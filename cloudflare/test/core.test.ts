@@ -8,8 +8,10 @@ import {
   computeFrontier,
   computePoints,
   extractPatchPaths,
+  filesStateSha256,
   globMatches,
   normalizeRelPath,
+  renderMbox,
   validatePatch,
   type MissionManifest,
   type TaskState,
@@ -175,4 +177,30 @@ test("DAG points depend on tier and dependencies", () => {
   assert.equal(computePoints(mission("dag", 1), task("b", {}, ["a"]), null, 1), 250);
   assert.equal(computePoints(mission("dag", 3), task("a"), null, 1), 100);
   assert.equal(computePoints(mission("dag", 3), task("b", {}, ["a"]), null, 1), 150);
+});
+
+test("filesStateSha256 matches the verifier server's files_sha256", async () => {
+  // Vectors computed with the Python implementation in verifier_server.py.
+  assert.equal(
+    await filesStateSha256({ "src/b.rs": "fn b() {}\n", "src/a.rs": "\u00e9\n" }),
+    "sha256:362445fe35ae3d719173ae2561e3aa0a61d41d06d820e5f58f7feddc5f385493"
+  );
+  assert.equal(
+    await filesStateSha256({}),
+    "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  );
+});
+
+test("renderMbox produces one git-am message per accepted patch", () => {
+  const mbox = renderMbox([
+    {
+      seq: 1, mission_id: "m", task_id: "t", contributor: "alice", display_name: "Alice <x>",
+      summary: "ok\nFrom here", patch: "diff --git a/f b/f\n", created_at: 0,
+    },
+  ]);
+  assert.match(mbox, /^From 0{39}1 Mon Sep 17 00:00:00 2001\n/);
+  assert.match(mbox, /\nFrom: Alice x <alice@contributors\.sunstead\.org>\n/);
+  assert.match(mbox, /\nSubject: \[PATCH\] m: verify t\n/);
+  assert.match(mbox, /\n>From here\n/);
+  assert.match(mbox, /\n---\ndiff --git a\/f b\/f\n--\n/);
 });

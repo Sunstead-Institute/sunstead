@@ -38,7 +38,23 @@ build context; their base images are pinned by digest.
 - `curl https://sunstead.org/join.txt` returns the guide.
 - `curl https://sunstead.org/api/missions` lists the missions with the
   expected spec hashes.
+- `curl https://sunstead.org/api/stats` returns the contributor funnel.
 - Watch the first real submission in the live feed.
+
+## Publishing mission history
+
+`/api/missions/<id>/history.mbox` is the public record of accepted work. To
+mirror it into a public git repository per mission:
+
+```bash
+curl -sL https://sunstead.org/api/missions/<id>/bundle.tar.gz?base=seed | tar xz
+git init -q && git add -A && git commit -qm "Mission seed"
+curl -sL https://sunstead.org/api/missions/<id>/history.mbox | git am
+git push <public remote> HEAD:main
+```
+
+History is recorded from the deploy that added it; patches accepted earlier
+are not in it.
 
 ## Rollback
 

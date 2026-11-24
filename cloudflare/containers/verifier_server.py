@@ -89,6 +89,44 @@ def compute_spec_sha256(repo_dir: str, frozen_paths):
     return "sha256:" + h.hexdigest()
 
 
+# mission_id -> (state sha256, accepted files). Lets the hub send only a hash
+# while this container stays warm; see filesStateSha256 in cloudflare/src/core.ts.
+_STATE_CACHE = {}
+
+
+def files_sha256(files: dict) -> str:
+    h = hashlib.sha256()
+    for rel in sorted(files):
+        data = files[rel].encode("utf-8")
+        h.update(rel.encode("utf-8") + b"\x00" + struct.pack("<Q", len(data)) + b"\x00" + data + b"\n")
+    return "sha256:" + h.hexdigest()
+
+
+class NeedFiles(Exception):
+    pass
+
+
+def resolve_current_files(req: dict) -> dict:
+    """Accepted files for this request: sent in full, or taken from the cache by hash."""
+    mission_id = req["mission_id"]
+    want = req.get("current_files_sha256")
+    if "current_files" in req:
+        files = req.get("current_files") or {}
+        if not isinstance(files, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in files.items()
+        ):
+            raise ValueError("current_files must map paths to strings")
+        sha = files_sha256(files)
+        if want and want != sha:
+            raise ValueError("current_files_sha256 does not match current_files")
+        _STATE_CACHE[mission_id] = (sha, dict(files))
+        return files
+    cached = _STATE_CACHE.get(mission_id)
+    if want and cached and cached[0] == want:
+        return dict(cached[1])
+    raise NeedFiles()
+
+
 def kill_sandbox_processes():
     kill_all_processes(RUNNER_USER)
     kill_all_processes(CHECKER_USER)
@@ -197,7 +235,7 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
         try:
             mission_id = req["mission_id"]
             frozen_paths = req.get("frozen_paths", [])
-            current_files = req.get("current_files", {})
+            current_files = resolve_current_files(req)
             reset_work_from_seed(mission_id, current_files, frozen_paths)
 
             buf = io.BytesIO()
@@ -214,6 +252,8 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             self.wfile.write(data)
+        except NeedFiles:
+            self.send_json(409, {"need_files": True})
         except Exception as e:
             self.send_json(500, {"error": str(e)})
 
@@ -225,7 +265,7 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
             patch = req["patch"]
             frozen_paths = req.get("frozen_paths", [])
             target_files = req.get("target_files", [])
-            current_files = req.get("current_files", {})
+            current_files = resolve_current_files(req)
             timeout_sec = max(5, min(int(req.get("timeout_sec", 90)), 120))
 
             reset_work_from_seed(mission_id, current_files, frozen_paths)
@@ -362,6 +402,8 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
                 "updated_files": updated_files,
                 "verify_ms": ms,
             })
+        except NeedFiles:
+            self.send_json(409, {"need_files": True})
         except Exception as e:
             ms = int((time.monotonic() - started) * 1000)
             self.send_json(200, {

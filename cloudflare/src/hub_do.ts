@@ -10,6 +10,9 @@ import {
   type MissionManifest,
   type TaskState,
   type TaskStatus,
+  filesStateSha256,
+  renderMbox,
+  type AcceptedPatch,
 } from "./core";
 import { SEED_MISSIONS, type SeedMission } from "./generated/missions";
 import { renderJoinTxt } from "./join_txt";
@@ -219,6 +222,30 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         updated_at INTEGER NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS claims_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mission_id TEXT NOT NULL,
+        task_id TEXT NOT NULL,
+        contributor TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+
+      -- Every accepted patch, in order, so mission history can be published
+      -- as git commits (GET /api/missions/:id/history.mbox).
+      CREATE TABLE IF NOT EXISTS accepted_patches (
+        seq INTEGER PRIMARY KEY AUTOINCREMENT,
+        mission_id TEXT NOT NULL,
+        task_id TEXT NOT NULL,
+        submission_id TEXT NOT NULL,
+        contributor TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        patch TEXT NOT NULL,
+        spec_sha256 TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_accepted_patches_mission
+        ON accepted_patches(mission_id, seq);
       CREATE INDEX IF NOT EXISTS idx_submissions_created
         ON submissions(created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_rate_events_bucket_time
@@ -265,7 +292,11 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       );
 
       if (specChanged) {
-        this.ctx.storage.sql.exec("DELETE FROM bundle_cache WHERE mission_id = ?", seed.manifest.id);
+        this.ctx.storage.sql.exec(
+          "DELETE FROM bundle_cache WHERE mission_id IN (?, ?)",
+          seed.manifest.id,
+          `${seed.manifest.id}#seed`
+        );
       }
 
       for (const task of seed.manifest.tasks) {
@@ -748,7 +779,19 @@ export class SunsteadHub extends DurableObject<HubEnv> {
 
     const bundleMatch = path.match(/^\/api\/missions\/([^/]+)\/bundle\.tar\.gz$/);
     if (method === "GET" && bundleMatch) {
-      return this.handleBundle(decodeURIComponent(bundleMatch[1]));
+      return this.handleBundle(
+        decodeURIComponent(bundleMatch[1]),
+        url.searchParams.get("base") === "seed"
+      );
+    }
+
+    const historyMatch = path.match(/^\/api\/missions\/([^/]+)\/history(\.mbox)?$/);
+    if (method === "GET" && historyMatch) {
+      return this.handleHistory(decodeURIComponent(historyMatch[1]), historyMatch[2] === ".mbox");
+    }
+
+    if (method === "GET" && path === "/api/stats") {
+      return jsonResp(this.computeStats());
     }
 
     const missionMatch = path.match(/^\/api\/missions\/([^/]+)$/);
@@ -914,14 +957,17 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     });
   }
 
-  private async handleBundle(missionId: string): Promise<Response> {
+  private async handleBundle(missionId: string, seed = false): Promise<Response> {
     const mission = this.getMissionRow(missionId);
     if (!mission) return jsonResp({ error: `unknown mission: ${missionId}` }, 404);
+    // `?base=seed` returns the mission as shipped, before any accepted patch,
+    // so `git am history.mbox` on top of it rebuilds the live state.
+    const cacheKey = seed ? `${missionId}#seed` : missionId;
 
     const cached = this.ctx.storage.sql
       .exec<{ tarball: ArrayBuffer }>(
         "SELECT tarball FROM bundle_cache WHERE mission_id = ?",
-        missionId
+        cacheKey
       )
       .toArray();
     if (cached.length > 0) {
@@ -934,18 +980,11 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       });
     }
 
-    const currentFiles = this.getMissionFiles(missionId);
-    const stub = this.getVerifierStub(mission);
-    const resp = await stub.fetch(
-      new Request("http://verifier/bundle", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mission_id: missionId,
-          frozen_paths: mission.manifest.frozen_paths,
-          current_files: currentFiles,
-        }),
-      })
+    const resp = await this.callVerifier(
+      mission,
+      "/bundle",
+      seed ? {} : this.getMissionFiles(missionId),
+      { mission_id: missionId, frozen_paths: mission.manifest.frozen_paths }
     );
     if (!resp.ok) {
       const errText = await resp.text();
@@ -957,7 +996,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       `INSERT INTO bundle_cache (mission_id, tarball, updated_at)
        VALUES (?, ?, ?)
        ON CONFLICT(mission_id) DO UPDATE SET tarball = excluded.tarball, updated_at = excluded.updated_at`,
-      missionId,
+      cacheKey,
       new Uint8Array(bytes),
       Math.floor(Date.now() / 1000)
     );
@@ -969,6 +1008,119 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         "Access-Control-Allow-Origin": "*",
       },
     });
+  }
+
+  /**
+   * Ask the mission's verifier container to act on the current accepted state.
+   * The first attempt sends only the state hash; a warm container that already
+   * holds that state uses it, otherwise it answers 409 {need_files} and we
+   * resend with the files.
+   */
+  private async callVerifier(
+    mission: SeedMission,
+    path: "/verify" | "/bundle",
+    files: Record<string, string>,
+    body: Record<string, unknown>
+  ): Promise<Response> {
+    const stub = this.getVerifierStub(mission);
+    const stateSha = await filesStateSha256(files);
+    const send = (withFiles: boolean) =>
+      stub.fetch(
+        new Request(`http://verifier${path}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...body,
+            current_files_sha256: stateSha,
+            ...(withFiles ? { current_files: files } : {}),
+          }),
+        })
+      );
+    const first = await send(false);
+    if (first.status !== 409) return first;
+    const info = (await first.json().catch(() => ({}))) as { need_files?: boolean };
+    if (!info.need_files) {
+      return new Response(JSON.stringify(info), { status: 409, headers: { "Content-Type": "application/json" } });
+    }
+    return send(true);
+  }
+
+  private handleHistory(missionId: string, mbox: boolean): Response {
+    const mission = this.getMissionRow(missionId);
+    if (!mission) return jsonResp({ error: `unknown mission: ${missionId}` }, 404);
+    const rows = this.ctx.storage.sql
+      .exec<{
+        seq: number;
+        mission_id: string;
+        task_id: string;
+        contributor: string;
+        display_name: string;
+        summary: string;
+        patch: string;
+        spec_sha256: string;
+        created_at: number;
+      }>(
+        `SELECT a.seq, a.mission_id, a.task_id, a.contributor,
+                COALESCE(c.display_name, a.contributor) AS display_name,
+                a.summary, a.patch, a.spec_sha256, a.created_at
+         FROM accepted_patches a LEFT JOIN contributors c ON c.handle = a.contributor
+         WHERE a.mission_id = ? ORDER BY a.seq ASC`,
+        missionId
+      )
+      .toArray();
+    if (mbox) {
+      return new Response(renderMbox(rows as AcceptedPatch[]), {
+        headers: {
+          "Content-Type": "application/mbox; charset=utf-8",
+          "Content-Disposition": `attachment; filename="${missionId}-history.mbox"`,
+          "Access-Control-Allow-Origin": "*",
+        },
+      });
+    }
+    return jsonResp({
+      mission_id: missionId,
+      how_to_rebuild:
+        `curl -sL <hub>/api/missions/${missionId}/bundle.tar.gz?base=seed | tar xz && ` +
+        `git init -q && git add -A && git commit -qm seed && ` +
+        `curl -sL <hub>/api/missions/${missionId}/history.mbox | git am`,
+      commits: rows.map((r) => ({
+        seq: r.seq,
+        task_id: r.task_id,
+        contributor: r.contributor,
+        display_name: r.display_name,
+        summary: r.summary,
+        spec_sha256: r.spec_sha256,
+        created_at: r.created_at,
+      })),
+    });
+  }
+
+  /** Contributor funnel: registered -> claimed -> submitted -> verified. */
+  private computeStats() {
+    const count = (sql: string, ...args: (string | number)[]) =>
+      this.ctx.storage.sql.exec<{ c: number }>(sql, ...args).one().c;
+    const now = Math.floor(Date.now() / 1000);
+    const funnel = (since: number) => ({
+      registered: count("SELECT COUNT(*) AS c FROM contributors WHERE created_at >= ?", since),
+      claimed: count("SELECT COUNT(DISTINCT contributor) AS c FROM claims_log WHERE created_at >= ?", since),
+      submitted: count("SELECT COUNT(DISTINCT contributor) AS c FROM submissions WHERE created_at >= ?", since),
+      verified: count(
+        "SELECT COUNT(DISTINCT contributor) AS c FROM submissions WHERE accepted = 1 AND created_at >= ?",
+        since
+      ),
+      submissions: count("SELECT COUNT(*) AS c FROM submissions WHERE created_at >= ?", since),
+      accepted_submissions: count(
+        "SELECT COUNT(*) AS c FROM submissions WHERE accepted = 1 AND created_at >= ?",
+        since
+      ),
+    });
+    return {
+      note: "Counts of distinct contributors at each step; claims are logged from Nov 2026 on.",
+      all_time: funnel(0),
+      last_7_days: funnel(now - 7 * 86400),
+      last_24_hours: funnel(now - 86400),
+      timestamp: now,
+    };
   }
 
   private async handleClaim(
@@ -1071,6 +1223,13 @@ export class SunsteadHub extends DurableObject<HubEnv> {
           ip,
           missionId,
           taskId
+        );
+        this.ctx.storage.sql.exec(
+          "INSERT INTO claims_log (mission_id, task_id, contributor, created_at) VALUES (?, ?, ?, ?)",
+          missionId,
+          taskId,
+          contributor,
+          now
         );
         this.emit({
           kind: "lease_claimed",
@@ -1235,25 +1394,16 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     });
 
     return this.withMissionLock(missionId, async () => {
-      const currentFiles = this.getMissionFiles(missionId);
-      const stub = this.getVerifierStub(mission);
       let cRes: ContainerVerifyResponse;
       try {
-        const resp = await stub.fetch(
-          new Request("http://verifier/verify", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              mission_id: missionId,
-              task_id: taskId,
-              patch,
-              frozen_paths: mission.manifest.frozen_paths,
-              target_files: task.def.target_files,
-              current_files: currentFiles,
-              timeout_sec: mission.manifest.verifier.timeout_sec ?? 90,
-            }),
-          })
-        );
+        const resp = await this.callVerifier(mission, "/verify", this.getMissionFiles(missionId), {
+          mission_id: missionId,
+          task_id: taskId,
+          patch,
+          frozen_paths: mission.manifest.frozen_paths,
+          target_files: task.def.target_files,
+          timeout_sec: mission.manifest.verifier.timeout_sec ?? 90,
+        });
         cRes = (await resp.json()) as ContainerVerifyResponse;
       } catch (e) {
         return jsonResp(
@@ -1334,6 +1484,19 @@ export class SunsteadHub extends DurableObject<HubEnv> {
           verify_ms: verifyMs,
           created_at: finishedAt,
         });
+        this.ctx.storage.sql.exec(
+          `INSERT INTO accepted_patches
+           (mission_id, task_id, submission_id, contributor, summary, patch, spec_sha256, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          missionId,
+          taskId,
+          subId,
+          contributor,
+          cRes.summary,
+          patch,
+          mission.spec_sha256,
+          finishedAt
+        );
 
         this.emit({
           kind: "submission_accepted",

@@ -249,6 +249,48 @@ def main():
     code, board = req("GET", "/api/leaderboard")
     assert code == 200
     ok("leaderboard reachable")
+
+    # Tier 3 Verus: a proof over the verbatim upstream base16ct code.
+    fixture = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           "redteam-fixtures", "base16ct", "decode_pair.rs")
+    with open(fixture, encoding="utf-8") as f:
+        code, res = submit("tier3-base16ct-verus", "decode_pair_flags", alice,
+                           {"src/decode_pair.rs": f.read()})
+    assert code == 200 and res.get("accepted") is True, (code, res)
+    ok(f"Verus decode_pair_flags accepted ({res.get('verify_ms')} ms)")
+
+    # Phase 4: accepted work is published as git history that rebuilds the live state.
+    mission = "tier3-mldsa-arith"
+    code, hist = req("GET", f"/api/missions/{mission}/history")
+    assert code == 200 and any(c["task_id"] == "centered_mod" for c in hist["commits"]), (code, hist)
+    code, mbox = req("GET", f"/api/missions/{mission}/history.mbox", raw=True)
+    assert code == 200
+    code, seed = req("GET", f"/api/missions/{mission}/bundle.tar.gz?base=seed", raw=True)
+    assert code == 200
+    code, live = req("GET", f"/api/missions/{mission}/bundle.tar.gz", raw=True)
+    assert code == 200
+    with tempfile.TemporaryDirectory() as tmp:
+        for name, data in (("seed", seed), ("live", live)):
+            os.makedirs(os.path.join(tmp, name))
+            with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
+                tf.extractall(os.path.join(tmp, name), filter="data")
+        with open(os.path.join(tmp, "history.mbox"), "wb") as f:
+            f.write(mbox)
+        subprocess.run(["git", "-c", "user.name=e2e", "-c", "user.email=e2e@localhost",
+                        "am", "-q", os.path.join(tmp, "history.mbox")],
+                       cwd=os.path.join(tmp, "seed"), check=True)
+        log = subprocess.check_output(["git", "log", "--format=%an|%s"],
+                                      cwd=os.path.join(tmp, "seed"), text=True)
+        assert "alice|" in log and "verify centered_mod" in log, log
+        diff = subprocess.run(["diff", "-r", "-x", ".git", os.path.join(tmp, "seed"),
+                               os.path.join(tmp, "live")], capture_output=True, text=True)
+        assert diff.returncode == 0, diff.stdout[-2000:]
+    ok("seed bundle + history.mbox (git am) rebuilds the live mission, with authors")
+
+    code, stats = req("GET", "/api/stats")
+    assert code == 200 and stats["all_time"]["registered"] >= 3, (code, stats)
+    assert stats["all_time"]["claimed"] >= 1 and stats["all_time"]["verified"] >= 2, stats
+    ok(f"funnel stats: {stats['all_time']}")
     print("\nAll end-to-end checks passed.")
 
 

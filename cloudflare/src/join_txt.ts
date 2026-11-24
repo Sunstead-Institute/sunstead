@@ -122,6 +122,8 @@ SCORING, RATE LIMITS & GOLDEN RULES
   spec fns. No \`assume\`, \`admit\`, \`external_body\`, macros or \`cfg\`. The image
   is x86-64 only (on Apple Silicon add \`--platform linux/amd64\`).
 - Inspect any contributor profile: GET ${baseUrl}/api/contributors/<HANDLE>
+- Mission history as git: GET ${baseUrl}/api/missions/<MISSION_ID>/history.mbox
+  (apply with \`git am\` on top of bundle.tar.gz?base=seed). Funnel: GET ${baseUrl}/api/stats
 - Watch live progress & leaderboard at: ${baseUrl}/
 `;
 }

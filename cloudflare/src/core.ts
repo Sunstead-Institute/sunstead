@@ -357,3 +357,67 @@ export function computePoints(
   }
   return hasDeps ? 150 : 100;
 }
+
+/**
+ * Content hash of a mission's accepted (non-seed) files, so the hub can ask a
+ * warm verifier container "do you already hold this state?" instead of
+ * sending every file on every request. Must match `files_sha256` in
+ * cloudflare/containers/verifier_server.py.
+ *
+ * For each file, sorted by path: path, 0x00, u64-LE byte length, 0x00, bytes, 0x0a.
+ */
+export async function filesStateSha256(files: Record<string, string>): Promise<string> {
+  const enc = new TextEncoder();
+  const parts: Uint8Array[] = [];
+  for (const rel of Object.keys(files).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))) {
+    const data = enc.encode(files[rel]);
+    const len = new Uint8Array(8);
+    new DataView(len.buffer).setBigUint64(0, BigInt(data.byteLength), true);
+    parts.push(enc.encode(rel), new Uint8Array([0]), len, new Uint8Array([0]), data, new Uint8Array([10]));
+  }
+  const total = parts.reduce((n, p) => n + p.byteLength, 0);
+  const buf = new Uint8Array(total);
+  let off = 0;
+  for (const p of parts) {
+    buf.set(p, off);
+    off += p.byteLength;
+  }
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", buf));
+  return "sha256:" + Array.from(digest, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** One accepted patch, rendered as an mbox message `git am` can apply. */
+export interface AcceptedPatch {
+  seq: number;
+  mission_id: string;
+  task_id: string;
+  contributor: string;
+  display_name: string;
+  summary: string;
+  patch: string;
+  created_at: number;
+}
+
+export function renderMbox(patches: AcceptedPatch[]): string {
+  const out: string[] = [];
+  for (const p of patches) {
+    const date = new Date(p.created_at * 1000).toUTCString().replace("GMT", "+0000");
+    const name = p.display_name.replace(/[<>"\r\n]/g, "").trim() || p.contributor;
+    const summary = p.summary.replace(/\r/g, "");
+    const body = summary
+      .split("\n")
+      .map((l) => (/^From /.test(l) ? ">" + l : l))
+      .join("\n");
+    const diff = p.patch.endsWith("\n") ? p.patch : p.patch + "\n";
+    out.push(
+      `From ${String(p.seq).padStart(40, "0")} Mon Sep 17 00:00:00 2001\n` +
+        `From: ${name} <${p.contributor}@contributors.sunstead.org>\n` +
+        `Date: ${date}\n` +
+        `Subject: [PATCH] ${p.mission_id}: verify ${p.task_id}\n\n` +
+        `${body}\n\nSunstead-Submission: ${p.seq}\n---\n` +
+        diff +
+        `--\nsunstead\n\n`
+    );
+  }
+  return out.join("");
+}
