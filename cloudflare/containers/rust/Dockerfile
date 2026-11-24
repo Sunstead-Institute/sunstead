@@ -6,17 +6,18 @@ RUN apt-get update \
 
 COPY missions/tier3-mldsa-arith /missions/tier3-mldsa-arith
 COPY missions/tier3-chacha-x509 /missions/tier3-chacha-x509
+COPY missions/verifier-common/sunstead_sandbox.py /opt/sunstead/sunstead_sandbox.py
 COPY cloudflare/containers/verifier_server.py /opt/verifier_server.py
 
-# Make /missions strictly read-only to the unprivileged `verifier` user.
-RUN chmod -R a-w,a+rX /missions \
-    && chmod a+rx /missions/tier3-mldsa-arith/verify /missions/tier3-chacha-x509/verify /opt/verifier_server.py \
-    && useradd -m -u 10001 verifier \
-    && mkdir -p /work \
-    && chown verifier:verifier /work
+# Seeds, harness and server are read-only. The server runs as root and never
+# executes contributor code itself: `verify` drops to `sunstead-runner` for
+# that, and the trusted checks run as `sunstead-checker`.
+RUN chmod -R a-w,a+rX /missions /opt/sunstead /opt/verifier_server.py \
+    && chmod -R a+rX /usr/local/cargo /usr/local/rustup \
+    && useradd -M -d /nonexistent -s /usr/sbin/nologin -u 10002 sunstead-runner \
+    && useradd -M -d /nonexistent -s /usr/sbin/nologin -u 10003 sunstead-checker \
+    && mkdir -p /work && chmod 0755 /work
 
-USER verifier
-ENV CARGO_TARGET_DIR=/tmp/cargo_target
 WORKDIR /work
 EXPOSE 8080
 CMD ["python3", "/opt/verifier_server.py"]

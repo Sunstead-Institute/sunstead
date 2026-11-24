@@ -1,92 +1,50 @@
 #!/usr/bin/env python3
-import json
-import os
-import re
-import shutil
-import subprocess
+"""Frozen verifier for `tier3-mldsa-arith`.
+
+Checking logic lives in the trusted harness baked into the verifier image
+(/opt/sunstead/sunstead_sandbox.py). The target file is linted (no std/core,
+no macros, no calls into spec.rs), then the frozen integration test is built
+and run as an unprivileged user in a scratch copy of the repo.
+"""
 import sys
 
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, rust_verify  # noqa: E402
+
 TASK_MAP = {
-    "centered_mod": ("src/centered_mod.rs", "verify_centered_mod"),
-    "ct_select": ("src/ct_select.rs", "verify_ct_select"),
-    "montgomery_reduce": ("src/montgomery.rs", "verify_montgomery_reduce"),
-    "power2round": ("src/power2round.rs", "verify_power2round"),
-    "decompose_lowbits": ("src/decompose.rs", "verify_decompose"),
-    "add_reduce": ("src/add_reduce.rs", "verify_add_reduce"),
-    "sub_reduce": ("src/sub_reduce.rs", "verify_sub_reduce"),
-    "make_hint": ("src/make_hint.rs", "verify_make_hint"),
-    "use_hint": ("src/use_hint.rs", "verify_use_hint"),
-    "ct_butterfly": ("src/butterfly.rs", "verify_ct_butterfly"),
-    "inv_butterfly": ("src/inv_butterfly.rs", "verify_inv_butterfly"),
+    'centered_mod': ('src/centered_mod.rs', 'verify_centered_mod', 'ct_strict'),
+    'ct_select': ('src/ct_select.rs', 'verify_ct_select', 'ct_strict'),
+    'montgomery_reduce': ('src/montgomery.rs', 'verify_montgomery_reduce', 'ct_strict'),
+    'power2round': ('src/power2round.rs', 'verify_power2round', 'ct_strict'),
+    'decompose_lowbits': ('src/decompose.rs', 'verify_decompose', 'ct_strict'),
+    'add_reduce': ('src/add_reduce.rs', 'verify_add_reduce', 'ct_strict'),
+    'sub_reduce': ('src/sub_reduce.rs', 'verify_sub_reduce', 'ct_strict'),
+    'make_hint': ('src/make_hint.rs', 'verify_make_hint', 'ct_strict'),
+    'use_hint': ('src/use_hint.rs', 'verify_use_hint', 'ct_strict'),
+    'ct_butterfly': ('src/butterfly.rs', 'verify_ct_butterfly', 'ct_strict'),
+    'inv_butterfly': ('src/inv_butterfly.rs', 'verify_inv_butterfly', 'ct_strict'),
 }
 
-FORBIDDEN_PATTERNS = [
-    (r"\bunsafe\b", "unsafe code is forbidden"),
-    (r"\bif\b", "branching (`if`) is forbidden in constant-time code"),
-    (r"\bmatch\b", "branching (`match`) is forbidden in constant-time code"),
-    (r"\bwhile\b|\bfor\b|\bloop\b", "loops are forbidden in constant-time arithmetic"),
-    (r"(?<!/)%(?!=)", "modulo operator `%` is variable-time on some CPUs"),
-    (r"(?<!/)/(?![/*])", "division operator `/` is variable-time on hardware"),
-    (r"\b(?:todo|unimplemented|panic)!", "panicking stubs are forbidden"),
-    (r"\basm!", "inline assembly is forbidden"),
+CT_STRICT_FORBIDDEN = [
+    ('\\bunsafe\\b', 'unsafe code is forbidden'),
+    ('\\bif\\b', 'branching (`if`) is forbidden in constant-time code'),
+    ('\\bmatch\\b', 'branching (`match`) is forbidden in constant-time code'),
+    ('\\bwhile\\b|\\bfor\\b|\\bloop\\b', 'loops are forbidden in constant-time arithmetic'),
+    ('(?<!/)%(?!=)', 'modulo operator `%` is variable-time on some CPUs'),
+    ('(?<!/)/(?![/*])', 'division operator `/` is variable-time on hardware'),
+    ('\\b(?:todo|unimplemented|panic)!', 'panicking stubs are forbidden'),
+    ('\\basm!', 'inline assembly is forbidden'),
 ]
 
+PROFILES = {"ct_strict": CT_STRICT_FORBIDDEN}
 
-def strip_comments(code: str) -> str:
-    code = re.sub(r"/\*.*?\*/", "", code, flags=re.S)
-    code = re.sub(r"//.*", "", code)
-    return code
+ALLOWED_MODULES = {'butterfly', 'decompose', 'ct_select', 'centered_mod', 'sub_reduce', 'power2round', 'use_hint', 'add_reduce', 'montgomery', 'make_hint', 'inv_butterfly'}
 
-
-def emit(ok: bool, summary: str, score=None):
-    out = {"ok": ok, "summary": summary}
-    if score is not None:
-        out["score"] = score
-    print(json.dumps(out))
-    sys.exit(0 if ok else 1)
-
-
-def main():
-    if len(sys.argv) < 2 or sys.argv[1] not in TASK_MAP:
-        emit(False, f"unknown task id: {sys.argv[1:]}")
-
-    task_id = sys.argv[1]
-    target_rel, test_name = TASK_MAP[task_id]
-
-    work = "/tmp/verify_run"
-    if os.path.exists(work):
-        shutil.rmtree(work)
-    shutil.copytree("/work", work)
-
-    # 1. Static constant-time & memory-safety hygiene check.
-    target_path = os.path.join(work, target_rel)
-    with open(target_path, "r", encoding="utf-8") as f:
-        cleaned = strip_comments(f.read())
-
-    for pattern, reason in FORBIDDEN_PATTERNS:
-        if re.search(pattern, cleaned):
-            emit(False, f"constant-time hygiene failed in {target_rel}: {reason}")
-
-    # 2. Run frozen exhaustive release test suite offline.
-    env = os.environ.copy()
-    env["CARGO_TARGET_DIR"] = "/tmp/cargo_target"
-    proc = subprocess.run(
-        ["cargo", "test", "--release", "--offline", "--test", test_name],
-        cwd=work,
-        env=env,
-        capture_output=True,
-        text=True,
-    )
-    if proc.returncode != 0:
-        tail = (proc.stdout + "\n" + proc.stderr).strip()[-300:]
-        emit(False, f"verification test `{test_name}` failed: {tail}")
-
-    emit(
-        True,
-        f"ML-DSA `{task_id}` passed constant-time hygiene + exhaustive Rust verification",
-        score=1.0,
-    )
+SUMMARY = "ML-DSA `{task_id}` passed constant-time hygiene + exhaustive Rust tests"
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>")
+    rust_verify(sys.argv[1], tasks=TASK_MAP, profiles=PROFILES,
+                allowed_modules=ALLOWED_MODULES, summary_fmt=SUMMARY)

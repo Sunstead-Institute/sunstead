@@ -229,8 +229,14 @@ pub async fn run_hermetic_verification(
         "--network=none".to_string(),
         "--cpus=2".to_string(),
         format!("--memory={}m", manifest.verifier.memory_mb.max(256)),
-        "--pids-limit=256".to_string(),
+        "--pids-limit=512".to_string(),
+        // `verify` starts as root with only SETUID/SETGID so it can run contributor
+        // code as `sunstead-runner` and trusted checks as `sunstead-checker`
+        // (see missions/verifier-common/sunstead_sandbox.py).
+        "--user=0:0".to_string(),
         "--cap-drop=ALL".to_string(),
+        "--cap-add=SETUID".to_string(),
+        "--cap-add=SETGID".to_string(),
         "--security-opt=no-new-privileges".to_string(),
         "-w".to_string(),
         "/work".to_string(),

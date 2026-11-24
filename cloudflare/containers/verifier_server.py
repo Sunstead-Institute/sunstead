@@ -4,7 +4,15 @@ Internal HTTP verifier server running inside each Cloudflare Container (`enableI
 Never exposed publicly; only reachable from SunsteadHub Durable Object via Container.fetch().
 
 Security properties:
-- Runs as non-root user `verifier` (UID 10001).
+- The server itself never executes contributor code. It runs as root so that the
+  frozen mission `./verify` (also root) can drop to the unprivileged
+  `sunstead-runner` user for contributor builds and to `sunstead-checker` for the
+  trusted checks (see /opt/sunstead/sunstead_sandbox.py).
+- `/work` and everything in it is owned by root and not writable by either
+  sandbox user, so contributor code cannot alter the verifier, the frozen spec
+  or a later submission's files.
+- Every sandbox-user process is killed before and after each request, so nothing
+  a submission starts survives into the next one in this warm container.
 - Seed mission repos live under read-only `/missions` (owned by root, mode 0555/0444).
 - Every request stages into a freshly wiped `/work`, runs `git apply`, checks frozen_paths &
   target_files, computes `spec_sha256`, and runs the frozen mission `./verify <task_id>`.
@@ -17,8 +25,12 @@ import os
 import shutil
 import struct
 import subprocess
+import sys
 import tarfile
 import time
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import CHECKER_USER, RUNNER_USER, kill_all_processes  # noqa: E402
 
 MISSIONS_ROOT = "/missions"
 WORK_DIR = "/work"
@@ -77,7 +89,13 @@ def compute_spec_sha256(repo_dir: str, frozen_paths):
     return "sha256:" + h.hexdigest()
 
 
+def kill_sandbox_processes():
+    kill_all_processes(RUNNER_USER)
+    kill_all_processes(CHECKER_USER)
+
+
 def reset_work_from_seed(mission_id: str, current_files: dict, frozen_paths: list):
+    kill_sandbox_processes()
     seed_dir = os.path.join(MISSIONS_ROOT, mission_id)
     if not os.path.isdir(seed_dir):
         raise ValueError(f"mission not present in this verifier container: {mission_id}")
@@ -98,8 +116,8 @@ def reset_work_from_seed(mission_id: str, current_files: dict, frozen_paths: lis
             src_f = os.path.join(root, fn)
             dst_f = os.path.join(dst_root, fn)
             shutil.copyfile(src_f, dst_f)
-            # Keep execute bit (e.g. ./verify), make writable for git apply on target files.
-            mode = os.stat(src_f).st_mode
+            # Keep the execute bit (e.g. ./verify); owner (root) write for git apply only.
+            mode = os.stat(src_f).st_mode & 0o555
             os.chmod(dst_f, mode | 0o200)
 
     # Overlay previously verified non-frozen file contents from Durable Object SQLite.
@@ -300,6 +318,7 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
                     timeout=timeout_sec,
                 )
             except subprocess.TimeoutExpired:
+                kill_sandbox_processes()
                 ms = int((time.monotonic() - started) * 1000)
                 self.send_json(200, {
                     "ok": False,
@@ -311,6 +330,7 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
                 })
                 return
 
+            kill_sandbox_processes()
             ms = int((time.monotonic() - started) * 1000)
             verdict = parse_verdict(proc.stdout)
             if verdict is None:
@@ -355,7 +375,10 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    if os.geteuid() != 0:
+        raise SystemExit("verifier_server.py must run as root (verify drops privileges itself)")
     os.makedirs(WORK_DIR, exist_ok=True)
+    os.chmod(WORK_DIR, 0o755)
     server = http.server.HTTPServer(("0.0.0.0", 8080), VerifierHandler)
     print("Sunstead verifier container listening on 0.0.0.0:8080", flush=True)
     server.serve_forever()

@@ -1,147 +1,68 @@
 #!/usr/bin/env python3
-import json
-import os
-import re
-import shutil
-import subprocess
+"""Frozen verifier for `tier2-soundness-bound`.
+
+All checking logic lives in the trusted harness baked into the verifier image
+(/opt/sunstead/sunstead_sandbox.py + SunsteadCheck.lean). This file only lists
+each task's module, the theorem that must prove it, and the frozen statement.
+Contributor code is built as an unprivileged user; the verdict comes from a
+Lean kernel replay of the compiled output, never from text the build printed.
+"""
 import sys
 
-ALLOWED_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify  # noqa: E402
+
+LIB_ROOT = 'SoundnessBound'
+FROZEN_FILES = ['SoundnessBound' + "/Spec.lean", "lakefile.toml", "lean-toolchain"]
 
 TASKS = {
-    "tighten_multi_user_bound": (
-        "SoundnessBound.MultiUserBound",
-        """import SoundnessBound.Spec
-import SoundnessBound.MultiUserBound
-
-def sunstead_audit_bound :
+    'tighten_multi_user_bound': {
+        'module': 'SoundnessBound.MultiUserBound',
+        'theorem': 'SoundnessBound.multi_user_bound',
+        'score_const': 'SoundnessBound.claimedMultiUserFactor',
+        'label': '100 * multiUserLoss(u,q) <= {score} * (u+q)^2',
+        'statement': """
+def tighten_multi_user_bound (C : Nat) : Prop :=
     ∀ u q : Nat, u ≥ 1 → q ≥ 1 →
-      100 * SoundnessBound.multiUserLoss u q ≤ SoundnessBound.claimedMultiUserFactor * ((u + q) * (u + q)) :=
-  SoundnessBound.multi_user_bound
-
-#print axioms sunstead_audit_bound
-#eval IO.println s!"SUNSTEAD_SCORE={SoundnessBound.claimedMultiUserFactor}"
+    100 * SoundnessBound.multiUserLoss u q ≤ C * ((u + q) * (u + q))
 """,
-        "100 * multiUserLoss(u,q) <= {factor} * (u+q)^2",
-    ),
-    "tighten_folding_bound": (
-        "SoundnessBound.FoldingBound",
-        """import SoundnessBound.Spec
-import SoundnessBound.FoldingBound
-
-def sunstead_audit_bound :
+    },
+    'tighten_folding_bound': {
+        'module': 'SoundnessBound.FoldingBound',
+        'theorem': 'SoundnessBound.folding_bound',
+        'score_const': 'SoundnessBound.claimedFoldingFactor',
+        'label': '100 * foldingError(d,r) <= {score} * (d+r)^2',
+        'statement': """
+def tighten_folding_bound (C : Nat) : Prop :=
     ∀ d r : Nat, d ≥ 1 → r ≥ 1 →
-      100 * SoundnessBound.foldingError d r ≤ SoundnessBound.claimedFoldingFactor * ((d + r) * (d + r)) :=
-  SoundnessBound.folding_bound
-
-#print axioms sunstead_audit_bound
-#eval IO.println s!"SUNSTEAD_SCORE={SoundnessBound.claimedFoldingFactor}"
+    100 * SoundnessBound.foldingError d r ≤ C * ((d + r) * (d + r))
 """,
-        "100 * foldingError(d,r) <= {factor} * (d+r)^2",
-    ),
-    "tighten_hybrid_kem_bound": (
-        "SoundnessBound.HybridKemBound",
-        """import SoundnessBound.Spec
-import SoundnessBound.HybridKemBound
-
-def sunstead_audit_bound :
+    },
+    'tighten_hybrid_kem_bound': {
+        'module': 'SoundnessBound.HybridKemBound',
+        'theorem': 'SoundnessBound.hybrid_kem_bound',
+        'score_const': 'SoundnessBound.claimedHybridKemFactor',
+        'label': '100 * hybridKemLoss(n,q) <= {score} * (n+q)^2',
+        'statement': """
+def tighten_hybrid_kem_bound (C : Nat) : Prop :=
     ∀ n q : Nat, n ≥ 1 → q ≥ 1 →
-      100 * SoundnessBound.hybridKemLoss n q ≤ SoundnessBound.claimedHybridKemFactor * ((n + q) * (n + q)) :=
-  SoundnessBound.hybrid_kem_bound
-
-#print axioms sunstead_audit_bound
-#eval IO.println s!"SUNSTEAD_SCORE={SoundnessBound.claimedHybridKemFactor}"
+    100 * SoundnessBound.hybridKemLoss n q ≤ C * ((n + q) * (n + q))
 """,
-        "100 * hybridKemLoss(n,q) <= {factor} * (n+q)^2",
-    ),
-    "tighten_frost_forking_bound": (
-        "SoundnessBound.FrostForkingBound",
-        """import SoundnessBound.Spec
-import SoundnessBound.FrostForkingBound
-
-def sunstead_audit_bound :
+    },
+    'tighten_frost_forking_bound': {
+        'module': 'SoundnessBound.FrostForkingBound',
+        'theorem': 'SoundnessBound.frost_forking_bound',
+        'score_const': 'SoundnessBound.claimedFrostForkingFactor',
+        'label': '100 * frostForkingLoss(t,q) <= {score} * (t+q)^2',
+        'statement': """
+def tighten_frost_forking_bound (C : Nat) : Prop :=
     ∀ t q : Nat, t ≥ 1 → q ≥ 1 →
-      100 * SoundnessBound.frostForkingLoss t q ≤ SoundnessBound.claimedFrostForkingFactor * ((t + q) * (t + q)) :=
-  SoundnessBound.frost_forking_bound
-
-#print axioms sunstead_audit_bound
-#eval IO.println s!"SUNSTEAD_SCORE={SoundnessBound.claimedFrostForkingFactor}"
+    100 * SoundnessBound.frostForkingLoss t q ≤ C * ((t + q) * (t + q))
 """,
-        "100 * frostForkingLoss(t,q) <= {factor} * (t+q)^2",
-    ),
+    },
 }
 
-
-def emit(ok: bool, summary: str, score=None):
-    out = {"ok": ok, "summary": summary}
-    if score is not None:
-        out["score"] = score
-    print(json.dumps(out))
-    sys.exit(0 if ok else 1)
-
-
-def check_axioms(output: str, decl_name: str):
-    no_ax = f"'{decl_name}' does not depend on any axioms"
-    if no_ax in output:
-        return []
-    m = re.search(rf"'{re.escape(decl_name)}' depends on axioms: \[([^\]]*)\]", output)
-    if not m:
-        return ["<missing axiom report>"]
-    found = [a.strip() for a in m.group(1).split(",") if a.strip()]
-    return [a for a in found if a not in ALLOWED_AXIOMS]
-
-
-def main():
-    if len(sys.argv) < 2 or sys.argv[1] not in TASKS:
-        emit(False, f"unknown task id: {sys.argv[1:]}")
-
-    task_id = sys.argv[1]
-    mod_name, audit_src, label_fmt = TASKS[task_id]
-
-    work = "/tmp/verify_run"
-    if os.path.exists(work):
-        shutil.rmtree(work)
-    shutil.copytree("/work", work)
-
-    build = subprocess.run(
-        ["lake", "build", mod_name],
-        cwd=work,
-        capture_output=True,
-        text=True,
-    )
-    if build.returncode != 0:
-        tail = (build.stdout + "\n" + build.stderr).strip()[-350:]
-        emit(False, f"lake build {mod_name} failed: {tail}")
-
-    audit_path = os.path.join(work, "_SunsteadAudit.lean")
-    with open(audit_path, "w", encoding="utf-8") as f:
-        f.write(audit_src)
-
-    audit = subprocess.run(
-        ["lake", "env", "lean", "_SunsteadAudit.lean"],
-        cwd=work,
-        capture_output=True,
-        text=True,
-    )
-    combined = audit.stdout + "\n" + audit.stderr
-    if audit.returncode != 0:
-        emit(False, f"Lean 4 audit failed: {combined.strip()[-350:]}")
-
-    bad_axioms = check_axioms(combined, "sunstead_audit_bound")
-    if bad_axioms:
-        emit(False, f"forbidden axioms detected: {', '.join(bad_axioms)}")
-
-    m = re.search(r"SUNSTEAD_SCORE=(\d+)", combined)
-    if not m:
-        emit(False, "could not extract verified score")
-
-    factor = int(m.group(1))
-    emit(
-        True,
-        f"Lean 4 verified: {label_fmt.format(factor=factor)} (0 sorry, 0 custom axioms)",
-        score=float(factor),
-    )
-
-
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>")
+    lean_verify(sys.argv[1], lib_root=LIB_ROOT, frozen_files=FROZEN_FILES, tasks=TASKS)

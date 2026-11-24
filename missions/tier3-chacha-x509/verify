@@ -1,40 +1,45 @@
 #!/usr/bin/env python3
-import json
-import os
-import re
-import shutil
-import subprocess
+"""Frozen verifier for `tier3-chacha-x509`.
+
+Checking logic lives in the trusted harness baked into the verifier image
+(/opt/sunstead/sunstead_sandbox.py). The target file is linted (no std/core,
+no macros, no calls into spec.rs), then the frozen integration test is built
+and run as an unprivileged user in a scratch copy of the repo.
+"""
 import sys
 
-# (target_rel, test_name, hygiene_profile)
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, rust_verify  # noqa: E402
+
 TASK_MAP = {
-    "ct_eq_32": ("src/ct_eq.rs", "verify_ct_eq", "ct_fixed_loop"),
-    "ct_cmov_u32": ("src/ct_cmov.rs", "verify_ct_cmov", "ct_fixed_loop"),
-    "chacha20_quarter_round": ("src/quarter_round.rs", "verify_quarter_round", "ct_strict"),
-    "chacha20_block": ("src/chacha_block.rs", "verify_chacha_block", "ct_fixed_loop"),
-    "der_parse_length": ("src/der_length.rs", "verify_der_length", "parser_safe"),
-    "der_parse_tlv": ("src/der_tlv.rs", "verify_der_tlv", "parser_safe"),
-    "der_parse_integer": ("src/der_integer.rs", "verify_der_integer", "parser_safe"),
-    "der_parse_oid": ("src/der_oid.rs", "verify_der_oid", "parser_safe"),
+    'ct_eq_32': ('src/ct_eq.rs', 'verify_ct_eq', 'ct_fixed_loop'),
+    'ct_cmov_u32': ('src/ct_cmov.rs', 'verify_ct_cmov', 'ct_fixed_loop'),
+    'chacha20_quarter_round': ('src/quarter_round.rs', 'verify_quarter_round', 'ct_strict'),
+    'chacha20_block': ('src/chacha_block.rs', 'verify_chacha_block', 'ct_fixed_loop'),
+    'der_parse_length': ('src/der_length.rs', 'verify_der_length', 'parser_safe'),
+    'der_parse_tlv': ('src/der_tlv.rs', 'verify_der_tlv', 'parser_safe'),
+    'der_parse_integer': ('src/der_integer.rs', 'verify_der_integer', 'parser_safe'),
+    'der_parse_oid': ('src/der_oid.rs', 'verify_der_oid', 'parser_safe'),
 }
 
 COMMON_FORBIDDEN = [
-    (r"\bunsafe\b", "unsafe code is forbidden"),
-    (r"\basm!", "inline assembly is forbidden"),
-    (r"\b(?:todo|unimplemented|panic|unreachable)!", "panicking macros are forbidden"),
-    (r"\.unwrap\s*\(", "`.unwrap()` is forbidden in panic-free security code"),
-    (r"\.expect\s*\(", "`.expect()` is forbidden in panic-free security code"),
+    ('\\bunsafe\\b', 'unsafe code is forbidden'),
+    ('\\basm!', 'inline assembly is forbidden'),
+    ('\\b(?:todo|unimplemented|panic|unreachable)!', 'panicking macros are forbidden'),
+    ('\\.unwrap\\s*\\(', '`.unwrap()` is forbidden in panic-free security code'),
+    ('\\.expect\\s*\\(', '`.expect()` is forbidden in panic-free security code'),
 ]
 
-CT_FIXED_LOOP_FORBIDDEN = COMMON_FORBIDDEN + [
-    (r"\bif\b", "branching (`if`) is forbidden in constant-time code"),
-    (r"\bmatch\b", "branching (`match`) is forbidden in constant-time code"),
-    (r"\bwhile\b|\bloop\b", "variable-bound loops (`while`/`loop`) are forbidden in constant-time code"),
-    (r"\bbreak\b|\bcontinue\b", "early-exit control flow (`break`/`continue`) is forbidden in constant-time code"),
-    (r"(?<!/)%(?!=)", "modulo operator `%` is variable-time on some CPUs"),
-    (r"(?<!/)/(?![/*])", "division operator `/` is variable-time on hardware"),
+CT_FIXED_LOOP_EXTRA = [
+    ('\\bif\\b', 'branching (`if`) is forbidden in constant-time code'),
+    ('\\bmatch\\b', 'branching (`match`) is forbidden in constant-time code'),
+    ('\\bwhile\\b|\\bloop\\b', 'variable-bound loops (`while`/`loop`) are forbidden in constant-time code'),
+    ('\\bbreak\\b|\\bcontinue\\b', 'early-exit control flow (`break`/`continue`) is forbidden in constant-time code'),
+    ('(?<!/)%(?!=)', 'modulo operator `%` is variable-time on some CPUs'),
+    ('(?<!/)/(?![/*])', 'division operator `/` is variable-time on hardware'),
 ]
 
+CT_FIXED_LOOP_FORBIDDEN = COMMON_FORBIDDEN + CT_FIXED_LOOP_EXTRA
 CT_STRICT_FORBIDDEN = CT_FIXED_LOOP_FORBIDDEN + [
     (r"\bfor\b", "loops are forbidden in quarter_round"),
 ]
@@ -45,60 +50,13 @@ PROFILES = {
     "parser_safe": COMMON_FORBIDDEN,
 }
 
+ALLOWED_MODULES = {'ct_cmov', 'chacha_block', 'der_tlv', 'quarter_round', 'der_oid', 'der_length', 'ct_eq', 'der_integer'}
 
-def strip_comments(code: str) -> str:
-    code = re.sub(r"/\*.*?\*/", "", code, flags=re.S)
-    code = re.sub(r"//.*", "", code)
-    return code
-
-
-def emit(ok: bool, summary: str, score=None):
-    out = {"ok": ok, "summary": summary}
-    if score is not None:
-        out["score"] = score
-    print(json.dumps(out))
-    sys.exit(0 if ok else 1)
-
-
-def main():
-    if len(sys.argv) < 2 or sys.argv[1] not in TASK_MAP:
-        emit(False, f"unknown task id: {sys.argv[1:]}")
-
-    task_id = sys.argv[1]
-    target_rel, test_name, profile = TASK_MAP[task_id]
-
-    work = "/tmp/verify_run"
-    if os.path.exists(work):
-        shutil.rmtree(work)
-    shutil.copytree("/work", work)
-
-    target_path = os.path.join(work, target_rel)
-    with open(target_path, "r", encoding="utf-8") as f:
-        cleaned = strip_comments(f.read())
-
-    for pattern, reason in PROFILES[profile]:
-        if re.search(pattern, cleaned):
-            emit(False, f"security hygiene failed in {target_rel}: {reason}")
-
-    env = os.environ.copy()
-    env["CARGO_TARGET_DIR"] = "/tmp/cargo_target"
-    proc = subprocess.run(
-        ["cargo", "test", "--release", "--offline", "--test", test_name],
-        cwd=work,
-        env=env,
-        capture_output=True,
-        text=True,
-    )
-    if proc.returncode != 0:
-        tail = (proc.stdout + "\n" + proc.stderr).strip()[-350:]
-        emit(False, f"verification test `{test_name}` failed: {tail}")
-
-    emit(
-        True,
-        f"ChaCha20/X.509 `{task_id}` passed security hygiene ({profile}) + RFC/fuzz Rust verification",
-        score=1.0,
-    )
+SUMMARY = "ChaCha20/X.509 `{task_id}` passed security hygiene ({profile}) + RFC/fuzz Rust tests"
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>")
+    rust_verify(sys.argv[1], tasks=TASK_MAP, profiles=PROFILES,
+                allowed_modules=ALLOWED_MODULES, summary_fmt=SUMMARY)

@@ -107,6 +107,11 @@ GOLDEN RULES (ENFORCED BY `sunstead-core`)
 - Only modify files in the task's `target_files` (max patch size: 512 KB).
 - Never touch `frozen_paths` (specs, verifier scripts, `sunstead.json`).
 - No binary patches, symlinks, `sorry`, `admit`, custom axioms, or `unsafe`.
+- Lean target files: no `#eval`/`run_cmd`, macros, notation, elaborators, `initialize`,
+  `axiom`/`opaque`/`unsafe`, `native_decide`, or imports outside the mission library.
+  Your compiled proof is re-checked by the Lean kernel against the frozen statement.
+- Rust target files: no `std`/`core`, macros (except `matches!`), attributes, `static`,
+  or calls into `spec.rs` functions (its constants and types are fine).
 - For HILLCLIMB missions, your verified `score` must strictly beat `best_score`.
 - Watch live progress & verifier runs at: {base_url}/
 "#
