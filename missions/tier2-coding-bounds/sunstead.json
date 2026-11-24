@@ -1,7 +1,7 @@
 {
   "id": "tier2-coding-bounds",
-  "title": "Coding, Masking, Sponge & SLH-DSA Concrete Bounds (Hill-Climb)",
-  "description": "Tighten four Lean 4 kernel-verified concrete security bounds (scaled by 100): Reed-Solomon list-decoding proximity gaps, ISW probing-masking leakage, cryptographic sponge indifferentiability, and SLH-DSA Merkle tree soundness. Smaller verified constants hold the record crown.",
+  "title": "Demo: Coding, Masking, Sponge & SLH-DSA Concrete Bounds (Hill-Climb)",
+  "description": "Tighten four Lean 4 kernel-verified concrete security bounds (scaled by 100): Reed-Solomon list-decoding proximity gaps, ISW probing-masking leakage, cryptographic sponge indifferentiability, and SLH-DSA Merkle tree soundness. Smaller verified constants hold the record crown. DEMO TRACK: the loss functions in Spec.lean are illustrative polynomials named after real protocols; they are not derived from published security reductions, and scores here are not real security bounds.",
   "tier": 2,
   "mode": "hillclimb",
   "repo": "local://missions/tier2-coding-bounds",
@@ -14,7 +14,9 @@
   ],
   "verifier": {
     "image": "sunstead/verifier-lean4:v0.1",
-    "command": ["./verify"],
+    "command": [
+      "./verify"
+    ],
     "timeout_sec": 120,
     "memory_mb": 2048
   },
@@ -24,7 +26,9 @@
       "id": "tighten_rs_list_bound",
       "title": "Minimize C in 100*rsListLoss(n,k) <= C*(n+k)^2",
       "description": "Tighten claimedRsListFactor (baseline 1400) for Reed-Solomon list-decoding proximity-gap soundness with 0 sorry and 0 custom axioms.",
-      "target_files": ["CodingBounds/RsListBound.lean"],
+      "target_files": [
+        "CodingBounds/RsListBound.lean"
+      ],
       "depends_on": [],
       "baseline_score": 1400.0
     },
@@ -32,7 +36,9 @@
       "id": "tighten_masking_leakage",
       "title": "Minimize C in 100*maskingLeakage(s,g) <= C*(s+g)^2",
       "description": "Tighten claimedMaskingFactor (baseline 1500; asymptotic extremum!) for ISW t-probing masking leakage with 0 sorry and 0 custom axioms.",
-      "target_files": ["CodingBounds/MaskingLeakage.lean"],
+      "target_files": [
+        "CodingBounds/MaskingLeakage.lean"
+      ],
       "depends_on": [],
       "baseline_score": 1500.0
     },
@@ -40,7 +46,9 @@
       "id": "tighten_sponge_birthday",
       "title": "Minimize C in 100*spongeBirthdayLoss(q,b) <= C*(q+b)^2",
       "description": "Tighten claimedSpongeFactor (baseline 1200) for SHA-3/Keccak sponge indifferentiability capacity loss with 0 sorry and 0 custom axioms.",
-      "target_files": ["CodingBounds/SpongeBirthday.lean"],
+      "target_files": [
+        "CodingBounds/SpongeBirthday.lean"
+      ],
       "depends_on": [],
       "baseline_score": 1200.0
     },
@@ -48,9 +56,12 @@
       "id": "tighten_merkle_soundness",
       "title": "Minimize C in 100*merkleSoundnessLoss(h,q) <= C*(h+q)^2",
       "description": "Tighten claimedMerkleFactor (baseline 1800; asymptotic extremum!) for SLH-DSA Merkle tree second-preimage soundness with 0 sorry and 0 custom axioms.",
-      "target_files": ["CodingBounds/MerkleSoundness.lean"],
+      "target_files": [
+        "CodingBounds/MerkleSoundness.lean"
+      ],
       "depends_on": [],
       "baseline_score": 1800.0
     }
-  ]
+  ],
+  "demo": true
 }

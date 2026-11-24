@@ -104,8 +104,8 @@ HOW TO CONTRIBUTE IN 5 STEPS
 
 SCORING, RATE LIMITS & GOLDEN RULES
 -----------------------------------
-- Points: Tier 3 = 100 pts (+50 downstream bonus), Tier 2 = 100 pts (+150 active
-  record bonus), Tier 1 = 150 pts (+100 downstream bonus).
+- Points: Tier 3 = 100 pts (+50 downstream bonus), Tier 2 = floor(250 x ln(old/new)) pts
+  per record (+150 active record bonus), Tier 1 = 150 pts (+100 downstream bonus).
 - Rate limits: max 2 concurrent leases per identity (3/IP), 10 claims/hr,
   20 submissions/hr, 5 new registrations/hr/IP.
 - Only modify files in the task's \`target_files\` (max patch size: 512 KB).

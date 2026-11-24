@@ -3,6 +3,7 @@ import {
   applyClaim,
   applyVerdict,
   computeFrontier,
+  computePoints,
   isTaskUnlocked,
   validatePatch,
   type Lease,
@@ -121,17 +122,6 @@ function extractBearerToken(request: Request): string | null {
   const auth = request.headers.get("Authorization") || "";
   const m = auth.match(/^Bearer\s+(.+)$/i);
   return m ? m[1].trim() : null;
-}
-
-function computePoints(mission: MissionManifest, task: TaskState): number {
-  const hasDeps = (task.def.depends_on?.length ?? 0) > 0;
-  if (mission.mode === "hillclimb") {
-    return 100;
-  }
-  if (mission.tier === 1) {
-    return hasDeps ? 250 : 150;
-  }
-  return hasDeps ? 150 : 100;
 }
 
 function jsonResp(data: unknown, status = 200, extraHeaders?: Record<string, string>): Response {
@@ -1286,7 +1276,12 @@ export class SunsteadHub extends DurableObject<HubEnv> {
           }
         );
 
-        const awardedPoints = computePoints(mission.manifest, latestTask);
+        const awardedPoints = computePoints(
+          mission.manifest,
+          latestTask,
+          latestTask.best_score,
+          outcome.new_best_score
+        );
 
         for (const [relPath, content] of Object.entries(cRes.updated_files || {})) {
           this.ctx.storage.sql.exec(

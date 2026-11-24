@@ -33,6 +33,8 @@ export interface MissionManifest {
   frozen_paths: string[];
   verifier: VerifierConfig;
   score_direction?: ScoreDirection;
+  /** Demo missions exercise the machinery; their results are not real research. */
+  demo?: boolean;
   tasks: TaskDefinition[];
 }
 
@@ -323,4 +325,35 @@ export function applyVerdict(
     new_best_score: newBestScore,
     unlocked_dependents: unlockedDependents,
   };
+}
+
+/**
+ * Points for an accepted submission.
+ *
+ * DAG tasks pay a flat amount by tier and depth. Hill-climb records pay
+ * floor(250 * |ln(new / previous)|): the log ratio is additive, so splitting one
+ * improvement into many tiny records never earns more than making it at once
+ * (and flooring makes it earn less). The first record on a task with no
+ * baseline pays 100.
+ */
+export function computePoints(
+  mission: MissionManifest,
+  task: TaskState,
+  previousBest: number | null,
+  newScore: number | null
+): number {
+  const hasDeps = (task.def.depends_on?.length ?? 0) > 0;
+  if (mission.mode === "hillclimb") {
+    if (previousBest === null || newScore === null) return 100;
+    if (previousBest > 0 && newScore > 0) {
+      return Math.max(0, Math.floor(250 * Math.abs(Math.log(newScore / previousBest))));
+    }
+    // Non-positive scores: fall back to relative change against |previous|.
+    const rel = Math.abs(newScore - previousBest) / Math.max(Math.abs(previousBest), 1);
+    return Math.max(0, Math.floor(250 * rel));
+  }
+  if (mission.tier === 1) {
+    return hasDeps ? 250 : 150;
+  }
+  return hasDeps ? 150 : 100;
 }
