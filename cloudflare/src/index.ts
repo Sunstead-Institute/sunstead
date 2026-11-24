@@ -15,10 +15,21 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    // Canonicalize www.sunstead.org -> https://sunstead.org
+    if (url.hostname === "www.sunstead.org") {
+      return new Response(null, {
+        status: 301,
+        headers: {
+          Location: `https://sunstead.org${url.pathname}${url.search}`,
+          ...SECURITY_HEADERS,
+        },
+      });
+    }
+
     // Serve Sunstead Foundation static UI directly at Cloudflare's edge.
-    if (request.method === "GET" && path in STATIC_ASSETS) {
+    if ((request.method === "GET" || request.method === "HEAD") && path in STATIC_ASSETS) {
       const asset = STATIC_ASSETS[path];
-      return new Response(asset.body, {
+      return new Response(request.method === "HEAD" ? null : asset.body, {
         headers: {
           "Content-Type": asset.contentType,
           "Cache-Control": path === "/" ? "public, max-age=60" : "public, max-age=300",
@@ -30,13 +41,17 @@ export default {
     // Route `/join.txt` and `/api/*` into the persistent SQLite Durable Object Hub.
     if (path === "/join.txt" || path.startsWith("/api/")) {
       const hub = env.HUB.getByName("sunstead-global-v1");
-      const resp = await hub.fetch(request);
+      const forwardReq =
+        request.method === "HEAD" && path === "/join.txt"
+          ? new Request(request.url, { method: "GET", headers: request.headers })
+          : request;
+      const resp = await hub.fetch(forwardReq);
       if (path === "/api/events") return resp;
       const headers = new Headers(resp.headers);
       for (const [k, v] of Object.entries(SECURITY_HEADERS)) {
         if (!headers.has(k)) headers.set(k, v);
       }
-      return new Response(resp.body, {
+      return new Response(request.method === "HEAD" ? null : resp.body, {
         status: resp.status,
         statusText: resp.statusText,
         headers,

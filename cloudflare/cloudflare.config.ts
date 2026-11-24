@@ -27,8 +27,7 @@ const worker = defineWorker({
   compatibilityFlags: ["nodejs_compat"],
   entrypoint,
   workersDev: true,
-  // Once sunstead.org transfers to Cloudflare DNS, uncomment:
-  // domains: ["sunstead.org"],
+  domains: ["sunstead.org", "www.sunstead.org"],
   exports: {
     SunsteadHub: exports.durableObject({ storage: "sqlite" }),
     Lean4Verifier: exports.durableObject({ storage: "sqlite", container: lean4Container }),
