@@ -84,6 +84,61 @@ def sunstead_audit :
 #print axioms sunstead_audit
 """,
     ),
+    "count_complement_sum": (
+        "MetaComplexity.CountComplement",
+        """import MetaComplexity.Spec
+import MetaComplexity.CountComplement
+
+def sunstead_audit :
+    ∀ (n : Nat) (P : Fin n → Bool),
+      MetaComplexity.countFin n P + MetaComplexity.countFin n (fun x => !P x) = n :=
+  @MetaComplexity.count_add_complement
+
+#print axioms sunstead_audit
+""",
+    ),
+    "count_mono": (
+        "MetaComplexity.CountMono",
+        """import MetaComplexity.Spec
+import MetaComplexity.CountMono
+
+def sunstead_audit :
+    ∀ {n : Nat} {P Q : Fin n → Bool},
+      (∀ x : Fin n, P x = true → Q x = true) →
+      MetaComplexity.countFin n P ≤ MetaComplexity.countFin n Q :=
+  @MetaComplexity.count_le_of_imp
+
+#print axioms sunstead_audit
+""",
+    ),
+    "union_bound_fin": (
+        "MetaComplexity.UnionBound",
+        """import MetaComplexity.Spec
+import MetaComplexity.UnionBound
+
+def sunstead_audit :
+    ∀ (n : Nat) (P Q : Fin n → Bool),
+      MetaComplexity.countFin n (fun x => P x || Q x) ≤
+      MetaComplexity.countFin n P + MetaComplexity.countFin n Q :=
+  @MetaComplexity.count_or_le_add
+
+#print axioms sunstead_audit
+""",
+    ),
+    "exponential_incompressibility": (
+        "MetaComplexity.ExpIncompressibility",
+        """import MetaComplexity.Spec
+import MetaComplexity.ExpIncompressibility
+
+def sunstead_audit :
+    ∀ {n c : Nat}, c ≤ n → ∀ (U : Fin (2 ^ (n - c)) → Fin (2 ^ n)),
+      (2 ^ c - 1) * 2 ^ (n - c) ≤ MetaComplexity.countFin (2 ^ n) (fun x => !MetaComplexity.inImage U x) ∧
+      MetaComplexity.countFin (2 ^ n) (MetaComplexity.inImage U) ≤ 2 ^ (n - c) :=
+  @MetaComplexity.exp_incompressible_bound
+
+#print axioms sunstead_audit
+""",
+    ),
 }
 
 

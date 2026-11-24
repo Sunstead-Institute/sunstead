@@ -15,12 +15,14 @@ RUN curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init
     && chmod -R a+rX /opt/elan
 
 COPY missions/tier1-metacomplexity-dag /missions/tier1-metacomplexity-dag
+COPY missions/tier1-crypto-algebra-dag /missions/tier1-crypto-algebra-dag
 COPY missions/tier2-soundness-bound /missions/tier2-soundness-bound
+COPY missions/tier2-coding-bounds /missions/tier2-coding-bounds
 COPY cloudflare/containers/verifier_server.py /opt/verifier_server.py
 
 # Make /missions strictly read-only to the unprivileged `verifier` user.
 RUN chmod -R a-w,a+rX /missions \
-    && chmod a+rx /missions/tier1-metacomplexity-dag/verify /missions/tier2-soundness-bound/verify /opt/verifier_server.py \
+    && chmod a+rx /missions/tier1-metacomplexity-dag/verify /missions/tier1-crypto-algebra-dag/verify /missions/tier2-soundness-bound/verify /missions/tier2-coding-bounds/verify /opt/verifier_server.py \
     && useradd -m -u 10001 verifier \
     && mkdir -p /work \
     && chown verifier:verifier /work

@@ -1,0 +1,56 @@
+{
+  "id": "tier2-coding-bounds",
+  "title": "Coding, Masking, Sponge & SLH-DSA Concrete Bounds (Hill-Climb)",
+  "description": "Tighten four Lean 4 kernel-verified concrete security bounds (scaled by 100): Reed-Solomon list-decoding proximity gaps, ISW probing-masking leakage, cryptographic sponge indifferentiability, and SLH-DSA Merkle tree soundness. Smaller verified constants hold the record crown.",
+  "tier": 2,
+  "mode": "hillclimb",
+  "repo": "local://missions/tier2-coding-bounds",
+  "frozen_paths": [
+    "CodingBounds/Spec.lean",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.1",
+    "command": ["./verify"],
+    "timeout_sec": 120,
+    "memory_mb": 2048
+  },
+  "score_direction": "minimize",
+  "tasks": [
+    {
+      "id": "tighten_rs_list_bound",
+      "title": "Minimize C in 100*rsListLoss(n,k) <= C*(n+k)^2",
+      "description": "Tighten claimedRsListFactor (baseline 1400) for Reed-Solomon list-decoding proximity-gap soundness with 0 sorry and 0 custom axioms.",
+      "target_files": ["CodingBounds/RsListBound.lean"],
+      "depends_on": [],
+      "baseline_score": 1400.0
+    },
+    {
+      "id": "tighten_masking_leakage",
+      "title": "Minimize C in 100*maskingLeakage(s,g) <= C*(s+g)^2",
+      "description": "Tighten claimedMaskingFactor (baseline 1500; asymptotic extremum!) for ISW t-probing masking leakage with 0 sorry and 0 custom axioms.",
+      "target_files": ["CodingBounds/MaskingLeakage.lean"],
+      "depends_on": [],
+      "baseline_score": 1500.0
+    },
+    {
+      "id": "tighten_sponge_birthday",
+      "title": "Minimize C in 100*spongeBirthdayLoss(q,b) <= C*(q+b)^2",
+      "description": "Tighten claimedSpongeFactor (baseline 1200) for SHA-3/Keccak sponge indifferentiability capacity loss with 0 sorry and 0 custom axioms.",
+      "target_files": ["CodingBounds/SpongeBirthday.lean"],
+      "depends_on": [],
+      "baseline_score": 1200.0
+    },
+    {
+      "id": "tighten_merkle_soundness",
+      "title": "Minimize C in 100*merkleSoundnessLoss(h,q) <= C*(h+q)^2",
+      "description": "Tighten claimedMerkleFactor (baseline 1800; asymptotic extremum!) for SLH-DSA Merkle tree second-preimage soundness with 0 sorry and 0 custom axioms.",
+      "target_files": ["CodingBounds/MerkleSoundness.lean"],
+      "depends_on": [],
+      "baseline_score": 1800.0
+    }
+  ]
+}

@@ -39,6 +39,36 @@ def sunstead_audit_bound :
 """,
         "100 * foldingError(d,r) <= {factor} * (d+r)^2",
     ),
+    "tighten_hybrid_kem_bound": (
+        "SoundnessBound.HybridKemBound",
+        """import SoundnessBound.Spec
+import SoundnessBound.HybridKemBound
+
+def sunstead_audit_bound :
+    ∀ n q : Nat, n ≥ 1 → q ≥ 1 →
+      100 * SoundnessBound.hybridKemLoss n q ≤ SoundnessBound.claimedHybridKemFactor * ((n + q) * (n + q)) :=
+  SoundnessBound.hybrid_kem_bound
+
+#print axioms sunstead_audit_bound
+#eval IO.println s!"SUNSTEAD_SCORE={SoundnessBound.claimedHybridKemFactor}"
+""",
+        "100 * hybridKemLoss(n,q) <= {factor} * (n+q)^2",
+    ),
+    "tighten_frost_forking_bound": (
+        "SoundnessBound.FrostForkingBound",
+        """import SoundnessBound.Spec
+import SoundnessBound.FrostForkingBound
+
+def sunstead_audit_bound :
+    ∀ t q : Nat, t ≥ 1 → q ≥ 1 →
+      100 * SoundnessBound.frostForkingLoss t q ≤ SoundnessBound.claimedFrostForkingFactor * ((t + q) * (t + q)) :=
+  SoundnessBound.frost_forking_bound
+
+#print axioms sunstead_audit_bound
+#eval IO.println s!"SUNSTEAD_SCORE={SoundnessBound.claimedFrostForkingFactor}"
+""",
+        "100 * frostForkingLoss(t,q) <= {factor} * (t+q)^2",
+    ),
 }
 
 

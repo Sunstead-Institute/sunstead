@@ -11,9 +11,13 @@ TASK_MAP = {
     "ct_select": ("src/ct_select.rs", "verify_ct_select"),
     "montgomery_reduce": ("src/montgomery.rs", "verify_montgomery_reduce"),
     "power2round": ("src/power2round.rs", "verify_power2round"),
+    "decompose_lowbits": ("src/decompose.rs", "verify_decompose"),
     "add_reduce": ("src/add_reduce.rs", "verify_add_reduce"),
     "sub_reduce": ("src/sub_reduce.rs", "verify_sub_reduce"),
+    "make_hint": ("src/make_hint.rs", "verify_make_hint"),
+    "use_hint": ("src/use_hint.rs", "verify_use_hint"),
     "ct_butterfly": ("src/butterfly.rs", "verify_ct_butterfly"),
+    "inv_butterfly": ("src/inv_butterfly.rs", "verify_inv_butterfly"),
 }
 
 FORBIDDEN_PATTERNS = [

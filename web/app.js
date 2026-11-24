@@ -261,10 +261,10 @@ function renderDag(detail) {
   const manifest = detail.mission.manifest;
   const layers = computeLayers(tasks);
 
-  const nodeW = 246;
+  const nodeW = 262;
   const nodeH = 92;
   const colGap = 86;
-  const rowGap = 24;
+  const rowGap = 22;
   const padX = 32;
   const padY = 28;
 
@@ -274,7 +274,7 @@ function renderDag(detail) {
   const height = Math.max(330, padY * 2 + maxRows * nodeH + (maxRows - 1) * rowGap);
 
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-  svg.style.minHeight = `${Math.min(height, 560)}px`;
+  svg.style.minHeight = `${Math.min(height, 640)}px`;
 
   const pos = new Map();
   let colPosIdx = 0;
@@ -326,7 +326,9 @@ function renderDag(detail) {
     const c = nodePalette(t);
     const sel = t.def.id === state.selectedTaskId ? "selected" : "";
     const shortTitle =
-      t.def.title.length > 31 ? t.def.title.slice(0, 30) + "…" : t.def.title;
+      t.def.title.length > 33 ? t.def.title.slice(0, 32) + "…" : t.def.title;
+    const shortId =
+      t.def.id.length > 23 ? t.def.id.slice(0, 22) + "…" : t.def.id;
     let footer = `${t.attempts} run${t.attempts === 1 ? "" : "s"}`;
     if (manifest.mode === "hillclimb" && t.best_score !== null && t.best_score !== undefined) {
       footer = `best: ${t.best_score} · ${footer}`;
@@ -342,7 +344,7 @@ function renderDag(detail) {
               fill="${c.fill}" stroke="${c.stroke}" stroke-width="1.5" />
         <line x1="12" y1="29" x2="${nodeW - 12}" y2="29" stroke="${c.stroke}" stroke-opacity="0.24" stroke-width="1" />
         <text x="12" y="20" fill="${c.badgeColor}" font-size="9.5" font-weight="700" letter-spacing="0.08em" font-family="Inter, sans-serif">${c.badge}</text>
-        <text x="${nodeW - 12}" y="20" text-anchor="end" fill="#6F747D" font-size="10" font-family="JetBrains Mono, monospace">${escapeHtml(t.def.id)}</text>
+        <text x="${nodeW - 12}" y="20" text-anchor="end" fill="#6F747D" font-size="10" font-family="JetBrains Mono, monospace">${escapeHtml(shortId)}</text>
         <text x="12" y="51" fill="${c.titleColor}" font-size="15.5" font-weight="600" font-family="Cormorant Garamond, Georgia, serif">${escapeHtml(shortTitle)}</text>
         <text x="12" y="75" fill="#5A5E66" font-size="10.8" font-family="JetBrains Mono, monospace">${escapeHtml(footer)}</text>
       </g>
@@ -434,6 +436,7 @@ function renderEvents() {
       if (ev.kind === "submission_accepted") { cls = "accepted"; icon = "✓"; }
       else if (ev.kind === "submission_rejected") { cls = "rejected"; icon = "✕"; }
       else if (ev.kind === "lease_claimed") { cls = "claimed"; icon = "●"; }
+      else if (ev.kind === "lease_released") { cls = "claimed"; icon = "○"; }
       const scoreBadge =
         ev.score !== null && ev.score !== undefined ? ` · score=${ev.score}` : "";
       return `
@@ -457,16 +460,26 @@ function renderLeaderboard(entries) {
     return;
   }
   el.innerHTML = entries
-    .map(
-      (e, idx) => `
+    .map((e, idx) => {
+      const name = e.display_name || e.contributor;
+      const ghBadge = e.github
+        ? ` <a href="https://github.com/${encodeURIComponent(e.github)}" target="_blank" rel="noopener" style="color:var(--teal);text-decoration:none;font-size:11px">@${escapeHtml(e.github)}</a>`
+        : "";
+      const pts = e.points !== undefined ? `${e.points} pts · ` : "";
+      const crowns = e.active_records > 0 ? ` · ★${e.active_records}` : "";
+      return `
       <div class="lb-row">
-        <div><strong>#${idx + 1} ${escapeHtml(e.contributor)}</strong></div>
-        <div class="small" style="font-family:var(--mono);color:var(--teal);font-weight:500">
-          ${e.verified_tasks} verified · ${e.accepted_submissions}/${e.total_submissions}
+        <div>
+          <strong>#${idx + 1} ${escapeHtml(name)}</strong>${ghBadge}
+          <div class="muted" style="font-size:11px;font-family:var(--mono)">${escapeHtml(e.contributor)}</div>
+        </div>
+        <div class="small" style="font-family:var(--mono);color:var(--teal);font-weight:500;text-align:right">
+          <div>${pts}${e.verified_tasks} verified${crowns}</div>
+          <div class="muted" style="font-size:10.5px">${e.accepted_submissions}/${e.total_submissions} accepted</div>
         </div>
       </div>
-    `
-    )
+    `;
+    })
     .join("");
 }
 
@@ -494,7 +507,7 @@ function connectSse() {
     }
   };
 
-  ["lease_claimed", "verification_started", "submission_accepted", "submission_rejected"].forEach(
+  ["lease_claimed", "lease_released", "verification_started", "submission_accepted", "submission_rejected"].forEach(
     (name) => es.addEventListener(name, handle)
   );
 }

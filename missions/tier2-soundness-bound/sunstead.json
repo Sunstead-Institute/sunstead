@@ -1,7 +1,7 @@
 {
   "id": "tier2-soundness-bound",
-  "title": "Concrete Multi-User & Folding Security Bounds (Hill-Climbing)",
-  "description": "Tighten two Lean 4 kernel-verified concrete security reduction bounds (scaled by 100): a multi-user/multi-query signing reduction and an r-round polynomial folding error bound. Smaller verified constants strictly climb the leaderboard.",
+  "title": "Concrete Multi-User, Folding, Hybrid KEM & FROST Bounds",
+  "description": "Tighten four Lean 4 kernel-verified concrete cryptographic reduction bounds (scaled by 100): multi-user signing, polynomial folding (FRI/WHIR), hybrid PQ+Classical KEM combining, and FROST threshold Schnorr forking. Smaller verified constants strictly climb the leaderboard.",
   "tier": 2,
   "mode": "hillclimb",
   "repo": "local://missions/tier2-soundness-bound",
@@ -35,6 +35,22 @@
       "target_files": ["SoundnessBound/FoldingBound.lean"],
       "depends_on": [],
       "baseline_score": 1600.0
+    },
+    {
+      "id": "tighten_hybrid_kem_bound",
+      "title": "Minimize C in 100*hybridKemLoss(n,q) <= C*(n+q)^2",
+      "description": "Tighten claimedHybridKemFactor (baseline 1200) for a multi-target hybrid PQ+Classical KEM IND-CCA reduction with 0 sorry and 0 custom axioms.",
+      "target_files": ["SoundnessBound/HybridKemBound.lean"],
+      "depends_on": [],
+      "baseline_score": 1200.0
+    },
+    {
+      "id": "tighten_frost_forking_bound",
+      "title": "Minimize C in 100*frostForkingLoss(t,q) <= C*(t+q)^2",
+      "description": "Tighten claimedFrostForkingFactor (baseline 2000) for FROST threshold Schnorr forking-lemma soundness with 0 sorry and 0 custom axioms.",
+      "target_files": ["SoundnessBound/FrostForkingBound.lean"],
+      "depends_on": [],
+      "baseline_score": 2000.0
     }
   ]
 }

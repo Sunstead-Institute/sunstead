@@ -1,0 +1,192 @@
+#!/usr/bin/env python3
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+
+ALLOWED_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
+
+AUDIT_TEMPLATES = {
+    "xor_involution": (
+        "CryptoAlgebra.XorInvolution",
+        """import CryptoAlgebra.Spec
+import CryptoAlgebra.XorInvolution
+
+def sunstead_audit :
+    ∀ {n : Nat} (m k : BitVec n), CryptoAlgebra.otpEnc (CryptoAlgebra.otpEnc m k) k = m :=
+  @CryptoAlgebra.otp_dec_enc
+
+#print axioms sunstead_audit
+""",
+    ),
+    "xor_bijection": (
+        "CryptoAlgebra.XorBijection",
+        """import CryptoAlgebra.Spec
+import CryptoAlgebra.XorBijection
+
+def sunstead_audit :
+    ∀ {n : Nat} (m : BitVec n), CryptoAlgebra.Bijective (CryptoAlgebra.otpEnc m) :=
+  @CryptoAlgebra.otp_enc_bijective
+
+#print axioms sunstead_audit
+""",
+    ),
+    "otp_perfect_secrecy": (
+        "CryptoAlgebra.OtpPerfectSecrecy",
+        """import CryptoAlgebra.Spec
+import CryptoAlgebra.OtpPerfectSecrecy
+
+def sunstead_audit :
+    ∀ {n : Nat} (m c : BitVec n),
+      ∃ k : BitVec n, CryptoAlgebra.otpEnc m k = c ∧ ∀ k', CryptoAlgebra.otpEnc m k' = c → k' = k :=
+  @CryptoAlgebra.otp_unique_key
+
+#print axioms sunstead_audit
+""",
+    ),
+    "mod_add_laws": (
+        "CryptoAlgebra.ModAddLaws",
+        """import CryptoAlgebra.Spec
+import CryptoAlgebra.ModAddLaws
+
+def sunstead_audit :
+    ∀ (q a b c : Nat),
+      CryptoAlgebra.modAdd q a b = CryptoAlgebra.modAdd q b a ∧
+      CryptoAlgebra.modAdd q (CryptoAlgebra.modAdd q a b) c =
+        CryptoAlgebra.modAdd q a (CryptoAlgebra.modAdd q b c) :=
+  @CryptoAlgebra.modAdd_comm_assoc
+
+#print axioms sunstead_audit
+""",
+    ),
+    "mod_mul_dist": (
+        "CryptoAlgebra.ModMulDist",
+        """import CryptoAlgebra.Spec
+import CryptoAlgebra.ModMulDist
+
+def sunstead_audit :
+    ∀ (q a b c : Nat),
+      CryptoAlgebra.modMul q a b = CryptoAlgebra.modMul q b a ∧
+      CryptoAlgebra.modMul q (CryptoAlgebra.modMul q a b) c =
+        CryptoAlgebra.modMul q a (CryptoAlgebra.modMul q b c) ∧
+      CryptoAlgebra.modMul q a (CryptoAlgebra.modAdd q b c) =
+        CryptoAlgebra.modAdd q (CryptoAlgebra.modMul q a b) (CryptoAlgebra.modMul q a c) :=
+  @CryptoAlgebra.modMul_comm_assoc_dist
+
+#print axioms sunstead_audit
+""",
+    ),
+    "crt_uniqueness": (
+        "CryptoAlgebra.CrtUniqueness",
+        """import CryptoAlgebra.Spec
+import CryptoAlgebra.CrtUniqueness
+
+def sunstead_audit :
+    ∀ {m n x y : Nat},
+      Nat.gcd m n = 1 → x % m = y % m → x % n = y % n → x % (m * n) = y % (m * n) :=
+  @CryptoAlgebra.crt_unique_mod_mul
+
+#print axioms sunstead_audit
+""",
+    ),
+    "diffie_hellman_soundness": (
+        "CryptoAlgebra.DiffieHellman",
+        """import CryptoAlgebra.Spec
+import CryptoAlgebra.DiffieHellman
+
+def sunstead_audit :
+    ∀ (g a b p : Nat),
+      CryptoAlgebra.powMod (CryptoAlgebra.powMod g a p) b p =
+        CryptoAlgebra.powMod (CryptoAlgebra.powMod g b p) a p :=
+  @CryptoAlgebra.dh_shared_secret_eq
+
+#print axioms sunstead_audit
+""",
+    ),
+    "shamir_linear_recovery": (
+        "CryptoAlgebra.ShamirRecovery",
+        """import CryptoAlgebra.Spec
+import CryptoAlgebra.ShamirRecovery
+
+def sunstead_audit :
+    ∀ {q s a x1 x2 inv_d : Nat},
+      s < q → x1 < x2 → ((x2 - x1) * inv_d) % q = 1 % q →
+      CryptoAlgebra.lagrangeRecover q x1 (CryptoAlgebra.shamirEval q s a x1) x2 (CryptoAlgebra.shamirEval q s a x2) inv_d = s :=
+  @CryptoAlgebra.shamir_recover_secret
+
+#print axioms sunstead_audit
+""",
+    ),
+}
+
+
+def emit(ok: bool, summary: str, score=None):
+    out = {"ok": ok, "summary": summary}
+    if score is not None:
+        out["score"] = score
+    print(json.dumps(out))
+    sys.exit(0 if ok else 1)
+
+
+def check_axioms(output: str, decl_name: str):
+    no_ax = f"'{decl_name}' does not depend on any axioms"
+    if no_ax in output:
+        return []
+    m = re.search(rf"'{re.escape(decl_name)}' depends on axioms: \[([^\]]*)\]", output)
+    if not m:
+        return ["<missing axiom report>"]
+    found = [a.strip() for a in m.group(1).split(",") if a.strip()]
+    return [a for a in found if a not in ALLOWED_AXIOMS]
+
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] not in AUDIT_TEMPLATES:
+        emit(False, f"unknown task id: {sys.argv[1:]}")
+
+    task_id = sys.argv[1]
+    target_mod, audit_src = AUDIT_TEMPLATES[task_id]
+
+    work = "/tmp/verify_run"
+    if os.path.exists(work):
+        shutil.rmtree(work)
+    shutil.copytree("/work", work)
+
+    build = subprocess.run(
+        ["lake", "build", target_mod],
+        cwd=work,
+        capture_output=True,
+        text=True,
+    )
+    if build.returncode != 0:
+        tail = (build.stdout + "\n" + build.stderr).strip()[-350:]
+        emit(False, f"lake build {target_mod} failed: {tail}")
+
+    audit_path = os.path.join(work, "_SunsteadAudit.lean")
+    with open(audit_path, "w", encoding="utf-8") as f:
+        f.write(audit_src)
+
+    audit = subprocess.run(
+        ["lake", "env", "lean", "_SunsteadAudit.lean"],
+        cwd=work,
+        capture_output=True,
+        text=True,
+    )
+    combined = audit.stdout + "\n" + audit.stderr
+    if audit.returncode != 0:
+        emit(False, f"Lean 4 audit failed: {combined.strip()[-350:]}")
+
+    bad_axioms = check_axioms(combined, "sunstead_audit")
+    if bad_axioms:
+        emit(False, f"forbidden axioms detected: {', '.join(bad_axioms)}")
+
+    emit(
+        True,
+        f"Lean 4 kernel verified `{task_id}` (0 sorry, 0 custom axioms)",
+        score=1.0,
+    )
+
+
+if __name__ == "__main__":
+    main()
