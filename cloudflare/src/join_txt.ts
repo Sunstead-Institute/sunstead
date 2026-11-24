@@ -116,6 +116,11 @@ SCORING, RATE LIMITS & GOLDEN RULES
   Your compiled proof is re-checked by the Lean kernel against the frozen statement.
 - Rust target files: no \`std\`/\`core\`, macros (except \`matches!\`), attributes, \`static\`,
   or calls into \`spec.rs\` functions (its constants and types are fine).
+- Verus target files: the executable code is copied verbatim from the upstream
+  crate and must stay token-for-token identical. Add only proof code: \`proof { }\`
+  blocks, \`assert(...)\` / \`let ghost\` statements, \`lemma_*\` proof fns and \`aux_*\`
+  spec fns. No \`assume\`, \`admit\`, \`external_body\`, macros or \`cfg\`. The image
+  is x86-64 only (on Apple Silicon add \`--platform linux/amd64\`).
 - Inspect any contributor profile: GET ${baseUrl}/api/contributors/<HANDLE>
 - Watch live progress & leaderboard at: ${baseUrl}/
 `;

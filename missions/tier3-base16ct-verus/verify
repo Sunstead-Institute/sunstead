@@ -1,0 +1,29 @@
+#!/usr/bin/env python3
+"""Frozen verifier for `tier3-base16ct-verus`.
+
+Checking logic lives in the trusted harness baked into the verifier image
+(/opt/sunstead/sunstead_sandbox.py). Every task file must be its frozen
+statement (statements/<module>.rs) plus proof code only; each statement's
+executable function must match the vendored base16ct 1.0.0 source token for
+token; then Verus verifies the task's module as an unprivileged user.
+"""
+import sys
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, verus_verify  # noqa: E402
+
+UP = "upstream/base16ct-1.0.0/src/"
+TASKS = {
+    "lower_encode_nibble": {"module": "lower_encode", "upstream": [(UP + "lower.rs", "encode_nibble")]},
+    "lower_decode_nibble": {"module": "lower_decode", "upstream": [(UP + "lower.rs", "decode_nibble")]},
+    "upper_encode_nibble": {"module": "upper_encode", "upstream": [(UP + "upper.rs", "encode_nibble")]},
+    "upper_decode_nibble": {"module": "upper_decode", "upstream": [(UP + "upper.rs", "decode_nibble")]},
+    "mixed_decode_nibble": {"module": "mixed_decode", "upstream": [(UP + "mixed.rs", "decode_nibble")]},
+    "decode_pair_flags": {"module": "decode_pair"},
+    "mixed_pair_correct": {"module": "mixed_pair"},
+}
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>")
+    verus_verify(sys.argv[1], tasks=TASKS)

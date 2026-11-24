@@ -27,11 +27,12 @@ Needs Node 22+, Python 3 and Docker (the dev server builds the verifier containe
    ```
    CI runs the first two on every pull request (`.github/workflows/ci.yml`).
 
-## Included Launch Security Arenas (45 Obligations across 6 Missions)
+## Included Launch Security Arenas (52 Obligations across 7 Missions)
 
 | Tier | Mission ID | Mode | Verifier | What It Proves |
 | :--- | :--- | :--- | :--- | :--- |
 | **Tier 3** | `tier3-mldsa-arith` | 11-Node DAG | `sunstead/verifier-rust:v0.1` | NIST FIPS 204 ML-DSA ($q = 8{,}380{,}417$) constant-time arithmetic pipeline (`centered_mod`, `ct_select`, `montgomery_reduce`, `power2round`, `decompose_lowbits` → `add_reduce`, `sub_reduce`, `make_hint`, `use_hint` → `ct_butterfly`, `inv_butterfly`) |
+| **Tier 3** | `tier3-base16ct-verus` | 7-Node DAG | `sunstead/verifier-verus:v0.1` | Verus proofs over the **published code** of RustCrypto `base16ct` 1.0.0 (constant-time hex): `encode_nibble`/`decode_nibble` (lower, upper, mixed case) produce the right digits and accept exactly the hex alphabet, and `decode_inner` flags every invalid pair. Executable code is checked token-for-token against the crates.io release |
 | **Tier 3** | `tier3-chacha-x509` | 8-Node DAG | `sunstead/verifier-rust:v0.1` | RFC 8439 constant-time ChaCha20 (`ct_eq_32`, `ct_cmov_u32`, `chacha20_quarter_round` → `chacha20_block`) & zero-panic canonical ITU-T X.690 ASN.1 DER parsers (`der_parse_length` → `der_parse_tlv` → `der_parse_integer`, `der_parse_oid`) |
 | **Tier 2 (demo)** | `tier2-soundness-bound` | 4-Track Hill-Climb | `sunstead/verifier-lean4:v0.1` | Tightening Lean 4 kernel-verified concrete multi-user signing, polynomial folding (FRI/WHIR), hybrid PQ+Classical KEM, and FROST threshold Schnorr bounds (`0 sorry`, `0 custom axioms`) |
 | **Tier 2 (demo)** | `tier2-coding-bounds` | 4-Track Hill-Climb | `sunstead/verifier-lean4:v0.1` | Tightening Lean 4 kernel-verified Reed–Solomon list-decoding, ISW $t$-probing masking leakage, cryptographic sponge capacity, and SLH-DSA Merkle tree soundness bounds (`0 sorry`, `0 custom axioms`) |
@@ -45,6 +46,7 @@ Contributor code never shares a user with the code that decides the verdict
 
 - `verify` starts as root and builds contributor code only as `sunstead-runner`, in a scratch copy, with rlimits and a clean environment. Every runner process is killed before and after each step, so nothing it starts survives into the verdict or into the next submission.
 - **Lean:** the frozen spec and frozen task statements are built separately as `sunstead-checker`. `SunsteadCheck.lean` then replays the contributor's compiled `.olean` through the Lean kernel, checks the target theorem proves exactly the frozen statement, and collects its axioms. No text printed by the build is trusted.
+- **Verus:** the target file must be the frozen statement (the upstream crate's function, verbatim, plus `ensures`) with only proof code added; this is checked token for token after erasing proof code, and the statement is checked against the vendored crates.io source. `scripts/check-upstream.py` checks the vendored source against crates.io.
 - **Rust:** target files may not use `std`/`core`, macros, attributes or `spec.rs` functions, so they cannot print, exit early or call the reference implementation; the frozen test must report its exact pass count.
 - `python3 scripts/redteam.py` runs known attacks (spoofed axiom reports, fake scores, weakened statements, notation hijacks, build-time tampering, early exit, spec delegation) against the verifier images and fails if any is accepted.
 

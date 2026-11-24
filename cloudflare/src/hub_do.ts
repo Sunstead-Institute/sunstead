@@ -13,12 +13,17 @@ import {
 } from "./core";
 import { SEED_MISSIONS, type SeedMission } from "./generated/missions";
 import { renderJoinTxt } from "./join_txt";
-import type { Lean4Verifier, RustVerifier } from "./containers";
+import type { Lean4Verifier, RustVerifier, VerusVerifier } from "./containers";
 
 export interface HubEnv {
   HUB: DurableObjectNamespace<SunsteadHub>;
   LEAN4_VERIFIER: DurableObjectNamespace<Lean4Verifier>;
   RUST_VERIFIER: DurableObjectNamespace<RustVerifier>;
+  VERUS_VERIFIER: DurableObjectNamespace<VerusVerifier>;
+}
+
+function parseVerifierKind(kind: string): SeedMission["verifier_kind"] {
+  return kind === "rust" || kind === "verus" ? kind : "lean4";
 }
 
 interface HubEvent {
@@ -381,7 +386,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     const parsed: SeedMission[] = rows.map((r) => ({
       manifest: JSON.parse(r.manifest_json) as MissionManifest,
       spec_sha256: r.spec_sha256,
-      verifier_kind: r.verifier_kind === "rust" ? "rust" : "lean4",
+      verifier_kind: parseVerifierKind(r.verifier_kind),
     }));
 
     parsed.sort((a, b) =>
@@ -403,7 +408,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     return {
       manifest: JSON.parse(rows[0].manifest_json) as MissionManifest,
       spec_sha256: rows[0].spec_sha256,
-      verifier_kind: rows[0].verifier_kind === "rust" ? "rust" : "lean4",
+      verifier_kind: parseVerifierKind(rows[0].verifier_kind),
     };
   }
 
@@ -570,6 +575,9 @@ export class SunsteadHub extends DurableObject<HubEnv> {
   private getVerifierStub(mission: SeedMission) {
     if (mission.verifier_kind === "rust") {
       return this.env.RUST_VERIFIER.getByName(`rust:${mission.manifest.id}`);
+    }
+    if (mission.verifier_kind === "verus") {
+      return this.env.VERUS_VERIFIER.getByName(`verus:${mission.manifest.id}`);
     }
     return this.env.LEAN4_VERIFIER.getByName(`lean4:${mission.manifest.id}`);
   }

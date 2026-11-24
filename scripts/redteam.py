@@ -30,6 +30,7 @@ IMAGES = {
     "tier1-crypto-algebra-dag": "sunstead/verifier-lean4:v0.1",
     "tier2-soundness-bound": "sunstead/verifier-lean4:v0.1",
     "tier2-coding-bounds": "sunstead/verifier-lean4:v0.1",
+    "tier3-base16ct-verus": "sunstead/verifier-verus:v0.1",
 }
 
 HONEST_CENTERED_MOD = """use crate::spec::{HALF_Q, Q};
@@ -179,6 +180,91 @@ end SoundnessBound
 """},
      False, None, "fake score line and fake axiom report for an unproved factor of 1"),
 ]
+
+
+# ---------------- Verus (base16ct) ----------------
+B16 = "tier3-base16ct-verus"
+B16_DIR = os.path.join(MISSIONS, B16)
+B16_FIXTURES = os.path.join(ROOT, "scripts", "redteam-fixtures", "base16ct")
+B16_TASKS = {
+    "lower_encode_nibble": "lower_encode", "lower_decode_nibble": "lower_decode",
+    "upper_encode_nibble": "upper_encode", "upper_decode_nibble": "upper_decode",
+    "mixed_decode_nibble": "mixed_decode", "decode_pair_flags": "decode_pair",
+    "mixed_pair_correct": "mixed_pair",
+}
+
+
+def _read(path):
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+def b16_honest(module):
+    return _read(os.path.join(B16_FIXTURES, module + ".rs"))
+
+
+def b16_statement(module):
+    return _read(os.path.join(B16_DIR, "statements", module + ".rs"))
+
+
+def _b16_cases():
+    cases = []
+    for task, module in B16_TASKS.items():
+        cases.append((f"verus-honest-{task}", B16, task, {f"src/{module}.rs": b16_honest(module)},
+                      True, None, "honest proof over the verbatim upstream code must pass"))
+    dec = "lower_decode"
+    honest, stmt = b16_honest(dec), b16_statement(dec)
+    tail_ = "    ret as u16\n"
+    end = "} // verus!"
+    bad = [
+        ("verus-unproven-statement", {f"src/{dec}.rs": stmt},
+         "the statement alone (no proof) must not verify"),
+        ("verus-assert-false", {f"src/{dec}.rs": honest.replace(tail_, "    assert(false);\n" + tail_)},
+         "a false assertion must fail in Verus itself"),
+        ("verus-assume-false", {f"src/{dec}.rs": stmt.replace(tail_, "    proof { assume(false); }\n" + tail_)},
+         "assume(false) proves anything"),
+        ("verus-admit", {f"src/{dec}.rs": stmt.replace(tail_, "    proof { admit(); }\n" + tail_)},
+         "admit() proves anything"),
+        ("verus-external-body-lemma", {f"src/{dec}.rs": stmt.replace(
+            tail_, "    proof { lemma_cheat(); }\n" + tail_).replace(
+            end, "#[verifier::external_body]\nproof fn lemma_cheat() ensures false {}\n" + end)},
+         "an unproven lemma marked external_body"),
+        ("verus-external-body-exec", {f"src/{dec}.rs": stmt.replace(
+            "pub fn decode_nibble", "#[verifier::external_body]\npub fn decode_nibble")},
+         "trusting the function under test"),
+        ("verus-changed-exec", {f"src/{dec}.rs": stmt.replace(
+            stmt[stmt.index("    let byte = src as i16;"):stmt.index(tail_) + len(tail_)],
+            "    if src >= 0x30 && src <= 0x39 { (src - 0x30) as u16 }\n"
+            "    else if src >= 0x61 && src <= 0x66 { (src - 0x61 + 10) as u16 }\n"
+            "    else { 0xffff }\n")},
+         "proving a rewritten function instead of the upstream code"),
+        ("verus-weakened-ensures", {f"src/{dec}.rs": stmt.replace(
+            "        r == nibble_result(src, is_digit(src) || is_lower_af(src)),\n", "        true,\n")},
+         "dropping the specification"),
+        ("verus-cfg-hidden", {f"src/{dec}.rs": honest.replace(
+            tail_, "    proof { #[cfg(any())] assume(false); }\n" + tail_)},
+         "code hidden behind cfg"),
+        ("verus-macro-in-proof", {f"src/{dec}.rs": honest.replace(
+            tail_, "    proof { vstd::seq![1u8]; }\n" + tail_)},
+         "macros in proof code"),
+        ("verus-added-exec-fn", {f"src/{dec}.rs": honest.replace(end, "pub fn helper() -> u8 { 0 }\n" + end)},
+         "new executable code next to the upstream function"),
+        ("verus-statement-and-src-changed", {
+            f"statements/{dec}.rs": stmt.replace("ret as u16", "(ret as u16) & 0xff"),
+            f"src/{dec}.rs": stmt.replace("ret as u16", "(ret as u16) & 0xff")},
+         "statement edited to differ from upstream (the hub also rejects frozen-path edits)"),
+    ]
+    for name, files, why in bad:
+        cases.append((name, B16, "lower_decode_nibble", files, False, None, why))
+    cases.append(("verus-tampered-dependency", B16, "mixed_pair_correct", {
+        "src/mixed_pair.rs": b16_honest("mixed_pair"),
+        "src/decode_pair.rs": b16_statement("decode_pair").replace(
+            "{\n}\n", "{\n    assume(false);\n}\n")},
+        False, None, "a lemma this task relies on proved by assume(false) in another task file"))
+    return cases
+
+
+CASES += _b16_cases()
 
 
 def make_work_tree(mission, files):

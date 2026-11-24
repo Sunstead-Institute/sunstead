@@ -167,6 +167,7 @@ v0.1 chose Rust + Verus for the hub and planned to verify its state machine in V
 
 ## 6. Flagship Security Arenas (Tiers 1–3 + Mission #0)
 
+- **Tier 3, first real-code mission (`tier3-base16ct-verus`, Nov 2026):** Verus proofs over RustCrypto `base16ct` 1.0.0 exactly as published. Contributors may only add proof code; the harness erases it and compares the rest token for token with a frozen statement, whose executable code is in turn compared with the vendored crates.io source. This is the template for verifying existing crates; next candidates are the arithmetic in RustCrypto `ml-dsa`/`ml-kem` (needs monomorphised copies of generic code, checked by differential tests).
 - **Tier 3 Flagship (`pq-signatures`):** Functional correctness, overflow-freedom, and constant-time verification of open-source Rust **ML-DSA (FIPS 204)** and **SLH-DSA (FIPS 205)** (plus **ASN.1 / X.509 parser** as follow-up). Breaks cleanly into 60–150 isolated proof files for daily visible `0% → 100%` progress.
 - **Tier 2 Flagship (`tight-bounds`):** Scalar hill-climbing leaderboards for:
   - Tighter concrete security reductions for **FROST** (threshold Schnorr) and **PQXDH** (post-quantum Signal) in EasyCrypt / Lean 4.

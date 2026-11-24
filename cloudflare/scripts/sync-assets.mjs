@@ -131,7 +131,8 @@ const missions = missionDirs.map((dirName) => {
   const fullDir = path.join(missionsDir, dirName);
   const manifest = JSON.parse(fs.readFileSync(path.join(fullDir, "sunstead.json"), "utf8"));
   const spec_sha256 = computeSpecSha256(fullDir, manifest.frozen_paths);
-  const verifier_kind = manifest.verifier.image.includes("rust") ? "rust" : "lean4";
+  const image = manifest.verifier.image;
+  const verifier_kind = image.includes("verus") ? "verus" : image.includes("rust") ? "rust" : "lean4";
   return { manifest, spec_sha256, verifier_kind };
 });
 
@@ -142,7 +143,7 @@ fs.writeFileSync(
     `export interface SeedMission {\n` +
     `  manifest: MissionManifest;\n` +
     `  spec_sha256: string;\n` +
-    `  verifier_kind: "lean4" | "rust";\n` +
+    `  verifier_kind: "lean4" | "rust" | "verus";\n` +
     `}\n\n` +
     `export const SEED_MISSIONS: SeedMission[] = ${JSON.stringify(missions, null, 2)};\n`
 );

@@ -38,9 +38,9 @@ SUNSTEAD_HOME = os.path.dirname(os.path.abspath(__file__))
 LEAN_CHECKER = os.path.join(SUNSTEAD_HOME, "SunsteadCheck.lean")
 ALLOWED_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
 
-# Lean/Rust toolchain locations baked into the images.
+# Lean/Rust/Verus toolchain locations baked into the images.
 BASE_PATH = os.environ.get("SUNSTEAD_BASE_PATH",
-                           "/opt/elan/bin:/usr/local/cargo/bin:/usr/local/bin:/usr/bin:/bin")
+                           "/opt/elan/bin:/opt/verus:/usr/local/cargo/bin:/usr/local/bin:/usr/bin:/bin")
 
 
 # ---------------------------------------------------------------------------
@@ -541,3 +541,468 @@ def rust_verify(task_id, *, tasks, profiles, allowed_modules, summary_fmt, timeo
 def _count_tests(path):
     with open(path, "r", encoding="utf-8") as f:
         return len(re.findall(r"#\[test\]", f.read()))
+
+
+# ---------------------------------------------------------------------------
+# Verus missions
+# ---------------------------------------------------------------------------
+#
+# A Verus mission verifies code copied verbatim from an existing crate. Each
+# task has a frozen statement file (statements/<module>.rs): the upstream
+# function(s) with Verus `requires`/`ensures` and no proof. The contributor's
+# file (src/<module>.rs) may only add ghost code to it:
+#   * `proof { ... }` blocks, `assert ...;` and `let ghost ...;` statements
+#     inside function bodies,
+#   * new `proof fn lemma_*` / `spec fn aux_*` items,
+#   * a body for each `proof fn` the statement declares.
+# After erasing exactly those, the file must be token-for-token identical to the
+# statement, so the executable code and its specification cannot change. The
+# statement's executable functions are in turn checked token-for-token against
+# the vendored upstream source. Verus then verifies the task's module.
+
+VERUS_ADDED_ITEM = re.compile(r"(lemma|aux)_\w+")
+VERUS_ALLOWED_ATTRS = {
+    "trigger", "auto", "verifier::rlimit", "verifier::spinoff_prover",
+    "verifier::nonlinear", "verifier::loop_isolation", "verifier::opaque",
+}
+VERUS_FORBIDDEN_IDENTS = {
+    "unsafe", "extern", "static", "mod", "macro_rules", "include", "include_str",
+    "include_bytes", "cfg", "cfg_attr", "path", "external", "external_body",
+    "external_fn_specification", "external_type_specification", "trusted",
+    "exec_allows_no_decreases_clause", "assume_termination", "allow_in_spec",
+    "uninterp", "axiom", "const", "impl", "trait",
+}
+_VERUS_PUNCT = sorted("""
+    ::= ... ..= ==> <== <==> &&& ||| === !== >>= <<=
+    :: -> => == != <= >= && || << >> += -= *= /= %= ^= &= |= .. ##
+    ! # $ % & ( ) * + , - . / : ; < = > ? @ [ ] ^ { | } ~
+""".split(), key=len, reverse=True)
+
+
+def _verus_strip_comments(src):
+    """Remove // and (nested) /* */ comments. Returns None on an unterminated comment."""
+    out, i, n = [], 0, len(src)
+    while i < n:
+        if src.startswith("//", i):
+            j = src.find("\n", i)
+            i = n if j < 0 else j
+        elif src.startswith("/*", i):
+            depth, i = 1, i + 2
+            while i < n and depth:
+                if src.startswith("/*", i):
+                    depth, i = depth + 1, i + 2
+                elif src.startswith("*/", i):
+                    depth, i = depth - 1, i + 2
+                else:
+                    i += 1
+            if depth:
+                return None
+            out.append(" ")
+        elif src[i] == '"':
+            j = i + 1
+            while j < n and src[j] != '"':
+                j += 2 if src[j] == "\\" else 1
+            out.append(src[i:j + 1])
+            i = j + 1
+        elif src[i] == "'" and re.match(r"'(?:\\.|[^'\\])'", src[i:i + 4]):
+            m = re.match(r"'(?:\\.|[^'\\])'", src[i:i + 4])
+            out.append(m.group(0))
+            i += len(m.group(0))
+        else:
+            out.append(src[i])
+            i += 1
+    return "".join(out)
+
+
+def verus_tokens(src):
+    """Tokenize Rust/Verus source (comments dropped). Raises ValueError on bad input."""
+    code = _verus_strip_comments(src)
+    if code is None:
+        raise ValueError("unterminated block comment")
+    toks, i, n = [], 0, len(code)
+    while i < n:
+        c = code[i]
+        if c.isspace():
+            i += 1
+            continue
+        m = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|[0-9][A-Za-z0-9_]*").match(code, i)
+        if m:
+            toks.append(m.group(0))
+            i = m.end()
+            continue
+        if c == '"':
+            m = re.compile(r'"(?:\\.|[^"\\])*"').match(code, i)
+            if not m:
+                raise ValueError("unterminated string literal")
+            toks.append(m.group(0))
+            i = m.end()
+            continue
+        if c == "'":
+            m = re.compile(r"'(?:\\.|[^'\\])'|'[A-Za-z_][A-Za-z0-9_]*").match(code, i)
+            if not m:
+                raise ValueError("bad character literal")
+            toks.append(m.group(0))
+            i = m.end()
+            continue
+        for p in _VERUS_PUNCT:
+            if code.startswith(p, i):
+                toks.append(p)
+                i += len(p)
+                break
+        else:
+            raise ValueError(f"unexpected character {c!r}")
+    return toks
+
+
+def _match_close(toks, i):
+    """toks[i] is an opening bracket; return the index of its matching closer."""
+    pairs = {"(": ")", "[": "]", "{": "}"}
+    stack = []
+    for j in range(i, len(toks)):
+        t = toks[j]
+        if t in pairs:
+            stack.append(pairs[t])
+        elif t in (")", "]", "}"):
+            if not stack or stack.pop() != t:
+                raise ValueError("unbalanced brackets")
+            if not stack:
+                return j
+    raise ValueError("unbalanced brackets")
+
+
+def _fn_body_start(toks, i):
+    """i indexes `fn`; return the index of the body's `{` (or of `;` for a bodiless fn)."""
+    depth = 0
+    j = i
+    while j < len(toks):
+        t = toks[j]
+        if t in ("(", "["):
+            depth += 1
+        elif t in (")", "]"):
+            depth -= 1
+        elif depth == 0 and t in ("{", ";"):
+            return j
+        j += 1
+    raise ValueError("function without body")
+
+
+_ITEM_PREFIX = {"pub", "open", "closed", "broadcast", "proof", "spec", "exec", "tracked"}
+
+
+def _item_start(toks, fn_idx):
+    """Walk back from `fn` over modifiers and outer attributes to the item's first token."""
+    j = fn_idx
+    while j > 0:
+        if toks[j - 1] in _ITEM_PREFIX:
+            j -= 1
+        elif toks[j - 1] == ")" and j >= 4 and toks[j - 4:j - 1] == ["pub", "(", "crate"]:
+            j -= 4
+        elif toks[j - 1] == "]":
+            # outer attribute `# [ ... ]`
+            k = j - 1
+            depth = 0
+            while k >= 0:
+                if toks[k] == "]":
+                    depth += 1
+                elif toks[k] == "[":
+                    depth -= 1
+                    if depth == 0:
+                        break
+                k -= 1
+            if k >= 1 and toks[k - 1] == "#":
+                j = k - 1
+            else:
+                break
+        else:
+            break
+    return j
+
+
+def _fn_mode(toks, start, fn_idx):
+    mods = toks[start:fn_idx]
+    if "proof" in mods:
+        return "proof"
+    if "spec" in mods:
+        return "spec"
+    return "exec"
+
+
+def _erase_ghost(toks, statement_proof_fns):
+    """Erase contributor-added ghost code (see comment above).
+
+    Returns (remaining tokens, erased tokens). Raises ValueError.
+    """
+    out = list(toks)
+    erased = []
+    # 1. Added lemma_/aux_ items and statement proof-fn bodies.
+    i = 0
+    while i < len(out):
+        if out[i] == "fn" and i + 1 < len(out):
+            name = out[i + 1]
+            start = _item_start(out, i)
+            mode = _fn_mode(out, start, i)
+            body = _fn_body_start(out, i)
+            end = _match_close(out, body) if out[body] == "{" else body
+            if VERUS_ADDED_ITEM.fullmatch(name):
+                if mode == "exec":
+                    raise ValueError(f"added function `{name}` must be a proof fn or spec fn")
+                erased += out[start:end + 1]
+                del out[start:end + 1]
+                i = start
+                continue
+            if mode == "proof" and name in statement_proof_fns and out[body] == "{":
+                erased += out[body + 1:end]
+                out[body + 1:end] = []
+                i = body + 2
+                continue
+        i += 1
+    # 2. proof blocks and assert statements.
+    i = 0
+    while i < len(out):
+        t = out[i]
+        if t == "proof" and i + 1 < len(out) and out[i + 1] == "{":
+            end = _match_close(out, i + 1)
+            erased += out[i:end + 1]
+            del out[i:end + 1]
+            continue
+        if t == "let" and i + 1 < len(out) and out[i + 1] in ("ghost", "tracked") \
+                and i > 0 and out[i - 1] in ("{", ";", "}"):
+            j = i + 2
+            while j < len(out) and out[j] != ";":
+                if out[j] in ("(", "[", "{"):
+                    j = _match_close(out, j)
+                j += 1
+            erased += out[i:j + 1]
+            del out[i:j + 1]
+            continue
+        if t == "assert" and i > 0 and out[i - 1] in ("{", ";", "}") \
+                and i + 1 < len(out) and out[i + 1] != "!":
+            j = i + 1
+            while j < len(out):
+                if out[j] in ("(", "["):
+                    j = _match_close(out, j) + 1
+                elif out[j] == ";":
+                    j += 1
+                    break
+                elif out[j] == "{":
+                    j = _match_close(out, j) + 1
+                    if j < len(out) and out[j] == ";":
+                        j += 1
+                    break
+                elif out[j] == "}":
+                    raise ValueError("assert statement without `;`")
+                else:
+                    j += 1
+            erased += out[i:j]
+            del out[i:j]
+            continue
+        i += 1
+    return out, erased
+
+
+def _statement_proof_fns(toks):
+    names = set()
+    for i, t in enumerate(toks):
+        if t == "fn" and i + 1 < len(toks):
+            if _fn_mode(toks, _item_start(toks, i), i) == "proof":
+                names.add(toks[i + 1])
+    return names
+
+
+def lint_verus_ghost(toks, rel):
+    """Hygiene rules for the ghost code a contributor added. Returns an error string or None.
+
+    Everything else in the file is checked to be identical to the frozen statement.
+    """
+    for i, t in enumerate(toks):
+        if t[0] in "\"'":
+            return f"{rel}: string and character literals are not allowed in proof code"
+        if t in VERUS_FORBIDDEN_IDENTS:
+            return f"{rel}: `{t}` is not allowed in proof code"
+        if "assume" in t or "admit" in t:
+            return f"{rel}: `{t}` is not allowed (no assumptions)"
+        if t == "!" and i > 0 and re.fullmatch(r"[A-Za-z_]\w*", toks[i - 1]) \
+                and i + 1 < len(toks) and toks[i + 1] in ("(", "[", "{"):
+            return f"{rel}: macro `{toks[i - 1]}!` is not allowed in proof code"
+        if t == "#":
+            j = i + 1
+            if j < len(toks) and toks[j] == "!":
+                j += 1
+            if j >= len(toks) or toks[j] != "[":
+                return f"{rel}: stray `#`"
+            try:
+                close = _match_close(toks, j)
+            except ValueError as e:
+                return f"{rel}: {e}"
+            path = []
+            for x in toks[j + 1:close]:
+                if x in ("(", "["):
+                    break
+                path.append(x)
+            name = "".join(path)
+            if name not in VERUS_ALLOWED_ATTRS:
+                return f"{rel}: attribute `#[{name}]` is not allowed"
+    return None
+
+
+def _strip_spec_for_upstream(toks):
+    """Statement exec fn tokens -> plain Rust tokens: drop `pub`, named returns, requires/ensures."""
+    out = list(toks)
+    while out and out[0] in ("pub", "open", "closed", "exec"):
+        out.pop(0)
+    if out[:1] == ["pub"]:
+        out.pop(0)
+    # `-> ( name : Ty )` -> `-> Ty`
+    if "->" in out:
+        k = out.index("->")
+        if out[k + 1] == "(" and out[k + 3] == ":":
+            close = _match_close(out, k + 1)
+            out[k + 1:close + 1] = out[k + 4:close]
+    body = _fn_body_start(out, 0)
+    for kw in ("requires", "ensures", "recommends", "decreases"):
+        if kw in out[:body]:
+            k = out.index(kw)
+            out[k:body] = []
+            body = _fn_body_start(out, 0)
+    return out
+
+
+def _find_fn(toks, name):
+    for i, t in enumerate(toks):
+        if t == "fn" and i + 1 < len(toks) and toks[i + 1] == name:
+            start = i
+            # include modifiers but not attributes
+            while start > 0 and toks[start - 1] in _ITEM_PREFIX:
+                start -= 1
+            if start >= 4 and toks[start - 1] == ")" and toks[start - 4:start - 1] == ["pub", "(", "crate"]:
+                start -= 4
+            body = _fn_body_start(toks, i)
+            end = _match_close(toks, body)
+            return toks[start:end + 1]
+    return None
+
+
+def check_verus_upstream(statement_toks, upstream_src, fn_name):
+    """The statement's `fn_name` must be the upstream function, token for token."""
+    mine = _find_fn(statement_toks, fn_name)
+    theirs = _find_fn(verus_tokens(upstream_src), fn_name)
+    if mine is None or theirs is None:
+        return f"function `{fn_name}` not found"
+    a = _strip_spec_for_upstream(mine)
+    b = [t for t in theirs if t not in ("pub",)]
+    a = [t for t in a if t not in ("pub",)]
+    if a != b:
+        return f"function `{fn_name}` differs from upstream"
+    return None
+
+
+def verus_check_file(work, rel, statement_rel):
+    """Check a task file is its statement plus allowed ghost code. Returns error or None."""
+    with open(os.path.join(work, rel), "r", encoding="utf-8") as f:
+        src = f.read()
+    if not src.isascii():
+        return f"{rel}: only ASCII source is allowed"
+    with open(os.path.join(work, statement_rel), "r", encoding="utf-8") as f:
+        stmt_src = f.read()
+    try:
+        toks = verus_tokens(src)
+        stmt = verus_tokens(stmt_src)
+        proof_fns = _statement_proof_fns(stmt)
+        mine, erased = _erase_ghost(toks, proof_fns)
+        expected, _ = _erase_ghost(stmt, proof_fns)
+    except ValueError as e:
+        return f"{rel}: {e}"
+    problem = lint_verus_ghost(erased, rel)
+    if problem:
+        return problem
+    if mine != expected:
+        k = next((i for i, (x, y) in enumerate(zip(mine, expected)) if x != y),
+                 min(len(mine), len(expected)))
+        near = " ".join(mine[max(0, k - 6):k + 6])
+        return (f"{rel}: after removing proof code the file must equal {statement_rel} "
+                f"(first difference near `{near}`)")
+    return None
+
+
+def _count_fns(toks):
+    return sum(1 for i, t in enumerate(toks)
+               if t == "fn" and i + 1 < len(toks) and not VERUS_ADDED_ITEM.fullmatch(toks[i + 1]))
+
+
+def _verus_results(stdout):
+    """Return (verified, errors) from `verus --output-json` stdout, or None."""
+    for line in reversed(stdout.splitlines()):
+        line = line.strip()
+        if line.startswith("{") and "verified" in line:
+            try:
+                d = json.loads(line)
+            except ValueError:
+                continue
+            r = d.get("verification-results", d)
+            if isinstance(r, dict) and "verified" in r and "errors" in r:
+                if r.get("encountered-vir-error") or r.get("success") is False:
+                    return (int(r["verified"]), max(1, int(r["errors"])))
+                return (int(r["verified"]), int(r["errors"]))
+    m = re.findall(r"^verification results:: (\d+) verified, (\d+) errors?$", stdout, flags=re.M)
+    if m:
+        return (int(m[-1][0]), int(m[-1][1]))
+    return None
+
+
+def verus_verify(task_id, *, tasks, crate_root="src/lib.rs", timeout_sec=110):
+    """Verify a Verus task.
+
+    tasks[task_id] = {
+        "module":    "lower_decode",                      # src/<module>.rs, statements/<module>.rs
+        "upstream":  [("upstream/base16ct-1.0.0/src/lower.rs", "decode_nibble")],  # optional
+    }
+    """
+    require_root()
+    task = tasks.get(task_id)
+    if task is None:
+        emit(False, f"unknown task id: {task_id}")
+    work = os.getcwd()
+
+    # 1. Every task file (not just the target) must be its statement plus ghost code.
+    for tid, t in sorted(tasks.items()):
+        rel = f"src/{t['module']}.rs"
+        stmt_rel = f"statements/{t['module']}.rs"
+        if not os.path.isfile(os.path.join(work, rel)):
+            emit(False, f"missing {rel}")
+        problem = verus_check_file(work, rel, stmt_rel)
+        if problem:
+            emit(False, f"hygiene check failed: {problem}")
+
+    # 2. The statement's executable code is the upstream crate's code, verbatim.
+    stmt_rel = f"statements/{task['module']}.rs"
+    with open(os.path.join(work, stmt_rel), "r", encoding="utf-8") as f:
+        stmt = verus_tokens(f.read())
+    for up_rel, fn_name in task.get("upstream", []):
+        with open(os.path.join(work, up_rel), "r", encoding="utf-8") as f:
+            problem = check_verus_upstream(stmt, f.read(), fn_name)
+        if problem:
+            emit(False, f"statement check failed ({stmt_rel} vs {up_rel}): {problem}")
+
+    # 3. Verus, as the runner, on a scratch copy. Verus only type-checks and
+    # verifies; it never runs the code it is given.
+    job = Job()
+    try:
+        src_dir = os.path.join(job.runner_dir, "src")
+        job.copy_tree_as(RUNNER_USER, work, src_dir)
+        p = run_as(RUNNER_USER,
+                   ["verus", crate_root, "--crate-type=lib", "--verify-module", task["module"],
+                    "--output-json", "--no-cheating"],
+                   cwd=src_dir, timeout=timeout_sec,
+                   env_extra={"HOME": job.runner_dir}, cpu_sec=timeout_sec, fsize_mb=1024)
+        ensure_no_processes(RUNNER_USER)
+        out = p.stdout + "\n" + p.stderr
+        res = _verus_results(p.stdout)
+        expected = _count_fns(stmt)
+        if p.returncode != 0 or res is None or res[1] != 0:
+            emit(False, f"Verus did not verify `{task['module']}`: {tail(out)}")
+        if res[0] < expected:
+            emit(False, f"Verus verified {res[0]} functions in `{task['module']}`, expected at least {expected}")
+        emit(True, f"Verus verified `{task['module']}` ({res[0]} functions, 0 errors, no assumptions)",
+             score=1.0)
+    finally:
+        job.cleanup()
