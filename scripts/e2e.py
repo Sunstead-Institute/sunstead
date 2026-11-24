@@ -56,12 +56,19 @@ def register(handle):
     return res["api_key"]
 
 
+def extract(tf, dest):
+    if hasattr(tarfile, "data_filter"):  # Python >= 3.12 (and security backports)
+        tf.extractall(dest, filter="data")
+    else:  # older Python; the bundle comes from the hub under test
+        tf.extractall(dest)
+
+
 def make_patch(mission_id, edits):
     code, data = req("GET", f"/api/missions/{mission_id}/bundle.tar.gz", raw=True)
     assert code == 200, f"bundle download failed: {code}"
     with tempfile.TemporaryDirectory() as tmp:
         with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
-            tf.extractall(tmp, filter="data")
+            extract(tf, tmp)
         for rel, content in edits.items():
             with open(os.path.join(tmp, rel), "w", encoding="utf-8") as f:
                 f.write(content)
@@ -273,7 +280,7 @@ def main():
         for name, data in (("seed", seed), ("live", live)):
             os.makedirs(os.path.join(tmp, name))
             with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
-                tf.extractall(os.path.join(tmp, name), filter="data")
+                extract(tf, os.path.join(tmp, name))
         with open(os.path.join(tmp, "history.mbox"), "wb") as f:
             f.write(mbox)
         subprocess.run(["git", "-c", "user.name=e2e", "-c", "user.email=e2e@localhost",
@@ -281,7 +288,7 @@ def main():
                        cwd=os.path.join(tmp, "seed"), check=True)
         log = subprocess.check_output(["git", "log", "--format=%an|%s"],
                                       cwd=os.path.join(tmp, "seed"), text=True)
-        assert "alice|" in log and "verify centered_mod" in log, log
+        assert "alice-rust|" in log and "verify centered_mod" in log, log
         diff = subprocess.run(["diff", "-r", "-x", ".git", os.path.join(tmp, "seed"),
                                os.path.join(tmp, "live")], capture_output=True, text=True)
         assert diff.returncode == 0, diff.stdout[-2000:]

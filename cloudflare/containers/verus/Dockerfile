@@ -1,14 +1,15 @@
-FROM --platform=linux/amd64 rust:1.91-slim-bookworm@sha256:8514999d4786ef12efe89239e86b3d0a021b94b9d35108c8efe6c79ca7dc1a65
+FROM --platform=linux/amd64 rust:1.91-slim-trixie@sha256:f75071363e7f4771769d4cf81b1b7b290e607f4d4459e8731f6abdcee9982dc8
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git python3 ca-certificates curl unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # Verus release, pinned by version and checksum, plus the Rust toolchain that
-# release requires (Verus refuses to run with any other).
-ARG VERUS_VERSION=PIN_ME
-ARG VERUS_SHA256=PIN_ME
-ARG VERUS_RUST_TOOLCHAIN=PIN_ME
+# release requires (Verus refuses to run with any other). Verus release
+# binaries need glibc >= 2.39, hence the trixie base.
+ARG VERUS_VERSION=0.2026.11.22.1ce6a59
+ARG VERUS_SHA256=c955d5958877f4f907cce80aa996d4239a481984829d82e325938c7bf242b0db
+ARG VERUS_RUST_TOOLCHAIN=1.100.0-x86_64-unknown-linux-gnu
 RUN curl -fsSL -o /tmp/verus.zip \
         "https://github.com/verus-lang/verus/releases/download/release%2F${VERUS_VERSION}/verus-${VERUS_VERSION}-x86-linux.zip" \
     && echo "${VERUS_SHA256}  /tmp/verus.zip" | sha256sum -c - \

@@ -17,14 +17,14 @@ pub fn decode_nibble(src: u8) -> (r: u16)
 
     // 0-9  0x30-0x39
     // if (byte > 0x2f && byte < 0x3a) ret += byte - 0x30 + 1; // -47
-    assert((((0x2fi16 - byte) & (byte - 0x3a)) >> 8) & (byte - 47) ==
-        (if 0x2f < byte && byte < 0x3a { byte - 47 } else { 0i16 })) by (bit_vector)
+    assert((((0x2fi16 - byte) as i16 & (byte - 0x3a) as i16) >> 8) & (byte - 47) as i16 ==
+        (if 0x2f < byte && byte < 0x3a { (byte - 47) as i16 } else { 0i16 })) by (bit_vector)
         requires 0 <= byte && byte < 256;
     ret += (((0x2fi16 - byte) & (byte - 0x3a)) >> 8) & (byte - 47);
     // A-F  0x41-0x46
     // if (byte > 0x40 && byte < 0x47) ret += byte - 0x41 + 10 + 1; // -54
-    assert((((0x40i16 - byte) & (byte - 0x47)) >> 8) & (byte - 54) ==
-        (if 0x40 < byte && byte < 0x47 { byte - 54 } else { 0i16 })) by (bit_vector)
+    assert((((0x40i16 - byte) as i16 & (byte - 0x47) as i16) >> 8) & (byte - 54) as i16 ==
+        (if 0x40 < byte && byte < 0x47 { (byte - 54) as i16 } else { 0i16 })) by (bit_vector)
         requires 0 <= byte && byte < 256;
     ret += (((0x40i16 - byte) & (byte - 0x47)) >> 8) & (byte - 54);
 

@@ -23,6 +23,7 @@ import io
 import json
 import os
 import shutil
+import signal
 import struct
 import subprocess
 import sys
@@ -421,6 +422,10 @@ if __name__ == "__main__":
         raise SystemExit("verifier_server.py must run as root (verify drops privileges itself)")
     os.makedirs(WORK_DIR, exist_ok=True)
     os.chmod(WORK_DIR, 0o755)
+    # This server is PID 1, and the kernel drops default-action signals sent to
+    # PID 1: without a handler, the runtime's SIGTERM on idle shutdown is
+    # ignored and the container hangs half-stopped.
+    signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
     server = http.server.HTTPServer(("0.0.0.0", 8080), VerifierHandler)
     print("Sunstead verifier container listening on 0.0.0.0:8080", flush=True)
     server.serve_forever()

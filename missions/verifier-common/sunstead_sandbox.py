@@ -931,18 +931,33 @@ def _count_fns(toks):
 
 def _verus_results(stdout):
     """Return (verified, errors) from `verus --output-json` stdout, or None."""
+    def from_json(d):
+        r = d.get("verification-results", d) if isinstance(d, dict) else None
+        if isinstance(r, dict) and "verified" in r and "errors" in r:
+            if r.get("encountered-vir-error") or r.get("success") is not True:
+                return (int(r["verified"]), max(1, int(r["errors"])))
+            return (int(r["verified"]), int(r["errors"]))
+        return None
+
+    # Current Verus releases pretty-print a single JSON document on stdout.
+    start = stdout.find("{")
+    if start >= 0:
+        try:
+            res = from_json(json.loads(stdout[start:]))
+        except ValueError:
+            res = None
+        if res is not None:
+            return res
+    # Older releases: one JSON object per line.
     for line in reversed(stdout.splitlines()):
         line = line.strip()
         if line.startswith("{") and "verified" in line:
             try:
-                d = json.loads(line)
+                res = from_json(json.loads(line))
             except ValueError:
                 continue
-            r = d.get("verification-results", d)
-            if isinstance(r, dict) and "verified" in r and "errors" in r:
-                if r.get("encountered-vir-error") or r.get("success") is False:
-                    return (int(r["verified"]), max(1, int(r["errors"])))
-                return (int(r["verified"]), int(r["errors"]))
+            if res is not None:
+                return res
     m = re.findall(r"^verification results:: (\d+) verified, (\d+) errors?$", stdout, flags=re.M)
     if m:
         return (int(m[-1][0]), int(m[-1][1]))
@@ -989,8 +1004,25 @@ def verus_verify(task_id, *, tasks, crate_root="src/lib.rs", timeout_sec=110):
     try:
         src_dir = os.path.join(job.runner_dir, "src")
         job.copy_tree_as(RUNNER_USER, work, src_dir)
+        # Verus rejects `--verify-module` together with `--no-cheating`, so the
+        # scratch copy gets a crate root holding the frozen spec, the target
+        # module and the task modules it names as `crate::<module>`
+        # (transitively), and the whole of that crate is verified. Every module
+        # in it is fully re-verified, so including one never adds trust; other
+        # task files (open statements) are left out.
+        task_modules = {t["module"] for t in tasks.values()}
+        mods, todo = [], [task["module"]]
+        while todo:
+            m = todo.pop()
+            if m in mods:
+                continue
+            mods.append(m)
+            with open(os.path.join(work, "src", m + ".rs"), "r", encoding="utf-8") as f:
+                todo += [d for d in re.findall(r"\bcrate\s*::\s*(\w+)", f.read()) if d in task_modules]
+        job.write_as(RUNNER_USER, os.path.join(src_dir, crate_root),
+                     "pub mod spec;\n" + "".join(f"pub mod {m};\n" for m in sorted(mods)))
         p = run_as(RUNNER_USER,
-                   ["verus", crate_root, "--crate-type=lib", "--verify-module", task["module"],
+                   ["verus", crate_root, "--crate-type=lib",
                     "--output-json", "--no-cheating"],
                    cwd=src_dir, timeout=timeout_sec,
                    env_extra={"HOME": job.runner_dir}, cpu_sec=timeout_sec, fsize_mb=1024)

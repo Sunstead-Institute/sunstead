@@ -13,7 +13,7 @@ pub fn encode_nibble(src: u8) -> (r: u8)
     let mut ret = src as i16 + 0x30;
     // 0-9  0x30-0x39
     // A-F  0x41-0x46
-    assert(((0x39i16 - ret) >> 8) & (0x41i16 - 0x3a) == (if ret > 0x39 { 0x41i16 - 0x3a } else { 0i16 })) by (bit_vector)
+    assert(((0x39i16 - ret) as i16 >> 8) & (0x41i16 - 0x3a) as i16 == (if ret > 0x39 { (0x41i16 - 0x3a) as i16 } else { 0i16 })) by (bit_vector)
         requires 0x30 <= ret && ret <= 0x12f;
     ret += ((0x39i16 - ret) >> 8) & (0x41i16 - 0x3a);
     ret as u8

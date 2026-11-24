@@ -210,7 +210,11 @@ def b16_statement(module):
 def _b16_cases():
     cases = []
     for task, module in B16_TASKS.items():
-        cases.append((f"verus-honest-{task}", B16, task, {f"src/{module}.rs": b16_honest(module)},
+        files = {f"src/{module}.rs": b16_honest(module)}
+        if task == "mixed_pair_correct":
+            # Opens only after decode_pair_flags is accepted; Verus re-verifies that proof too.
+            files["src/decode_pair.rs"] = b16_honest("decode_pair")
+        cases.append((f"verus-honest-{task}", B16, task, files,
                       True, None, "honest proof over the verbatim upstream code must pass"))
     dec = "lower_decode"
     honest, stmt = b16_honest(dec), b16_statement(dec)
