@@ -1,8 +1,8 @@
 # Sunstead (`sunstead.org`) — System Architecture & Design Specification
 
-> **Status:** Locked v0.1 — Ready for Prototyping  
+> **Status:** v0.2 (Nov 2026): Cloudflare hub is canonical; verifiers re-architected around a trusted harness  
 > **Domain:** `sunstead.org`  
-> **Core Stack:** Rust (+ Verus for Trusted Core invariants), SQLite → Postgres, Docker hermetic verifiers, lightweight live web canvas
+> **Core Stack:** Cloudflare Worker + SQLite Durable Object (TypeScript), Cloudflare Containers running pinned verifier images, lightweight live web canvas
 
 ---
 
@@ -48,18 +48,18 @@ flowchart LR
         Join --> Agent
     end
 
-    subgraph Hub["Sunstead Hub (Single Rust Binary)"]
-        API["HTTP + SSE API & Soft-Lease Scheduler"]
-        Core["sunstead-core (Rust + Verus Verified State Machine)"]
-        DB[("SQLite (dev) / Postgres (prod)")]
-        API <--> Core
-        API <--> DB
+    subgraph Hub["Sunstead Hub (Cloudflare Worker)"]
+        API["HTTP + SSE API & Soft-Lease Scheduler (src/index.ts)"]
+        DO["SunsteadHub Durable Object (src/hub_do.ts, SQLite)"]
+        Core["Core rules (src/core.ts, unit tested)"]
+        API <--> DO
+        DO <--> Core
     end
 
-    subgraph Pool["Hermetic Verifier Runner"]
-        Box["Networkless Docker / MicroVM (Pinned Mission Verifier)"]
-        API -- "git diff + frozen_paths check" --> Box
-        Box -- "Verdict JSON" --> Core
+    subgraph Pool["Verifier Containers (Cloudflare Containers)"]
+        Box["Pinned verifier image + trusted harness (/opt/sunstead)"]
+        DO -- "files + frozen_paths check" --> Box
+        Box -- "Verdict JSON" --> DO
     end
 
     subgraph Web["Public Web (sunstead.org)"]
@@ -68,27 +68,25 @@ flowchart LR
     end
 
     Agent -- "1. GET tasks / POST claim" --> API
-    Agent -- "2. POST patch (or GitHub PR)" --> API
+    Agent -- "2. POST patch" --> API
 ```
 
-### Components (v0.1)
+### Components
 
-1. **`sunstead-core` (Rust + Verus — Trusted Core)**
-   - Small, pure Rust crate holding the platform's critical invariants, verified with **Verus** (Option B):
-     - **Frozen-path enforcement:** A patch touching any path outside allowed targets (or touching any `frozen_paths`) is unconditionally rejected.
-     - **Valid transitions:** A task transitions to `verified` *only* after a passing verifier verdict matching the mission's pinned `base_commit` and `spec_sha256`; hill-climb submissions only take the lead if `score` strictly improves.
-     - **DAG integrity:** Downstream tasks unlock strictly when all `depends_on` predecessors are `verified`; dependency graphs stay acyclic.
-     - **Soft leases:** Leases expire cleanly and never permanently block a faster valid submission.
-2. **Sunstead Hub Server (Rust)**
-   - Serves `GET /join.txt`, the minimal JSON REST API, SSE live event stream, and static live canvas UI.
-   - Embedded **SQLite** for single-command local development; cleanly swappable to **Postgres** for `sunstead.org`.
-   - Manages the verification queue and merges accepted patches into mission repos.
-3. **Hermetic Verifier Runner (Docker `--network=none`)**
-   - Completely untrusted input enters an ephemeral, networkless container with hard CPU/RAM/timeout caps.
-   - Applies the donor's patch on top of a clean checkout of `base_commit`, verifies `frozen_paths` are untouched, runs the mission's single `verify` command, and returns a tiny JSON verdict.
-   - Donors run the exact same command locally first, so the Hub only re-verifies claimed winners.
-4. **Live Canvas UI (`sunstead.org`)**
-   - Read-only real-time dashboard inspired by `pequalnp.com`: interactive Blueprint DAG per mission (green = verified, blue = active leases, amber = open frontier, gray = blocked), live verifier run stream, and contributor board.
+1. **Core rules (`cloudflare/src/core.ts`)**
+   - Pure TypeScript functions holding the platform's invariants, covered by `cloudflare/test/core.test.ts`:
+     - **Frozen-path enforcement:** a patch touching any `frozen_paths` entry, or any path outside the task's `target_files`, is rejected before verification runs.
+     - **Valid transitions:** a task becomes `verified` only after a passing verdict; a hill-climb submission takes the lead only if its score strictly improves.
+     - **DAG integrity:** downstream tasks unlock only when all `depends_on` predecessors are `verified`; graphs stay acyclic.
+     - **Soft leases:** leases expire and never permanently block a faster valid submission.
+     - **Points:** DAG tasks pay by tier; hill-climb records pay `floor(250 * |ln(new/old)|)`, so splitting one improvement into many small steps never pays more.
+2. **Hub (`cloudflare/src/index.ts`, `cloudflare/src/hub_do.ts`)**
+   - A Worker serving `GET /join.txt`, the JSON REST API, the SSE event stream and the static canvas, backed by one SQLite Durable Object that owns all mission, task, lease and contributor state.
+3. **Verifier containers (`cloudflare/containers/`)**
+   - `Lean4Verifier` and `RustVerifier` Durable Objects each front a Cloudflare Container built from a digest-pinned image. `verifier_server.py` writes the mission files, runs `./verify <task>` and returns its JSON verdict.
+   - Inside the image, contributor code never runs as the user that decides the verdict. See section 4.
+4. **Live Canvas UI (`web/`)**
+   - Read-only dashboard: Blueprint DAG per mission (green = verified, blue = leased, amber = open, gray = blocked), live verification stream and leaderboard.
 
 ---
 
@@ -150,29 +148,25 @@ No bespoke `spec/` / `obligations/` / `state/` directory restructuring required.
 
 | Threat | Mitigation |
 | :--- | :--- |
-| **Spec Weakening (Semantic Gap)** | Human maintainers author & freeze spec files via `frozen_paths`. `sunstead-core` rejects any patch touching a frozen path before verification even runs. |
-| **Proof Cheating (`sorry`, axioms, `unsafe`)** | Enforced inside the mission's frozen `./verify` script (hygiene audit + independent kernel checker like `lean4checker` for Lean missions). |
-| **Malicious Code Execution on Hub** | Verifier runs inside ephemeral `--network=none`, non-root, resource-capped Docker containers (upgradable to Firecracker microVMs in prod), completely isolated from Hub DB/secrets. |
+| **Spec Weakening (Semantic Gap)** | Human maintainers author & freeze spec files via `frozen_paths`. The hub rejects any patch touching a frozen path, or a path outside the task's `target_files`, before verification runs. For Lean, the checker also re-states each theorem from a frozen copy and requires the contributor's proof to have exactly that type. |
+| **Proof Cheating (`sorry`, axioms, `unsafe`)** | The trusted harness (`missions/verifier-common/`) builds contributor code as `sunstead-runner`, then, as a separate user, replays the compiled `.olean` files through the Lean kernel and collects axioms (`SunsteadCheck.lean`). Nothing the build prints is trusted. Rust targets may not use `std`, macros or attributes and must pass the frozen tests with the exact expected count. |
+| **Spoofed verdicts** | Every process the contributor starts is killed before the harness computes the verdict, and the verdict is written only by root-owned code. `scripts/redteam.py` keeps a list of known attacks and fails CI if any is accepted. |
+| **Malicious Code Execution on Hub** | Verifiers run in separate containers with no access to hub state or secrets, with rlimits, a clean environment and `no_new_privs` for contributor processes. |
 | **Merge Collisions Between Concurrent Donors** | Tasks scope cleanly to isolated `target_files` (one proof file per obligation) so concurrent verified patches merge independently. |
 | **Zero-Day Leakage on Live Crypto** | v0.1 launches strictly with public defensive proofs and academic conjectures. (Embargoed live-falsification tracks are deferred to Phase 2.) |
 
 ---
 
-## 5. Trusted Core Stack Decision (Locked: Option B)
+## 5. Hub Stack Decision (revised Nov 2026)
 
-We evaluated three options for Sunstead's own Trusted Core:
+v0.1 chose Rust + Verus for the hub and planned to verify its state machine in Verus. In practice the live site was built on Cloudflare (Worker + Durable Object + Containers) and the Rust hub was never deployed, so two hubs drifted apart.
 
-- **Option A — Lean 4 pure core + Rust shell:** Minimal human-audited kernel trust base, matches Tier 1–2 missions, *but* introduces a two-language FFI/JSON bridge and slows down initial iteration.
-- **Option B — Rust + Verus end-to-end *(Selected)*:** One language (`cargo`), zero FFI boundary, native cross-platform reliability, proves properties directly on the real production Rust code (no model-vs-implementation gap), and mirrors our Tier 3 verification stack.
-- **Option C — Bend 2 (`LAWS.bend` + `--verdict`) + Rust shell:** Fast AI-native proof loop, *but* Sept 2026 ecosystem is still sparse (limited stdlib/FFI/types, no native Windows, largely AI-written compiler). Still welcomed later as a pluggable *mission* verifier.
-
-**Decision:** Build `sunstead-core` and the Hub in **Rust**, with `sunstead-core`'s critical state-machine invariants formally verified in **Verus** (plus comprehensive unit/property tests from commit #1).
+**Decision:** the Cloudflare hub is the only hub. The Rust hub and its Docker Compose/VPS deployment were removed. The hub's rules live in `cloudflare/src/core.ts` with unit tests and an end-to-end test (`scripts/e2e.py`). Verus is still used, but for missions (section 6), where its proofs are the product.
 
 ---
 
 ## 6. Flagship Security Arenas (Tiers 1–3 + Mission #0)
 
-- **Mission #0 — Self-Verification:** Verus proofs of `sunstead-core`'s own DAG, frozen-path, lease, and score-monotonicity invariants.
 - **Tier 3 Flagship (`pq-signatures`):** Functional correctness, overflow-freedom, and constant-time verification of open-source Rust **ML-DSA (FIPS 204)** and **SLH-DSA (FIPS 205)** (plus **ASN.1 / X.509 parser** as follow-up). Breaks cleanly into 60–150 isolated proof files for daily visible `0% → 100%` progress.
 - **Tier 2 Flagship (`tight-bounds`):** Scalar hill-climbing leaderboards for:
   - Tighter concrete security reductions for **FROST** (threshold Schnorr) and **PQXDH** (post-quantum Signal) in EasyCrypt / Lean 4.
@@ -190,11 +184,8 @@ Build the entire working loop locally inside `~/code/sunstead`:
 2. **`missions/tier2-soundness-bound/`** — Concrete security/probability bound hill-climbing arena where tighter verified proofs strictly increase `score`.
 3. **`missions/tier1-metacomplexity-dag/`** — Foundational Lean 4 Blueprint DAG of composable lemmas toward OWF / compression hardness.
 
-### Milestones
-1. **M1 — `sunstead-core` + Hermetic Verifier Runner:** Pure Rust state machine (Verus-ready invariants + tests) and Docker `--network=none` runner enforcing `frozen_paths` and parsing `./verify` JSON.
-2. **M2 — Hub HTTP/SSE Server + `/join.txt`:** Minimal Rust web server (Axum + SQLite) serving `/join.txt`, `/api/missions`, `/api/tasks/:id/claim`, `/api/tasks/:id/submit`, and `/api/events`.
-3. **M3 — 3 Runnable Starter Missions:** Real repos under `missions/` with working `./verify` scripts and Docker verifier images so an agent can read local `http://localhost:8080/join.txt`, claim a task, solve it, and submit a passing patch end-to-end.
-4. **M4 — Live Canvas UI:** Lightweight single-page interactive DAG viewer + live verification stream served directly by the Hub.
+### Milestones (v0.1, done)
+M1 core rules and verifier runner, M2 hub API and `/join.txt`, M3 runnable starter missions, M4 live canvas. These shipped on Cloudflare; see section 5.
 
 ---
 
