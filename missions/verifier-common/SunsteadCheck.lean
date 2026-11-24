@@ -58,13 +58,13 @@ partial def parseArgs : List String → Cfg → Except String Cfg
 def Cfg.isUntrusted (c : Cfg) (m : Name) : Bool :=
   c.libRoot.isPrefixOf m && !c.frozen.contains m
 
-structure Acc where
+structure VisitAcc where
   visited : Std.HashSet Name := {}
   trusted : Array Import := #[]
   consts : Std.HashMap Name ConstantInfo := {}
   untrustedMods : Array Name := #[]
 
-partial def visit (c : Cfg) (acc : IO.Ref Acc) (m : Name) : IO Unit := do
+partial def visit (c : Cfg) (acc : IO.Ref VisitAcc) (m : Name) : IO Unit := do
   if (← acc.get).visited.contains m then return
   acc.modify fun a => { a with visited := a.visited.insert m }
   if c.isUntrusted m then
@@ -119,7 +119,7 @@ def run (args : List String) : IO Json := do
     | .ok c => pure c
     | .error e => throw <| IO.userError e
   initSearchPath (← findSysroot) [c.trustedLib]
-  let acc ← IO.mkRef ({} : Acc)
+  let acc ← IO.mkRef ({} : VisitAcc)
   visit c acc c.targetModule
   let a ← acc.get
   unless a.untrustedMods.contains c.targetModule do

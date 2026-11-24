@@ -145,6 +145,26 @@ end MetaComplexity
   pure () : IO Unit)
 """},
      False, None, "build-time #eval starts a process that rewrites the audit file"),
+    ("lean-hillclimb-honest-control", "tier2-soundness-bound", "tighten_multi_user_bound",
+     {}, True, 1000.0, "the seed's baseline proof must verify and score 1000 via the kernel"),
+    # These slip past the source hygiene scan on purpose, so the kernel
+    # replay + axiom check is what must reject them.
+    ("deep-lean-sorryax", "tier1-metacomplexity-dag", "decoder_injective",
+     {"MetaComplexity/DecoderInjective.lean": HONEST_DECODER.replace(
+         "  intro a b h\n  have h1 := congrArg c.decode h\n  rw [c.left_inv, c.left_inv] at h1\n  exact h1\n",
+         "  exact sorryAx _ false\n")},
+     False, None, "sorryAx is not the word `sorry`, so only the axiom check can catch it"),
+    ("deep-hillclimb-sorryax", "tier2-soundness-bound", "tighten_multi_user_bound",
+     {"SoundnessBound/MultiUserBound.lean": """import SoundnessBound.Spec
+namespace SoundnessBound
+def claimedMultiUserFactor : Nat := 1
+theorem multi_user_bound :
+    ∀ u q : Nat, u ≥ 1 → q ≥ 1 →
+      100 * multiUserLoss u q ≤ claimedMultiUserFactor * ((u + q) * (u + q)) :=
+  sorryAx _ false
+end SoundnessBound
+"""},
+     False, None, "unproved factor of 1 without any #eval: the axiom check must reject it"),
     ("lean-hillclimb-score-spoof", "tier2-soundness-bound", "tighten_multi_user_bound",
      {"SoundnessBound/MultiUserBound.lean": """import SoundnessBound.Spec
 namespace SoundnessBound
