@@ -1,6 +1,6 @@
 # Local Sunstead Lean 4 verifier image. Build context: the `missions/` directory
 # (see scripts/build-verifiers.sh).
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim@sha256:e67eeead736ff7bbe258ef088bff683635c561b1fcfefad0806c1df4ab49ce0e
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl git python3 xz-utils \
@@ -9,8 +9,8 @@ RUN apt-get update \
 ENV ELAN_HOME=/opt/elan
 ENV PATH="/opt/elan/bin:${PATH}"
 
-# TODO(pin): pin elan-init.sh to a release tag + checksum instead of master.
-RUN curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+# elan installer pinned to a release tag; the Lean toolchain is pinned by version.
+RUN curl -sSf https://raw.githubusercontent.com/leanprover/elan/v4.0.0/elan-init.sh \
     | sh -s -- -y --default-toolchain leanprover/lean4:v4.14.0 --no-modify-path \
     && elan toolchain install leanprover/lean4:v4.14.0 \
     && lean --version \

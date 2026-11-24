@@ -1,12 +1,10 @@
-/target
-/data
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
 .lake/
 .DS_Store
-deploy/.env
 cloudflare/node_modules
 cloudflare/.cloudflare
 cloudflare/src/generated
 __pycache__/
+target/

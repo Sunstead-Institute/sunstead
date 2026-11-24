@@ -1,6 +1,6 @@
 /**
- * 1:1 TypeScript port of `crates/sunstead-core` invariants (policy, DAG, transitions).
- * Mirrors the Verus-verified state machine rules for Cloudflare Workers/Durable Objects.
+ * Sunstead core rules (frozen-path policy, DAG readiness, task transitions,
+ * points) for the Cloudflare hub. Unit tests: cloudflare/test/core.test.ts.
  */
 
 export type MissionMode = "dag" | "hillclimb";

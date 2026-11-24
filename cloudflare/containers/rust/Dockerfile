@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 rust:slim-bookworm
+FROM --platform=linux/amd64 rust:1.91-slim-bookworm@sha256:8514999d4786ef12efe89239e86b3d0a021b94b9d35108c8efe6c79ca7dc1a65
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git python3 ca-certificates \

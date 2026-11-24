@@ -46,7 +46,7 @@ fs.writeFileSync(
     )};\n`
 );
 
-// 2. Deterministic glob matcher matching sunstead-core::policy::glob_matches
+// 2. Deterministic glob matcher (must match globMatches in src/core.ts)
 function segmentMatches(pat, seg) {
   const dp = Array.from({ length: pat.length + 1 }, () =>
     Array(seg.length + 1).fill(false)
