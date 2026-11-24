@@ -1,0 +1,74 @@
+{
+  "id": "tier3-mldsa-arith",
+  "title": "ML-DSA (FIPS 204) Constant-Time Arithmetic & NTT Butterfly",
+  "description": "Verify a complete 7-stage branchless, constant-time, overflow-free modular arithmetic pipeline for NIST FIPS 204 ML-DSA (q = 8,380,417)—from centered reduction, Power2Round, and Montgomery reduction up to the Cooley-Tukey NTT butterfly.",
+  "tier": 3,
+  "mode": "dag",
+  "repo": "local://missions/tier3-mldsa-arith",
+  "frozen_paths": [
+    "Cargo.toml",
+    "src/lib.rs",
+    "src/spec.rs",
+    "tests/**",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-rust:v0.1",
+    "command": ["./verify"],
+    "timeout_sec": 120,
+    "memory_mb": 2048
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "centered_mod",
+      "title": "Constant-time centered reduction mod q",
+      "description": "Implement branchless centered_mod(a: i32) -> i32 mapping [0, q) into [-HALF_Q, HALF_Q] with zero unsafe, branches, or division/modulo.",
+      "target_files": ["src/centered_mod.rs"],
+      "depends_on": []
+    },
+    {
+      "id": "ct_select",
+      "title": "Constant-time conditional i32 select",
+      "description": "Implement branchless ct_select_i32(cond: u32, a: i32, b: i32) -> i32 returning a when cond != 0 else b with zero secret-dependent control flow.",
+      "target_files": ["src/ct_select.rs"],
+      "depends_on": []
+    },
+    {
+      "id": "montgomery_reduce",
+      "title": "FIPS 204 Montgomery reduction (R = 2^32)",
+      "description": "Implement branchless montgomery_reduce(a: i64) -> i32 using QINV = 58728449 so |r| < q and r * 2^32 ≡ a (mod q) for all a in [-(2^31-1)*q, (2^31-1)*q].",
+      "target_files": ["src/montgomery.rs"],
+      "depends_on": []
+    },
+    {
+      "id": "power2round",
+      "title": "FIPS 204 Power2Round (d = 13 bits)",
+      "description": "Implement branchless power2round(r: i32) -> (i32, i32) decomposing every r in [0, q) into (r1, r0) with r = r1*2^13 + r0 and -2^12 < r0 <= 2^12.",
+      "target_files": ["src/power2round.rs"],
+      "depends_on": []
+    },
+    {
+      "id": "add_reduce",
+      "title": "Constant-time centered modular addition",
+      "description": "Compose centered_mod and ct_select_i32 to implement branchless add_centered(a, b) for centered residues in [-HALF_Q, HALF_Q].",
+      "target_files": ["src/add_reduce.rs"],
+      "depends_on": ["centered_mod", "ct_select"]
+    },
+    {
+      "id": "sub_reduce",
+      "title": "Constant-time centered modular subtraction",
+      "description": "Compose centered_mod and ct_select_i32 to implement branchless sub_centered(a, b) returning (a - b) mod± q in [-HALF_Q, HALF_Q].",
+      "target_files": ["src/sub_reduce.rs"],
+      "depends_on": ["centered_mod", "ct_select"]
+    },
+    {
+      "id": "ct_butterfly",
+      "title": "ML-DSA Cooley-Tukey NTT butterfly",
+      "description": "Compose montgomery_reduce, add_centered, and sub_centered into a constant-time NTT butterfly returning (a + zeta*b, a - zeta*b) mod± q.",
+      "target_files": ["src/butterfly.rs"],
+      "depends_on": ["montgomery_reduce", "add_reduce", "sub_reduce"]
+    }
+  ]
+}

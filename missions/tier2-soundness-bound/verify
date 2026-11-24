@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+
+ALLOWED_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
+
+TASKS = {
+    "tighten_multi_user_bound": (
+        "SoundnessBound.MultiUserBound",
+        """import SoundnessBound.Spec
+import SoundnessBound.MultiUserBound
+
+def sunstead_audit_bound :
+    ∀ u q : Nat, u ≥ 1 → q ≥ 1 →
+      100 * SoundnessBound.multiUserLoss u q ≤ SoundnessBound.claimedMultiUserFactor * ((u + q) * (u + q)) :=
+  SoundnessBound.multi_user_bound
+
+#print axioms sunstead_audit_bound
+#eval IO.println s!"SUNSTEAD_SCORE={SoundnessBound.claimedMultiUserFactor}"
+""",
+        "100 * multiUserLoss(u,q) <= {factor} * (u+q)^2",
+    ),
+    "tighten_folding_bound": (
+        "SoundnessBound.FoldingBound",
+        """import SoundnessBound.Spec
+import SoundnessBound.FoldingBound
+
+def sunstead_audit_bound :
+    ∀ d r : Nat, d ≥ 1 → r ≥ 1 →
+      100 * SoundnessBound.foldingError d r ≤ SoundnessBound.claimedFoldingFactor * ((d + r) * (d + r)) :=
+  SoundnessBound.folding_bound
+
+#print axioms sunstead_audit_bound
+#eval IO.println s!"SUNSTEAD_SCORE={SoundnessBound.claimedFoldingFactor}"
+""",
+        "100 * foldingError(d,r) <= {factor} * (d+r)^2",
+    ),
+}
+
+
+def emit(ok: bool, summary: str, score=None):
+    out = {"ok": ok, "summary": summary}
+    if score is not None:
+        out["score"] = score
+    print(json.dumps(out))
+    sys.exit(0 if ok else 1)
+
+
+def check_axioms(output: str, decl_name: str):
+    no_ax = f"'{decl_name}' does not depend on any axioms"
+    if no_ax in output:
+        return []
+    m = re.search(rf"'{re.escape(decl_name)}' depends on axioms: \[([^\]]*)\]", output)
+    if not m:
+        return ["<missing axiom report>"]
+    found = [a.strip() for a in m.group(1).split(",") if a.strip()]
+    return [a for a in found if a not in ALLOWED_AXIOMS]
+
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] not in TASKS:
+        emit(False, f"unknown task id: {sys.argv[1:]}")
+
+    task_id = sys.argv[1]
+    mod_name, audit_src, label_fmt = TASKS[task_id]
+
+    work = "/tmp/verify_run"
+    if os.path.exists(work):
+        shutil.rmtree(work)
+    shutil.copytree("/work", work)
+
+    build = subprocess.run(
+        ["lake", "build", mod_name],
+        cwd=work,
+        capture_output=True,
+        text=True,
+    )
+    if build.returncode != 0:
+        tail = (build.stdout + "\n" + build.stderr).strip()[-350:]
+        emit(False, f"lake build {mod_name} failed: {tail}")
+
+    audit_path = os.path.join(work, "_SunsteadAudit.lean")
+    with open(audit_path, "w", encoding="utf-8") as f:
+        f.write(audit_src)
+
+    audit = subprocess.run(
+        ["lake", "env", "lean", "_SunsteadAudit.lean"],
+        cwd=work,
+        capture_output=True,
+        text=True,
+    )
+    combined = audit.stdout + "\n" + audit.stderr
+    if audit.returncode != 0:
+        emit(False, f"Lean 4 audit failed: {combined.strip()[-350:]}")
+
+    bad_axioms = check_axioms(combined, "sunstead_audit_bound")
+    if bad_axioms:
+        emit(False, f"forbidden axioms detected: {', '.join(bad_axioms)}")
+
+    m = re.search(r"SUNSTEAD_SCORE=(\d+)", combined)
+    if not m:
+        emit(False, "could not extract verified score")
+
+    factor = int(m.group(1))
+    emit(
+        True,
+        f"Lean 4 verified: {label_fmt.format(factor=factor)} (0 sorry, 0 custom axioms)",
+        score=float(factor),
+    )
+
+
+if __name__ == "__main__":
+    main()

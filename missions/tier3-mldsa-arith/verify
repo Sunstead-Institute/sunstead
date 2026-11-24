@@ -1,0 +1,88 @@
+#!/usr/bin/env python3
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+
+TASK_MAP = {
+    "centered_mod": ("src/centered_mod.rs", "verify_centered_mod"),
+    "ct_select": ("src/ct_select.rs", "verify_ct_select"),
+    "montgomery_reduce": ("src/montgomery.rs", "verify_montgomery_reduce"),
+    "power2round": ("src/power2round.rs", "verify_power2round"),
+    "add_reduce": ("src/add_reduce.rs", "verify_add_reduce"),
+    "sub_reduce": ("src/sub_reduce.rs", "verify_sub_reduce"),
+    "ct_butterfly": ("src/butterfly.rs", "verify_ct_butterfly"),
+}
+
+FORBIDDEN_PATTERNS = [
+    (r"\bunsafe\b", "unsafe code is forbidden"),
+    (r"\bif\b", "branching (`if`) is forbidden in constant-time code"),
+    (r"\bmatch\b", "branching (`match`) is forbidden in constant-time code"),
+    (r"\bwhile\b|\bfor\b|\bloop\b", "loops are forbidden in constant-time arithmetic"),
+    (r"(?<!/)%(?!=)", "modulo operator `%` is variable-time on some CPUs"),
+    (r"(?<!/)/(?![/*])", "division operator `/` is variable-time on hardware"),
+    (r"\b(?:todo|unimplemented|panic)!", "panicking stubs are forbidden"),
+    (r"\basm!", "inline assembly is forbidden"),
+]
+
+
+def strip_comments(code: str) -> str:
+    code = re.sub(r"/\*.*?\*/", "", code, flags=re.S)
+    code = re.sub(r"//.*", "", code)
+    return code
+
+
+def emit(ok: bool, summary: str, score=None):
+    out = {"ok": ok, "summary": summary}
+    if score is not None:
+        out["score"] = score
+    print(json.dumps(out))
+    sys.exit(0 if ok else 1)
+
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] not in TASK_MAP:
+        emit(False, f"unknown task id: {sys.argv[1:]}")
+
+    task_id = sys.argv[1]
+    target_rel, test_name = TASK_MAP[task_id]
+
+    work = "/tmp/verify_run"
+    if os.path.exists(work):
+        shutil.rmtree(work)
+    shutil.copytree("/work", work)
+
+    # 1. Static constant-time & memory-safety hygiene check.
+    target_path = os.path.join(work, target_rel)
+    with open(target_path, "r", encoding="utf-8") as f:
+        cleaned = strip_comments(f.read())
+
+    for pattern, reason in FORBIDDEN_PATTERNS:
+        if re.search(pattern, cleaned):
+            emit(False, f"constant-time hygiene failed in {target_rel}: {reason}")
+
+    # 2. Run frozen exhaustive release test suite offline.
+    env = os.environ.copy()
+    env["CARGO_TARGET_DIR"] = "/tmp/cargo_target"
+    proc = subprocess.run(
+        ["cargo", "test", "--release", "--offline", "--test", test_name],
+        cwd=work,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        tail = (proc.stdout + "\n" + proc.stderr).strip()[-300:]
+        emit(False, f"verification test `{test_name}` failed: {tail}")
+
+    emit(
+        True,
+        f"ML-DSA `{task_id}` passed constant-time hygiene + exhaustive Rust verification",
+        score=1.0,
+    )
+
+
+if __name__ == "__main__":
+    main()

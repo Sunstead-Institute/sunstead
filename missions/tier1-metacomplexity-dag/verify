@@ -1,0 +1,157 @@
+#!/usr/bin/env python3
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+
+ALLOWED_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
+
+AUDIT_TEMPLATES = {
+    "pigeonhole_fin": (
+        "MetaComplexity.Pigeonhole",
+        """import MetaComplexity.Spec
+import MetaComplexity.Pigeonhole
+
+def sunstead_audit :
+    ∀ {n m : Nat}, m < n → ∀ (f : Fin n → Fin m), ¬ MetaComplexity.Injective f :=
+  @MetaComplexity.no_inj_lt
+
+#print axioms sunstead_audit
+""",
+    ),
+    "decoder_injective": (
+        "MetaComplexity.DecoderInjective",
+        """import MetaComplexity.Spec
+import MetaComplexity.DecoderInjective
+
+def sunstead_audit :
+    ∀ {n k : Nat} (c : MetaComplexity.LosslessCompressor n k), MetaComplexity.Injective c.encode :=
+  @MetaComplexity.encode_injective_of_lossless
+
+#print axioms sunstead_audit
+""",
+    ),
+    "bijection_card_eq": (
+        "MetaComplexity.BijectionCard",
+        """import MetaComplexity.Spec
+import MetaComplexity.BijectionCard
+
+def sunstead_audit :
+    ∀ {n m : Nat} (f : Fin n → Fin m) (g : Fin m → Fin n),
+      (∀ x, g (f x) = x) → (∀ y, f (g y) = y) → n = m :=
+  @MetaComplexity.bij_card_eq
+
+#print axioms sunstead_audit
+""",
+    ),
+    "incompressibility_theorem": (
+        "MetaComplexity.Incompressibility",
+        """import MetaComplexity.Spec
+import MetaComplexity.Incompressibility
+
+def sunstead_audit :
+    ∀ {n k : Nat}, k < n → MetaComplexity.LosslessCompressor n k → False :=
+  @MetaComplexity.no_universal_lossless_compressor
+
+#print axioms sunstead_audit
+""",
+    ),
+    "non_surjective_decoder": (
+        "MetaComplexity.NonSurjective",
+        """import MetaComplexity.Spec
+import MetaComplexity.NonSurjective
+
+def sunstead_audit :
+    ∀ {n k : Nat}, k < n → ∀ (U : Fin (2 ^ k) → Fin (2 ^ n)),
+      ∃ x : Fin (2 ^ n), ∀ p : Fin (2 ^ k), U p ≠ x :=
+  @MetaComplexity.exists_incompressible_string
+
+#print axioms sunstead_audit
+""",
+    ),
+    "incompressible_density": (
+        "MetaComplexity.IncompressibleDensity",
+        """import MetaComplexity.Spec
+import MetaComplexity.IncompressibleDensity
+
+def sunstead_audit :
+    ∀ {m n : Nat} (U : Fin m → Fin n),
+      n - m ≤ MetaComplexity.countFin n (fun x => !MetaComplexity.inImage U x) :=
+  @MetaComplexity.count_not_in_image_ge
+
+#print axioms sunstead_audit
+""",
+    ),
+}
+
+
+def emit(ok: bool, summary: str, score=None):
+    out = {"ok": ok, "summary": summary}
+    if score is not None:
+        out["score"] = score
+    print(json.dumps(out))
+    sys.exit(0 if ok else 1)
+
+
+def check_axioms(output: str, decl_name: str):
+    no_ax = f"'{decl_name}' does not depend on any axioms"
+    if no_ax in output:
+        return []
+    m = re.search(rf"'{re.escape(decl_name)}' depends on axioms: \[([^\]]*)\]", output)
+    if not m:
+        return ["<missing axiom report>"]
+    found = [a.strip() for a in m.group(1).split(",") if a.strip()]
+    return [a for a in found if a not in ALLOWED_AXIOMS]
+
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] not in AUDIT_TEMPLATES:
+        emit(False, f"unknown task id: {sys.argv[1:]}")
+
+    task_id = sys.argv[1]
+    target_mod, audit_src = AUDIT_TEMPLATES[task_id]
+
+    work = "/tmp/verify_run"
+    if os.path.exists(work):
+        shutil.rmtree(work)
+    shutil.copytree("/work", work)
+
+    build = subprocess.run(
+        ["lake", "build", target_mod],
+        cwd=work,
+        capture_output=True,
+        text=True,
+    )
+    if build.returncode != 0:
+        tail = (build.stdout + "\n" + build.stderr).strip()[-350:]
+        emit(False, f"lake build {target_mod} failed: {tail}")
+
+    audit_path = os.path.join(work, "_SunsteadAudit.lean")
+    with open(audit_path, "w", encoding="utf-8") as f:
+        f.write(audit_src)
+
+    audit = subprocess.run(
+        ["lake", "env", "lean", "_SunsteadAudit.lean"],
+        cwd=work,
+        capture_output=True,
+        text=True,
+    )
+    combined = audit.stdout + "\n" + audit.stderr
+    if audit.returncode != 0:
+        emit(False, f"Lean 4 audit failed: {combined.strip()[-350:]}")
+
+    bad_axioms = check_axioms(combined, "sunstead_audit")
+    if bad_axioms:
+        emit(False, f"forbidden axioms detected: {', '.join(bad_axioms)}")
+
+    emit(
+        True,
+        f"Lean 4 kernel verified `{task_id}` (0 sorry, 0 custom axioms)",
+        score=1.0,
+    )
+
+
+if __name__ == "__main__":
+    main()

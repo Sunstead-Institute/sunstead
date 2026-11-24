@@ -1,0 +1,8 @@
+/target
+/data
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+.lake/
+.DS_Store
+deploy/.env

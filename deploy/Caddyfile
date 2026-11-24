@@ -1,0 +1,26 @@
+www.sunstead.org {
+    redir https://sunstead.org{uri} permanent
+}
+
+sunstead.org {
+    encode zstd gzip
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    # Disable buffering on the Server-Sent Events stream so live DAG updates arrive instantly.
+    handle /api/events {
+        reverse_proxy hub:8080 {
+            flush_interval -1
+        }
+    }
+
+    handle {
+        reverse_proxy hub:8080
+    }
+}

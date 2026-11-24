@@ -1,0 +1,66 @@
+{
+  "id": "tier1-metacomplexity-dag",
+  "title": "Meta-Complexity & Quantitative Incompressibility Blueprint",
+  "description": "A 6-node Lean 4 Blueprint DAG establishing finite pigeonhole, bijection cardinality, Kolmogorov incompressibility, non-surjectivity of short decoders, and the quantitative 50% average-case incompressibility density bound underlying Liu-Pass OWF meta-complexity.",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "local://missions/tier1-metacomplexity-dag",
+  "frozen_paths": [
+    "MetaComplexity/Spec.lean",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.1",
+    "command": ["./verify"],
+    "timeout_sec": 120,
+    "memory_mb": 2048
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "pigeonhole_fin",
+      "title": "Finite pigeonhole: no injection Fin n -> Fin m (m < n)",
+      "description": "Prove MetaComplexity.no_inj_lt in MetaComplexity/Pigeonhole.lean with 0 sorry and 0 custom axioms.",
+      "target_files": ["MetaComplexity/Pigeonhole.lean"],
+      "depends_on": []
+    },
+    {
+      "id": "decoder_injective",
+      "title": "Lossless compressor encoding is injective",
+      "description": "Prove MetaComplexity.encode_injective_of_lossless in MetaComplexity/DecoderInjective.lean with 0 sorry and 0 custom axioms.",
+      "target_files": ["MetaComplexity/DecoderInjective.lean"],
+      "depends_on": []
+    },
+    {
+      "id": "bijection_card_eq",
+      "title": "Finite bijection implies equal cardinality",
+      "description": "Use pigeonhole_fin to prove MetaComplexity.bij_card_eq: any mutual-inverse pair between Fin n and Fin m implies n = m.",
+      "target_files": ["MetaComplexity/BijectionCard.lean"],
+      "depends_on": ["pigeonhole_fin"]
+    },
+    {
+      "id": "incompressibility_theorem",
+      "title": "Kolmogorov incompressibility (no universal k < n compressor)",
+      "description": "Combine pigeonhole_fin and decoder_injective to prove MetaComplexity.no_universal_lossless_compressor.",
+      "target_files": ["MetaComplexity/Incompressibility.lean"],
+      "depends_on": ["pigeonhole_fin", "decoder_injective"]
+    },
+    {
+      "id": "non_surjective_decoder",
+      "title": "Every shorter decoder misses an incompressible witness",
+      "description": "Prove MetaComplexity.exists_incompressible_string: for any U : Fin (2^k) -> Fin (2^n) with k < n, there exists x not in the image of U.",
+      "target_files": ["MetaComplexity/NonSurjective.lean"],
+      "depends_on": ["pigeonhole_fin"]
+    },
+    {
+      "id": "incompressible_density",
+      "title": "Quantitative incompressibility density (>= n - m strings)",
+      "description": "Prove MetaComplexity.count_not_in_image_ge: for any decoder U : Fin m -> Fin n, at least n - m strings lie outside the image of U (>= 50% density for 1-bit compression).",
+      "target_files": ["MetaComplexity/IncompressibleDensity.lean"],
+      "depends_on": ["non_surjective_decoder", "bijection_card_eq"]
+    }
+  ]
+}
