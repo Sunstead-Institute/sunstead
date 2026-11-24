@@ -441,18 +441,19 @@ def lean_verify(task_id, *, lib_root, frozen_files, tasks, timeout_sec=110):
             emit(False, f"lake build {task['module']} failed: {tail(p.stdout + p.stderr)}")
 
         # 3. Trusted kernel replay + statement + axiom check (checker user).
+        # key=value tokens: `lean --run` parses any `--flag` as its own option.
         argv = [
             "lean", "--run", LEAN_CHECKER,
-            "--trusted-lib", os.path.join(trusted, ".lake", "build", "lib"),
-            "--untrusted-lib", os.path.join(src_dir, ".lake", "build", "lib"),
-            "--lib-root", lib_root,
-            "--frozen", ",".join([f"{lib_root}.Spec", f"{lib_root}.SunsteadStatements"]),
-            "--target-module", task["module"],
-            "--target-const", task["theorem"],
-            "--statement", f"SunsteadStatements.{task_id}",
+            "trusted-lib=" + os.path.join(trusted, ".lake", "build", "lib"),
+            "untrusted-lib=" + os.path.join(src_dir, ".lake", "build", "lib"),
+            "lib-root=" + lib_root,
+            "frozen=" + ",".join([f"{lib_root}.Spec", f"{lib_root}.SunsteadStatements"]),
+            "target-module=" + task["module"],
+            "target-const=" + task["theorem"],
+            "statement=" + f"SunsteadStatements.{task_id}",
         ]
         if task.get("score_const"):
-            argv += ["--score-const", task["score_const"]]
+            argv.append("score-const=" + task["score_const"])
         p = run_as(CHECKER_USER, argv, cwd=trusted, timeout=deadline(),
                    env_extra={"HOME": job.checker_dir})
         ensure_no_processes(CHECKER_USER)

@@ -23,6 +23,6 @@ RUN chmod -R a-w,a+rX /opt/sunstead \
     && useradd -M -d /nonexistent -s /usr/sbin/nologin -u 10002 sunstead-runner \
     && useradd -M -d /nonexistent -s /usr/sbin/nologin -u 10003 sunstead-checker \
     && mkdir -p /work \
-    && cd /tmp && lean --run /opt/sunstead/SunsteadCheck.lean --selftest | grep -q '"selftest":"ok"'
+    && cd /tmp && lean --run /opt/sunstead/SunsteadCheck.lean selftest | grep -q '"selftest":"ok"'
 
 WORKDIR /work

@@ -29,7 +29,7 @@ RUN chmod -R a-w,a+rX /missions /opt/sunstead /opt/verifier_server.py \
     && useradd -M -d /nonexistent -s /usr/sbin/nologin -u 10002 sunstead-runner \
     && useradd -M -d /nonexistent -s /usr/sbin/nologin -u 10003 sunstead-checker \
     && mkdir -p /work && chmod 0755 /work \
-    && cd /tmp && lean --run /opt/sunstead/SunsteadCheck.lean --selftest | grep -q '"selftest":"ok"'
+    && cd /tmp && lean --run /opt/sunstead/SunsteadCheck.lean selftest | grep -q '"selftest":"ok"'
 
 WORKDIR /work
 EXPOSE 8080

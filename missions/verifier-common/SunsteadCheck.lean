@@ -34,19 +34,26 @@ structure Cfg where
   scoreConst : Option Name := none
   statementsModule : Name := .anonymous
 
+/-- Arguments are `key=value` tokens (no leading dashes: `lean --run` would
+otherwise try to parse them as its own options). -/
 partial def parseArgs : List String → Cfg → Except String Cfg
   | [], c => .ok c
-  | "--trusted-lib" :: v :: rest, c => parseArgs rest { c with trustedLib := v }
-  | "--untrusted-lib" :: v :: rest, c => parseArgs rest { c with untrustedLib := v }
-  | "--lib-root" :: v :: rest, c =>
-      parseArgs rest { c with libRoot := v.toName, statementsModule := (v ++ ".SunsteadStatements").toName }
-  | "--frozen" :: v :: rest, c =>
-      parseArgs rest { c with frozen := (v.splitOn ",").map String.toName }
-  | "--target-module" :: v :: rest, c => parseArgs rest { c with targetModule := v.toName }
-  | "--target-const" :: v :: rest, c => parseArgs rest { c with targetConst := v.toName }
-  | "--statement" :: v :: rest, c => parseArgs rest { c with statement := v.toName }
-  | "--score-const" :: v :: rest, c => parseArgs rest { c with scoreConst := some v.toName }
-  | a :: _, _ => .error s!"unknown argument {a}"
+  | a :: rest, c =>
+    match a.splitOn "=" with
+    | k :: vs =>
+      let v := "=".intercalate vs
+      match k with
+      | "trusted-lib" => parseArgs rest { c with trustedLib := v }
+      | "untrusted-lib" => parseArgs rest { c with untrustedLib := v }
+      | "lib-root" =>
+        parseArgs rest { c with libRoot := v.toName, statementsModule := (v ++ ".SunsteadStatements").toName }
+      | "frozen" => parseArgs rest { c with frozen := (v.splitOn ",").map String.toName }
+      | "target-module" => parseArgs rest { c with targetModule := v.toName }
+      | "target-const" => parseArgs rest { c with targetConst := v.toName }
+      | "statement" => parseArgs rest { c with statement := v.toName }
+      | "score-const" => parseArgs rest { c with scoreConst := some v.toName }
+      | _ => .error s!"unknown argument {a}"
+    | [] => .error s!"unknown argument {a}"
 
 def Cfg.isUntrusted (c : Cfg) (m : Name) : Bool :=
   c.libRoot.isPrefixOf m && !c.frozen.contains m
@@ -129,7 +136,7 @@ def run (args : List String) : IO Json := do
   return j
 
 def main (args : List String) : IO UInt32 := do
-  if args == ["--selftest"] then
+  if args == ["selftest"] then
     IO.println "{\"selftest\":\"ok\"}"
     return 0
   try
