@@ -1,0 +1,23 @@
+{
+  "name": "sunstead-cloudflare",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync": "node scripts/sync-assets.mjs",
+    "typecheck": "node scripts/sync-assets.mjs && tsc --noEmit",
+    "dev": "node scripts/sync-assets.mjs && cf dev",
+    "build": "node scripts/sync-assets.mjs && cf build",
+    "deploy": "node scripts/sync-assets.mjs && cf deploy --containers-rollout immediate"
+  },
+  "dependencies": {
+    "@cloudflare/containers": "^0.3.7"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^2.0.0-rc.5",
+    "@cloudflare/workers-types": "^5.20261124.1",
+    "cf": "^1.0.0-rc.4",
+    "typescript": "^5.7.0",
+    "vite": "^8.3.8"
+  }
+}

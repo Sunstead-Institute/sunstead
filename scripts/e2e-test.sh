@@ -25,7 +25,9 @@ BASE = os.environ.get("SUNSTEAD_URL", "http://127.0.0.1:8787").rstrip("/")
 
 def req(method, path, body=None):
     data = None if body is None else json.dumps(body).encode("utf-8")
-    headers = {"Content-Type": "application/json"} if body is not None else {}
+    headers = {"User-Agent": "sunstead-e2e/0.1"}
+    if body is not None:
+        headers["Content-Type"] = "application/json"
     r = urllib.request.Request(BASE + path, data=data, headers=headers, method=method)
     try:
         with urllib.request.urlopen(r, timeout=180) as resp:

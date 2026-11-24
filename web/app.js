@@ -106,7 +106,7 @@ async function loadHealth() {
   try {
     const h = await fetchJson("/api/health");
     if (h.docker_verifier_ready) {
-      pill.textContent = "Sandbox Ready · Docker";
+      pill.textContent = h.verifier_label || "Sandbox Ready · Docker";
       pill.className = "pill pill-ok";
     } else {
       pill.textContent = "Hub Online · No Verifier";

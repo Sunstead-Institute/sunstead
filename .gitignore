@@ -6,3 +6,6 @@
 .lake/
 .DS_Store
 deploy/.env
+cloudflare/node_modules
+cloudflare/.cloudflare
+cloudflare/src/generated
