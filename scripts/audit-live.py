@@ -690,6 +690,141 @@ def audit_rank_history(repo, mid, accepted, tasks_by_id):
         require(final_score == tasks_by_id[task_id]["best_score"], "published best score differs from certificate")
 
 
+def _fips197_aes_sbox():
+    """Independently compute the 256-entry NIST FIPS 197 AES S-box over GF(2^8)."""
+    def gf_mul(a, b):
+        res = 0
+        for _ in range(8):
+            if b & 1:
+                res ^= a
+            hi = a & 0x80
+            a = (a << 1) & 0xFF
+            if hi:
+                a ^= 0x1B
+            b >>= 1
+        return res
+
+    def gf_inv(x):
+        if x == 0:
+            return 0
+        res, base, exp = 1, x, 254
+        while exp:
+            if exp & 1:
+                res = gf_mul(res, base)
+            base = gf_mul(base, base)
+            exp >>= 1
+        return res
+
+    table = []
+    for x in range(256):
+        b = gf_inv(x)
+        out = 0
+        for i in range(8):
+            bit = (
+                (b >> i)
+                ^ (b >> ((i + 4) % 8))
+                ^ (b >> ((i + 5) % 8))
+                ^ (b >> ((i + 6) % 8))
+                ^ (b >> ((i + 7) % 8))
+                ^ (0x63 >> i)
+            ) & 1
+            out |= bit << i
+        table.append(out)
+    return table
+
+
+_AES_SBOX_TABLE = _fips197_aes_sbox()
+_AES_SBOX_TARGETS = {
+    "minimize_total_gates": (
+        "AesSbox/TotalCircuit.lean",
+        "AesSbox.totalScore",
+        "AesSbox.totalGates",
+        "AesSbox.totalOutputs",
+    ),
+    "minimize_and_gates": (
+        "AesSbox/AndCircuit.lean",
+        "AesSbox.andScore",
+        "AesSbox.andGates",
+        "AesSbox.andOutputs",
+    ),
+}
+
+
+def check_aes_sbox_circuit(source, task_id):
+    """Read only literal gate/output definitions and verify all 256 FIPS 197 AES S-box inputs."""
+    require(task_id in _AES_SBOX_TARGETS, f"unknown AES S-box task: {task_id}")
+    require(len(source.encode("utf-8")) <= 16384, "AES S-box circuit exceeds 16384 bytes")
+    _, score_name, gates_name, outputs_name = _AES_SBOX_TARGETS[task_id]
+    pattern = (
+        rf"\s*def\s+{re.escape(score_name)}\s*:\s*Nat\s*:=\s*(0|[1-9][0-9]{{0,3}})\s*\n"
+        rf"\s*def\s+{re.escape(gates_name)}\s*:\s*List\s*\(Nat\s*×\s*Nat\s*×\s*Nat\)\s*:=\s*(\[[\s\S]*?\])\s*\n"
+        rf"\s*def\s+{re.escape(outputs_name)}\s*:\s*List\s+Nat\s*:=\s*(\[[\s\S]*?\])\s*"
+    )
+    match = re.fullmatch(pattern, source)
+    require(match, "unexpected AES S-box circuit format")
+    claimed_score = int(match[1])
+    gates_lit, outputs_lit = match[2], match[3]
+    require(re.fullmatch(r"[0-9\s(),\[\]]+", gates_lit), "invalid AES S-box gate table")
+    require(re.fullmatch(r"[0-9\s,\[\]]+", outputs_lit), "invalid AES S-box output list")
+    gates = ast.literal_eval(gates_lit)
+    outputs = ast.literal_eval(outputs_lit)
+    require(type(gates) is list and 1 <= len(gates) <= 1024, "invalid AES S-box gate count")
+    require(type(outputs) is list and len(outputs) == 8, "invalid AES S-box output count")
+    for i, gate in enumerate(gates):
+        require(
+            type(gate) is tuple and len(gate) == 3 and all(type(v) is int for v in gate),
+            "invalid AES S-box gate triple",
+        )
+        op, w1, w2 = gate
+        require(0 <= op < 4, f"invalid AES S-box opcode {op} at gate {i}")
+        require(0 <= w1 < 8 + i and 0 <= w2 < 8 + i, f"non-causal wire index at gate {i}")
+    num_wires = 8 + len(gates)
+    require(all(type(w) is int and 0 <= w < num_wires for w in outputs), "out-of-range output wire index")
+
+    actual_score = len(gates) if task_id == "minimize_total_gates" else sum(1 for op, _, _ in gates if op == 2)
+    require(actual_score == claimed_score, "invalid AES S-box circuit score")
+
+    mask = (1 << 256) - 1
+    wires = [sum(((x >> b) & 1) << x for x in range(256)) for b in range(8)]
+    for op, w1, w2 in gates:
+        v1, v2 = wires[w1], wires[w2]
+        if op == 0:
+            wires.append(v1 ^ v2)
+        elif op == 1:
+            wires.append((v1 ^ v2) ^ mask)
+        elif op == 2:
+            wires.append(v1 & v2)
+        else:
+            wires.append(v1 ^ mask)
+    for x in range(256):
+        got = sum(((wires[ow] >> x) & 1) << b for b, ow in enumerate(outputs))
+        require(got == _AES_SBOX_TABLE[x], f"AES S-box differs at input 0x{x:02x}")
+    return actual_score
+
+
+def audit_aes_sbox_history(repo, accepted, snapshot_tasks, manifest):
+    commits = repo_git(repo, "rev-list", "--reverse", "HEAD").decode().splitlines()
+    require(len(commits) == 1 + len(accepted), "unexpected AES S-box history length")
+    baselines = {t["id"]: t["baseline_score"] for t in manifest["tasks"]}
+    previous = {}
+    for task_id, (rel_path, _, _, _) in _AES_SBOX_TARGETS.items():
+        seed_src = repo_git(repo, "show", commits[0] + ":" + rel_path).decode("utf-8")
+        seed_score = check_aes_sbox_circuit(seed_src, task_id)
+        require(seed_score == baselines[task_id], f"unexpected AES S-box seed baseline for {task_id}")
+        previous[task_id] = seed_score
+    for commit, task_id in zip(commits[1:], accepted):
+        rel_path = _AES_SBOX_TARGETS[task_id][0]
+        source = repo_git(repo, "show", commit + ":" + rel_path).decode("utf-8")
+        score = check_aes_sbox_circuit(source, task_id)
+        require(score < previous[task_id], f"invalid AES S-box progression for {task_id}")
+        print(f"  PASS {commit[:12]} ({task_id}): all 256 FIPS 197 inputs verified at score {score}")
+        previous[task_id] = score
+    for task in snapshot_tasks:
+        tid = task["def"]["id"]
+        if task["status"] == "verified":
+            require(previous[tid] == task["best_score"], f"published best score differs from circuit for {tid}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--image", default=None, help="override stock Lean toolchain image (default: per-mission verifier image)")
@@ -721,11 +856,13 @@ def main():
         mission = ROOT / "missions" / mid
         manifest = json.loads((mission / "sunstead.json").read_text(encoding="utf-8"))
         rank_mission = mid in ("matrix-rank444-f2", "matrix-rank-alphatensor-f2") and manifest["mode"] == "hillclimb"
-        require(not manifest.get("demo") and (rank_mission or manifest["mode"] == "dag"), "unsupported audited mission")
+        aes_sbox_mission = mid == "aes-sbox-circuit" and manifest["mode"] == "hillclimb"
+        hillclimb_mission = rank_mission or aes_sbox_mission
+        require(not manifest.get("demo") and (hillclimb_mission or manifest["mode"] == "dag"), "unsupported audited mission")
         require(manifest == detail["manifest"], "live manifest differs from trusted checkout")
         history = json.loads(download(endpoint + "/history"))["commits"]
         verified = {t["def"]["id"] for t in snapshot["tasks"] if t["status"] == "verified"}
-        require(history and (rank_mission or len(history) == len(verified)), "history incomplete or changed during audit")
+        require(history and (hillclimb_mission or len(history) == len(verified)), "history incomplete or changed during audit")
         require(verified == {row["task_id"] for row in history}, "verified tasks and history disagree")
         seed_files = archive_files(download(endpoint + "/bundle.tar.gz?base=seed"))
         live_files = archive_files(download(endpoint + "/bundle.tar.gz"))
@@ -736,6 +873,10 @@ def main():
             if rank_mission:
                 tasks_by_id = {t["def"]["id"]: t for t in snapshot["tasks"]}
                 audit_rank_history(Path(tmp) / "repo", mid, accepted, tasks_by_id)
+                count += len(accepted)
+                continue
+            if aes_sbox_mission:
+                audit_aes_sbox_history(Path(tmp) / "repo", accepted, snapshot["tasks"], manifest)
                 count += len(accepted)
                 continue
             image, expected_version = resolve_audit_target(

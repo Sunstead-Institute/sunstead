@@ -1,0 +1,105 @@
+#!/usr/bin/env python3
+"""Verify an explicit straight-line AES S-box Boolean circuit and measure its cost."""
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify
+
+TASKS = {
+    "minimize_total_gates": {
+        "module": "AesSbox.TotalBound",
+        "theorem": "AesSbox.total_bound",
+        "score_const": "AesSbox.totalScore",
+        "statement": "def minimize_total_gates (n : Nat) : Prop := AesSbox.ValidTotalCircuit n",
+        "label": "{score} total gates",
+    },
+    "minimize_and_gates": {
+        "module": "AesSbox.AndBound",
+        "theorem": "AesSbox.and_bound",
+        "score_const": "AesSbox.andScore",
+        "statement": "def minimize_and_gates (n : Nat) : Prop := AesSbox.ValidAndCircuit n",
+        "label": "{score} AND gates",
+    },
+}
+
+CIRCUIT_TARGETS = {
+    "minimize_total_gates": (
+        "AesSbox/TotalCircuit.lean",
+        "AesSbox.totalScore",
+        "AesSbox.totalGates",
+        "AesSbox.totalOutputs",
+    ),
+    "minimize_and_gates": (
+        "AesSbox/AndCircuit.lean",
+        "AesSbox.andScore",
+        "AesSbox.andGates",
+        "AesSbox.andOutputs",
+    ),
+}
+
+MAX_BYTES = 16384
+MAX_GATES = 1024
+
+
+def check_circuit(path, score_name, gates_name, outputs_name):
+    # Restrict the editable source to concrete circuit literals replayable outside Lean.
+    if not path.is_file():
+        emit(False, f"Missing circuit file: {path.name}", stage="lint")
+    raw = path.read_bytes()
+    if len(raw) > MAX_BYTES:
+        emit(False, f"Circuit file exceeds {MAX_BYTES} bytes", stage="lint")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        emit(False, "Circuit file must be valid UTF-8", stage="lint")
+
+    nat = r"(?:0|[1-9][0-9]{0,3})"
+    triple = rf"\(\s*{nat}\s*,\s*{nat}\s*,\s*{nat}\s*\)"
+    header_re = (
+        rf"\s*def\s+{re.escape(score_name)}\s*:\s*Nat\s*:=\s*({nat})\s*\n"
+        rf"\s*def\s+{re.escape(gates_name)}\s*:\s*List\s*\(Nat\s*×\s*Nat\s*×\s*Nat\)\s*:=\s*\[\s*(.*?)\s*\]\s*\n"
+        rf"\s*def\s+{re.escape(outputs_name)}\s*:\s*List\s+Nat\s*:=\s*\[\s*(.*?)\s*\]\s*"
+    )
+    match = re.fullmatch(header_re, text, re.DOTALL)
+    if not match:
+        emit(
+            False,
+            f"Expected only literal definitions for {score_name}, {gates_name}, and {outputs_name}",
+            stage="lint",
+        )
+    gates_body = match.group(2)
+    outputs_body = match.group(3)
+    if not gates_body or not re.fullmatch(
+        rf"{triple}(?:\s*,\s*{triple}){{0,{MAX_GATES - 1}}}", gates_body
+    ):
+        emit(
+            False,
+            f"Expected 1 to {MAX_GATES} literal (op, w1, w2) gate triples",
+            stage="lint",
+        )
+    if not re.fullmatch(rf"{nat}(?:\s*,\s*{nat}){{7}}", outputs_body):
+        emit(False, "Expected exactly 8 literal output wire indices", stage="lint")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>", stage="lint")
+    task_id = sys.argv[1]
+    if task_id in CIRCUIT_TARGETS:
+        rel_path, score_name, gates_name, outputs_name = CIRCUIT_TARGETS[task_id]
+        check_circuit(
+            Path(__file__).resolve().parent / rel_path,
+            score_name,
+            gates_name,
+            outputs_name,
+        )
+    lean_verify(
+        task_id,
+        lib_root="AesSbox",
+        frozen_files=["AesSbox/Spec.lean", "UPSTREAM.json", "lakefile.toml", "lean-toolchain"],
+        tasks=TASKS,
+        uses_mathlib=False,
+        timeout_sec=60,
+    )

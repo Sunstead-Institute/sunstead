@@ -38,6 +38,7 @@ IMAGES = {
     "curve25519-dalek": V431_IMAGE,
     "matrix-rank444-f2": DEFAULT_IMAGE,
     "matrix-rank-alphatensor-f2": DEFAULT_IMAGE,
+    "aes-sbox-circuit": DEFAULT_IMAGE,
     "__synthetic_mathlib__": DEFAULT_IMAGE,
     "__synthetic_hillclimb__": DEFAULT_IMAGE,
     "__synthetic_repo_snapshot__": DEFAULT_IMAGE,
@@ -342,6 +343,14 @@ with open(os.path.join(MISSIONS, "matrix-rank444-f2", "Rank444", "Certificate.le
           encoding="utf-8") as f:
     RANK_BASELINE = f.read()
 
+with open(os.path.join(MISSIONS, "aes-sbox-circuit", "AesSbox", "TotalCircuit.lean"),
+          encoding="utf-8") as f:
+    AES_TOTAL_BASELINE = f.read()
+
+with open(os.path.join(MISSIONS, "aes-sbox-circuit", "AesSbox", "AndCircuit.lean"),
+          encoding="utf-8") as f:
+    AES_AND_BASELINE = f.read()
+
 CASES = [
     ("rank444-wrong-score", "matrix-rank444-f2", "reduce_rank",
      {"Rank444/Certificate.lean": RANK_BASELINE.replace("Nat := 47", "Nat := 46", 1)},
@@ -351,6 +360,29 @@ CASES = [
     ("rank444-invalid-table", "matrix-rank444-f2", "reduce_rank",
      {"Rank444/Certificate.lean": "def B334.score : Nat := 1\ndef certificate : List (Nat × Nat × Nat) := [(0, 0, 0)]\n"},
      False, None, "a shorter table must still compute the full multiplication tensor"),
+    # --- AES S-box Boolean circuit hill-climb (`aes-sbox-circuit`) ---
+    ("aes-sbox-total-baseline", "aes-sbox-circuit", "minimize_total_gates",
+     {}, True, 130, "seed tower-field circuit must kernel-replay at 130 total gates"),
+    ("aes-sbox-and-baseline", "aes-sbox-circuit", "minimize_and_gates",
+     {}, True, 36, "seed tower-field circuit must kernel-replay at 36 AND gates"),
+    ("aes-sbox-corrupted-output", "aes-sbox-circuit", "minimize_total_gates",
+     {"AesSbox/TotalCircuit.lean": AES_TOTAL_BASELINE.replace("[132,", "[131,", 1)},
+     False, None, "corrupted output wire must be rejected by the 256-input kernel check"),
+    ("aes-sbox-and-corrupted-output", "aes-sbox-circuit", "minimize_and_gates",
+     {"AesSbox/AndCircuit.lean": AES_AND_BASELINE.replace("[132,", "[131,", 1)},
+     False, None, "corrupted AND-track output wire must be rejected by the 256-input kernel check"),
+    ("aes-sbox-non-causal-wire", "aes-sbox-circuit", "minimize_total_gates",
+     {"AesSbox/TotalCircuit.lean": AES_TOTAL_BASELINE.replace("[\n  (", "[\n  (0, 8, 0), --x\n  (", 1).replace(", --x\n  (", ",\n  (", 1).replace("Nat := 130", "Nat := 131", 1)},
+     False, None, "non-causal/cyclic gate referencing wire 8 at gate 0 must be rejected by wellFormed"),
+    ("aes-sbox-wrong-total-score", "aes-sbox-circuit", "minimize_total_gates",
+     {"AesSbox/TotalCircuit.lean": AES_TOTAL_BASELINE.replace("Nat := 130", "Nat := 129", 1)},
+     False, None, "claimed totalScore must equal totalGates.length"),
+    ("aes-sbox-wrong-and-score", "aes-sbox-circuit", "minimize_and_gates",
+     {"AesSbox/AndCircuit.lean": AES_AND_BASELINE.replace("Nat := 36", "Nat := 35", 1)},
+     False, None, "claimed andScore must equal andCount andGates"),
+    ("aes-sbox-code-injection", "aes-sbox-circuit", "minimize_total_gates",
+     {"AesSbox/TotalCircuit.lean": AES_TOTAL_BASELINE + "\n#eval IO.println \"pwn\"\n"},
+     False, None, "non-literal Lean code injection in circuit file must be rejected at lint"),
     # --- Pure Lean 4.36.0 attacks + honest control (`onboarding-sandbox`) ---
     ("lean-honest-control", "onboarding-sandbox", "decoder_injective",
      {"OnboardingSandbox/DecoderInjective.lean": HONEST_DECODER}, True, None,

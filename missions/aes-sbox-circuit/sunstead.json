@@ -1,0 +1,58 @@
+{
+  "id": "aes-sbox-circuit",
+  "title": "AES S-box Boolean circuit: minimize total gates and multiplicative complexity",
+  "description": "Sunstead pins AWS Automated Reasoning's verbatim NIST FIPS 197 AES S-box table (`SBOX` from `leanprover/LNSym@49f8a1d9`, Apache-2.0) and kernel-proves byte-for-byte agreement with the algebraic GF(2^8) formula on all 256 inputs in pure Lean 4.36.0 (no Mathlib). Two independent hill-climb tracks challenge contributors to minimize straight-line `{xor, xnor, and, not}` circuits computing the AES S-box: total gate count (seeded at 130 gates from a normal-basis GF(((2^2)^2)^2) tower-field decomposition) and multiplicative complexity / AND gate count (seeded at 36 AND gates).",
+  "tier": 2,
+  "mode": "hillclimb",
+  "repo": "https://github.com/leanprover/LNSym",
+  "upstream": {
+    "repo": "leanprover/LNSym",
+    "commit": "49f8a1d9e46f8dcfc345f4bc15d35b0ba845ff5c",
+    "license": "Apache-2.0"
+  },
+  "score_direction": "minimize",
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 60,
+    "memory_mb": 2048
+  },
+  "frozen_paths": [
+    "AesSbox/Spec.lean",
+    "AesSbox/TotalBound.lean",
+    "AesSbox/AndBound.lean",
+    "LICENSE",
+    "README.md",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "tasks": [
+    {
+      "id": "minimize_total_gates",
+      "title": "Minimize total gate count over {xor, xnor, and, not}",
+      "description": "Submit a straight-line circuit in AesSbox/TotalCircuit.lean (`totalScore`, `totalGates`, `totalOutputs`). The frozen Lean 4 kernel proof verifies well-formedness, gate count, and exact equivalence to the NIST FIPS 197 AES S-box on all 256 inputs via `decide +kernel`. Only strict improvements below the current record earn credit.",
+      "baseline_score": 130,
+      "target_files": [
+        "AesSbox/TotalCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/leanprover/LNSym/blob/49f8a1d9e46f8dcfc345f4bc15d35b0ba845ff5c/Specs/AESCommon.lean#L15-L33"
+    },
+    {
+      "id": "minimize_and_gates",
+      "title": "Minimize multiplicative complexity (AND gate count)",
+      "description": "Submit a straight-line circuit in AesSbox/AndCircuit.lean (`andScore`, `andGates`, `andOutputs`). The frozen Lean 4 kernel proof verifies well-formedness, AND gate count (`op == 2`), and exact equivalence to the NIST FIPS 197 AES S-box on all 256 inputs via `decide +kernel`. Only strict improvements below the current record earn credit.",
+      "baseline_score": 36,
+      "target_files": [
+        "AesSbox/AndCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/leanprover/LNSym/blob/49f8a1d9e46f8dcfc345f4bc15d35b0ba845ff5c/Specs/AESCommon.lean#L15-L33"
+    }
+  ]
+}
