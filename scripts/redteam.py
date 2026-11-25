@@ -41,6 +41,7 @@ IMAGES = {
     "matrix-rank444-f2": DEFAULT_IMAGE,
     "matrix-rank-alphatensor-f2": DEFAULT_IMAGE,
     "aes-sbox-circuit": DEFAULT_IMAGE,
+    "crypto-sbox-circuits": DEFAULT_IMAGE,
     "sorting-networks-opt": DEFAULT_IMAGE,
     "__synthetic_pure_lean__": DEFAULT_IMAGE,
     "__synthetic_mathlib__": DEFAULT_IMAGE,
@@ -648,6 +649,26 @@ with open(os.path.join(MISSIONS, "sorting-networks-opt", "SortNet", "Net9.lean")
           encoding="utf-8") as f:
     SORTNET_N9_BASELINE = f.read()
 
+with open(os.path.join(MISSIONS, "crypto-sbox-circuits", "CryptoSbox", "Sm4TotalCircuit.lean"),
+          encoding="utf-8") as f:
+    SM4_TOTAL_BASELINE = f.read()
+
+with open(os.path.join(MISSIONS, "crypto-sbox-circuits", "CryptoSbox", "Sm4AndCircuit.lean"),
+          encoding="utf-8") as f:
+    SM4_AND_BASELINE = f.read()
+
+with open(os.path.join(MISSIONS, "crypto-sbox-circuits", "CryptoSbox", "AesInvTotalCircuit.lean"),
+          encoding="utf-8") as f:
+    AES_INV_TOTAL_BASELINE = f.read()
+
+with open(os.path.join(MISSIONS, "crypto-sbox-circuits", "CryptoSbox", "CamelliaTotalCircuit.lean"),
+          encoding="utf-8") as f:
+    CAMELLIA_TOTAL_BASELINE = f.read()
+
+with open(os.path.join(MISSIONS, "crypto-sbox-circuits", "CryptoSbox", "CamelliaAndCircuit.lean"),
+          encoding="utf-8") as f:
+    CAMELLIA_AND_BASELINE = f.read()
+
 CASES = [
     ("rank444-wrong-score", "matrix-rank444-f2", "reduce_rank",
      {"Rank444/Certificate.lean": RANK_BASELINE.replace("Nat := 47", "Nat := 46", 1)},
@@ -703,6 +724,43 @@ CASES = [
     ("sortnet-n9-code-injection", "sorting-networks-opt", "sort_n9",
      {"SortNet/Net9.lean": SORTNET_N9_BASELINE + "\n#eval IO.println \"pwn\"\n"},
      False, None, "Lean code injection in network file must be rejected at lint"),
+    # --- Standardized Crypto S-box Circuits (`crypto-sbox-circuits`: SM4, AES Inverse, Camellia SBOX1) ---
+    ("crypto-sbox-sm4-total-baseline", "crypto-sbox-circuits", "sm4_total_gates",
+     {}, True, 130, "seed SM4 tower-field circuit must kernel-replay at 130 total gates"),
+    ("crypto-sbox-sm4-and-baseline", "crypto-sbox-circuits", "sm4_and_gates",
+     {}, True, 36, "seed SM4 tower-field circuit must kernel-replay at 36 AND gates"),
+    ("crypto-sbox-aes-inv-total-baseline", "crypto-sbox-circuits", "aes_inv_total_gates",
+     {}, True, 129, "seed AES Inverse tower-field circuit must kernel-replay at 129 total gates"),
+    ("crypto-sbox-aes-inv-and-baseline", "crypto-sbox-circuits", "aes_inv_and_gates",
+     {}, True, 36, "seed AES Inverse tower-field circuit must kernel-replay at 36 AND gates"),
+    ("crypto-sbox-camellia-total-baseline", "crypto-sbox-circuits", "camellia_total_gates",
+     {}, True, 130, "seed Camellia SBOX1 tower-field circuit must kernel-replay at 130 total gates"),
+    ("crypto-sbox-camellia-and-baseline", "crypto-sbox-circuits", "camellia_and_gates",
+     {}, True, 36, "seed Camellia SBOX1 tower-field circuit must kernel-replay at 36 AND gates"),
+    ("crypto-sbox-sm4-corrupted-output", "crypto-sbox-circuits", "sm4_total_gates",
+     {"CryptoSbox/Sm4TotalCircuit.lean": SM4_TOTAL_BASELINE.replace("Outputs : List Nat := [", "Outputs : List Nat := [0, ", 1).rsplit(",", 1)[0] + "]\n"},
+     False, None, "corrupted SM4 output wire must be rejected by the 256-input kernel check"),
+    ("crypto-sbox-aes-inv-corrupted-output", "crypto-sbox-circuits", "aes_inv_total_gates",
+     {"CryptoSbox/AesInvTotalCircuit.lean": AES_INV_TOTAL_BASELINE.replace("Outputs : List Nat := [", "Outputs : List Nat := [0, ", 1).rsplit(",", 1)[0] + "]\n"},
+     False, None, "corrupted AES Inverse output wire must be rejected by the 256-input kernel check"),
+    ("crypto-sbox-camellia-corrupted-output", "crypto-sbox-circuits", "camellia_total_gates",
+     {"CryptoSbox/CamelliaTotalCircuit.lean": CAMELLIA_TOTAL_BASELINE.replace("Outputs : List Nat := [", "Outputs : List Nat := [0, ", 1).rsplit(",", 1)[0] + "]\n"},
+     False, None, "corrupted Camellia SBOX1 output wire must be rejected by the 256-input kernel check"),
+    ("crypto-sbox-wrong-total-score", "crypto-sbox-circuits", "sm4_total_gates",
+     {"CryptoSbox/Sm4TotalCircuit.lean": SM4_TOTAL_BASELINE.replace("Nat := 130", "Nat := 129", 1)},
+     False, None, "claimed sm4TotalScore must equal sm4TotalGates.length"),
+    ("crypto-sbox-wrong-and-score", "crypto-sbox-circuits", "camellia_and_gates",
+     {"CryptoSbox/CamelliaAndCircuit.lean": CAMELLIA_AND_BASELINE.replace("Nat := 36", "Nat := 35", 1)},
+     False, None, "claimed camelliaAndScore must equal andCount camelliaAndGates"),
+    ("crypto-sbox-non-causal-wire", "crypto-sbox-circuits", "sm4_total_gates",
+     {"CryptoSbox/Sm4TotalCircuit.lean": SM4_TOTAL_BASELINE.replace("[\n  (", "[\n  (0, 8, 0),\n  (", 1).replace("Nat := 130", "Nat := 131", 1)},
+     False, None, "non-causal gate referencing wire 8 at gate 0 must be rejected by wellFormed"),
+    ("crypto-sbox-non-literal-injection", "crypto-sbox-circuits", "sm4_total_gates",
+     {"CryptoSbox/Sm4TotalCircuit.lean": SM4_TOTAL_BASELINE + "\n#eval IO.println \"pwn\"\n"},
+     False, None, "non-literal Lean code injection in circuit file must be rejected at lint"),
+    ("crypto-sbox-sorry-attack", "crypto-sbox-circuits", "sm4_and_gates",
+     {"CryptoSbox/Sm4AndCircuit.lean": "def CryptoSbox.sm4AndScore : Nat := 1\ndef CryptoSbox.sm4AndGates : List (Nat × Nat × Nat) := by sorry\ndef CryptoSbox.sm4AndOutputs : List Nat := [0, 1, 2, 3, 4, 5, 6, 7]\n"},
+     False, None, "sorry inside circuit definition must be rejected at lint/kernel"),
     # --- Pure Lean 4.36.0 attacks + honest control (`__synthetic_pure_lean__`) ---
     ("lean-honest-control", "__synthetic_pure_lean__", "decoder_injective",
      {"SyntheticPureLean/DecoderInjective.lean": HONEST_DECODER}, True, None,

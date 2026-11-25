@@ -1,0 +1,106 @@
+{
+  "id": "crypto-sbox-circuits",
+  "title": "SM4, AES Inverse, and Camellia SBOX1 Boolean circuits: minimize total gates and multiplicative complexity",
+  "description": "Sunstead pins OpenSSL's verbatim 256-entry tables (`openssl/openssl@d94024ff`, Apache-2.0) for three ISO/RFC/NIST standardized 8-bit cryptographic S-boxes \u2014 SM4 (RFC 8998 / ISO 18033-3), AES Inverse (NIST FIPS 197 \u00a75.3.2), and Camellia SBOX1 (RFC 3713 / ISO 18033-3) \u2014 and kernel-proves byte-for-byte agreement with their algebraic GF(2^8) definitions on all 256 inputs in pure Lean 4.36.0 (no Mathlib). Six independent hill-climb tracks challenge contributors to minimize straight-line `{xor, xnor, and, not}` total gate count and multiplicative complexity (AND gate count) for each S-box.",
+  "tier": 2,
+  "mode": "hillclimb",
+  "repo": "https://github.com/openssl/openssl",
+  "upstream": {
+    "repo": "openssl/openssl",
+    "commit": "d94024ffc7e726566a6255228ad0a7de4cfc956d",
+    "license": "Apache-2.0"
+  },
+  "score_direction": "minimize",
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 60,
+    "memory_mb": 2048
+  },
+  "frozen_paths": [
+    "CryptoSbox/Spec.lean",
+    "CryptoSbox/Sm4TotalBound.lean",
+    "CryptoSbox/Sm4AndBound.lean",
+    "CryptoSbox/AesInvTotalBound.lean",
+    "CryptoSbox/AesInvAndBound.lean",
+    "CryptoSbox/CamelliaTotalBound.lean",
+    "CryptoSbox/CamelliaAndBound.lean",
+    "LICENSE",
+    "README.md",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "tasks": [
+    {
+      "id": "sm4_total_gates",
+      "title": "SM4 S-box: minimize total gate count over {xor, xnor, and, not}",
+      "description": "Submit a straight-line SM4 S-box circuit in CryptoSbox/Sm4TotalCircuit.lean (`sm4TotalScore`, `sm4TotalGates`, `sm4TotalOutputs`). The frozen Lean 4 kernel proof verifies well-formedness, gate count, and exact equivalence to RFC 8998 / ISO 18033-3 SM4 on all 256 inputs via `decide +kernel`. Only strict improvements below the current record earn credit.",
+      "baseline_score": 130,
+      "target_files": [
+        "CryptoSbox/Sm4TotalCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/openssl/openssl/blob/d94024ffc7e726566a6255228ad0a7de4cfc956d/crypto/sm4/sm4.c#L15-L38"
+    },
+    {
+      "id": "sm4_and_gates",
+      "title": "SM4 S-box: minimize multiplicative complexity (AND gate count)",
+      "description": "Submit a straight-line SM4 S-box circuit in CryptoSbox/Sm4AndCircuit.lean (`sm4AndScore`, `sm4AndGates`, `sm4AndOutputs`). The frozen Lean 4 kernel proof verifies well-formedness, AND gate count (`op == 2`), and exact equivalence to RFC 8998 / ISO 18033-3 SM4 on all 256 inputs via `decide +kernel`. Only strict improvements below the current record earn credit.",
+      "baseline_score": 36,
+      "target_files": [
+        "CryptoSbox/Sm4AndCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/openssl/openssl/blob/d94024ffc7e726566a6255228ad0a7de4cfc956d/crypto/sm4/sm4.c#L15-L38"
+    },
+    {
+      "id": "aes_inv_total_gates",
+      "title": "AES Inverse S-box: minimize total gate count over {xor, xnor, and, not}",
+      "description": "Submit a straight-line AES Inverse S-box circuit in CryptoSbox/AesInvTotalCircuit.lean (`aesInvTotalScore`, `aesInvTotalGates`, `aesInvTotalOutputs`). The frozen Lean 4 kernel proof verifies well-formedness, gate count, and exact equivalence to NIST FIPS 197 \u00a75.3.2 AES Inverse S-box on all 256 inputs via `decide +kernel`. Only strict improvements below the current record earn credit.",
+      "baseline_score": 129,
+      "target_files": [
+        "CryptoSbox/AesInvTotalCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/openssl/openssl/blob/d94024ffc7e726566a6255228ad0a7de4cfc956d/crypto/aria/aria.c#L757-L790"
+    },
+    {
+      "id": "aes_inv_and_gates",
+      "title": "AES Inverse S-box: minimize multiplicative complexity (AND gate count)",
+      "description": "Submit a straight-line AES Inverse S-box circuit in CryptoSbox/AesInvAndCircuit.lean (`aesInvAndScore`, `aesInvAndGates`, `aesInvAndOutputs`). The frozen Lean 4 kernel proof verifies well-formedness, AND gate count (`op == 2`), and exact equivalence to NIST FIPS 197 \u00a75.3.2 AES Inverse S-box on all 256 inputs via `decide +kernel`. Only strict improvements below the current record earn credit.",
+      "baseline_score": 36,
+      "target_files": [
+        "CryptoSbox/AesInvAndCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/openssl/openssl/blob/d94024ffc7e726566a6255228ad0a7de4cfc956d/crypto/aria/aria.c#L757-L790"
+    },
+    {
+      "id": "camellia_total_gates",
+      "title": "Camellia SBOX1: minimize total gate count over {xor, xnor, and, not}",
+      "description": "Submit a straight-line Camellia SBOX1 circuit in CryptoSbox/CamelliaTotalCircuit.lean (`camelliaTotalScore`, `camelliaTotalGates`, `camelliaTotalOutputs`). The frozen Lean 4 kernel proof verifies well-formedness, gate count, and exact equivalence to RFC 3713 \u00a72.4 / ISO 18033-3 Camellia SBOX1 on all 256 inputs via `decide +kernel`. Only strict improvements below the current record earn credit.",
+      "baseline_score": 130,
+      "target_files": [
+        "CryptoSbox/CamelliaTotalCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/openssl/openssl/blob/d94024ffc7e726566a6255228ad0a7de4cfc956d/crypto/camellia/camellia.c#L64-L107"
+    },
+    {
+      "id": "camellia_and_gates",
+      "title": "Camellia SBOX1: minimize multiplicative complexity (AND gate count)",
+      "description": "Submit a straight-line Camellia SBOX1 circuit in CryptoSbox/CamelliaAndCircuit.lean (`camelliaAndScore`, `camelliaAndGates`, `camelliaAndOutputs`). The frozen Lean 4 kernel proof verifies well-formedness, AND gate count (`op == 2`), and exact equivalence to RFC 3713 \u00a72.4 / ISO 18033-3 Camellia SBOX1 on all 256 inputs via `decide +kernel`. Only strict improvements below the current record earn credit.",
+      "baseline_score": 36,
+      "target_files": [
+        "CryptoSbox/CamelliaAndCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/openssl/openssl/blob/d94024ffc7e726566a6255228ad0a7de4cfc956d/crypto/camellia/camellia.c#L64-L107"
+    }
+  ]
+}

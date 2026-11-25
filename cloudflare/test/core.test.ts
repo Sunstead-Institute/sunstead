@@ -321,6 +321,42 @@ test("sorting-networks-opt mission isolates independent n=9..16 network targets"
   );
 });
 
+test("crypto-sbox-circuits mission isolates all 6 independent S-box circuit targets", () => {
+  const manifest = JSON.parse(readFileSync(new URL(
+    "../../missions/crypto-sbox-circuits/sunstead.json", import.meta.url
+  ), "utf8")) as MissionManifest;
+  assert.equal(manifest.mode, "hillclimb");
+  assert.equal(manifest.score_direction, "minimize");
+  assert.equal(manifest.tier, 2);
+  assert.equal(manifest.tasks.length, 6);
+  const byId = Object.fromEntries(manifest.tasks.map((t) => [t.id, t]));
+  assert.equal(byId.sm4_total_gates.baseline_score, 130);
+  assert.equal(byId.sm4_and_gates.baseline_score, 36);
+  assert.equal(byId.aes_inv_total_gates.baseline_score, 129);
+  assert.equal(byId.aes_inv_and_gates.baseline_score, 36);
+  assert.equal(byId.camellia_total_gates.baseline_score, 130);
+  assert.equal(byId.camellia_and_gates.baseline_score, 36);
+  for (const file of [
+    "CryptoSbox/Spec.lean",
+    "CryptoSbox/Sm4TotalBound.lean",
+    "CryptoSbox/AesInvTotalBound.lean",
+    "CryptoSbox/CamelliaAndBound.lean",
+    "verify",
+  ]) {
+    assert.throws(
+      () => validatePatch(patchFor(file), manifest.frozen_paths, byId.sm4_total_gates.target_files),
+      /frozen/
+    );
+  }
+  assert.throws(
+    () => validatePatch(patchFor("CryptoSbox/CamelliaTotalCircuit.lean"), manifest.frozen_paths, byId.sm4_total_gates.target_files),
+    /outside/
+  );
+  for (const t of manifest.tasks) {
+    validatePatch(patchFor(t.target_files[0]), manifest.frozen_paths, t.target_files);
+  }
+});
+
 test("validatePatch blocks frozen paths and files outside target_files", () => {
   assert.throws(
     () => validatePatch(patchFor("MetaComplexity/Spec.lean"), FROZEN, ["MetaComplexity/X.lean"]),

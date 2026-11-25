@@ -57,6 +57,7 @@ COPY pnt-analytic-foundations /tmp/prebuild-missions/pnt-analytic-foundations
 COPY matrix-rank444-f2 /tmp/prebuild-missions/matrix-rank444-f2
 COPY matrix-rank-alphatensor-f2 /tmp/prebuild-missions/matrix-rank-alphatensor-f2
 COPY aes-sbox-circuit /tmp/prebuild-missions/aes-sbox-circuit
+COPY crypto-sbox-circuits /tmp/prebuild-missions/crypto-sbox-circuits
 COPY sorting-networks-opt /tmp/prebuild-missions/sorting-networks-opt
 RUN python3 /opt/sunstead/prebuild_cache.py /tmp/prebuild-missions/* \
     && rm -rf /tmp/prebuild-missions \
