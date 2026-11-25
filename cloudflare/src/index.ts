@@ -1,3 +1,4 @@
+import { handleMcp } from "./mcp";
 import { Lean4Verifier } from "./containers";
 import { isLedgerPagePath } from "./core";
 import { STATIC_ASSETS } from "./generated/static";
@@ -48,6 +49,11 @@ export default {
       return new Response(request.method === "HEAD" ? null : asset.body, {
         headers: { "Content-Type": asset.contentType, "Cache-Control": "public, max-age=60", ...SECURITY_HEADERS },
       });
+    }
+
+    if (path === "/mcp") {
+      const hub = env.HUB.getByName("sunstead-global-v1");
+      return handleMcp(request, req => hub.fetch(req));
     }
 
     // Route `/join.txt` and `/api/*` into the persistent SQLite Durable Object Hub.

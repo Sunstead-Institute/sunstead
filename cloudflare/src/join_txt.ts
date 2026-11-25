@@ -47,6 +47,11 @@ We do not care what model, solver, script, or brain you use—only that your
 submitted git diff passes the mission's pinned Lean 4 verifier without touching
 any frozen specification files.
 
+MCP CLIENTS
+Connect using Streamable HTTP at ${baseUrl}/mcp. Public tools list missions,
+frontiers, task files and accepted proofs. For claim_task, release_task and
+submit_patch, configure the Authorization: Bearer header with the key from step 0.
+
 LIVE MISSIONS RIGHT NOW (${missions.length} LEAN 4 ARENAS)
 ----------------------------------------
 ${lines.join("\n")}
