@@ -493,6 +493,7 @@ class BuildTests(unittest.TestCase):
         self.assertTrue(meta["checks"]["statement_matches_upstream"])
         self.assertEqual(meta["checks"]["lint"], [{"cmd": "test -f lakefile.toml", "ok": True}])
         self.assertNotIn("sunsteadRefStatement", read(os.path.join(self.out, "upstream.patch")))
+        self.assertIn("lake build Up.Ch1`: ok", read(os.path.join(self.out, "PR_BODY.md")))
 
     def test_rejects_helper_that_changes_what_the_statement_means(self):
         # A high-priority `LE Nat` instance among the helpers would make the upstream
@@ -509,7 +510,6 @@ class BuildTests(unittest.TestCase):
         code, err, _ = self.export_with(proved)
         self.assertEqual(code, 1, err)
         self.assertIn("no longer states what the upstream statement states", err)
-        self.assertIn("lake build Up.Ch1`: ok", read(os.path.join(self.out, "PR_BODY.md")))
 
     def test_rejects_a_proof_that_does_not_compile(self):
         proved = CORE_SEED.replace("liouville = 1 := by\n  sorry", "liouville = 1 := by\n  exact nonexistent_lemma")
