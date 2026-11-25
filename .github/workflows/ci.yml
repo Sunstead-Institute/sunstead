@@ -42,6 +42,7 @@ jobs:
         run: |
           python3 -m py_compile \
             missions/verifier-common/sunstead_sandbox.py \
+            missions/verifier-common/prebuild_cache.py \
             cloudflare/containers/verifier_server.py \
             scripts/check-upstream.py scripts/check-statements.py scripts/redteam.py scripts/e2e.py \
             scripts/scout-upstream.py scripts/test_scout_upstream.py
@@ -110,5 +111,8 @@ jobs:
             test -d /missions/arklib-near-capacity-primes &&
             test -d /missions/pnt-analytic-foundations &&
             test -d /missions/onboarding-sandbox &&
+            test -x /opt/sunstead/sunstead-check &&
+            /opt/sunstead/sunstead-check selftest | grep -q "\"selftest\":\"ok\"" &&
+            test "$(ls -1 /opt/sunstead/mission-cache | wc -l)" -ge 3 &&
             python3 -m py_compile /opt/verifier_server.py
           '

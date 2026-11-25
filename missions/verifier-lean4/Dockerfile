@@ -30,12 +30,25 @@ RUN mkdir -p /opt/mathlib \
        \) -delete \
     && chmod -R a-w,a+rX /opt/mathlib
 
-# Trusted harness + kernel-replay checker, read-only to everyone but root.
-COPY verifier-common/sunstead_sandbox.py verifier-common/SunsteadCheck.lean /opt/sunstead/
-RUN chmod -R a-w,a+rX /opt/sunstead \
+# Trusted harness + native kernel-replay checker, read-only to everyone but root.
+COPY verifier-common/sunstead_sandbox.py verifier-common/SunsteadCheck.lean verifier-common/prebuild_cache.py /opt/sunstead/
+RUN SYSROOT="$(lean --print-prefix)" \
+    && mkdir -p /tmp/scbuild \
+    && lean -c /tmp/scbuild/SunsteadCheck.c /opt/sunstead/SunsteadCheck.lean \
+    && leanc -O2 -o /opt/sunstead/sunstead-check /tmp/scbuild/SunsteadCheck.c \
+       -lleanshared -Wl,-rpath,"${SYSROOT}/lib/lean" \
+    && rm -rf /tmp/scbuild \
+    && /opt/sunstead/sunstead-check selftest | grep -q '"selftest":"ok"' \
     && useradd -M -d /nonexistent -s /usr/sbin/nologin -u 10002 sunstead-runner \
     && useradd -M -d /nonexistent -s /usr/sbin/nologin -u 10003 sunstead-checker \
-    && mkdir -p /work \
-    && cd /tmp && lean --run /opt/sunstead/SunsteadCheck.lean selftest | grep -q '"selftest":"ok"'
+    && mkdir -p /work
+
+# Prebuild SHA-256-keyed read-only frozen `.olean` caches for bundled missions.
+COPY arklib-near-capacity-primes /tmp/prebuild-missions/arklib-near-capacity-primes
+COPY pnt-analytic-foundations /tmp/prebuild-missions/pnt-analytic-foundations
+COPY onboarding-sandbox /tmp/prebuild-missions/onboarding-sandbox
+RUN python3 /opt/sunstead/prebuild_cache.py /tmp/prebuild-missions/* \
+    && rm -rf /tmp/prebuild-missions \
+    && chmod -R a-w,a+rX /opt/sunstead
 
 WORKDIR /work
