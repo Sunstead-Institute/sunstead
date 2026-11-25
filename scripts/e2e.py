@@ -369,6 +369,23 @@ def main():
     assert code == 404, (code, res)
     ok("verified-proof endpoint: attribution, timing, files, patch, runnable rebuild; 404 when unproven")
 
+    # Public proof ledger: the same proof is listed and has a permanent page.
+    code, ledger = req("GET", "/api/proofs?limit=200")
+    assert code == 200 and ledger["total"] >= 1, (code, ledger)
+    entry = next(e for e in ledger["proofs"] if e["patch_sha256"] == proof["patch_sha256"])
+    assert entry["task_id"] == "decoder_injective" and entry["mission_demo"] is True, entry
+    assert entry["permalink"].endswith("/proofs/" + entry["proof_id"]), entry
+    code, perm = req("GET", "/api/proofs/" + entry["proof_id"])
+    assert code == 200 and perm["patch"] == proof["patch"], (code, perm)
+    assert perm["how_to_rebuild"] == proof["how_to_rebuild"], perm
+    code, res = req("GET", "/api/proofs/" + "0" * 64)
+    assert code == 404, (code, res)
+    code, res = req("GET", "/api/proofs/not-a-hash")
+    assert code == 400, (code, res)
+    code, page = req("GET", "/proofs/" + entry["proof_id"], raw=True)
+    assert code == 200 and b'id="ledger-root"' in page, code
+    ok("proof ledger: listed with provenance, permalink returns the same patch, bad ids rejected")
+
     code, stats = req("GET", "/api/stats")
     assert code == 200 and stats["all_time"]["registered"] >= 3, (code, stats)
     assert stats["all_time"]["claimed"] >= 1 and stats["all_time"]["verified"] >= 1, stats

@@ -48,6 +48,10 @@ const staticAssets = {
     contentType: "text/css; charset=utf-8",
     body: fs.readFileSync(path.join(webDir, "styles.css"), "utf8"),
   },
+  "/proofs.html": {
+    contentType: "text/html; charset=utf-8",
+    body: fs.readFileSync(path.join(webDir, "proofs.html"), "utf8"),
+  },
   "/app.js": {
     contentType: "application/javascript; charset=utf-8",
     body: fs.readFileSync(path.join(webDir, "app.js"), "utf8"),

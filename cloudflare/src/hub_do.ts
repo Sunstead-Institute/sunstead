@@ -16,6 +16,12 @@ import {
   buildProofView,
   type AcceptedProofRow,
   sseHello,
+  buildLedgerEntry,
+  buildLedgerProof,
+  parseLedgerQuery,
+  PROOF_HASH_RE,
+  type LedgerMissionInfo,
+  type LedgerRow,
 } from "./core";
 import { SEED_MISSIONS, type SeedMission } from "./generated/missions";
 import { renderJoinTxt } from "./join_txt";
@@ -261,6 +267,12 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     // Safe additive schema migrations for existing Durable Object SQLite instances.
     this.ensureColumn("tasks", "lease_ip", "TEXT");
     this.ensureColumn("submissions", "points", "INTEGER NOT NULL DEFAULT 0");
+    // Ledger permalink key: SHA-256 of the stored (possibly normalized) patch.
+    // Rows from before this column are filled in by backfillPatchHashes().
+    this.ensureColumn("accepted_patches", "patch_sha256", "TEXT");
+    this.ctx.storage.sql.exec(
+      "CREATE INDEX IF NOT EXISTS idx_accepted_patches_sha ON accepted_patches(patch_sha256)"
+    );
   }
 
   private ensureColumn(table: string, col: string, colDef: string): void {
@@ -874,6 +886,15 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       );
     }
 
+    if (method === "GET" && path === "/api/proofs") {
+      return this.handleLedgerList(url.searchParams, url.origin);
+    }
+
+    const ledgerMatch = path.match(/^\/api\/proofs\/([^/]+)$/);
+    if (method === "GET" && ledgerMatch) {
+      return this.handleLedgerProof(decodeURIComponent(ledgerMatch[1]), url.origin);
+    }
+
     if (method === "GET" && path === "/api/stats") {
       return jsonResp(this.computeStats());
     }
@@ -1231,6 +1252,109 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         patchSha256: await sha256Hex(row.patch),
       })
     );
+  }
+
+  /** Fill accepted_patches.patch_sha256 for rows accepted before the column existed. */
+  private async backfillPatchHashes(): Promise<void> {
+    const missing = this.ctx.storage.sql
+      .exec<{ seq: number; patch: string }>(
+        "SELECT seq, patch FROM accepted_patches WHERE patch_sha256 IS NULL"
+      )
+      .toArray();
+    if (missing.length === 0) return;
+    const hashes = await Promise.all(missing.map((r) => sha256Hex(r.patch)));
+    missing.forEach((r, i) => {
+      this.ctx.storage.sql.exec(
+        "UPDATE accepted_patches SET patch_sha256 = ? WHERE seq = ? AND patch_sha256 IS NULL",
+        hashes[i],
+        r.seq
+      );
+    });
+  }
+
+  private static readonly LEDGER_SELECT = `
+    SELECT a.seq, a.mission_id, a.task_id, a.submission_id, a.contributor,
+           COALESCE(c.display_name, a.contributor) AS display_name, c.github AS github,
+           a.summary, a.patch, a.patch_sha256, a.spec_sha256, a.created_at, s.verify_ms AS verify_ms
+    FROM accepted_patches a
+    LEFT JOIN contributors c ON c.handle = a.contributor
+    LEFT JOIN submissions s ON s.id = a.submission_id`;
+
+  private ledgerMissionInfo(): (missionId: string) => LedgerMissionInfo {
+    const cache = new Map<string, LedgerMissionInfo>();
+    return (missionId) => {
+      if (!cache.has(missionId)) cache.set(missionId, this.getMissionRow(missionId));
+      return cache.get(missionId) ?? null;
+    };
+  }
+
+  /** GET /api/proofs: every accepted proof, newest first, paged by ?before=<seq>. */
+  private async handleLedgerList(params: URLSearchParams, hubOrigin: string): Promise<Response> {
+    await this.backfillPatchHashes();
+    const { limit, before, missionId } = parseLedgerQuery(params);
+    const where: string[] = [];
+    const args: (string | number)[] = [];
+    if (before !== null) {
+      where.push("a.seq < ?");
+      args.push(before);
+    }
+    if (missionId !== null) {
+      where.push("a.mission_id = ?");
+      args.push(missionId);
+    }
+    const rows = this.ctx.storage.sql
+      .exec<LedgerRow>(
+        `${SunsteadHub.LEDGER_SELECT}
+         ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+         ORDER BY a.seq DESC LIMIT ?`,
+        ...args,
+        limit + 1
+      )
+      .toArray();
+    const page = rows.slice(0, limit);
+    const missionInfo = this.ledgerMissionInfo();
+    const total = this.ctx.storage.sql
+      .exec<{ c: number }>(
+        missionId === null
+          ? "SELECT COUNT(*) AS c FROM accepted_patches"
+          : "SELECT COUNT(*) AS c FROM accepted_patches WHERE mission_id = ?",
+        ...(missionId === null ? [] : [missionId])
+      )
+      .one().c;
+    return jsonResp({
+      total,
+      proofs: page.map((r) => buildLedgerEntry(r, missionInfo(r.mission_id), hubOrigin)),
+      next_before: rows.length > limit ? page[page.length - 1].seq : null,
+    });
+  }
+
+  /** GET /api/proofs/:proof_id: one proof's permanent record (id = bare hex of patch_sha256). */
+  private async handleLedgerProof(hash: string, hubOrigin: string): Promise<Response> {
+    const key = hash.toLowerCase().replace(/^sha256:/, "");
+    if (!PROOF_HASH_RE.test(key)) {
+      return jsonResp({ error: "proof id must be a 64-character hex SHA-256" }, 400);
+    }
+    await this.backfillPatchHashes();
+    const rows = this.ctx.storage.sql
+      .exec<LedgerRow>(
+        `${SunsteadHub.LEDGER_SELECT} WHERE a.patch_sha256 = ? ORDER BY a.seq ASC`,
+        `sha256:${key}`
+      )
+      .toArray();
+    if (rows.length === 0) return jsonResp({ error: `no accepted proof with patch sha256:${key}` }, 404);
+    const missionInfo = this.ledgerMissionInfo();
+    const [first, ...rest] = rows;
+    return jsonResp({
+      ...buildLedgerProof(first, missionInfo(first.mission_id), hubOrigin),
+      // The same patch text accepted again (another task or mission) shares this hash.
+      also_accepted_as: rest.map((r) => ({
+        seq: r.seq,
+        mission_id: r.mission_id,
+        task_id: r.task_id,
+        contributor: r.contributor,
+        accepted_at: r.created_at,
+      })),
+    });
   }
 
   /** Contributor funnel: registered -> claimed -> submitted -> verified. */
@@ -1612,6 +1736,11 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         );
       }
 
+      // Hash outside the state lock so nothing awaits between its reads and writes.
+      const storedPatch =
+        cRes.normalized_patch && cRes.normalized_patch.trim() ? cRes.normalized_patch : patch;
+      const storedPatchSha = await sha256Hex(storedPatch);
+
       return this.withLock(this.stateLocks, missionId, async () => {
         const latestTasks = this.getTasks(missionId);
         const latestTask = latestTasks.find((t) => t.def.id === taskId) || task;
@@ -1672,8 +1801,6 @@ export class SunsteadHub extends DurableObject<HubEnv> {
           );
 
           const subId = crypto.randomUUID();
-          const storedPatch =
-            cRes.normalized_patch && cRes.normalized_patch.trim() ? cRes.normalized_patch : patch;
           this.insertSubmission({
             id: subId,
             mission_id: missionId,
@@ -1689,8 +1816,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
           });
           this.ctx.storage.sql.exec(
             `INSERT INTO accepted_patches
-             (mission_id, task_id, submission_id, contributor, summary, patch, spec_sha256, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+             (mission_id, task_id, submission_id, contributor, summary, patch, spec_sha256, created_at, patch_sha256)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             missionId,
             taskId,
             subId,
@@ -1698,7 +1825,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
             cRes.summary,
             storedPatch,
             mission.spec_sha256,
-            finishedAt
+            finishedAt,
+            storedPatchSha
           );
 
           this.emit({

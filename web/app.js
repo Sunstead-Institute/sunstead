@@ -473,60 +473,208 @@ async function loadProof(missionId, taskId) {
   renderProofPanel(proof);
 }
 
-function renderProofPanel(proof) {
-  const panel = $("proof-panel");
+function fmtUtc(unixSec) {
+  return unixSec ? new Date(unixSec * 1000).toISOString().replace("T", " ").slice(0, 16) + " UTC" : "";
+}
+
+/** Only http(s) URLs become links; anything else is shown as text. */
+function safeHttpUrl(u) {
+  try {
+    const url = new URL(String(u ?? ""));
+    return url.protocol === "https:" || url.protocol === "http:" ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+const GITHUB_REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const HEX_RE = /^[0-9a-f]{7,64}$/;
+
+/** "owner/repo @ abc1234" linked to that commit's tree on GitHub when the parts look sane. */
+function upstreamHtml(up) {
+  if (!up) return `<span class="muted">none recorded</span>`;
+  const short = String(up.commit || "").slice(0, 7);
+  const label = `${escapeHtml(up.repo)} @ <code>${escapeHtml(short)}</code>`;
+  const repoOk = GITHUB_REPO_RE.test(String(up.repo || ""));
+  const commitOk = HEX_RE.test(String(up.commit || ""));
+  const main =
+    repoOk && commitOk
+      ? `<a class="proof-link" href="https://github.com/${escapeHtml(up.repo)}/tree/${escapeHtml(up.commit)}" target="_blank" rel="noopener">${label}</a>`
+      : label;
+  const taskUrl = safeHttpUrl(up.task_url);
+  const task = taskUrl
+    ? ` · <a class="proof-link" href="${escapeHtml(taskUrl)}" target="_blank" rel="noopener">upstream sorry ↗</a>`
+    : "";
+  return `${main}${up.license ? ` <span class="muted small">(${escapeHtml(up.license)})</span>` : ""}${task}`;
+}
+
+function contributorHtml(proof) {
   const name = proof.display_name || proof.contributor;
   const gh = proof.github
     ? ` <a href="https://github.com/${encodeURIComponent(proof.github)}" target="_blank" rel="noopener" class="proof-link">@${escapeHtml(proof.github)}</a>`
     : "";
-  const when = proof.accepted_at ? new Date(proof.accepted_at * 1000).toISOString().replace("T", " ").slice(0, 16) + " UTC" : "";
+  return `<strong>${escapeHtml(name)}</strong> <span class="muted small"><code>${escapeHtml(proof.contributor)}</code></span>${gh}`;
+}
+
+/** Diff, metadata and rebuild command for one accepted proof (task panel and ledger page). */
+function proofDetailHtml(proof) {
   const specNote = proof.spec_is_current
     ? ""
     : `<div class="proof-warn small">Accepted under an earlier frozen spec than the one live now.</div>`;
-  panel.innerHTML = `
-    <div class="proof-head">
-      <div>
-        <div class="proof-kicker">Verified proof · commit #${escapeHtml(proof.seq)}</div>
-        <div class="proof-by"><strong>${escapeHtml(name)}</strong> <span class="muted small"><code>${escapeHtml(proof.contributor)}</code></span>${gh}</div>
-      </div>
-      <a class="btn-outline-ink" href="${escapeHtml(proof.history_mbox)}">history.mbox ↓</a>
-    </div>
+  const proofId = String(proof.patch_sha256 || "").replace(/^sha256:/, "");
+  const permalink = /^[0-9a-f]{64}$/.test(proofId) ? `<a class="proof-link" href="/proofs/${proofId}">permalink</a>` : "";
+  return `
     ${specNote}
     <div class="inspector-grid">
       <div class="kv"><div class="kv-label">Verification Time</div><div class="kv-val">${escapeHtml(fmtDuration(proof.verify_ms))}</div></div>
-      <div class="kv"><div class="kv-label">Accepted</div><div class="kv-val">${escapeHtml(when)}</div></div>
+      <div class="kv"><div class="kv-label">Accepted</div><div class="kv-val">${escapeHtml(fmtUtc(proof.accepted_at))}</div></div>
       <div class="kv"><div class="kv-label">Spec SHA-256 at Acceptance</div><div class="kv-val">${escapeHtml(proof.spec_sha256)}</div></div>
-      <div class="kv"><div class="kv-label">Patch SHA-256</div><div class="kv-val">${escapeHtml(proof.patch_sha256)}</div></div>
+      <div class="kv"><div class="kv-label">Patch SHA-256 ${permalink}</div><div class="kv-val">${escapeHtml(proof.patch_sha256)}</div></div>
     </div>
     ${proof.summary ? `<p class="muted small proof-summary">${escapeHtml(proof.summary)}</p>` : ""}
     <div class="proof-block">
       <div class="proof-block-head">
         <span class="kv-label">Accepted Lean 4 diff · ${escapeHtml((proof.files || []).join(", "))}</span>
-        <button type="button" class="btn-outline-ink proof-copy" data-copy="patch">Copy diff</button>
+        <button type="button" class="btn-outline-ink proof-copy" data-copy="patch" data-label="Copy diff">Copy diff</button>
       </div>
       <pre class="proof-diff" tabindex="0">${renderDiffHtml(proof.patch)}</pre>
     </div>
     <div class="proof-block">
       <div class="proof-block-head">
         <span class="kv-label">Rebuild and check it yourself (seed bundle + git am)</span>
-        <button type="button" class="btn-outline-ink proof-copy" data-copy="rebuild">Copy command</button>
+        <button type="button" class="btn-outline-ink proof-copy" data-copy="rebuild" data-label="Copy command">Copy command</button>
       </div>
       <pre class="proof-cmd" tabindex="0">${escapeHtml(proof.how_to_rebuild)}</pre>
     </div>
   `;
-  panel.querySelectorAll(".proof-copy").forEach((btn) => {
+}
+
+function wireProofCopyButtons(root, proof) {
+  root.querySelectorAll(".proof-copy").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const text = btn.dataset.copy === "patch" ? proof.patch : proof.how_to_rebuild;
-      const label = btn.textContent;
       try {
         await navigator.clipboard.writeText(text);
         btn.textContent = "Copied ✓";
       } catch {
         btn.textContent = "Copy failed";
       }
-      setTimeout(() => (btn.textContent = label), 1600);
+      clearTimeout(btn._resetTimer);
+      btn._resetTimer = setTimeout(() => (btn.textContent = btn.dataset.label), 1600);
     });
   });
+}
+
+function renderProofPanel(proof) {
+  const panel = $("proof-panel");
+  panel.innerHTML = `
+    <div class="proof-head">
+      <div>
+        <div class="proof-kicker">Verified proof · commit #${escapeHtml(proof.seq)}</div>
+        <div class="proof-by">${contributorHtml(proof)}</div>
+      </div>
+      <a class="btn-outline-ink" href="${escapeHtml(proof.history_mbox)}">history.mbox ↓</a>
+    </div>
+    ${proofDetailHtml(proof)}
+  `;
+  wireProofCopyButtons(panel, proof);
+}
+
+// ---------------- Verified Proofs Ledger (/proofs, /proofs/<sha256>) ----------------
+
+function ledgerBadges(p) {
+  const out = [];
+  if (p.mission_retired) out.push(`<span class="ledger-badge ledger-badge-muted">retired mission</span>`);
+  if (p.mission_demo) out.push(`<span class="ledger-badge ledger-badge-muted">demo · 0 pts</span>`);
+  if (!p.spec_is_current && !p.mission_retired) out.push(`<span class="ledger-badge ledger-badge-warn">earlier spec</span>`);
+  return out.join(" ");
+}
+
+function ledgerRowHtml(p) {
+  const hash = String(p.proof_id || "");
+  const link = /^[0-9a-f]{64}$/.test(hash) ? `/proofs/${hash}` : null;
+  const title = escapeHtml(p.task_title || p.task_id);
+  return `
+    <li class="ledger-row">
+      <div class="ledger-main">
+        <div class="ledger-title">${link ? `<a href="${link}">${title}</a>` : title} ${ledgerBadges(p)}</div>
+        <div class="muted small">${escapeHtml(p.mission_title || p.mission_id)} · <code>${escapeHtml(p.task_id)}</code></div>
+        <div class="small">Upstream: ${upstreamHtml(p.upstream)}</div>
+      </div>
+      <div class="ledger-side small">
+        <div>${contributorHtml(p)}</div>
+        <div class="muted">${escapeHtml(fmtUtc(p.accepted_at))}</div>
+        <div class="ledger-hash"><code>${escapeHtml(hash.slice(0, 12))}</code></div>
+      </div>
+    </li>`;
+}
+
+async function loadLedgerList(root) {
+  root.innerHTML = `
+    <div class="card-header"><h3>All accepted proofs</h3><span id="ledger-count" class="muted small"></span></div>
+    <ol id="ledger-list" class="ledger-list"></ol>
+    <div class="ledger-more"><button type="button" id="ledger-more" class="btn-outline-ink hidden">Load older proofs</button></div>`;
+  const list = $("ledger-list");
+  const more = $("ledger-more");
+  let before = null;
+  const loadPage = async () => {
+    more.disabled = true;
+    try {
+      const q = before === null ? "" : `&before=${encodeURIComponent(before)}`;
+      const data = await fetchJson(`/api/proofs?limit=50${q}`);
+      $("ledger-count").textContent = `${Number(data.total) || 0} total`;
+      if (before === null && (!data.proofs || data.proofs.length === 0)) {
+        list.innerHTML = `<li class="muted small">No proofs have been accepted yet.</li>`;
+      } else {
+        list.insertAdjacentHTML("beforeend", (data.proofs || []).map(ledgerRowHtml).join(""));
+      }
+      before = data.next_before ?? null;
+      more.classList.toggle("hidden", before === null);
+    } catch (e) {
+      list.insertAdjacentHTML("beforeend", `<li class="muted small">Could not load the ledger (${escapeHtml(e.message)}).</li>`);
+    } finally {
+      more.disabled = false;
+    }
+  };
+  more.addEventListener("click", loadPage);
+  await loadPage();
+}
+
+async function loadLedgerProof(root, hash) {
+  let proof;
+  try {
+    proof = await fetchJson(`/api/proofs/${hash}`);
+  } catch (e) {
+    root.innerHTML = `<p><a class="proof-link" href="/proofs">← All proofs</a></p>
+      <div class="muted">No accepted proof has patch SHA-256 <code>${escapeHtml(hash)}</code> (${escapeHtml(e.message)}).</div>`;
+    return;
+  }
+  document.title = `${proof.task_title || proof.task_id} · Verified proof · Sunstead`;
+  const also = (proof.also_accepted_as || [])
+    .map((a) => `<li><code>${escapeHtml(a.mission_id)}/${escapeHtml(a.task_id)}</code> by <code>${escapeHtml(a.contributor)}</code>, ${escapeHtml(fmtUtc(a.accepted_at))}</li>`)
+    .join("");
+  root.innerHTML = `
+    <p><a class="proof-link" href="/proofs">← All proofs</a></p>
+    <div class="proof-head">
+      <div>
+        <div class="proof-kicker">Verified proof · ${escapeHtml(proof.mission_title || proof.mission_id)} · commit #${escapeHtml(proof.seq)} ${ledgerBadges(proof)}</div>
+        <h2 class="serif-h2 ledger-proof-title">${escapeHtml(proof.task_title || proof.task_id)}</h2>
+        <div class="proof-by">${contributorHtml(proof)}</div>
+      </div>
+      <a class="btn-outline-ink" href="${escapeHtml(proof.history_mbox)}">history.mbox ↓</a>
+    </div>
+    <div class="small ledger-upstream">Upstream: ${upstreamHtml(proof.upstream)}</div>
+    <div class="small muted">Independent audit: ${proof.audit ? escapeHtml(proof.audit.status) : "not run yet"}</div>
+    ${proofDetailHtml(proof)}
+    ${also ? `<div class="small ledger-also"><div class="kv-label">The same patch was also accepted as</div><ul>${also}</ul></div>` : ""}
+  `;
+  wireProofCopyButtons(root, proof);
+}
+
+function loadLedgerPage() {
+  const root = $("ledger-root");
+  const m = location.pathname.match(/^\/proofs\/([0-9a-f]{64})\/?$/);
+  return m ? loadLedgerProof(root, m[1]) : loadLedgerList(root);
 }
 
 async function loadInitialFeedAndLeaderboard() {
@@ -716,6 +864,9 @@ function setupJoinModal() {
   const tasks = [loadHealth()];
   if ($("mission-tabs")) {
     tasks.push(loadMissions(), loadInitialFeedAndLeaderboard());
+  }
+  if ($("ledger-root")) {
+    tasks.push(loadLedgerPage());
   }
   await Promise.all(tasks);
   if ($("event-feed")) {
