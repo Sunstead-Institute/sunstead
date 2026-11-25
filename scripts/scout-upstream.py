@@ -19,7 +19,10 @@ For each watched repository it reports:
   candidate), for DAG missions.
 
 This is a static scan. It does not compile anything, so "compiles cleanly with
-only this sorry" (criterion 2) still needs a `lake build` before a task ships.
+only this sorry" (criterion 2) still needs a `lake build` and an axiom audit
+before a task ships. A candidate is also not proof the work is free: check
+upstream main, open PRs and issue comments for an existing claim first.
+Licenses are reported as permissive, or copyleft/unknown needing review.
 
 Usage:
   python3 scripts/scout-upstream.py                       # whole watchlist, HEAD
@@ -47,8 +50,18 @@ WATCHLIST = [
     "Beneficial-AI-Foundation/curve25519-dalek-lean-verify",
 ]
 
-# Licenses that permit mirroring (DESIGN.md Section 4, criterion 4).
-PERMISSIVE_SPDX = {"Apache-2.0", "MIT", "BSD-2-Clause", "BSD-3-Clause", "AGPL-3.0", "GPL-3.0", "LGPL-3.0", "MPL-2.0", "ISC"}
+# DESIGN.md Section 4, criterion 4. Permissive licenses can be mirrored as-is;
+# copyleft ones (which DESIGN.md allows, e.g. AGPL-3.0) need a license review first.
+PERMISSIVE_SPDX = {"Apache-2.0", "MIT", "BSD-2-Clause", "BSD-3-Clause", "ISC"}
+COPYLEFT_SPDX = {"AGPL-3.0", "GPL-3.0", "LGPL-3.0", "MPL-2.0"}
+
+
+def license_status(spdx: str) -> str:
+    if spdx in PERMISSIVE_SPDX:
+        return "permissive"
+    if spdx in COPYLEFT_SPDX:
+        return "copyleft: needs license review before mirroring"
+    return "unknown: needs license review before mirroring"
 
 DECL_KINDS = (
     "theorem", "lemma", "def", "instance", "structure", "class", "abbrev",
@@ -406,6 +419,7 @@ def scout_repo(repo, workdir, toolchain, live):
         mathlib=mathlib_rev(show(d, commit, "lake-manifest.json")),
         license=detect_spdx(lic_text),
     )
+    info["license_status"] = license_status(info["license"])
     files = [f for f in git(d, "ls-tree", "-r", "--name-only", commit).split("\n") if f.endswith(".lean")]
     blueprint_tex = "\n".join(
         show(d, commit, f) or "" for f in git(d, "ls-tree", "-r", "--name-only", commit).split("\n")
@@ -466,7 +480,14 @@ def scout_repo(repo, workdir, toolchain, live):
 # ------------------------------------------------------------------- output
 
 def render_markdown(results, toolchain):
-    out = [f"# Upstream sorry scout{f' (toolchain {toolchain})' if toolchain else ''}", ""]
+    out = [
+        f"# Upstream sorry scout{f' (toolchain {toolchain})' if toolchain else ''}",
+        "",
+        "> A candidate here passed a static scan only. Before packaging one, check that it is still open on",
+        "> upstream main and not claimed in an open upstream PR or issue thread, then `lake build` it at the",
+        "> pin and audit its axioms (DESIGN.md Section 4, criteria 2 and 3).",
+        "",
+    ]
     out.append("| Repo | Commit | Toolchain | Mathlib | License | Candidates | Excluded |")
     out.append("|---|---|---|---|---|---|---|")
     for info, cands in results:
@@ -480,8 +501,7 @@ def render_markdown(results, toolchain):
         open_c = [c for c in cands if c.status == "candidate"]
         if not open_c:
             continue
-        lic_ok = info["license"] in PERMISSIVE_SPDX
-        out.append(f"## {info['repo']}@{info['commit']} ({info['license']}{'' if lic_ok else ', LICENSE NOT CONFIRMED PERMISSIVE'})")
+        out.append(f"## {info['repo']}@{info['commit']} ({info['license']}, {license_status(info['license'])})")
         out.append("")
         out.append("| Declaration | Location | Blueprint | Live | Depends on | Hints |")
         out.append("|---|---|---|---|---|---|")

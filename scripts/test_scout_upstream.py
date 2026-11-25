@@ -104,6 +104,11 @@ class ScoutTests(unittest.TestCase):
         self.assertEqual(scout.detect_spdx("MIT License\n\nPermission is hereby granted, free of charge, to any person"), "MIT")
         self.assertEqual(scout.detect_spdx("All rights reserved."), "UNKNOWN")
 
+    def test_license_status(self):
+        self.assertEqual(scout.license_status("Apache-2.0"), "permissive")
+        self.assertTrue(scout.license_status("AGPL-3.0").startswith("copyleft"))
+        self.assertTrue(scout.license_status("UNKNOWN").startswith("unknown"))
+
     def test_hints(self):
         self.assertTrue(scout.feasibility_hints("", "theorem x : RH_up_to 3e12", ""))
         self.assertEqual(scout.feasibility_hints("", "theorem x (n : ℕ) : n + 0 = n", ""), [])
