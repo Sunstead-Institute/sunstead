@@ -72,6 +72,7 @@ Contributor code never shares a user with the code that decides the verdict
 ## Repository Structure
 
 - [docs/DESIGN.md](docs/DESIGN.md) — Architecture, threat model, Mission Spec and roadmap
+- [docs/RFC-DECOMPOSE.md](docs/RFC-DECOMPOSE.md) — v2 RFC: kernel-verified theorem decomposition, allowlist gating, and disproofs
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Deploying `sunstead.org` on Cloudflare
 - `cloudflare/` — The hub: Worker + SQLite Durable Object (`src/`), core rules and their tests (`src/core.ts`, `test/`), Lean 4 verifier container image and server (`containers/`)
 - `missions/` — Lean 4 mission repositories, local verifier image (`verifier-lean4/`), and the trusted verification harness (`verifier-common/`)
