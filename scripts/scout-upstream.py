@@ -57,14 +57,21 @@ WATCHLIST_DOMAINS = [
     ("fpvandoorn/carleson", "math"),
     ("thefundamentaltheor3m/Sphere-Packing-Lean", "math"),
     ("google-deepmind/formal-conjectures", "math"),
+    ("teorth/IEANTN", "math"),
     ("Verified-zkEVM/ArkLib", "cryptography"),
     ("Verified-zkEVM/VCVio", "cryptography"),
     ("Verified-zkEVM/CompPoly", "cryptography"),
     ("Verified-zkEVM/clean", "cryptography"),
+    ("Verified-zkEVM/evm-asm", "cryptography"),
+    ("Verified-zkEVM/PolyFun", "cryptography"),
     ("leanprover/LNSym", "cryptography"),
     ("Beneficial-AI-Foundation/curve25519-dalek-lean-verify", "cryptography"),
+    ("leanEthereum/leanVM", "cryptography"),
     ("BobDyLean/dylean", "cryptography"),
     ("reilabs/proven-zk", "cryptography"),
+    ("reilabs/lampe", "cryptography"),
+    ("GaloisInc/zkLean", "cryptography"),
+    ("cedar-policy/cedar-spec", "systems"),
     ("k3nfalt/longtails", "optimization"),
     ("optsuite/optlib", "optimization"),
     ("verified-optimization/CvxLean", "optimization"),
@@ -73,6 +80,10 @@ WATCHLIST_DOMAINS = [
 WATCHLIST = [r for r, _ in WATCHLIST_DOMAINS]
 DOMAIN_OF = dict(WATCHLIST_DOMAINS)
 DOMAINS = sorted(set(DOMAIN_OF.values()))
+
+# Default per-subprocess timeouts (seconds), overridable via --timeout.
+GIT_TIMEOUT = 120
+GH_TIMEOUT = 60
 
 # The toolchain the production verifier image runs (cloudflare/containers/lean4).
 # Only standalone-mathlib candidates pinned to it can be packaged without new
@@ -370,7 +381,8 @@ def live_task_lines(root: str = ROOT):
     live = {}
     for mpath in glob.glob(os.path.join(root, "missions", "*", "sunstead.json")):
         try:
-            manifest = json.load(open(mpath, encoding="utf-8"))
+            with open(mpath, encoding="utf-8") as fh:
+                manifest = json.load(fh)
         except (OSError, ValueError):
             continue
         for t in manifest.get("tasks", []):
@@ -408,9 +420,13 @@ def link_dependencies(cands, proof_text_by_key):
 
 # ------------------------------------------------- open upstream PRs/issues
 
-def run_gh(args):
+def run_gh(args, timeout=None, run=subprocess.run):
     """Run a read-only `gh api` GET and return parsed JSON."""
-    r = subprocess.run(["gh", *args], capture_output=True, text=True, env={**os.environ, "GH_PROMPT_DISABLED": "1"})
+    t = GH_TIMEOUT if timeout is None else timeout
+    try:
+        r = run(["gh", *args], capture_output=True, text=True, timeout=t, env={**os.environ, "GH_PROMPT_DISABLED": "1"})
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"gh {' '.join(args[:3])} timed out after {t}s")
     if r.returncode != 0:
         raise RuntimeError(f"gh {' '.join(args)}: {(r.stderr or '').strip().splitlines()[-1:] or r.returncode}")
     return json.loads(r.stdout or "null")
@@ -538,25 +554,33 @@ def apply_open_work(cands, work):
 
 # ---------------------------------------------------------------------- git
 
-def git(repo_dir, *args, check=True):
-    r = subprocess.run(["git", "-C", repo_dir, *args], capture_output=True, text=True)
+def git(repo_dir, *args, check=True, timeout=None, run=subprocess.run):
+    t = GIT_TIMEOUT if timeout is None else timeout
+    try:
+        r = run(["git", "-C", repo_dir, *args], capture_output=True, text=True, timeout=t)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"git {args[0] if args else ''} timed out after {t}s".strip())
     if check and r.returncode != 0:
         raise RuntimeError(f"git {' '.join(args)}: {r.stderr.strip()}")
     return r.stdout
 
 
-def ensure_clone(repo: str, workdir: str) -> str:
+def ensure_clone(repo: str, workdir: str, timeout=None, run=subprocess.run) -> str:
+    t = GIT_TIMEOUT if timeout is None else timeout
     d = os.path.join(workdir, repo.replace("/", "__"))
     if not os.path.isdir(os.path.join(d, ".git")):
         os.makedirs(workdir, exist_ok=True)
-        r = subprocess.run(
-            ["git", "clone", "-q", "--filter=blob:none", "--no-checkout", f"https://github.com/{repo}", d],
-            capture_output=True, text=True, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
-        )
+        try:
+            r = run(
+                ["git", "clone", "-q", "--filter=blob:none", "--no-checkout", f"https://github.com/{repo}", d],
+                capture_output=True, text=True, timeout=t, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"clone timed out after {t}s")
         if r.returncode != 0:
             raise RuntimeError(f"clone failed: {r.stderr.strip().splitlines()[-1] if r.stderr.strip() else r.returncode}")
     else:
-        git(d, "fetch", "-q", "origin", check=False)
+        git(d, "fetch", "-q", "origin", check=False, timeout=t, run=run)
     return d
 
 
@@ -574,24 +598,32 @@ def wanted_blobs(ls_tree):
     return out
 
 
-def prefetch_blobs(repo_dir, ls_tree, run=subprocess.run):
+def prefetch_blobs(repo_dir, ls_tree, run=subprocess.run, timeout=None):
     """Fetch the blobs a scan needs in one round trip. In a blob:none partial
     clone, `git checkout` otherwise fetches missing blobs lazily, which takes
-    minutes per repo. Best effort: on failure the lazy path still works."""
+    minutes per repo. Best effort: on failure or timeout the lazy path still works."""
     blobs = wanted_blobs(ls_tree)
     if not blobs:
         return 0
-    r = run(
-        ["git", "-C", repo_dir, "-c", "fetch.negotiationAlgorithm=noop", "fetch", "-q", "origin",
-         "--no-tags", "--no-write-fetch-head", "--recurse-submodules=no", "--filter=blob:none", "--stdin"],
-        input="\n".join(blobs) + "\n", capture_output=True, text=True,
-        env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
-    )
+    t = GIT_TIMEOUT if timeout is None else timeout
+    try:
+        r = run(
+            ["git", "-C", repo_dir, "-c", "fetch.negotiationAlgorithm=noop", "fetch", "-q", "origin",
+             "--no-tags", "--no-write-fetch-head", "--recurse-submodules=no", "--filter=blob:none", "--stdin"],
+            input="\n".join(blobs) + "\n", capture_output=True, text=True, timeout=t,
+            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+        )
+    except subprocess.TimeoutExpired:
+        return 0
     return len(blobs) if r.returncode == 0 else 0
 
 
-def show(repo_dir, commit, path):
-    r = subprocess.run(["git", "-C", repo_dir, "show", f"{commit}:{path}"], capture_output=True)
+def show(repo_dir, commit, path, timeout=None, run=subprocess.run):
+    t = GIT_TIMEOUT if timeout is None else timeout
+    try:
+        r = run(["git", "-C", repo_dir, "show", f"{commit}:{path}"], capture_output=True, timeout=t)
+    except subprocess.TimeoutExpired:
+        return None
     return r.stdout.decode("utf-8", "replace") if r.returncode == 0 else None
 
 
@@ -660,7 +692,11 @@ def scout_repo(repo, workdir, toolchain, live, check_prs=False, gh=run_gh):
     cands, proof_text, sorry_decls = [], {}, {}
     contents = {}
     if files:
-        subprocess.run(["git", "-C", d, "checkout", "-q", "--force", commit, "--", *files], capture_output=True)
+        try:
+            subprocess.run(["git", "-C", d, "checkout", "-q", "--force", commit, "--", *files], capture_output=True, timeout=GIT_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            info["error"] = f"git checkout timed out after {GIT_TIMEOUT}s"
+            return info, []
     for f in files:
         p = os.path.join(d, f)
         try:
@@ -819,7 +855,14 @@ def main(argv=None):
         help="cross-check candidates against open upstream PRs and issues via `gh api` (read-only GETs); "
              "a candidate an open PR likely solves is excluded",
     )
+    ap.add_argument(
+        "--timeout", type=int, default=GIT_TIMEOUT,
+        help=f"per-subprocess timeout in seconds for git/gh calls (default: {GIT_TIMEOUT}s)",
+    )
     args = ap.parse_args(argv)
+    if args.timeout is not None and args.timeout > 0:
+        globals()["GIT_TIMEOUT"] = args.timeout
+        globals()["GH_TIMEOUT"] = min(args.timeout, GH_TIMEOUT) if args.timeout < GH_TIMEOUT else args.timeout
 
     repos = args.repo or [r for r, d in WATCHLIST_DOMAINS if not args.domain or d in args.domain]
     live = live_task_lines()

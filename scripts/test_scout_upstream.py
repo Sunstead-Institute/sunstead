@@ -2,6 +2,7 @@
 """Offline unit tests for scripts/scout-upstream.py.  Run: python3 scripts/test_scout_upstream.py"""
 import importlib.util
 import os
+import subprocess
 import unittest
 
 _spec = importlib.util.spec_from_file_location(
@@ -134,12 +135,18 @@ class FakeGh:
 
 class MultiToolchainTests(unittest.TestCase):
     def test_watchlist_domains(self):
-        for repo in ("Verified-zkEVM/VCVio", "leanprover/LNSym", "reilabs/proven-zk", "BobDyLean/dylean"):
+        for repo in (
+            "Verified-zkEVM/VCVio", "leanprover/LNSym", "reilabs/proven-zk", "BobDyLean/dylean",
+            "leanEthereum/leanVM", "Verified-zkEVM/evm-asm", "Verified-zkEVM/PolyFun",
+            "reilabs/lampe", "GaloisInc/zkLean",
+        ):
             self.assertEqual(scout.DOMAIN_OF[repo], "cryptography")
         for repo in ("k3nfalt/longtails", "optsuite/optlib", "verified-optimization/CvxLean", "lean-dojo/FloatLib"):
             self.assertEqual(scout.DOMAIN_OF[repo], "optimization")
+        self.assertEqual(scout.DOMAIN_OF["cedar-policy/cedar-spec"], "systems")
+        self.assertEqual(scout.DOMAIN_OF["teorth/IEANTN"], "math")
         self.assertEqual(len(scout.WATCHLIST), len(set(scout.WATCHLIST)))
-        self.assertEqual(set(scout.DOMAINS), {"math", "cryptography", "optimization"})
+        self.assertEqual(set(scout.DOMAINS), {"math", "cryptography", "optimization", "systems"})
 
     def test_file_imports(self):
         src = "/- header -/\nmodule\n-- c\nimport Mathlib.Data.Nat.Basic\npublic import ArkLib.Foo Batteries.Data\n\ntheorem t : True := trivial\nimport NotHeader\n"
@@ -319,6 +326,27 @@ class PrefetchTests(unittest.TestCase):
         self.assertEqual(scout.prefetch_blobs("/repo", "", lambda *a, **k: self.fail("no call")), 0)
 
 
+class TimeoutAndLiveTests(unittest.TestCase):
+    def test_timeouts_raise_clean_runtime_error_or_fallback(self):
+        def timeout_run(cmd, **kw):
+            raise subprocess.TimeoutExpired(cmd, kw.get("timeout", 1))
+
+        with self.assertRaisesRegex(RuntimeError, "timed out after 5s"):
+            scout.run_gh(["api", "-X", "GET", "repos/o/r/pulls"], timeout=5, run=timeout_run)
+        with self.assertRaisesRegex(RuntimeError, "timed out after 7s"):
+            scout.git("/repo", "fetch", "origin", timeout=7, run=timeout_run)
+        self.assertEqual(scout.prefetch_blobs("/repo", LS_TREE, run=timeout_run, timeout=3), 0)
+        self.assertIsNone(scout.show("/repo", "HEAD", "README.md", timeout=3, run=timeout_run))
+
+    def test_live_task_lines_detects_live_crypto_and_math_missions(self):
+        live = scout.live_task_lines()
+        self.assertIn(("leanprover/LNSym", "Proofs/AES-GCM/AESGCMEncKernelSym.lean"), live)
+        self.assertIn(
+            ("Verified-zkEVM/ArkLib", "ArkLib/Data/CodingTheory/ProximityGap/CapacityBounds.lean"),
+            live,
+        )
+
+
 class NoNetworkTests(unittest.TestCase):
     def test_suite_makes_no_subprocess_calls(self):
         """The offline tests above must never reach gh/git: guard subprocess.run."""
@@ -328,6 +356,7 @@ class NoNetworkTests(unittest.TestCase):
             suite = unittest.defaultTestLoader.loadTestsFromTestCase(CheckPrsTests)
             suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(MultiToolchainTests))
             suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(PrefetchTests))
+            suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(TimeoutAndLiveTests))
             result = unittest.TestResult()
             suite.run(result)
             self.assertTrue(result.wasSuccessful(), result.failures + result.errors)
