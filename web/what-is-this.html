@@ -241,23 +241,23 @@ lemma isCompletelyMultiplicative_liouville :
 
           <div class="arena-row">
             <div class="arena-meta">
-              <span class="badge-gold">Tier 1 · Certified Optimization</span>
-              <span class="badge-teal">tejasvi/rank444-f2 · Hill-Climb</span>
+              <span class="badge-gold">Tier 2 · Certified Optimization</span>
+              <span class="badge-teal">tejasvi/rank444-f2 + AlphaTensor · Hill-Climb</span>
             </div>
-            <h3>Matrix Multiplication Rank 4×4×4 over F₂ (Beat AlphaTensor's 47)</h3>
+            <h3>Matrix Multiplication Rank over F₂: 4×4×4 &amp; 6-Shape AlphaTensor Suite</h3>
             <p>
-              A formally verified optimization record mission using the verbatim Apache-2.0 specification from <a href="https://github.com/tejasvi/rank444-f2" target="_blank" rel="noopener">tejasvi/rank444-f2</a>. Seeded with AlphaTensor's verified <code>r = 47</code> scheme; any contributor who submits an explicit valid scheme with strictly fewer than 47 multiplications (kernel-checked across all 4,096 Brent equations via <code>decide +kernel</code>) sets a new verified record.
+              Formally verified tensor-rank optimization records using the verbatim Apache-2.0 specification from <a href="https://github.com/tejasvi/rank444-f2" target="_blank" rel="noopener">tejasvi/rank444-f2</a> with verified baselines from DeepMind's <a href="https://github.com/google-deepmind/alphatensor" target="_blank" rel="noopener">AlphaTensor</a>: beat <code>r = 47</code> on <code>⟨4,4,4⟩</code>, or set new records across <code>⟨3,3,3⟩</code> (23, open since Laderman 1976), <code>⟨3,3,4⟩</code> (29), <code>⟨3,4,4⟩</code> (38), <code>⟨3,4,5⟩</code> (47), <code>⟨3,5,5⟩</code> (58), and <code>⟨4,4,5⟩</code> (63)—every coefficient checked by <code>decide +kernel</code>.
             </p>
           </div>
 
           <div class="arena-row">
             <div class="arena-meta">
               <span class="badge-gold">Tier 1 · Number Theory</span>
-              <span class="badge-teal">teorth/IEANTN · Pure Kernel</span>
+              <span class="badge-teal">teorth/IEANTN · 26 Verbatim Theorems across 5 Arenas</span>
             </div>
-            <h3>IEANTN (Terence Tao): Kernel-Checked Chebyshev ψ(n) ≤ 1.11 n Bound</h3>
+            <h3>IEANTN (Terence Tao &amp; Harald Helfgott): Explicit Analytic Number Theory Network</h3>
             <p>
-              Verbatim open challenge from Terence Tao's <a href="https://github.com/teorth/IEANTN" target="_blank" rel="noopener">teorth/IEANTN</a> (Apache-2.0): prove <code>∀ n ≤ 11723, Chebyshev.psi n ≤ 1.11 * n</code> purely inside the Lean 4 kernel without <code>native_decide</code>, upgrading <code>ψ(x) ≤ 1.11 x</code> for all <code>x &gt; 0</code> to a 100% Comparator-verified proof.
+              Five verbatim Lean 4.36.0 missions from Terence Tao's <a href="https://github.com/teorth/IEANTN" target="_blank" rel="noopener">teorth/IEANTN</a> (Apache-2.0): the kernel-checked Chebyshev <code>ψ(n) ≤ 1.11 n</code> bound (already solved &amp; audited!), explicit short-interval primes (Kadiri–Lumley, Ramaré–Saouter, Dusart), Riemann zeta analytic machinery &amp; exponential sums (Patel, Hadamard partial fractions, Rosser zero-counting, Trudgian, Hiary), active <code>BKLNW.v2</code>/<code>MT.v2</code>/<code>KLN.v1</code>/<code>FKS.v1</code> Chebyshev pipelines, and Harald Helfgott's Schoenfeld (1976) conditional Chebyshev bounds.
             </p>
           </div>
 

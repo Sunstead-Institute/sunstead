@@ -1,0 +1,14 @@
+{
+  "repo": "tejasvi/rank444-f2",
+  "commit": "22f87dd705718246e3256f4cb5b5bc47311eb53d",
+  "license": "Apache-2.0",
+  "specialization": "Sunstead specializes the upstream tensor-rank predicate `B334.RankLE (B334.mmT n m p) r` to six benchmark matrix multiplication shapes over F\u2082 (`\u27e83,3,3\u27e9`, `\u27e83,3,4\u27e9`, `\u27e83,4,4\u27e9`, `\u27e83,4,5\u27e9`, `\u27e83,5,5\u27e9`, `\u27e84,4,5\u27e9`). Public baselines are extracted verbatim from DeepMind's Apache-2.0 `google-deepmind/alphatensor@1949163da3be` (`algorithms/factorizations_f2.npz`).",
+  "public_baseline": "https://github.com/google-deepmind/alphatensor/blob/1949163da3bef7e3eb268a3ac015fd1c2dbfc767/algorithms/factorizations_f2.npz",
+  "checks": [
+    {
+      "local_file": "RankF2/Spec.lean",
+      "upstream_file": "lean/B334/Statement.lean",
+      "verbatim_snippet": "namespace B334\n\nopen Finset\n\nsection Tensors\n\nvariable {R : Type*} [CommSemiring R] {n\u2080 n\u2081 n\u2082 : \u2115}\n\n/-- The rank-one tensor `a \u2297 b \u2297 c`: its entry `(i, j, k)` is `a i * b j * c k`. -/\ndef outer3 (a : Fin n\u2080 \u2192 R) (b : Fin n\u2081 \u2192 R) (c : Fin n\u2082 \u2192 R) : Fin n\u2080 \u2192 Fin n\u2081 \u2192 Fin n\u2082 \u2192 R :=\n  fun i j k => a i * b j * c k\n\n/-- `RankLE T r`: `T` is a sum of `r` rank-one tensors. -/\ndef RankLE (T : Fin n\u2080 \u2192 Fin n\u2081 \u2192 Fin n\u2082 \u2192 R) (r : \u2115) : Prop :=\n  \u2203 (a : Fin r \u2192 Fin n\u2080 \u2192 R) (b : Fin r \u2192 Fin n\u2081 \u2192 R) (c : Fin r \u2192 Fin n\u2082 \u2192 R),\n    T = \u2211 s, outer3 (a s) (b s) (c s)\n\nend Tensors\n\n/-- The matrix multiplication tensor \u27e8n,m,p\u27e9 over F\u2082. Entry `(x, y, z)` is 1 iff `x = m i + j`, `y = p j + k`,\n`z = n k + i` for some `i < n`, `j < m`, `k < p`. -/\ndef mmT (n m p : \u2115) : Fin (n * m) \u2192 Fin (m * p) \u2192 Fin (p * n) \u2192 ZMod 2 :=\n  fun x y z => if x.val % m = y.val / p \u2227 y.val % p = z.val / n \u2227 z.val % n = x.val / m then 1 else 0"
+    }
+  ]
+}

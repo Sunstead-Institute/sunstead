@@ -1,0 +1,106 @@
+{
+  "id": "matrix-rank-alphatensor-f2",
+  "title": "AlphaTensor Matrix Multiplication Suite over F\u2082 (6 Benchmark Shapes)",
+  "description": "Six formally verified world-record tensor-rank hill-climb challenges over F\u2082 spanning \u27e83,3,3\u27e9 (rank 23, open since Laderman 1976), \u27e83,3,4\u27e9 (29), \u27e83,4,4\u27e9 (38), \u27e83,4,5\u27e9 (47), \u27e83,5,5\u27e9 (58), and \u27e84,4,5\u27e9 (63, AlphaTensor Nature 2022 \u2014 strictly improvable!). Reuses the verbatim Apache-2.0 `B334.RankLE (B334.mmT n m p) r` specification from `tejasvi/rank444-f2` with verified baselines from DeepMind's Apache-2.0 `google-deepmind/alphatensor`.",
+  "tier": 2,
+  "mode": "hillclimb",
+  "repo": "https://github.com/google-deepmind/alphatensor",
+  "upstream": {
+    "repo": "tejasvi/rank444-f2",
+    "commit": "22f87dd705718246e3256f4cb5b5bc47311eb53d",
+    "license": "Apache-2.0"
+  },
+  "score_direction": "minimize",
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 240,
+    "memory_mb": 6144
+  },
+  "frozen_paths": [
+    "RankF2/Spec.lean",
+    "RankF2/Common.lean",
+    "RankF2/Bound333.lean",
+    "RankF2/Bound334.lean",
+    "RankF2/Bound344.lean",
+    "RankF2/Bound345.lean",
+    "RankF2/Bound355.lean",
+    "RankF2/Bound445.lean",
+    "LICENSE",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "tasks": [
+    {
+      "id": "rank_333",
+      "title": "Reduce \u27e83,3,3\u27e9 rank over F\u2082 below 23",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e83,3,3\u27e9 over F\u2082 (baseline 23, open since Laderman 1976). Submit your coefficient bitmask triples in `RankF2/Cert333.lean` (`B334.score333` and `B334.cert333`). Frozen `RankF2/Bound333.lean` checks all 729 Brent equations inside the Lean 4 kernel (`decide +kernel`).",
+      "baseline_score": 23,
+      "target_files": [
+        "RankF2/Cert333.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/alphatensor/blob/1949163da3bef7e3eb268a3ac015fd1c2dbfc767/algorithms/factorizations_f2.npz"
+    },
+    {
+      "id": "rank_334",
+      "title": "Reduce \u27e83,3,4\u27e9 rank over F\u2082 below 29",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e83,3,4\u27e9 over F\u2082 (AlphaTensor baseline 29). Submit your coefficient bitmask triples in `RankF2/Cert334.lean` (`B334.score334` and `B334.cert334`). Frozen `RankF2/Bound334.lean` checks all 1296 Brent equations inside the Lean 4 kernel (`decide +kernel`).",
+      "baseline_score": 29,
+      "target_files": [
+        "RankF2/Cert334.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/alphatensor/blob/1949163da3bef7e3eb268a3ac015fd1c2dbfc767/algorithms/factorizations_f2.npz"
+    },
+    {
+      "id": "rank_344",
+      "title": "Reduce \u27e83,4,4\u27e9 rank over F\u2082 below 38",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e83,4,4\u27e9 over F\u2082 (AlphaTensor baseline 38). Submit your coefficient bitmask triples in `RankF2/Cert344.lean` (`B334.score344` and `B334.cert344`). Frozen `RankF2/Bound344.lean` checks all 2304 Brent equations inside the Lean 4 kernel (`decide +kernel`).",
+      "baseline_score": 38,
+      "target_files": [
+        "RankF2/Cert344.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/alphatensor/blob/1949163da3bef7e3eb268a3ac015fd1c2dbfc767/algorithms/factorizations_f2.npz"
+    },
+    {
+      "id": "rank_345",
+      "title": "Reduce \u27e83,4,5\u27e9 rank over F\u2082 below 47",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e83,4,5\u27e9 over F\u2082 (AlphaTensor baseline 47). Submit your coefficient bitmask triples in `RankF2/Cert345.lean` (`B334.score345` and `B334.cert345`). Frozen `RankF2/Bound345.lean` checks all 3600 Brent equations inside the Lean 4 kernel (`decide +kernel`).",
+      "baseline_score": 47,
+      "target_files": [
+        "RankF2/Cert345.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/alphatensor/blob/1949163da3bef7e3eb268a3ac015fd1c2dbfc767/algorithms/factorizations_f2.npz"
+    },
+    {
+      "id": "rank_355",
+      "title": "Reduce \u27e83,5,5\u27e9 rank over F\u2082 below 58",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e83,5,5\u27e9 over F\u2082 (AlphaTensor baseline 58). Submit your coefficient bitmask triples in `RankF2/Cert355.lean` (`B334.score355` and `B334.cert355`). Frozen `RankF2/Bound355.lean` checks all 5625 Brent equations inside the Lean 4 kernel (`decide +kernel`).",
+      "baseline_score": 58,
+      "target_files": [
+        "RankF2/Cert355.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/alphatensor/blob/1949163da3bef7e3eb268a3ac015fd1c2dbfc767/algorithms/factorizations_f2.npz"
+    },
+    {
+      "id": "rank_445",
+      "title": "Reduce \u27e84,4,5\u27e9 rank over F\u2082 below 63",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e84,4,5\u27e9 over F\u2082 (AlphaTensor baseline 63; recent bounds reached 60\u201362). Submit your coefficient bitmask triples in `RankF2/Cert445.lean` (`B334.score445` and `B334.cert445`). Frozen `RankF2/Bound445.lean` checks all 6400 Brent equations inside the Lean 4 kernel (`decide +kernel`).",
+      "baseline_score": 63,
+      "target_files": [
+        "RankF2/Cert445.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/alphatensor/blob/1949163da3bef7e3eb268a3ac015fd1c2dbfc767/algorithms/factorizations_f2.npz"
+    }
+  ]
+}

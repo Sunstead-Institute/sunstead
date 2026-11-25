@@ -1,0 +1,77 @@
+{
+  "repo": "teorth/IEANTN",
+  "commit": "cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3",
+  "license": "Apache-2.0",
+  "checks": [
+    {
+      "local_file": "IEANTN/Nodes/Hiary2016/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/Hiary2016/v1/Conclusions.lean",
+      "exact_sha256": "0648adb42e1ca2a0cd9566fe8bb04dd41e63a67a389d066f1a347abed42a647c"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Patel2020/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/Patel2020/v1/Conclusions.lean",
+      "exact_sha256": "e28fd982a07238e0d6c3b1921a91fb0d4069614bbc09ac7fa52cf206bc68ebfc"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Trudgian2011/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/Trudgian2011/v1/Conclusions.lean",
+      "exact_sha256": "5f95e894e9e96c039e63ea5704c84d8a4c2cd76e249d7d7e0adef1e9c72c683e"
+    },
+    {
+      "local_file": "IEANTN/Nodes/ZeroCount/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/ZeroCount/v1/Conclusions.lean",
+      "exact_sha256": "8e8d6408e9cbea09e17c32cd92152133c78f690b84b72f9d4df2bf6f71a38a13"
+    },
+    {
+      "local_file": "IEANTN/Nodes/ZetaHadamard/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/ZetaHadamard/v1/Conclusions.lean",
+      "exact_sha256": "7059789de0f72dcaf892319fc7579709698ae7cb2abcc3ac122e548a3ac5af8b"
+    },
+    {
+      "local_file": "IEANTN/Vocabulary/Zeta.lean",
+      "upstream_file": "IEANTN/Vocabulary/Zeta.lean",
+      "exact_sha256": "42e239de4c1151d03ed94ee4c0c51d031f974faa6998f447e85845665bb846ef"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Patel2020/v1/TaskChengGraham2.lean",
+      "upstream_file": "IEANTN/Nodes/Patel2020/v1/Challenge.lean",
+      "verbatim_snippet": "theorem Patel2020.v1.challenge_cheng_graham_lemma_2 : Patel2020.v1.cheng_graham_lemma_2 := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Patel2020/v1/TaskChengGraham3.lean",
+      "upstream_file": "IEANTN/Nodes/Patel2020/v1/Challenge.lean",
+      "verbatim_snippet": "theorem Patel2020.v1.challenge_cheng_graham_lemma_3 : Patel2020.v1.cheng_graham_lemma_3 := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Patel2020/v1/TaskZetaOneBound.lean",
+      "upstream_file": "IEANTN/Nodes/Patel2020/v1/Challenge.lean",
+      "verbatim_snippet": "theorem Patel2020.v1.challenge_zeta_one_bound : Patel2020.v1.zeta_one_bound := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/ZetaHadamard/v1/TaskLogDerivPartialFractions.lean",
+      "upstream_file": "IEANTN/Nodes/ZetaHadamard/v1/Challenge.lean",
+      "verbatim_snippet": "theorem ZetaHadamard.v1.challenge_logDeriv_partial_fractions : ZetaHadamard.v1.logDeriv_partial_fractions := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/ZeroCount/v1/TaskRvmErrorSmall.lean",
+      "upstream_file": "IEANTN/Nodes/ZeroCount/v1/Challenge.lean",
+      "verbatim_snippet": "theorem ZeroCount.v1.challenge_rvm_error_small : ZeroCount.v1.rvm_error_small := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/ZeroCount/v1/TaskRvmErrorBound.lean",
+      "upstream_file": "IEANTN/Nodes/ZeroCount/v1/Challenge.lean",
+      "verbatim_snippet": "theorem ZeroCount.v1.challenge_rvm_error_bound : ZeroCount.v1.rvm_error_bound := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Trudgian2011/v1/TaskIntegralSBound.lean",
+      "upstream_file": "IEANTN/Nodes/Trudgian2011/v1/Challenge.lean",
+      "verbatim_snippet": "theorem Trudgian2011.v1.challenge_integral_S_bound : Trudgian2011.v1.integral_S_bound := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Hiary2016/v1/TaskZetaHalfLine.lean",
+      "upstream_file": "IEANTN/Nodes/Hiary2016/v1/Challenge.lean",
+      "verbatim_snippet": "theorem Hiary2016.v1.challenge_zeta_half_line_bound : Hiary2016.v1.zeta_half_line_bound := by\n  sorry"
+    }
+  ]
+}

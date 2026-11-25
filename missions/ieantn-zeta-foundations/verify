@@ -1,0 +1,79 @@
+#!/usr/bin/env python3
+"""Frozen verifier for `ieantn-zeta-foundations`.
+
+Uses the shared trusted harness baked into `/opt/sunstead/sunstead_sandbox.py`
+with Lean 4.36.0 + read-only Mathlib v4.36.0.
+"""
+import sys
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify  # noqa: E402
+
+LIB_ROOT = "IEANTN"
+FROZEN_FILES = [
+    "IEANTN/Nodes/Hiary2016/v1/Conclusions.lean",
+    "IEANTN/Nodes/Patel2020/v1/Conclusions.lean",
+    "IEANTN/Nodes/Trudgian2011/v1/Conclusions.lean",
+    "IEANTN/Nodes/ZeroCount/v1/Conclusions.lean",
+    "IEANTN/Nodes/ZetaHadamard/v1/Conclusions.lean",
+    "IEANTN/Vocabulary/Zeta.lean",
+    "IEANTN/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain"
+]
+
+TASKS = {
+    "patel_cheng_graham_lemma_2": {
+        "module": "IEANTN.Nodes.Patel2020.v1.TaskChengGraham2",
+        "theorem": "Patel2020.v1.challenge_cheng_graham_lemma_2",
+        "statement": "\ndef patel_cheng_graham_lemma_2 : Prop :=\n  Patel2020.v1.cheng_graham_lemma_2\n"
+    },
+    "patel_cheng_graham_lemma_3": {
+        "module": "IEANTN.Nodes.Patel2020.v1.TaskChengGraham3",
+        "theorem": "Patel2020.v1.challenge_cheng_graham_lemma_3",
+        "statement": "\ndef patel_cheng_graham_lemma_3 : Prop :=\n  Patel2020.v1.cheng_graham_lemma_3\n"
+    },
+    "patel_zeta_one_bound": {
+        "module": "IEANTN.Nodes.Patel2020.v1.TaskZetaOneBound",
+        "theorem": "Patel2020.v1.challenge_zeta_one_bound",
+        "statement": "\ndef patel_zeta_one_bound : Prop :=\n  Patel2020.v1.zeta_one_bound\n"
+    },
+    "zeta_hadamard_partial_fractions": {
+        "module": "IEANTN.Nodes.ZetaHadamard.v1.TaskLogDerivPartialFractions",
+        "theorem": "ZetaHadamard.v1.challenge_logDeriv_partial_fractions",
+        "statement": "\ndef zeta_hadamard_partial_fractions : Prop :=\n  ZetaHadamard.v1.logDeriv_partial_fractions\n"
+    },
+    "zero_count_rvm_error_small": {
+        "module": "IEANTN.Nodes.ZeroCount.v1.TaskRvmErrorSmall",
+        "theorem": "ZeroCount.v1.challenge_rvm_error_small",
+        "statement": "\ndef zero_count_rvm_error_small : Prop :=\n  ZeroCount.v1.rvm_error_small\n"
+    },
+    "zero_count_rvm_error_bound": {
+        "module": "IEANTN.Nodes.ZeroCount.v1.TaskRvmErrorBound",
+        "theorem": "ZeroCount.v1.challenge_rvm_error_bound",
+        "statement": "\ndef zero_count_rvm_error_bound : Prop :=\n  ZeroCount.v1.rvm_error_bound\n"
+    },
+    "trudgian_2011_integral_S_bound": {
+        "module": "IEANTN.Nodes.Trudgian2011.v1.TaskIntegralSBound",
+        "theorem": "Trudgian2011.v1.challenge_integral_S_bound",
+        "statement": "\ndef trudgian_2011_integral_S_bound : Prop :=\n  Trudgian2011.v1.integral_S_bound\n"
+    },
+    "hiary_2016_zeta_half_line_bound": {
+        "module": "IEANTN.Nodes.Hiary2016.v1.TaskZetaHalfLine",
+        "theorem": "Hiary2016.v1.challenge_zeta_half_line_bound",
+        "statement": "\ndef hiary_2016_zeta_half_line_bound : Prop :=\n  Hiary2016.v1.zeta_half_line_bound\n"
+    }
+}
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>")
+    lean_verify(
+        sys.argv[1],
+        lib_root=LIB_ROOT,
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        uses_mathlib=True,
+        timeout_sec=230,
+    )
