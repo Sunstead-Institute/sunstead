@@ -33,6 +33,7 @@ Usage:
 `--hub` (default https://sunstead.org) is only read with GET /api/proofs/<id>.
 """
 import argparse
+import ast
 import importlib.util
 import json
 import os
@@ -49,6 +50,8 @@ STANDARD_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
 PROOF_ID_RE = re.compile(r"^[0-9a-f]{64}$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+SIMPLE_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z_0-9']*$")
+SCOPED_PREFIX_RE = re.compile(r"^(?:set_option|open|attribute|local|scoped)\b.*\bin\s*$")
 
 _spec = importlib.util.spec_from_file_location("scout_upstream", os.path.join(ROOT, "scripts", "scout-upstream.py"))
 scout = importlib.util.module_from_spec(_spec)
@@ -75,6 +78,21 @@ def load_proof(args) -> dict:
 
 def verify_theorems(verify_src: str) -> dict:
     """task id -> fully qualified theorem name, from a mission's `verify` TASKS table."""
+    try:
+        tree = ast.parse(verify_src)
+        for node in tree.body:
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and target.id == "TASKS":
+                        tasks = ast.literal_eval(node.value)
+                        if isinstance(tasks, dict):
+                            return {
+                                k: v["theorem"]
+                                for k, v in tasks.items()
+                                if isinstance(k, str) and isinstance(v, dict) and isinstance(v.get("theorem"), str)
+                            }
+    except (SyntaxError, ValueError):
+        pass
     pat = re.compile(r'"(?P<task>[\w.-]+)"\s*:\s*\{\s*"module"\s*:\s*"[^"]+"\s*,\s*"theorem"\s*:\s*"(?P<thm>[^"]+)"')
     return {m.group("task"): m.group("thm") for m in pat.finditer(verify_src)}
 
@@ -118,10 +136,12 @@ def load_mission(missions_root: str, proof: dict) -> dict:
     theorems = verify_theorems(read(os.path.join(mdir, "verify")))
     if task["id"] not in theorems:
         raise ExportError(f"no theorem for task {task['id']} in {mid}/verify")
+    is_repo_snapshot = (manifest.get("snapshot") or {}).get("mode") == "repo-snapshot"
     return {
         "id": mid, "dir": mdir, "manifest": manifest, "upstream": upstream, "task": task,
         "target_file": task["target_files"][0], "theorem": theorems[task["id"]],
         "upstream_path": path, "upstream_lines": (line_a, line_b),
+        "is_repo_snapshot": is_repo_snapshot,
     }
 
 
@@ -210,13 +230,14 @@ def find_decl(decls, theorem: str):
 
 
 def leading_block_start(lines, masked_lines, idx: int) -> int:
-    """First line of the doc comment / attribute lines directly above line idx (0-based)."""
+    """First line of doc comments, attributes, or scoped `... in` modifiers directly above line idx (0-based)."""
     j = idx
     while j > 0:
         raw, masked = lines[j - 1], masked_lines[j - 1]
         if not raw.strip():
             break
-        if masked.strip() == "" or masked.lstrip().startswith("@["):
+        m = masked.strip()
+        if m == "" or m.startswith("@[") or SCOPED_PREFIX_RE.match(m):
             j -= 1
             continue
         break
@@ -313,23 +334,37 @@ def transplant(upstream_src: str, mission: dict, contrib: dict) -> tuple:
 # ---------------------------------------------------------------- build & checks
 
 def lean_module(path: str) -> str:
-    return path[: -len(".lean")].replace("/", ".")
+    parts = path[: -len(".lean")].split("/")
+    return ".".join(p if SIMPLE_IDENT_RE.match(p) else f"«{p}»" for p in parts)
 
 
 # Standalone checker run with `lake env lean --run`. It imports only `Lean`, loads
-# the built module's environment with `importModules` (no elaborators, commands or
-# `#print` run), requires the declaration to be a theorem, and lists its axioms with
-# `collectAxioms`, so nothing in the upstream or contributed source can rewrite the
-# report (cf. redteam.py's lean-spoof-axiom-report).
+# the built module's environment with `importModules ... (loadExts := false)` (no
+# elaborators, commands, `initialize` hooks or `#print` run), requires the
+# declaration to be a theorem, and lists its axioms with `collectAxioms`, so
+# nothing in the upstream or contributed source can rewrite the report (cf.
+# redteam.py's lean-spoof-axiom-report).
 AXIOM_CHECKER = """import Lean
 open Lean
+
+def stripGuillemets (raw : String) : String :=
+  match raw.toList with
+  | '«' :: rest =>
+    match rest.reverse with
+    | '»' :: innerRev => String.ofList innerRev.reverse
+    | _ => raw
+  | _ => raw
+
+def parseLeanName (s : String) : Name :=
+  (s.splitOn ".").foldl (fun acc part => Name.str acc (stripGuillemets part)) Name.anonymous
 
 def main (args : List String) : IO UInt32 := do
   match args with
   | [modStr, declStr] =>
-    let decl := declStr.toName
+    let mod := parseLeanName modStr
+    let decl := parseLeanName declStr
     initSearchPath (← findSysroot)
-    let env ← importModules #[{ module := modStr.toName }] {} 0
+    let env ← importModules #[{ module := mod }] {} 0 (loadExts := false)
     match env.find? decl with
     | some (.thmInfo _) => pure ()
     | some _ =>
@@ -454,16 +489,17 @@ def export(args) -> dict:
         with tempfile.TemporaryDirectory(prefix="sunstead-export-") as scratch:
             seed, proved = proved_file(mission, proof["patch"], scratch)
             contrib = extract_contribution(seed, proved, mission["theorem"])
-            lib_root = mission["theorem"].split(".")[0]
-            transplanted = "\n".join(contrib["helpers"] + [contrib["proof"]])
-            if re.search(rf"(?<![\w.]){re.escape(lib_root)}\.", transplanted):
-                warnings.append(f"proof text refers to the mission namespace `{lib_root}.`; rename to upstream names before sending")
+            if not mission["is_repo_snapshot"]:
+                lib_root = mission["theorem"].split(".")[0]
+                transplanted = "\n".join(contrib["helpers"] + [contrib["proof"]])
+                if re.search(rf"(?<![\w.]){re.escape(lib_root)}\.", transplanted):
+                    warnings.append(f"proof text refers to the mission namespace `{lib_root}.`; rename to upstream names before sending")
+                if any(m.split(".")[0] == lib_root for m in contrib["new_imports"]):
+                    raise ExportError("proof imports another mission module; export its dependency first")
             if contrib["after_target"]:
                 warnings.append(f"declarations added after the theorem are not exported: {contrib['after_target']}")
             if contrib["new_opens"]:
                 warnings.append(f"the proved file adds `open` lines; add what the proof needs upstream by hand: {contrib['new_opens']}")
-            if any(m.split(".")[0] == lib_root for m in contrib["new_imports"]):
-                raise ExportError("proof imports another mission module; export its dependency first")
             updir = os.path.join(scratch, "upstream")
             repo_url = args.upstream_url or f"https://github.com/{mission['upstream']['repo']}.git"
             fetch_upstream(repo_url, mission["upstream"]["commit"], updir, log)

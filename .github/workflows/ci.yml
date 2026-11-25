@@ -105,6 +105,8 @@ jobs:
         run: python3 scripts/redteam.py
       - name: Frozen task statements match the seed theorems (every mission, demos included)
         run: python3 scripts/check-statements.py
+      - name: Independent audit container security tests (v4.36.0 + v4.35.0 repo-snapshot)
+        run: python3 scripts/test_audit_live.py -v
 
   hub-images:
     name: Cloudflare container image build
