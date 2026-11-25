@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+"""Frozen repo-snapshot verifier for `curve25519-dalek`.
+
+Uses the shared trusted harness baked into `/opt/sunstead/sunstead_sandbox.py`
+with Lean 4.31.0 + Mathlib + Aeneas + PrimeCert and the read-only prebuilt
+upstream `.olean` snapshot of
+`Beneficial-AI-Foundation/curve25519-dalek-lean-verify@52cad87d054943c96c984d99d9ea9e5d043b0d65`.
+"""
+import sys
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_repo_snapshot_verify  # noqa: E402
+
+SNAPSHOT_ID = "curve25519-dalek"
+FROZEN_FILES = [
+    "UPSTREAM.json",
+    "lean-toolchain",
+]
+ALLOWED_IMPORT_PREFIXES = [
+    "Curve25519Dalek",
+    "Aeneas",
+    "PrimeCert",
+    "Mathlib",
+    "Std",
+    "Init",
+    "Batteries",
+]
+LEAN_OPTIONS = [
+    "pp.unicode.fun=true",
+    "autoImplicit=false",
+    "relaxedAutoImplicit=false",
+    "maxSynthPendingDepth=3",
+    "maxRecDepth=10000",
+]
+
+TASKS = {
+    "add_assoc_ed25519": {
+        "module": "Curve25519Dalek.Math.Edwards.Curve",
+        "theorem": "Edwards.add_assoc_Ed25519",
+        "target_files": ["Curve25519Dalek/Math/Edwards/Curve.lean"],
+    },
+    "is_even_iff_in_doubling_image_right": {
+        "module": "Curve25519Dalek.Math.Ristretto.Representation",
+        "theorem": "curve25519_dalek.ristretto.IsEven_iff_in_doubling_image_right",
+        "target_files": ["Curve25519Dalek/Math/Ristretto/Representation.lean"],
+        "prereq_modules": ["Curve25519Dalek.Math.Edwards.Curve"],
+        "bridge_modules": ["Curve25519Dalek.Math.Edwards.Representation"],
+        "preserve_theorems": [
+            {
+                "module": "Curve25519Dalek.Math.Edwards.Curve",
+                "theorem": "Edwards.add_assoc_Ed25519",
+            },
+        ],
+    },
+}
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>")
+    lean_repo_snapshot_verify(
+        sys.argv[1],
+        snapshot_id=SNAPSHOT_ID,
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        allowed_import_prefixes=ALLOWED_IMPORT_PREFIXES,
+        uses_mathlib=True,
+        lean_options=LEAN_OPTIONS,
+        allow_other_sorries=True,
+        timeout_sec=230,
+    )

@@ -17,3 +17,13 @@ export class Lean4V435Verifier extends Container {
   sleepAfter = "3m";
   enableInternet = false;
 }
+
+/**
+ * Hermetic Lean 4.31.0 + Mathlib + Aeneas repo-snapshot verification container (e.g. curve25519-dalek)
+ * running with outbound internet disabled.
+ */
+export class Lean4V431Verifier extends Container {
+  defaultPort = 8080;
+  sleepAfter = "3m";
+  enableInternet = false;
+}

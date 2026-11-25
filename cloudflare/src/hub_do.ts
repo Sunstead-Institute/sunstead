@@ -39,16 +39,18 @@ import {
 } from "./core";
 import { SEED_MISSIONS, type SeedMission } from "./generated/missions";
 import { renderJoinTxt } from "./join_txt";
-import type { Lean4Verifier, Lean4V435Verifier } from "./containers";
+import type { Lean4Verifier, Lean4V435Verifier, Lean4V431Verifier } from "./containers";
 
 export interface HubEnv {
   HUB: DurableObjectNamespace<SunsteadHub>;
   LEAN4_VERIFIER: DurableObjectNamespace<Lean4Verifier>;
   LEAN4_V435_VERIFIER: DurableObjectNamespace<Lean4V435Verifier>;
+  LEAN4_V431_VERIFIER: DurableObjectNamespace<Lean4V431Verifier>;
 }
 
 function parseVerifierKind(kind: string): SeedMission["verifier_kind"] {
   if (kind === "lean4-v4.35.0") return "lean4-v4.35.0";
+  if (kind === "lean4-v4.31.0") return "lean4-v4.31.0";
   return "lean4";
 }
 
@@ -696,6 +698,9 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     const key = `${mission.verifier_kind}:${mission.manifest.verifier.image}:${mission.manifest.id}`;
     if (mission.verifier_kind === "lean4-v4.35.0") {
       return this.env.LEAN4_V435_VERIFIER.getByName(key);
+    }
+    if (mission.verifier_kind === "lean4-v4.31.0") {
+      return this.env.LEAN4_V431_VERIFIER.getByName(key);
     }
     return this.env.LEAN4_VERIFIER.getByName(key);
   }

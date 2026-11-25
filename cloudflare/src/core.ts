@@ -6,7 +6,7 @@
 export type MissionMode = "dag" | "hillclimb";
 export type ScoreDirection = "maximize" | "minimize";
 export type TaskStatus = "open" | "leased" | "verified";
-export type VerifierKind = "lean4" | "lean4-v4.35.0";
+export type VerifierKind = "lean4" | "lean4-v4.35.0" | "lean4-v4.31.0";
 
 export interface VerifierConfig {
   image: string;
@@ -37,6 +37,11 @@ export const SUPPORTED_VERIFIER_TOOLCHAINS: Record<
     container_app: "sunstead-verifier-lean4-v435",
     default_image: "sunstead/verifier-lean4-v4.35.0:v0.1",
   },
+  "lean4-v4.31.0": {
+    toolchain: "leanprover/lean4:v4.31.0",
+    container_app: "sunstead-verifier-lean4-v431",
+    default_image: "sunstead/verifier-lean4-v4.31.0:v0.1",
+  },
 };
 
 /**
@@ -50,9 +55,11 @@ export function resolveVerifierKind(verifier: Pick<VerifierConfig, "image" | "to
   if (tc) {
     if (tc === "leanprover/lean4:v4.36.0") return "lean4";
     if (tc === "leanprover/lean4:v4.35.0") return "lean4-v4.35.0";
+    if (tc === "leanprover/lean4:v4.31.0") return "lean4-v4.31.0";
     throw new Error(`unsupported verifier toolchain: ${tc}`);
   }
   if (img.includes("lean4-v4.35.0")) return "lean4-v4.35.0";
+  if (img.includes("lean4-v4.31.0")) return "lean4-v4.31.0";
   if (img.includes("lean4")) return "lean4";
   throw new Error(`unsupported verifier image: ${img}`);
 }

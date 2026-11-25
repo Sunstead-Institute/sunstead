@@ -161,11 +161,15 @@ const missions = missionDirs.map((dirName) => {
       verifier_kind = "lean4";
     } else if (toolchain === "leanprover/lean4:v4.35.0") {
       verifier_kind = "lean4-v4.35.0";
+    } else if (toolchain === "leanprover/lean4:v4.31.0") {
+      verifier_kind = "lean4-v4.31.0";
     } else {
       throw new Error(`unsupported verifier toolchain in ${dirName}: ${toolchain}`);
     }
   } else if (image.includes("lean4-v4.35.0")) {
     verifier_kind = "lean4-v4.35.0";
+  } else if (image.includes("lean4-v4.31.0")) {
+    verifier_kind = "lean4-v4.31.0";
   } else if (image.includes("lean4")) {
     verifier_kind = "lean4";
   } else {

@@ -650,11 +650,19 @@ test("resolveVerifierKind routes by pinned toolchain or image and fails closed o
     "lean4-v4.35.0"
   );
   assert.equal(resolveVerifierKind({ image: "sunstead/verifier-lean4-v4.35.0:v0.1" }), "lean4-v4.35.0");
+  assert.equal(
+    resolveVerifierKind({
+      image: "sunstead/verifier-lean4-v4.31.0:v0.1",
+      toolchain: "leanprover/lean4:v4.31.0",
+    }),
+    "lean4-v4.31.0"
+  );
+  assert.equal(resolveVerifierKind({ image: "sunstead/verifier-lean4-v4.31.0:v0.1" }), "lean4-v4.31.0");
   assert.throws(
     () =>
       resolveVerifierKind({
-        image: "sunstead/verifier-lean4-v4.31.0:v0.1",
-        toolchain: "leanprover/lean4:v4.31.0",
+        image: "sunstead/verifier-lean4-v4.28.0:v0.1",
+        toolchain: "leanprover/lean4:v4.28.0",
       }),
     /unsupported verifier toolchain/
   );
@@ -664,6 +672,7 @@ test("resolveVerifierKind routes by pinned toolchain or image and fails closed o
   );
   assert.equal(SUPPORTED_VERIFIER_TOOLCHAINS["lean4"].toolchain, "leanprover/lean4:v4.36.0");
   assert.equal(SUPPORTED_VERIFIER_TOOLCHAINS["lean4-v4.35.0"].toolchain, "leanprover/lean4:v4.35.0");
+  assert.equal(SUPPORTED_VERIFIER_TOOLCHAINS["lean4-v4.31.0"].toolchain, "leanprover/lean4:v4.31.0");
 });
 
 // ---------------------------------------------------------------- contributor social links

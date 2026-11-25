@@ -29,11 +29,13 @@ const CF_ROOT = path.resolve(__dirname, "..");
 const REPO_ROOT = path.resolve(CF_ROOT, "..");
 const DOCKERFILE = path.join(CF_ROOT, "containers", "lean4", "Dockerfile");
 const DOCKERFILE_V435 = path.join(CF_ROOT, "containers", "lean4-v4.35.0", "Dockerfile");
+const DOCKERFILE_V431 = path.join(CF_ROOT, "containers", "lean4-v4.31.0", "Dockerfile");
 const RECORD = path.join(CF_ROOT, ".cloudflare", "verifier-image.json");
 const APP_NAME = "sunstead-verifier-lean4";
 export const VERIFIER_APPS = [
   { name: "sunstead-verifier-lean4", envVar: "SUNSTEAD_VERIFIER_IMAGE", dockerfile: DOCKERFILE },
   { name: "sunstead-verifier-lean4-v435", envVar: "SUNSTEAD_VERIFIER_V435_IMAGE", dockerfile: DOCKERFILE_V435 },
+  { name: "sunstead-verifier-lean4-v431", envVar: "SUNSTEAD_VERIFIER_V431_IMAGE", dockerfile: DOCKERFILE_V431 },
 ];
 export const IMAGE_RE = /^registry\.cloudflare\.com\/[A-Za-z0-9._\/-]+@sha256:[0-9a-f]{64}$/;
 

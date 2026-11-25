@@ -1,0 +1,65 @@
+{
+  "id": "curve25519-dalek",
+  "title": "curve25519-dalek: Ed25519 Group Associativity & Ristretto255 Even-Point Characterization",
+  "description": "Full-repository upstream cryptography snapshot from Beneficial-AI-Foundation/curve25519-dalek-lean-verify (commit 52cad87d, Lean v4.31.0, Apache-2.0). Closes two foundational elliptic-curve mathematics `sorry` obligations backing Rust's curve25519-dalek verification: Ed25519 twisted Edwards group-law associativity (`Edwards.add_assoc_Ed25519`, completing `AddCommGroup (Point Ed25519)`) and Ristretto255 even-point surjectivity onto the doubling image (`curve25519_dalek.ristretto.IsEven_iff_in_doubling_image_right`), verified against prebuilt sorry-free upstream `.olean` dependencies plus Mathlib, Aeneas, and PrimeCert.",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/Beneficial-AI-Foundation/curve25519-dalek-lean-verify",
+  "upstream": {
+    "repo": "Beneficial-AI-Foundation/curve25519-dalek-lean-verify",
+    "commit": "52cad87d054943c96c984d99d9ea9e5d043b0d65",
+    "license": "Apache-2.0"
+  },
+  "snapshot": {
+    "mode": "repo-snapshot",
+    "snapshot_id": "curve25519-dalek",
+    "lean_options": [
+      "pp.unicode.fun=true",
+      "autoImplicit=false",
+      "relaxedAutoImplicit=false",
+      "maxSynthPendingDepth=3",
+      "maxRecDepth=10000"
+    ],
+    "allowed_import_prefixes": [
+      "Curve25519Dalek",
+      "Aeneas",
+      "PrimeCert",
+      "Mathlib",
+      "Std",
+      "Init",
+      "Batteries"
+    ]
+  },
+  "frozen_paths": [
+    "UPSTREAM.json",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4-v4.31.0:v0.1",
+    "toolchain": "leanprover/lean4:v4.31.0",
+    "command": ["./verify"],
+    "timeout_sec": 240,
+    "memory_mb": 6144
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "add_assoc_ed25519",
+      "title": "Prove twisted Edwards group-law associativity on Ed25519 (`Edwards.add_assoc_Ed25519`)",
+      "description": "Closes the sole remaining `sorry` in `Curve25519Dalek/Math/Edwards/Curve.lean:366-371` (`Edwards.add_assoc_Ed25519`): prove `p + q + r = p + (q + r)` for all `p q r : Point Ed25519` (completing `AddCommGroup (Point Ed25519)` without `sorryAx`) using standard axioms only. Accepted patches apply directly upstream to `Beneficial-AI-Foundation/curve25519-dalek-lean-verify@52cad87d`.",
+      "target_files": ["Curve25519Dalek/Math/Edwards/Curve.lean"],
+      "depends_on": [],
+      "upstream_url": "https://github.com/Beneficial-AI-Foundation/curve25519-dalek-lean-verify/blob/52cad87d054943c96c984d99d9ea9e5d043b0d65/Curve25519Dalek/Math/Edwards/Curve.lean#L366-L371"
+    },
+    {
+      "id": "is_even_iff_in_doubling_image_right",
+      "title": "Prove every even Ed25519 point lies in the doubling image (`IsEven_iff_in_doubling_image_right`)",
+      "description": "Closes `curve25519_dalek.ristretto.IsEven_iff_in_doubling_image_right` at `Curve25519Dalek/Math/Ristretto/Representation.lean:440-442`: prove `IsEven P → ∃ Q : Point Ed25519, P = Q + Q` for all `P : Point Ed25519` (building on the sorry-free `AddCommGroup (Point Ed25519)` from `add_assoc_ed25519`) using standard axioms only. Accepted patches apply directly upstream to `Beneficial-AI-Foundation/curve25519-dalek-lean-verify@52cad87d`.",
+      "target_files": ["Curve25519Dalek/Math/Ristretto/Representation.lean"],
+      "depends_on": ["add_assoc_ed25519"],
+      "upstream_url": "https://github.com/Beneficial-AI-Foundation/curve25519-dalek-lean-verify/blob/52cad87d054943c96c984d99d9ea9e5d043b0d65/Curve25519Dalek/Math/Ristretto/Representation.lean#L440-L442"
+    }
+  ]
+}

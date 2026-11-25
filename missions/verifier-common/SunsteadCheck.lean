@@ -152,6 +152,15 @@ partial def visit (c : Cfg) (acc : IO.Ref VisitAcc) (m : Name) : IO Unit := do
   else
     acc.modify fun a => { a with trusted := a.trusted.push { module := m } }
 
+/-- Explicit `QuotKind` equality so this file compiles without `BEq QuotKind`
+(absent in Lean 4.31, added in later releases). -/
+def quotKindEq : QuotKind → QuotKind → Bool
+  | .type, .type => true
+  | .ctor, .ctor => true
+  | .lift, .lift => true
+  | .ind, .ind => true
+  | _, _ => false
+
 /-- Structural kernel equality for local frozen type dependencies (`FrozenTypeDeps(M, T)`).
 Compares exact declaration kind, name, universe parameters, type, and value/inductive
 fields while ignoring declaration-order `ReducibilityHints` heights so adding helper
@@ -179,7 +188,7 @@ def constInfoStructEq (a b : ConstantInfo) : Bool :=
     x.numMotives == y.numMotives && x.numMinors == y.numMinors &&
     x.k == y.k && x.isUnsafe == y.isUnsafe && x.rules.length == y.rules.length
   | .quotInfo x, .quotInfo y =>
-    x.name == y.name && x.levelParams == y.levelParams && x.type == y.type && x.kind == y.kind
+    x.name == y.name && x.levelParams == y.levelParams && x.type == y.type && quotKindEq x.kind y.kind
   | _, _ => false
 
 /-- Compute the transitive closure of constants defined inside `frozenMap`
@@ -216,10 +225,11 @@ def requireTheoremConst (name : Name) (ci : ConstantInfo) : CoreM Unit := do
 
 def checkClassicM (c : Cfg) : CoreM Json := do
   let env ← getEnv
-  let some tci := env.find? c.targetConst
+  let kenv := env.toKernelEnv
+  let some tci := kenv.find? c.targetConst
     | throwError "target constant {c.targetConst} not found"
   requireTheoremConst c.targetConst tci
-  let some sci := env.find? c.statement
+  let some sci := kenv.find? c.statement
     | throwError "frozen statement {c.statement} not found"
   unless tci.levelParams.length == sci.levelParams.length do
     throwError "universe parameter count mismatch: got {tci.levelParams.length}, expected {sci.levelParams.length}"
@@ -229,7 +239,7 @@ def checkClassicM (c : Cfg) : CoreM Json := do
   if let some k := c.scoreConst then
     unless sci.levelParams.isEmpty do
       throwError "hill-climb statement must not be universe polymorphic"
-    let some kci := env.find? k | throwError "score constant {k} not found"
+    let some kci := kenv.find? k | throwError "score constant {k} not found"
     unless kci.type == mkConst ``Nat do
       throwError "score constant {k} must have type Nat"
     let n ← Meta.MetaM.run' do
@@ -251,14 +261,14 @@ def checkClassicM (c : Cfg) : CoreM Json := do
 def checkSnapshotM (c : Cfg) (frozenTargetCI : ConstantInfo)
     (frozenMap : Std.HashMap Name ConstantInfo)
     (frozenTypeDeps : Std.HashSet Name) : CoreM Json := do
-  let env ← getEnv
-  let some tci := env.find? c.targetConst
+  let kenv := (← getEnv).toKernelEnv
+  let some tci := kenv.find? c.targetConst
     | throwError "target constant {c.targetConst} not found"
   requireTheoremConst c.targetConst tci
   for u in frozenTypeDeps do
     let some fci := frozenMap.get? u
       | throwError "internal error: missing frozen type dependency {u}"
-    let some cci := env.find? u
+    let some cci := kenv.find? u
       | throwError "frozen local type dependency {u} missing from contributor module"
     unless constInfoStructEq cci fci do
       throwError "frozen local type dependency {u} was modified by contributor"
@@ -274,6 +284,18 @@ def checkSnapshotM (c : Cfg) (frozenTargetCI : ConstantInfo)
       all := [checkName] }
   let axs ← collectAxioms checkName
   return Json.mkObj [("ok", Json.bool true), ("axioms", toJson (axs.map toString))]
+
+/-- Version-portable kernel replay across Lean 4.31 (`Lean.Environment.replay`)
+and Lean 4.35+ (`Lean.Kernel.Environment.replay`). -/
+local elab "sunsteadReplay" consts:term:max env:term:max : term => do
+  let curEnv ← getEnv
+  let kReplay := `Lean.Kernel.Environment.replay
+  if curEnv.contains kReplay then
+    let id := mkIdent kReplay
+    Elab.Term.elabTerm (← `(Lean.Environment.ofKernelEnv <$> ($id:ident $consts ($env).toKernelEnv))) none
+  else
+    let id := mkIdent `Lean.Environment.replay
+    Elab.Term.elabTerm (← `($id:ident $consts $env)) none
 
 def run (args : List String) : IO Json := do
   let c ← match parseArgs args {} with
@@ -312,8 +334,7 @@ def run (args : List String) : IO Json := do
     for (n, _) in a.consts do
       if env.contains n then
         throw <| IO.userError s!"contributor module redefines trusted constant {n}"
-    let kenv ← Kernel.Environment.replay a.consts env.toKernelEnv
-    let env := Environment.ofKernelEnv kenv
+    let env ← sunsteadReplay a.consts env
     let ctx : Core.Context := { fileName := "<sunstead-check>", fileMap := default }
     let (j, _) ← (checkSnapshotM c frozenTargetCI frozenMap frozenTypeDeps).toIO ctx { env := env }
     return j
@@ -322,8 +343,7 @@ def run (args : List String) : IO Json := do
     for (n, _) in a.consts do
       if env.contains n then
         throw <| IO.userError s!"contributor module redefines trusted constant {n}"
-    let kenv ← Kernel.Environment.replay a.consts env.toKernelEnv
-    let env := Environment.ofKernelEnv kenv
+    let env ← sunsteadReplay a.consts env
     let ctx : Core.Context := { fileName := "<sunstead-check>", fileMap := default }
     let (j, _) ← (checkClassicM c).toIO ctx { env := env }
     return j
