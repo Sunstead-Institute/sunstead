@@ -51,10 +51,19 @@ BASE_PATH = os.environ.get("SUNSTEAD_BASE_PATH",
 # Verdict output
 # ---------------------------------------------------------------------------
 
-def emit(ok, summary, score=None):
+MAX_DIAGNOSTICS_CHARS = 2000
+
+
+def emit(ok, summary, score=None, *, stage=None, diagnostics=None):
     out = {"ok": bool(ok), "summary": str(summary)[:600]}
     if score is not None:
         out["score"] = score
+    if not ok and stage:
+        out["stage"] = str(stage)
+    if not ok and diagnostics:
+        clipped = diag_clip(str(diagnostics), MAX_DIAGNOSTICS_CHARS)
+        if clipped:
+            out["diagnostics"] = clipped
     sys.stdout.write(json.dumps(out) + "\n")
     sys.stdout.flush()
     sys.exit(0 if ok else 1)
@@ -63,6 +72,22 @@ def emit(ok, summary, score=None):
 def tail(text, n=350):
     text = (text or "").strip()
     return text[-n:]
+
+
+def diag_clip(text, n=MAX_DIAGNOSTICS_CHARS):
+    """Clip verbose compiler/checker diagnostics while keeping both head and tail.
+
+    Lean puts the primary root-cause file:line:col error at the top of output and
+    summary context at the bottom; preserving both ends gives agents the exact
+    diagnostic needed to repair proofs without unbounded payload growth.
+    """
+    text = (text or "").strip()
+    if len(text) <= n:
+        return text
+    marker = "\n... [truncated] ...\n"
+    head = (n - len(marker)) // 2
+    tail_len = n - len(marker) - head
+    return text[:head].rstrip() + marker + text[-tail_len:].lstrip()
 
 
 # ---------------------------------------------------------------------------
@@ -654,17 +679,17 @@ def _lean_check(task_id, *, lib_root, frozen_files, tasks,
             if rel in frozen_set:
                 continue
             if rel == os.path.join(lib_root, "SunsteadStatements.lean"):
-                emit(False, f"{rel}: reserved file name")
+                emit(False, f"{rel}: reserved file name", stage="lint", diagnostics=f"{rel}: reserved file name")
             # Unsolved stubs still contain `sorry`; only the files the target
             # depends on must be sorry-free, which the checker enforces. Lint
             # the remaining rules for every file.
             problem = lint_lean_file(os.path.join(dirpath, fn), rel, lib_root, allowed_imports)
             if problem and "`sorry`" not in problem:
-                emit(False, f"hygiene check failed: {problem}")
+                emit(False, f"hygiene check failed: {problem}", stage="lint", diagnostics=problem)
     target_rel = task["module"].replace(".", "/") + ".lean"
     problem = lint_lean_file(os.path.join(work, target_rel), target_rel, lib_root, allowed_imports)
     if problem and not (allow_sorry and "`sorry`" in problem):
-        emit(False, f"hygiene check failed: {problem}")
+        emit(False, f"hygiene check failed: {problem}", stage="lint", diagnostics=problem)
 
     job = Job()
     try:
@@ -709,7 +734,10 @@ def _lean_check(task_id, *, lib_root, frozen_files, tasks,
             )
             ensure_no_processes(CHECKER_USER)
             if failed_mod is not None:
-                emit(False, f"trusted spec build failed ({failed_mod}): {tail(p.stdout + p.stderr)}")
+                combined = (p.stdout + "\n" + p.stderr).strip()
+                st = "timeout" if p.returncode == -9 else "sandbox"
+                emit(False, f"trusted spec build failed ({failed_mod}): {tail(combined)}",
+                     stage=st, diagnostics=combined)
             trusted_lib_paths = [os.path.join(trusted, ".lake", "build", "lib", "lean")] + extra_lib_paths
             runner_prebuilt_dir = None
             runner_prebuilt_modules = set()
@@ -730,7 +758,10 @@ def _lean_check(task_id, *, lib_root, frozen_files, tasks,
         )
         ensure_no_processes(RUNNER_USER)
         if failed_mod is not None:
-            emit(False, f"lean build {failed_mod} failed: {tail(p.stdout + p.stderr)}")
+            combined = (p.stdout + "\n" + p.stderr).strip()
+            st = "timeout" if p.returncode == -9 else "compile"
+            emit(False, f"lean build {failed_mod} failed: {tail(combined)}",
+                 stage=st, diagnostics=combined)
 
         # 3. Trusted kernel replay + statement + axiom check (checker user).
         # Prefer the precompiled native binary `/opt/sunstead/sunstead-check` when present.
@@ -764,13 +795,20 @@ def _lean_check(task_id, *, lib_root, frozen_files, tasks,
                 except ValueError:
                     pass
         if result is None:
-            emit(False, f"trusted checker produced no result: {tail(p.stdout + p.stderr)}")
+            combined = (p.stdout + "\n" + p.stderr).strip()
+            st = "timeout" if p.returncode == -9 else "kernel"
+            emit(False, f"trusted checker produced no result: {tail(combined)}",
+                 stage=st, diagnostics=combined)
         if not result.get("ok"):
-            emit(False, f"kernel check failed: {str(result.get('error', 'unknown error'))[:400]}")
+            err_msg = str(result.get("error", "unknown error"))
+            emit(False, f"kernel check failed: {err_msg[:400]}",
+                 stage="kernel", diagnostics=err_msg)
         allowed_axioms = set(ALLOWED_AXIOMS) | ({"sorryAx"} if allow_sorry else set())
         bad = [a for a in result.get("axioms", []) if a not in allowed_axioms]
         if bad:
-            emit(False, f"forbidden axioms: {', '.join(bad)}")
+            msg = f"forbidden axioms: {', '.join(bad)}"
+            emit(False, msg, stage="axioms",
+                 diagnostics=f"{msg} (allowed: {', '.join(sorted(allowed_axioms))})")
         elapsed = int((time.monotonic() - started) * 1000)
         if allow_sorry:
             emit(True, f"seed `{task['theorem']}` has exactly the frozen statement of `{task_id}` "
@@ -778,7 +816,8 @@ def _lean_check(task_id, *, lib_root, frozen_files, tasks,
         if task.get("score_const"):
             score = result.get("score")
             if not isinstance(score, int):
-                emit(False, "trusted checker did not return a score")
+                emit(False, "trusted checker did not return a score",
+                     stage="kernel", diagnostics="trusted checker did not return an integer score")
             label = task.get("label", "score {score}").format(score=score)
             emit(True, f"Lean 4 kernel-replayed: {label} (0 sorry, standard axioms only, {elapsed} ms)",
                  score=float(score))

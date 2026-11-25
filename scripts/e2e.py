@@ -386,6 +386,17 @@ def main():
     assert code == 200 and b'id="ledger-root"' in page, code
     ok("proof ledger: listed with provenance, permalink returns the same patch, bad ids rejected")
 
+    # Read-only single-request task files inspection endpoint.
+    code, tfiles = req("GET", "/api/missions/onboarding-sandbox/tasks/decoder_injective/files")
+    assert code == 200, (code, tfiles)
+    assert tfiles["task_id"] == "decoder_injective" and tfiles["status"] == "verified", tfiles
+    assert "OnboardingSandbox/DecoderInjective.lean" in tfiles["target_files"], tfiles["target_files"].keys()
+    assert "OnboardingSandbox/Spec.lean" in tfiles["frozen_files"], tfiles["frozen_files"].keys()
+    assert "sorry" not in tfiles["target_files"]["OnboardingSandbox/DecoderInjective.lean"]
+    code, res = req("GET", "/api/missions/onboarding-sandbox/tasks/no-such-task/files")
+    assert code == 404, (code, res)
+    ok("task-files endpoint: returns live target_files + frozen_files without waking verifier; 404 on unknown task")
+
     code, stats = req("GET", "/api/stats")
     assert code == 200 and stats["all_time"]["registered"] >= 3, (code, stats)
     assert stats["all_time"]["claimed"] >= 1 and stats["all_time"]["verified"] >= 1, stats

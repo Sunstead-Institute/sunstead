@@ -661,3 +661,90 @@ export function isLedgerPagePath(path: string): boolean {
   return /^\/proofs\/?$/.test(path) || /^\/proofs\/[0-9a-f]{64}\/?$/.test(path);
 }
 
+export type FailureStage =
+  | "patch"
+  | "lint"
+  | "compile"
+  | "kernel"
+  | "axioms"
+  | "timeout"
+  | "sandbox";
+
+const VALID_FAILURE_STAGES = new Set<string>([
+  "patch",
+  "lint",
+  "compile",
+  "kernel",
+  "axioms",
+  "timeout",
+  "sandbox",
+]);
+
+export const MAX_DIAGNOSTICS_CHARS = 2_000;
+
+/** Validate and clip optional structured failure diagnostics from the verifier. */
+export function sanitizeFailureDiagnostics(
+  stage: unknown,
+  diagnostics: unknown
+): { stage?: FailureStage; diagnostics?: string } {
+  const out: { stage?: FailureStage; diagnostics?: string } = {};
+  if (typeof stage === "string" && VALID_FAILURE_STAGES.has(stage)) {
+    out.stage = stage as FailureStage;
+  }
+  if (typeof diagnostics === "string") {
+    const trimmed = diagnostics.trim();
+    if (trimmed) {
+      out.diagnostics = trimmed.slice(0, MAX_DIAGNOSTICS_CHARS);
+    }
+  }
+  return out;
+}
+
+/**
+ * Single-request view of a task's current target files and readable frozen specs
+ * (`GET /api/missions/:id/tasks/:task/files`) so agents can inspect a theorem stub
+ * before downloading the full `bundle.tar.gz`.
+ */
+export function buildTaskFilesView(opts: {
+  mission: MissionManifest;
+  specSha256: string;
+  task: TaskState;
+  unlocked: boolean;
+  seedFiles: Record<string, string>;
+  liveOverlay: Record<string, string>;
+}) {
+  const { mission, specSha256, task, unlocked, seedFiles, liveOverlay } = opts;
+  const targetFiles: Record<string, string> = {};
+  const frozenFiles: Record<string, string> = {};
+
+  const allPaths = Array.from(
+    new Set([...Object.keys(seedFiles), ...Object.keys(liveOverlay)])
+  ).sort();
+
+  for (const rel of allPaths) {
+    const isFrozen = mission.frozen_paths.some((pat) => globMatches(pat, rel));
+    if (isFrozen) {
+      // Frozen files always come strictly from the trusted seed, never from mutable overlay.
+      if (rel in seedFiles) {
+        frozenFiles[rel] = seedFiles[rel];
+      }
+      continue;
+    }
+    if (task.def.target_files.some((pat) => globMatches(pat, rel))) {
+      targetFiles[rel] = rel in liveOverlay ? liveOverlay[rel] : seedFiles[rel];
+    }
+  }
+
+  return {
+    mission_id: mission.id,
+    task_id: task.def.id,
+    title: task.def.title,
+    status: task.status,
+    unlocked,
+    spec_sha256: specSha256,
+    upstream_url: task.def.upstream_url ?? null,
+    depends_on: task.def.depends_on ?? [],
+    target_files: targetFiles,
+    frozen_files: frozenFiles,
+  };
+}

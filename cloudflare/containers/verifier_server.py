@@ -38,6 +38,8 @@ from sunstead_sandbox import CHECKER_USER, RUNNER_USER, kill_all_processes  # no
 MISSIONS_ROOT = "/missions"
 WORK_DIR = "/work"
 MAX_PAYLOAD_BYTES = 16 * 1024 * 1024
+MAX_DIAGNOSTICS_CHARS = 2000
+VALID_STAGES = {"patch", "lint", "compile", "kernel", "axioms", "timeout", "sandbox"}
 
 
 def segment_matches(pat: str, seg: str) -> bool:
@@ -324,10 +326,13 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
 
             if ap.returncode != 0:
                 ms = int((time.monotonic() - started) * 1000)
+                err_txt = ap.stderr.strip()
                 self.send_json(200, {
                     "ok": False,
                     "score": None,
-                    "summary": f"git apply failed: {ap.stderr.strip()}",
+                    "summary": f"git apply failed: {err_txt[:400]}",
+                    "stage": "patch",
+                    "diagnostics": err_txt[:MAX_DIAGNOSTICS_CHARS],
                     "spec_sha256": "",
                     "updated_files": {},
                     "normalized_patch": "",
@@ -349,6 +354,8 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
                     "ok": False,
                     "score": None,
                     "summary": "patch modified no files",
+                    "stage": "patch",
+                    "diagnostics": "patch modified no files",
                     "spec_sha256": "",
                     "updated_files": {},
                     "normalized_patch": "",
@@ -360,10 +367,13 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
                 for fp in frozen_paths:
                     if glob_matches(fp, rel):
                         ms = int((time.monotonic() - started) * 1000)
+                        msg = f"post-apply frozen path violation: {rel}"
                         self.send_json(200, {
                             "ok": False,
                             "score": None,
-                            "summary": f"post-apply frozen path violation: {rel}",
+                            "summary": msg,
+                            "stage": "patch",
+                            "diagnostics": msg,
                             "spec_sha256": "",
                             "updated_files": {},
                             "normalized_patch": "",
@@ -372,10 +382,13 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
                         return
                 if target_files and not any(glob_matches(tf, rel) for tf in target_files):
                     ms = int((time.monotonic() - started) * 1000)
+                    msg = f"post-apply outside target_files: {rel}"
                     self.send_json(200, {
                         "ok": False,
                         "score": None,
-                        "summary": f"post-apply outside target_files: {rel}",
+                        "summary": msg,
+                        "stage": "patch",
+                        "diagnostics": msg,
                         "spec_sha256": "",
                         "updated_files": {},
                         "normalized_patch": "",
@@ -411,10 +424,13 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
             except subprocess.TimeoutExpired:
                 kill_sandbox_processes()
                 ms = int((time.monotonic() - started) * 1000)
+                msg = f"verification timed out after {timeout_sec}s"
                 self.send_json(200, {
                     "ok": False,
                     "score": None,
-                    "summary": f"verification timed out after {timeout_sec}s",
+                    "summary": msg,
+                    "stage": "timeout",
+                    "diagnostics": msg,
                     "spec_sha256": post_spec_sha256,
                     "updated_files": {},
                     "normalized_patch": "",
@@ -426,11 +442,13 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
             ms = int((time.monotonic() - started) * 1000)
             verdict = parse_verdict(proc.stdout)
             if verdict is None:
-                tail = (proc.stdout + "\n" + proc.stderr).strip()[-350:]
+                combined = (proc.stdout + "\n" + proc.stderr).strip()
                 self.send_json(200, {
                     "ok": False,
                     "score": None,
-                    "summary": f"verifier did not emit JSON verdict: {tail}",
+                    "summary": f"verifier did not emit JSON verdict: {combined[-350:]}",
+                    "stage": "sandbox",
+                    "diagnostics": combined[-MAX_DIAGNOSTICS_CHARS:],
                     "spec_sha256": post_spec_sha256,
                     "updated_files": {},
                     "normalized_patch": "",
@@ -447,7 +465,7 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
                         with open(abs_f, "r", encoding="utf-8") as f:
                             updated_files[rel] = f.read()
 
-            self.send_json(200, {
+            resp_body = {
                 "ok": ok,
                 "score": verdict.get("score"),
                 "summary": str(verdict.get("summary", "")),
@@ -455,7 +473,15 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
                 "updated_files": updated_files,
                 "normalized_patch": normalized_patch if ok else "",
                 "verify_ms": ms,
-            })
+            }
+            if not ok:
+                stage = verdict.get("stage")
+                if isinstance(stage, str) and stage in VALID_STAGES:
+                    resp_body["stage"] = stage
+                diag = verdict.get("diagnostics")
+                if isinstance(diag, str) and diag.strip():
+                    resp_body["diagnostics"] = diag.strip()[:MAX_DIAGNOSTICS_CHARS]
+            self.send_json(200, resp_body)
         except NeedFiles:
             self.send_json(409, {"need_files": True})
         except Exception as e:

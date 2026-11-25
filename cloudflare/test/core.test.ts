@@ -25,6 +25,9 @@ import {
   proofIdFromPatchSha,
   LEDGER_DEFAULT_LIMIT,
   LEDGER_MAX_LIMIT,
+  buildTaskFilesView,
+  sanitizeFailureDiagnostics,
+  MAX_DIAGNOSTICS_CHARS,
   type AcceptedProofRow,
   type MissionManifest,
   type TaskState,
@@ -516,4 +519,60 @@ test("ledger page paths and proof ids accept only lowercase 64-hex hashes", () =
   assert.ok(!PROOF_HASH_RE.test(LEDGER_SHA + "0"));
   assert.ok(!PROOF_HASH_RE.test("<script>"));
   assert.equal(proofIdFromPatchSha(`sha256:${LEDGER_SHA}`), LEDGER_SHA);
+});
+
+test("sanitizeFailureDiagnostics accepts known stages and caps diagnostic length", () => {
+  assert.deepEqual(sanitizeFailureDiagnostics("compile", "  file.lean:3:2: error  "), {
+    stage: "compile",
+    diagnostics: "file.lean:3:2: error",
+  });
+  assert.deepEqual(sanitizeFailureDiagnostics("bogus_stage", "   "), {});
+  const huge = "x".repeat(MAX_DIAGNOSTICS_CHARS + 500);
+  const clipped = sanitizeFailureDiagnostics("kernel", huge);
+  assert.equal(clipped.stage, "kernel");
+  assert.equal(clipped.diagnostics?.length, MAX_DIAGNOSTICS_CHARS);
+});
+
+test("buildTaskFilesView overlays mutable target files while keeping frozen files strictly from seed", () => {
+  const m = mission("dag", 1, {
+    id: "pnt-analytic-foundations",
+    frozen_paths: ["PntFoundations/Spec.lean", "lakefile.toml", "verify"],
+  });
+  const t = task("liouville", {
+    def: {
+      id: "liouville",
+      title: "Prove Liouville",
+      target_files: ["PntFoundations/Liouville.lean"],
+      depends_on: [],
+      upstream_url: "https://github.com/example/repo/blob/abc/File.lean#L10",
+    },
+  });
+  const view = buildTaskFilesView({
+    mission: m,
+    specSha256: SPEC,
+    task: t,
+    unlocked: true,
+    seedFiles: {
+      "PntFoundations/Spec.lean": "def spec := 1\n",
+      "PntFoundations/Liouville.lean": "theorem t : True := by sorry\n",
+      "PntFoundations/Other.lean": "theorem other : True := by sorry\n",
+      "lakefile.toml": "name = \"Pnt\"\n",
+    },
+    liveOverlay: {
+      "PntFoundations/Liouville.lean": "theorem t : True := trivial\n",
+      // Even if a rogue key existed in overlay, frozen files must never come from overlay.
+      "PntFoundations/Spec.lean": "def spec := 999\n",
+    },
+  });
+  assert.equal(view.mission_id, "pnt-analytic-foundations");
+  assert.equal(view.task_id, "liouville");
+  assert.equal(view.unlocked, true);
+  assert.equal(view.spec_sha256, SPEC);
+  assert.deepEqual(view.target_files, {
+    "PntFoundations/Liouville.lean": "theorem t : True := trivial\n",
+  });
+  assert.deepEqual(view.frozen_files, {
+    "PntFoundations/Spec.lean": "def spec := 1\n",
+    "lakefile.toml": "name = \"Pnt\"\n",
+  });
 });
