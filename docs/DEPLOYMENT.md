@@ -23,48 +23,77 @@ fronting the Lean 4 Cloudflare Container (`Lean4Verifier`). Configuration is in
 
 ## Deploy
 
+There are two deploy modes. Both run `scripts/sync-assets.mjs` first and use
+`cf deploy --containers-rollout immediate`.
+
+### Full deploy (rebuilds the Lean 4 verifier image)
+
 ```bash
 cd cloudflare
 npm ci
 npm run deploy      # syncs missions/web into the Worker, builds and rolls out the Lean 4 container
 ```
 
-`npm run deploy` runs `cf deploy --containers-rollout immediate`, so the new
-Lean 4 verifier image replaces the old one at once. The container image builds
-from `cloudflare/containers/lean4/Dockerfile` with the repository root as build
-context; its base image is pinned by digest.
+The container image builds from `cloudflare/containers/lean4/Dockerfile` with
+the repository root as build context; its base image is pinned by digest. On
+Apple Silicon this is a `linux/amd64` Lean + Mathlib build under emulation and
+takes 10 to 20 minutes. Use it whenever anything the image copies in has
+changed: `missions/` (frozen specs, `verify` scripts, `sunstead.json`),
+`missions/verifier-common/`, `cloudflare/containers/verifier_server.py`, or the
+Dockerfile itself.
 
-### Retiring v0.2 Rust / Verus Durable Objects (one-time v1 migration)
+After a successful full deploy, `scripts/deploy.mjs` records a SHA-256 of the
+Dockerfile and every file it copies in (`npm run verifier-inputs` prints it)
+in `cloudflare/.cloudflare/verifier-image.json`. That file is git-ignored and
+local to the checkout.
 
-`cloudflare/cloudflare.config.ts` declares deleted tombstones for the removed
-v0.2 verifier classes:
+### Worker-only deploy (UI, hub and Worker code; about 5 seconds)
 
-```ts
-RustVerifier: exports.durableObject({ state: "deleted" }),
-VerusVerifier: exports.durableObject({ state: "deleted" }),
+```bash
+cd cloudflare
+npm run deploy:worker                 # add -- --dry-run to build and check without uploading
 ```
 
-Cloudflare's `cf` 1.0 `exports` model uses `state: "deleted"` (replacing legacy
-Wrangler `deleted_classes` migrations) to retire previously-deployed Durable
-Object namespaces once their classes and bindings have been removed from code.
+This looks up the image the live `sunstead-verifier-lean4` application runs
+(`cf containers applications list`), sets `SUNSTEAD_VERIFIER_IMAGE` to it, and
+runs `cf deploy`. With that variable set, `cloudflare.config.ts` declares
+`image: { reference: <digest> }` instead of the Dockerfile, so no Docker build
+happens and the container keeps the image it already has. To pin a specific
+image yourself, set the variable before running it:
 
-- On the first Lean-only v1 deploy, Cloudflare retires any existing
-  `RustVerifier` / `VerusVerifier` Durable Object namespaces. If either class
-  was never deployed on the target account, Cloudflare emits a non-fatal
-  `stale_tombstone` notice.
-- If orphaned container applications (`sunstead-verifier-rust`,
-  `sunstead-verifier-verus`) remain in the account, list and delete them via:
-  ```bash
-  npx cf containers applications list
-  npx cf containers applications delete <application-id>
-  ```
-- On the next deploy after retirement completes, Cloudflare prints
-  `stale_tombstone` / "Safe to remove from `exports`" — you can then delete the
-  two tombstone lines from `cloudflare/cloudflare.config.ts`.
-- Inside `SunsteadHub`, `seedMissions()` automatically prunes retired missions
-  from active `missions`, `tasks`, `mission_files`, and `bundle_cache` tables
-  while preserving historical `submissions`, `contributors`, `claims_log`, and
-  `accepted_patches`.
+```bash
+SUNSTEAD_VERIFIER_IMAGE=registry.cloudflare.com/<account>/sunstead-verifier-lean4@sha256:<digest> npm run deploy:worker
+```
+
+Guard rails:
+
+- Only `registry.cloudflare.com/...@sha256:<64 hex>` is accepted, by both the
+  script and `cloudflare.config.ts`. A mutable tag could swap the verifier
+  without anyone noticing.
+- The verifier image carries its own copy of the missions. If the
+  verifier-inputs hash differs from the one recorded by the last full deploy,
+  `deploy:worker` refuses, because the Worker and the verifier would then
+  disagree about the missions. Run `npm run deploy` instead.
+- With no record (a fresh checkout, CI, or a full deploy made before this
+  script existed), it also refuses. If you have confirmed that the live image
+  was built from the same `missions/` and verifier code, pass
+  `npm run deploy:worker -- --force`.
+
+### Retired v0.2 Rust / Verus verifiers
+
+The Rust and Verus Durable Object classes and their deleted-class tombstones
+are gone from `cloudflare/cloudflare.config.ts`. If orphaned container
+applications (`sunstead-verifier-rust`, `sunstead-verifier-verus`) still exist
+in the account, list and delete them:
+
+```bash
+npx cf containers applications list
+npx cf containers applications delete <application-id>
+```
+
+Inside `SunsteadHub`, `seedMissions()` prunes retired missions from the active
+`missions`, `tasks`, `mission_files` and `bundle_cache` tables and keeps the
+historical `submissions`, `contributors`, `claims_log` and `accepted_patches`.
 
 ## After deploy
 

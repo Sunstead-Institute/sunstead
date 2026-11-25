@@ -8,8 +8,10 @@
     "typecheck": "node scripts/sync-assets.mjs && tsc --noEmit",
     "dev": "node scripts/sync-assets.mjs && cf dev",
     "build": "node scripts/sync-assets.mjs && cf build",
-    "deploy": "node scripts/sync-assets.mjs && cf deploy --containers-rollout immediate",
-    "test": "node --test --experimental-strip-types test/core.test.ts"
+    "deploy": "node scripts/deploy.mjs full",
+    "deploy:worker": "node scripts/deploy.mjs worker",
+    "verifier-inputs": "node scripts/deploy.mjs inputs",
+    "test": "node --test --experimental-strip-types test/core.test.ts test/deploy.test.mjs"
   },
   "dependencies": {
     "@cloudflare/containers": "^0.3.7"
