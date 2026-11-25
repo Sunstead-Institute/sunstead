@@ -1906,6 +1906,20 @@ export async function executeRefute(
     if (!sub) {
       return { status: 404, body: { error: `subgoal '${task.def.subgoal_id}' not found` } };
     }
+  } else {
+    const existingRootRef = sql
+      .exec<{ id: string }>(
+        "SELECT id FROM refutations WHERE mission_id = ? AND task_id = ? AND target_kind = 'root' LIMIT 1",
+        missionId,
+        taskId
+      )
+      .toArray();
+    if (existingRootRef.length > 0) {
+      return {
+        status: 409,
+        body: { error: `root task '${taskId}' already has a kernel-verified counterexample (${existingRootRef[0].id})` },
+      };
+    }
   }
 
   const libRoot = mission.verify_contract?.lib_root ?? null;
@@ -1995,7 +2009,10 @@ export async function executeRefute(
   const proofId = proofIdFromPatchSha(storedPatchSha);
   const permalink = `${ctx.hubOrigin}/proofs/${proofId}`;
   const refutationId = ctx.randomUUID();
-  const bounty = computeRefutationBounty(mission.manifest);
+  // Prevent self-refutation bounty farming: a proposer may cleanly retract their own false
+  // subgoal (invalidating the split + recording a strike), but earns 0 bounty points.
+  const isSelfRefutation = Boolean(isSubgoal && decomp && decomp.proposer === contributor);
+  const bounty = isSelfRefutation ? 0 : computeRefutationBounty(mission.manifest);
 
   return ctx.withMissionLock(missionId, async () => {
     const ts = ctx.now();
@@ -2038,6 +2055,24 @@ export async function executeRefute(
         ts,
         latestDecomp.proposer
       );
+    } else {
+      // Prevent concurrent or repeated bounty farming on an already-disputed root task.
+      const existingRootRef = sql
+        .exec<{ id: string }>(
+          "SELECT id FROM refutations WHERE mission_id = ? AND task_id = ? AND target_kind = 'root' LIMIT 1",
+          missionId,
+          taskId
+        )
+        .toArray();
+      if (existingRootRef.length > 0) {
+        return {
+          status: 409,
+          body: {
+            accepted: false,
+            error: `root task '${taskId}' already has a kernel-verified counterexample (${existingRootRef[0].id})`,
+          },
+        };
+      }
     }
 
     const specAtRefute = isSubgoal && sub ? sub.subgoal_spec_sha256 : mission.spec_sha256;

@@ -778,3 +778,68 @@ test("depth-2 nested decomposition cascades assembly upward and obeys max depth 
   assert.equal(sumPoints("alice") + sumPoints("bob") + sumPoints("carol"), 150);
   assert.equal(getTasks("arklib-near-capacity-primes").find((t) => t.def.id === "near_capacity_prime_supply")!.status, "verified");
 });
+
+test("anti-gaming: self-refutation pays 0 bounty and duplicate root refutation is rejected with 409", async () => {
+  const { sql, ctx, getTasks, sumPoints } = createTestHub();
+  upsertAllowlistEntry(sql, { handle: "alice", active: true, added_by: "admin", note: "pilot", now: 100 });
+
+  // 1. Alice proposes a split and then refutes her own false subgoal -> split invalidated + strike, but 0 pts!
+  const dec = await executeDecompose(ctx, {
+    taskId: "near_capacity_prime_supply",
+    contributor: "alice",
+    rawBody: {
+      decomp_id: "d_self",
+      subgoals: [
+        { id: "bad_self", title: "Bad Self", statement: "0 = 1" },
+        { id: "ok_other", title: "Other", statement: "2 = 2" },
+      ],
+      reduction_file: "ArkLibNearCapacity/Decomp_self.lean",
+      reduction_theorem: "ArkLibNearCapacity.red_self",
+      patch: generateUnifiedDiff("ArkLibNearCapacity/Decomp_self.lean", null, "import ArkLibNearCapacity.Spec\n"),
+    },
+  });
+  assert.equal(dec.status, 201);
+  const badSub = getTasks("arklib-near-capacity-primes").find((t) => t.def.subgoal_id === "bad_self")!;
+
+  const selfRef = await executeRefute(ctx, {
+    taskId: badSub.def.id,
+    contributor: "alice",
+    rawBody: {
+      refute_file: "ArkLibNearCapacity/RefuteSelf.lean",
+      refute_theorem: "ArkLibNearCapacity.refute_self",
+      patch: generateUnifiedDiff("ArkLibNearCapacity/RefuteSelf.lean", null, "import ArkLibNearCapacity.Spec\n"),
+    },
+  });
+  assert.equal(selfRef.status, 200);
+  assert.equal(selfRef.body.refuted, true);
+  assert.equal(selfRef.body.points_awarded, 0, "self-refutation must award 0 bounty points");
+  assert.equal(sumPoints("alice"), 0);
+  assert.equal(listAllowlist(sql).find((a) => a.handle === "alice")?.strikes, 1);
+
+  // 2. Bob refutes the root task -> succeeds once (+75 pts); second root refutation -> 409 Conflict!
+  const rootRef1 = await executeRefute(ctx, {
+    taskId: "near_capacity_prime_supply",
+    contributor: "bob",
+    rawBody: {
+      refute_file: "ArkLibNearCapacity/RefuteRoot1.lean",
+      refute_theorem: "ArkLibNearCapacity.refute_root1",
+      patch: generateUnifiedDiff("ArkLibNearCapacity/RefuteRoot1.lean", null, "import ArkLibNearCapacity.Spec\n"),
+    },
+  });
+  assert.equal(rootRef1.status, 200);
+  assert.equal(rootRef1.body.points_awarded, 75);
+  assert.equal(sumPoints("bob"), 75);
+
+  const rootRef2 = await executeRefute(ctx, {
+    taskId: "near_capacity_prime_supply",
+    contributor: "bob",
+    rawBody: {
+      refute_file: "ArkLibNearCapacity/RefuteRoot2.lean",
+      refute_theorem: "ArkLibNearCapacity.refute_root2",
+      patch: generateUnifiedDiff("ArkLibNearCapacity/RefuteRoot2.lean", null, "import ArkLibNearCapacity.Spec\n"),
+    },
+  });
+  assert.equal(rootRef2.status, 409);
+  assert.match(String(rootRef2.body.error), /already has a kernel-verified counterexample/);
+  assert.equal(sumPoints("bob"), 75, "duplicate root refutation must not farm additional bounty");
+});
