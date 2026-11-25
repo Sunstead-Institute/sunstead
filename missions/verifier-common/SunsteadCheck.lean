@@ -42,15 +42,20 @@ Mode B — Repo-Snapshot mission (`mode=verify`, `frozen-target-olean=<path>`):
    collects all axioms of `_sunstead_check`.
 
 Mode C — v2 Decomposition (`mode=decompose`) & Refutation (`mode=refute`):
-- `mode=decompose`: verifies 2–6 trusted subgoal definitions `L_1 .. L_k : Prop`
-  from `decomp-statements-module` (safe, monomorphic, standard axioms only,
-  none def-eq to `True`, `False`, parent `T`, or another `L_j`), replays the
-  proposer's reduction module through `Kernel.Environment.replay`, confirms
-  `L_1 → ... → L_k → T` with standard axioms only, and checks that the reduced
-  proof term genuinely references every hypothesis `h_1 .. h_k`.
-- `mode=refute`: replays a contributor proof of `¬ <frozen statement>` (for
-  either a root task or a spawned subgoal, in classic or repo-snapshot mode)
-  with 0 `sorryAx` and standard axioms only.
+- `mode=decompose`: reads `untrusted-decomp-modules` (`DecompStatements_*`,
+  elaborated by `sunstead-runner`, never `sunstead-checker`) from
+  `untrusted-decomp-lib`, rejects any non-frozen imports or axiom/opaque/unsafe
+  declarations, replays them through `Kernel.Environment.replay` into the purely
+  trusted environment, verifies 2–6 subgoal definitions `L_1 .. L_k : Prop`
+  (safe, monomorphic, standard axioms only, none def-eq to `True`, `False`,
+  parent `T`, or another `L_j`), replays the proposer's reduction module through
+  `Kernel.Environment.replay`, confirms `L_1 → ... → L_k → T` with standard
+  axioms only, and checks that the reduced proof term references every
+  hypothesis `h_1 .. h_k`.
+- `mode=refute`: replays any `untrusted-decomp-modules` (for subgoal refutations)
+  and a contributor proof of `¬ <frozen statement>` (for either a root task or a
+  spawned subgoal, in classic or repo-snapshot mode) with 0 `sorryAx` and
+  standard axioms only.
 
 Output: one JSON line on stdout, e.g. {"ok":true,"axioms":["propext"],"score":150}.
 Any error fails closed with {"ok":false,"error":"..."}.
@@ -71,6 +76,8 @@ structure Cfg where
   mode : CheckMode := .verify
   trustedLibs : List System.FilePath := []
   untrustedLib : System.FilePath := ""
+  untrustedDecompLib : Option System.FilePath := none
+  untrustedDecompModules : List Name := []
   libRoot : Name := .anonymous
   frozen : List Name := []
   untrustedModules : List Name := []
@@ -124,6 +131,11 @@ partial def parseArgs : List String → Cfg → Except String Cfg
         let paths := (v.splitOn ":").filter (!·.isEmpty) |>.map System.FilePath.mk
         parseArgs rest { c with trustedLibs := c.trustedLibs ++ paths }
       | "untrusted-lib" => parseArgs rest { c with untrustedLib := v }
+      | "untrusted-decomp-lib" =>
+        parseArgs rest { c with untrustedDecompLib := some (System.FilePath.mk v) }
+      | "untrusted-decomp-modules" =>
+        let mods := (v.splitOn ",").filter (!·.isEmpty) |>.map parseLeanName
+        parseArgs rest { c with untrustedDecompModules := mods }
       | "lib-root" =>
         let root := parseLeanName v
         let stmtsMod := if c.statementsModule.isAnonymous then Name.mkStr root "SunsteadStatements" else c.statementsModule
@@ -153,8 +165,11 @@ partial def parseArgs : List String → Cfg → Except String Cfg
       | _ => .error s!"unknown argument {a}"
     | [] => .error s!"unknown argument {a}"
 
+def Cfg.isUntrustedDecomp (c : Cfg) (m : Name) : Bool :=
+  c.untrustedDecompModules.contains m
+
 def Cfg.isUntrusted (c : Cfg) (m : Name) : Bool :=
-  if m == c.statementsModule || c.decompStatementsModule == some m then
+  if m == c.statementsModule || c.decompStatementsModule == some m || c.isUntrustedDecomp m then
     false
   else if !c.untrustedModules.isEmpty then
     c.untrustedModules.contains m
@@ -200,6 +215,10 @@ def readModulePartsChecked (allowModuleSystem : Bool) (path : System.FilePath)
 partial def visit (c : Cfg) (acc : IO.Ref VisitAcc) (m : Name) : IO Unit := do
   if (← acc.get).visited.contains m then return
   acc.modify fun a => { a with visited := a.visited.insert m }
+  if c.isUntrustedDecomp m then
+    -- Read from `untrustedDecompLib` and kernel-replayed explicitly before contributor code;
+    -- never loaded via `importModules`.
+    return
   if c.isUntrusted m then
     let path := modToFilePath c.untrustedLib m "olean"
     unless (← path.pathExists) do
@@ -425,6 +444,45 @@ partial def reduceForUsage (env : Environment)
         let body ← reduceForUsage env untrusted unfolding (minor.beta #[.fvar p1, .fvar p2])
         if !exprHasFVar p1 body && !exprHasFVar p2 body then
           return ← reduceForUsage env untrusted unfolding (mkAppN body (args.extract 5 args.size))
+      -- Best-effort reduction of trivial equality-transport wrappers (`congrArg (fun _ => T) _`,
+      -- `Eq.mp`/`Eq.mpr`/`Eq.ndrec`/`Eq.rec` over `Eq.refl`) and constant-branch `ite`/`dite`.
+      if n == ``congrArg && args.size == 6 then
+        let fnArg ← reduceForUsage env untrusted unfolding args[4]!
+        let eqArg ← reduceForUsage env untrusted unfolding args[5]!
+        let cur ← get
+        let p := FVarId.mk (Name.mkNum `_sunstead_unused_probe cur.nextProbe)
+        set { cur with nextProbe := cur.nextProbe + 1 }
+        let body ← reduceForUsage env untrusted unfolding (fnArg.beta #[.fvar p])
+        if !exprHasFVar p body then
+          return mkApp2 (mkConst ``Eq.refl (ls.tail)) args[1]! body
+        if eqArg.getAppFn.isConstOf ``Eq.refl then
+          let a1 ← reduceForUsage env untrusted unfolding args[2]!
+          let fa1 ← reduceForUsage env untrusted unfolding (fnArg.beta #[a1])
+          return mkApp2 (mkConst ``Eq.refl (ls.tail)) args[1]! fa1
+      if (n == ``Eq.mp || n == ``Eq.mpr) && args.size >= 4 then
+        let eqArg ← reduceForUsage env untrusted unfolding args[2]!
+        if eqArg.getAppFn.isConstOf ``Eq.refl then
+          return ← reduceForUsage env untrusted unfolding (mkAppN args[3]! (args.extract 4 args.size))
+      if (n == ``Eq.ndrec || n == ``Eq.rec) && args.size >= 6 then
+        let eqArg ← reduceForUsage env untrusted unfolding args[5]!
+        if eqArg.getAppFn.isConstOf ``Eq.refl then
+          return ← reduceForUsage env untrusted unfolding (mkAppN args[3]! (args.extract 6 args.size))
+      if n == ``ite && args.size >= 5 then
+        let tBranch ← reduceForUsage env untrusted unfolding args[3]!
+        let eBranch ← reduceForUsage env untrusted unfolding args[4]!
+        if tBranch == eBranch then
+          return ← reduceForUsage env untrusted unfolding (mkAppN tBranch (args.extract 5 args.size))
+      if n == ``dite && args.size >= 5 then
+        let tFn ← reduceForUsage env untrusted unfolding args[3]!
+        let eFn ← reduceForUsage env untrusted unfolding args[4]!
+        let cur ← get
+        let p1 := FVarId.mk (Name.mkNum `_sunstead_unused_probe cur.nextProbe)
+        let p2 := FVarId.mk (Name.mkNum `_sunstead_unused_probe (cur.nextProbe + 1))
+        set { cur with nextProbe := cur.nextProbe + 2 }
+        let tBody ← reduceForUsage env untrusted unfolding (tFn.beta #[.fvar p1])
+        let eBody ← reduceForUsage env untrusted unfolding (eFn.beta #[.fvar p2])
+        if !exprHasFVar p1 tBody && !exprHasFVar p2 eBody && tBody == eBody then
+          return ← reduceForUsage env untrusted unfolding (mkAppN tBody (args.extract 5 args.size))
       let args' ← args.mapM (reduceForUsage env untrusted unfolding)
       return mkAppN fn args'
     | _ =>
@@ -482,10 +540,42 @@ def checkClassicM (c : Cfg) : CoreM Json := do
   let axs ← collectAxioms checkName
   return Json.mkObj ([("ok", Json.bool true), ("axioms", toJson (axs.map toString))] ++ fields)
 
-/-- Validate trusted subgoal definitions `L_1 .. L_k` inside the trusted
-environment BEFORE replaying contributor code: each `L_i` must be a safe,
-monomorphic `Prop` definition with standard axioms only (0 `sorryAx`), and none
-may be definitionally equal to `True`, `False`, parent `T`, or another `L_j`. -/
+/-- Pure kernel definitional equality check (never invokes `MetaM` or
+`Environment.realizeConst`, so it runs cleanly on `Environment.ofKernelEnv`
+after `Kernel.Environment.replay` across Lean 4.31–4.36+). -/
+def kernelIsDefEqM (a b : Expr) : CoreM Bool := do
+  let env ← getEnv
+  match Lean.Kernel.isDefEq env {} a b with
+  | .ok eq => return eq
+  | .error _ => throwError "kernel definitional equality check failed"
+
+/-- Validate a single kernel-replayed subgoal statement definition `name` inside
+the pre-contributor environment: must be a safe, monomorphic `Prop` `.defnInfo`
+using standard axioms only (0 `sorryAx`). -/
+def checkSafePropSubgoalDefM (subName : Name) : CoreM (DefinitionVal × Array Name) := do
+  let kenv := (← getEnv).toKernelEnv
+  let some sci := kenv.find? subName
+    | throwError "subgoal statement {subName} not found"
+  let dv ← match sci with
+    | .defnInfo dv => pure dv
+    | _ => throwError "subgoal {subName} must be a safe Prop definition"
+  unless dv.levelParams.isEmpty do
+    throwError "subgoal {subName} must not be universe polymorphic"
+  unless dv.safety == .safe do
+    throwError "subgoal {subName} must be safe"
+  let isProp ← kernelIsDefEqM dv.type (Expr.sort Level.zero)
+  unless isProp do
+    throwError "subgoal {subName} must have type Prop"
+  let axs ← collectAxioms subName
+  for ax in axs do
+    unless isStandardAxiom ax do
+      throwError "subgoal statement {subName} uses forbidden axiom {ax}"
+  return (dv, axs)
+
+/-- Validate kernel-replayed subgoal definitions `L_1 .. L_k` BEFORE replaying
+contributor code: each `L_i` must be a safe, monomorphic `Prop` definition with
+standard axioms only (0 `sorryAx`), and none may be definitionally equal to
+`True`, `False`, parent `T`, or another `L_j`. -/
 def checkDecompSubgoalsM (c : Cfg) : CoreM (Array Name) := do
   let k := c.subgoalConsts.length
   unless k >= 2 && k <= 6 do
@@ -496,41 +586,30 @@ def checkDecompSubgoalsM (c : Cfg) : CoreM (Array Name) := do
     | throwError "parent frozen statement {c.statement} not found"
   unless pci.levelParams.isEmpty do
     throwError "parent statement {c.statement} must not be universe polymorphic for decomposition"
+  let mut allAxioms : Std.HashSet Name := {}
+  if c.isUntrustedDecomp c.statementsModule then
+    let (_, parentAxs) ← checkSafePropSubgoalDefM c.statement
+    for ax in parentAxs do
+      allAxioms := allAxioms.insert ax
   let parentExpr := mkConst c.statement []
   let parentBody := pci.value?.getD parentExpr
-  let mut allAxioms : Std.HashSet Name := {}
   let mut bodies : Array (Name × Expr) := #[]
   for subName in c.subgoalConsts do
-    let some sci := kenv.find? subName
-      | throwError "trusted subgoal statement {subName} not found"
-    let dv ← match sci with
-      | .defnInfo dv => pure dv
-      | _ => throwError "subgoal {subName} must be a safe Prop definition"
-    unless dv.levelParams.isEmpty do
-      throwError "subgoal {subName} must not be universe polymorphic"
-    unless dv.safety == .safe do
-      throwError "subgoal {subName} must be safe"
-    let isProp ← Meta.MetaM.run' <| Meta.isDefEq dv.type (Expr.sort Level.zero)
-    unless isProp do
-      throwError "subgoal {subName} must have type Prop"
-    let axs ← collectAxioms subName
+    let (dv, axs) ← checkSafePropSubgoalDefM subName
     for ax in axs do
-      unless isStandardAxiom ax do
-        throwError "subgoal statement {subName} uses forbidden axiom {ax}"
       allAxioms := allAxioms.insert ax
-    let isTrue ← Meta.MetaM.run' <| Meta.isDefEq dv.value (mkConst ``True)
+    let isTrue ← kernelIsDefEqM dv.value (mkConst ``True)
     if isTrue then
       throwError "subgoal {subName} is trivially definitionally equal to True"
-    let isFalse ← Meta.MetaM.run' <| Meta.isDefEq dv.value (mkConst ``False)
+    let isFalse ← kernelIsDefEqM dv.value (mkConst ``False)
     if isFalse then
       throwError "subgoal {subName} is vacuously definitionally equal to False"
-    let isParent ← Meta.MetaM.run' <| do
-      if ← Meta.isDefEq dv.value parentBody then return true
-      Meta.isDefEq (mkConst subName []) parentExpr
+    let isParentBody ← kernelIsDefEqM dv.value parentBody
+    let isParent ← if isParentBody then pure true else kernelIsDefEqM (mkConst subName []) parentExpr
     if isParent then
       throwError "subgoal {subName} is trivially definitionally equal to parent statement {c.statement}"
     for (prevName, prevBody) in bodies do
-      let isDup ← Meta.MetaM.run' <| Meta.isDefEq dv.value prevBody
+      let isDup ← kernelIsDefEqM dv.value prevBody
       if isDup then
         throwError "subgoal {subName} is definitionally equal to earlier subgoal {prevName}"
     bodies := bodies.push (subName, dv.value)
@@ -646,7 +725,7 @@ def run (args : List String) : IO Json := do
 
   match c.frozenTargetOlean with
   | some frozenPath =>
-    if c.mode == .decompose then
+    if c.mode == .decompose || !c.untrustedDecompModules.isEmpty then
       throw <| IO.userError "decompose mode is only supported for classic statement-based missions"
     unless (← frozenPath.pathExists) do
       throw <| IO.userError s!"missing frozen target .olean: {frozenPath}"
@@ -675,33 +754,94 @@ def run (args : List String) : IO Json := do
     if a.regions.size + frozenParts.size == 0 then pure ()
     return j
   | none =>
+    if c.mode == .decompose then
+      match c.decompStatementsModule with
+      | none => throw <| IO.userError "decompose mode requires decomp-statements-module"
+      | some dm =>
+        unless c.isUntrustedDecomp dm do
+          throw <| IO.userError s!"decomp statements module {dm} must be listed in untrusted-decomp-modules for kernel replay"
     let mut trustedImports := a.trusted
     let mut seenTrusted : Std.HashSet Name := {}
     for imp in a.trusted do
       seenTrusted := seenTrusted.insert imp.module
-    if !c.statementsModule.isAnonymous && !seenTrusted.contains c.statementsModule then
+    if !c.statementsModule.isAnonymous && !seenTrusted.contains c.statementsModule && !c.isUntrustedDecomp c.statementsModule then
       trustedImports := trustedImports.push { module := c.statementsModule, importAll := c.allowModuleSystem }
       seenTrusted := seenTrusted.insert c.statementsModule
     if let some dm := c.decompStatementsModule then
-      if !dm.isAnonymous && !seenTrusted.contains dm then
-        trustedImports := trustedImports.push { module := dm, importAll := c.allowModuleSystem }
-        seenTrusted := seenTrusted.insert dm
+      if !dm.isAnonymous && !c.isUntrustedDecomp dm then
+        throw <| IO.userError s!"decomp statements module {dm} must be listed in untrusted-decomp-modules for kernel replay"
+
+    -- Load `sunstead-runner`-compiled `DecompStatements_*` modules from checker-owned
+    -- snapshot storage without trusting them via `importModules`; every constant is
+    -- checked for safety and kernel-replayed below before contributor proofs.
+    let mut decompConsts : Std.HashMap Name ConstantInfo := {}
+    let mut decompRegions : Array CompactedRegion := #[]
+    if !c.untrustedDecompModules.isEmpty then
+      let some decompLib := c.untrustedDecompLib
+        | throw <| IO.userError "untrusted-decomp-modules requires untrusted-decomp-lib"
+      for dm in c.untrustedDecompModules do
+        if c.frozen.contains dm then
+          throw <| IO.userError s!"decomp statements module {dm} must not be marked frozen"
+        let path := modToFilePath decompLib dm "olean"
+        unless (← path.pathExists) do
+          throw <| IO.userError s!"missing build output for decomp statements module {dm}"
+        let parts ← readModulePartsChecked false path (toString dm)
+        for (_, reg) in parts do
+          decompRegions := decompRegions.push reg
+        for (mod, _) in parts do
+          for imp in mod.imports do
+            if c.libRoot.isPrefixOf imp.module && !c.frozen.contains imp.module then
+              throw <| IO.userError s!"decomp statements module {dm} imports non-frozen module {imp.module}"
+            if !seenTrusted.contains imp.module then
+              trustedImports := trustedImports.push { module := imp.module, importAll := c.allowModuleSystem }
+              seenTrusted := seenTrusted.insert imp.module
+          for (n, ci) in mod.constNames.zip mod.constants do
+            match ci with
+            | .axiomInfo _ =>
+              throw <| IO.userError s!"decomp statements module {dm} contains forbidden axiom {n}"
+            | .opaqueInfo _ =>
+              throw <| IO.userError s!"decomp statements module {dm} contains forbidden opaque {n}"
+            | .quotInfo _ =>
+              throw <| IO.userError s!"decomp statements module {dm} contains forbidden quotient {n}"
+            | .defnInfo dv =>
+              unless dv.safety == .safe do
+                throw <| IO.userError s!"decomp statements module {dm} contains unsafe definition {n}"
+            | .inductInfo iv =>
+              if iv.isUnsafe then
+                throw <| IO.userError s!"decomp statements module {dm} contains unsafe inductive {n}"
+            | .ctorInfo cv =>
+              if cv.isUnsafe then
+                throw <| IO.userError s!"decomp statements module {dm} contains unsafe constructor {n}"
+            | .recInfo rv =>
+              if rv.isUnsafe then
+                throw <| IO.userError s!"decomp statements module {dm} contains unsafe recursor {n}"
+            | .thmInfo _ => pure ()
+            if decompConsts.contains n then
+              throw <| IO.userError s!"decomp statements constant {n} defined in more than one module"
+            decompConsts := decompConsts.insert n ci
+
     let env ← importModules trustedImports {} 0 (loadExts := false)
+    for (n, _) in decompConsts do
+      if env.contains n then
+        throw <| IO.userError s!"decomp statements module redefines trusted constant {n}"
+    let env ← if decompConsts.isEmpty then pure env else sunsteadReplay decompConsts env
     for (n, _) in a.consts do
       if env.contains n then
         throw <| IO.userError s!"contributor module redefines trusted constant {n}"
     let ctx : Core.Context := { fileName := "<sunstead-check>", fileMap := default }
     if c.mode == .decompose then
-      -- Validate subgoal statements strictly against the trusted environment BEFORE replaying contributor code.
+      -- Validate kernel-replayed subgoal statements BEFORE replaying contributor code.
       let (subAxs, _) ← (checkDecompSubgoalsM c).toIO ctx { env := env }
       let env ← sunsteadReplay a.consts env
       let (j, _) ← (checkDecompReductionM c a.consts subAxs).toIO ctx { env := env }
-      if a.regions.size == 0 then pure ()
+      if a.regions.size + decompRegions.size == 0 then pure ()
       return j
     else
+      if c.isUntrustedDecomp c.statementsModule then
+        let _ ← (checkSafePropSubgoalDefM c.statement).toIO ctx { env := env }
       let env ← sunsteadReplay a.consts env
       let (j, _) ← (checkClassicM c).toIO ctx { env := env }
-      if a.regions.size == 0 then pure ()
+      if a.regions.size + decompRegions.size == 0 then pure ()
       return j
 
 def main (args : List String) : IO UInt32 := do

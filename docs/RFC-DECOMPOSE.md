@@ -56,43 +56,37 @@ Constraints enforced **before** waking the verifier container:
 
 ### 2.2 Anti-Vacuity & Symbol-Scope Isolation (Critical Trust Boundary)
 
-A subtle way to game or corrupt a decomposition is introducing custom contributor-defined symbols inside `L_1 .. L_k` (or sneaking `sorry` into a helper `def` that `L_i` mentions).
+A subtle way to game or corrupt a decomposition is introducing custom contributor-defined symbols inside `L_1 .. L_k` (or sneaking `sorry` or tactic-level metaprogramming such as `by run_tac` / `by_elab` into a subgoal statement).
 
-To close this completely:
-- Every subgoal statement `L_i` is elaborated by **`sunstead-checker`** (NOT `sunstead-runner`) inside a generated, read-only trusted module `<Lib>.DecompStatements_<T>_<d>.lean` that imports **ONLY** the mission's frozen `<Lib>.Spec` (plus any frozen `statement_preamble` opens) and **ZERO contributor modules**.
-- Each `L_i` must elaborate to type `Prop` with **zero `sorryAx`** and **standard axioms only** (`propext`, `Classical.choice`, `Quot.sound`) in the statement itself.
-- **Anti-triviality check (kernel-enforced):**
-  - No `L_i` may be definitionally equal to `True`, `False`, or the parent statement `SunsteadStatements.T` itself.
-  - Every `L_i` must actually be **used** by the reduction proof (a free-variable/dependency check rejects unused dead-weight subgoals — or even simpler, checking that replacing `h_i` isn't trivially unused by verifying the proof term references every binder `h_1 ... h_k`!).
+To close this completely without ever running proposer-controlled Lean elaboration under `sunstead-checker`:
+- Every subgoal statement `L_i` passes strict source-hygiene linting (`lint_subgoal_statement`: bans `by`, `do`, `run_tac`, `by_elab`, `run_cmd`/`run_elab`/`run_meta`, `#eval`/`#check`/..., macros, elaborators, `sorry`/`sorryAx`, `axiom`/`opaque`/`unsafe`, attributes, imports, and nested declarations).
+- Generated `<Lib>.DecompStatements_<T>_<d>.lean` imports **ONLY** the mission's frozen `<Lib>.Spec` (plus any frozen `statement_preamble` opens) and **ZERO contributor modules**, and is elaborated strictly as **`sunstead-runner`** (unprivileged, isolated directory, rlimits, followed immediately by `ensure_no_processes(sunstead-runner)`).
+- Its resulting `.olean` is snapshotted (rejecting symlinks and `.olean.private`/`.olean.server` sidecars) into `sunstead-checker`-owned read-only storage before the contributor's proof module compiles, and `SunsteadCheck` loads it via `readModulePartsChecked` + **`Kernel.Environment.replay`** (never trusting it via `importModules`), rejecting any non-frozen imports, axioms, opaques, or unsafe definitions.
+- Each `L_i` must be a safe, monomorphic `Prop` definition with **zero `sorryAx`** and **standard axioms only** (`propext`, `Classical.choice`, `Quot.sound`) in the statement itself.
+- **Anti-triviality & hypothesis-usage checks (best-effort anti-gaming heuristics, not soundness):**
+  - No `L_i` may be definitionally equal to `True`, `False`, the parent statement `SunsteadStatements.T`, or an earlier `L_j`.
+  - Every `L_i` must remain referenced after best-effort usage reduction (`reduceForUsage`: beta/zeta, projections, `id`/`Function.const`, `And`/`Prod`/`PProd`/`Exists` dead projections, trivial `congrArg`/`Eq.mp`/`Eq.mpr`/`Eq.rec`/`Eq.ndrec`, and identical-branch `ite`/`dite`).
+  - Note: checking semantic equivalence (`L_i ↔ True`, `L_i ↔ T`, e.g. `1 = 1` or `T ∧ True`) or semantic dependence on `h_i` through arbitrary non-unfolded library constants is undecidable in general. **Soundness** is still 100% guaranteed by the Lean kernel (`L_1 → ... → L_k → T` plus final untouched `./verify <T>`), while anti-gaming beyond these syntactic/def-eq guards is enforced economically and operationally via the **Phase 1 allowlist**, **zero-inflation point split**, **vest-on-closure architect share**, and **refutation strikes**.
 
 ### 2.3 Checking the Reduction Proof (`L_1 → ... → L_k → T`)
 
-1. **`sunstead-checker` (Step 1 — trusted):** Compiles `<Lib>.DecompStatements_<T>_<d>.lean`, containing:
-   ```lean
-   import <Lib>.Spec
-   -- frozen statement_preamble
-   namespace SunsteadDecomp_<T>_<d>
-     <L_1 statement>
-     ...
-     <L_k statement>
-     def reduction_goal : Prop := L_1 → ... → L_k → SunsteadStatements.<T>
-   end SunsteadDecomp_<T>_<d>
-   ```
-   Confirming every `L_i` has type `Prop` using only frozen definitions and standard axioms.
-2. **`sunstead-runner` (Step 2 — untrusted, UID 10002):** Compiles the proposer's reduction module `<Lib>.Decomp_<T>_<d>.lean` against the read-only `Spec.olean` + `DecompStatements_<T>_<d>.olean` with all normal rlimits and hygiene checks (`0 sorry`, no macros, no `unsafe`, no `module`).
-3. **`ensure_no_processes(sunstead-runner)`** kills all runner processes.
-4. **`sunstead-checker` (Step 3 — trusted, UID 10003):** Invokes `sunstead-check` to:
+1. **`sunstead-checker` (Step 1a — trusted frozen baseline):** Uses cached or freshly compiled frozen `<Lib>.Spec` + `<Lib>.SunsteadStatements` `.olean`s (containing zero contributor text).
+2. **`sunstead-runner` (Step 1b — untrusted, UID 10002):** Elaborates `<Lib>.DecompStatements_<T>_<d>.lean` against read-only frozen `Spec.olean` only, kills all runner processes (`ensure_no_processes`), and snapshots the resulting `.olean` into `sunstead-checker`-owned read-only storage before deleting the runner's build directory.
+3. **`sunstead-runner` (Step 2 — untrusted, UID 10002):** Compiles the proposer's reduction module `<Lib>.Decomp_<T>_<d>.lean` against the read-only `Spec.olean` + snapshotted `DecompStatements_<T>_<d>.olean` with all normal rlimits and hygiene checks (`0 sorry`, no macros, no `run_tac`/`by_elab`, no `unsafe`, no `module`).
+4. **`ensure_no_processes(sunstead-runner)`** kills all runner processes.
+5. **`sunstead-checker` (Step 3 — trusted, UID 10003):** Invokes `sunstead-check` (`loadExts := false`) to:
+   - Read `DecompStatements_<T>_<d>.olean` from `untrusted-decomp-lib` (never via `importModules`), verify zero non-frozen imports and zero `axiom`/`opaque`/unsafe constants, replay all its constants through `Kernel.Environment.replay`, and run `checkDecompSubgoalsM`.
    - Replay all contributor constants in `Decomp_<T>_<d>.olean` through `Kernel.Environment.replay`.
    - Assert the kernel accepts:
      ```lean
      theorem _sunstead_decomp_check :
-         SunsteadDecomp_<T>_<d>.reduction_goal :=
+         L_1 → ... → L_k → SunsteadStatements.<T> :=
        <Lib>.<target_reduction_theorem>
      ```
    - Assert `collectAxioms _sunstead_decomp_check ⊆ {propext, Classical.choice, Quot.sound}` (`0 sorryAx`!).
-   - Verify the proof term references every hypothesis `h_1 .. h_k` (no dead/unused subgoals).
+   - Run best-effort usage reduction verifying every hypothesis `h_1 .. h_k` is referenced.
 
-Notice how **little new TCB code** this requires: it reuses 100% of our existing `sunstead-runner` / `sunstead-checker` isolation and `SunsteadCheck`'s `Kernel.Environment.replay`!
+Notice how **little new TCB code** this requires: it preserves 100% of our 3-principal `sunstead-runner` / `sunstead-checker` isolation (zero proposer text is ever elaborated as `sunstead-checker`) and replays every untrusted `.olean` through `SunsteadCheck`'s `Kernel.Environment.replay`!
 
 ---
 
@@ -193,8 +187,9 @@ Every attack below must have a dedicated regression case in `scripts/redteam.py`
 | Attack | Goal of Attacker | Defense |
 | :--- | :--- | :--- |
 | **Vacuous split (`L_1 := False`)** | Farm points or grief contributors with an unprovable subgoal | Zero points at decompose time; `L_i = False` rejected syntactically/def-eq; allowlist gating; `POST /refute` (`¬ L_i`) kills split and penalizes proposer |
-| **Hidden `def` smuggling** | Define `def P := True` in contributor file and put `P` in `L_i` | `DecompStatements` compiles as `sunstead-checker` importing ONLY frozen `Spec`, never contributor files |
-| **Trivial pass-through (`L_1 := T`, `L_2 := True`)** | Farm architect share without real mathematical progress | Reject `k < 2`, reject `L_i` def-eq to `True` or `T`, require proof term to use all `h_1 .. h_k`, zero extra points above $P$ |
+| **Hidden `def` smuggling** | Define `def P := True` in contributor file and put `P` in `L_i` | `DecompStatements` elaborates as `sunstead-runner` importing ONLY frozen `Spec` (never contributor files), then is snapshotted and kernel-replayed by `SunsteadCheck` |
+| **Metaprogramming / IO in subgoal text (`by run_tac` / `by_elab`)** | Execute arbitrary IO or tamper with frozen `.olean`s during `DecompStatements` elaboration | `lint_subgoal_statement` + `LEAN_FORBIDDEN_ALWAYS_CORE` ban `by`/`do`/`run_tac`/`by_elab`; `DecompStatements` elaborates strictly as unprivileged `sunstead-runner` (zero write access to `checker_dir`/frozen cache), runner processes are killed, and `SunsteadCheck` kernel-replays `DecompStatements` from scratch (`loadExts := false`, rejecting axioms/opaques/unsafe defs) |
+| **Trivial pass-through (`L_1 := T`, `L_2 := True`)** | Farm architect share without real mathematical progress | Reject `k < 2`, reject `L_i` def-eq to `True`/`False`/`T`/duplicates, best-effort usage reduction requiring all `h_1 .. h_k`, plus allowlist + zero extra points above $P$ + vest-on-closure |
 | **Sorry / axiom / macro in glue proof** | Accept an unsound reduction `L_1 ∧ L_2 → T` | Full `lint_lean_file` + `SunsteadCheck` `Kernel.Environment.replay` with `0 sorryAx` and standard axioms only |
 | **Subgoal solver edits reduction file** | Weakens `Decomp_<T>_d1.lean` to bypass `L_1` | Reduction file is frozen in `subgoal` verification; final closure re-runs original untouched `./verify <T>` |
 | **Graph-explosion spam** | Flood blueprint with 100 overlapping decompositions | Allowlist gating + max 1 active decomposition per target + max depth 2 + per-contributor active cap |

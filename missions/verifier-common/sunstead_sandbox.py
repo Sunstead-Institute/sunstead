@@ -413,6 +413,8 @@ LEAN_MODULE_SYSTEM_FORBIDDEN = [
 LEAN_FORBIDDEN_ALWAYS_CORE = [
     (r"(?<![\w.])(elab|elab_rules|macro|macro_rules|syntax|declare_syntax_cat|notation|infix|infixl|infixr|prefix|postfix)\b",
      "custom syntax, macros and elaborators are not allowed in target files"),
+    (r"(?<![\w.])(run_tac|by_elab)\b",
+     "build-time tactic/elaborator execution (`run_tac`, `by_elab`) is not allowed"),
     (r"(?<![\w.])(initialize|builtin_initialize)\b", "`initialize` blocks are not allowed"),
     (r"(?<![\w.])(implemented_by|extern|unsafe|opaque|axiom)\b",
      "`axiom`, `opaque`, `unsafe`, `extern` and `implemented_by` are not allowed"),
@@ -1541,6 +1543,10 @@ _SUBGOAL_EXTRA_FORBIDDEN = [
     (r"(?<![\w.])sorryAx(?![\w'])", "`sorryAx` is not allowed in subgoal statements"),
     (r"(?<![\w.])set_option(?![\w'])", "`set_option` is not allowed in subgoal statements"),
     (r"(?<![\w.])import(?![\w'])", "`import` is not allowed in subgoal statements"),
+    (r"(?<![\w.])(by|do|run_tac|by_elab)(?![\w'])",
+     "tactic and monadic blocks (`by`, `do`, `run_tac`, `by_elab`) are not allowed in subgoal statements"),
+    (r"#(eval|exit|reduce|guard|guard_msgs|check|print|synth|where|help|lint)\b",
+     "commands (`#eval`, `#check`, ...) are not allowed in subgoal statements"),
     (r"@\[", "attributes (`@[...]`) are not allowed in subgoal statements"),
     (
         r"(?<![\w.])(def|abbrev|structure|inductive|class|instance|theorem|lemma|"
@@ -1767,28 +1773,62 @@ def _prepare_classic_trusted(job, work, lib_root, frozen_files, tasks,
 
 def _compile_decomp_statements(job, lib_root, frozen_mods, spec_base_dir,
                                extra_lib_paths, decomp_mod, decomp_src,
-                               fsize_mb, deadline, subdir="decomp_trusted"):
-    """Compile read-only `<Lib>.DecompStatements_<T>_<d>.lean` strictly as `sunstead-checker`."""
-    droot = os.path.join(job.checker_dir, subdir)
+                               fsize_mb, deadline, timeout_sec,
+                               subdir="decomp_runner"):
+    """Elaborate untrusted `<Lib>.DecompStatements_<T>_<d>.lean` strictly as
+    `sunstead-runner` (never `sunstead-checker`), kill all runner processes, and
+    copy the resulting `.olean` into `sunstead-checker`-owned read-only storage
+    so subsequent contributor builds cannot mutate it and `SunsteadCheck` can
+    kernel-replay every declaration from scratch."""
+    droot = os.path.join(job.runner_dir, subdir)
     segs = _validate_mod_name(decomp_mod)
     src_path = os.path.join(droot, *segs) + ".lean"
-    run_as(CHECKER_USER, ["mkdir", "-p", os.path.dirname(src_path)], cwd="/", timeout=30)
-    job.write_as(CHECKER_USER, src_path, decomp_src)
+    run_as(RUNNER_USER, ["mkdir", "-p", os.path.dirname(src_path)], cwd="/", timeout=30)
+    job.write_as(RUNNER_USER, src_path, decomp_src)
+    runner_cpu = max(timeout_sec * 4, 240)
     failed_mod, p = _compile_lean_graph(
-        CHECKER_USER, droot, lib_root,
+        RUNNER_USER, droot, lib_root,
         [decomp_mod],
-        extra_lib_paths, deadline, job.checker_dir,
-        fsize_mb=fsize_mb,
+        extra_lib_paths, deadline, job.runner_dir,
+        cpu_sec=runner_cpu, fsize_mb=fsize_mb,
         prebuilt_dir=spec_base_dir,
         prebuilt_modules=set(frozen_mods),
     )
-    ensure_no_processes(CHECKER_USER)
+    ensure_no_processes(RUNNER_USER)
     if failed_mod is not None:
         combined = (p.stdout + "\n" + p.stderr).strip()
         st = "timeout" if p.returncode == -9 else "compile"
         emit(False, f"subgoal statement elaboration failed ({failed_mod}): {tail(combined)}",
              stage=st, diagnostics=combined)
-    return os.path.join(droot, ".lake", "build", "lib", "lean", *segs) + ".olean"
+    runner_olean = os.path.join(droot, ".lake", "build", "lib", "lean", *segs) + ".olean"
+    if os.path.islink(runner_olean) or not os.path.isfile(runner_olean):
+        emit(False, f"subgoal statement build produced invalid .olean for {decomp_mod}",
+             stage="sandbox")
+    for suffix in (".private", ".server"):
+        if os.path.exists(runner_olean + suffix) or os.path.islink(runner_olean + suffix):
+            emit(False, f"module-system sidecar `{suffix}` is not allowed for {decomp_mod}",
+                 stage="lint")
+    snap_lib = os.path.join(job.checker_dir, "decomp_snapshot_lib")
+    snap_olean = os.path.join(snap_lib, *segs) + ".olean"
+    run_as(CHECKER_USER, ["mkdir", "-p", os.path.dirname(snap_olean)], cwd="/", timeout=30)
+    copy_script = (
+        "import os, sys\n"
+        "src, dst = sys.argv[1], sys.argv[2]\n"
+        "fd = os.open(src, os.O_RDONLY | os.O_NOFOLLOW)\n"
+        "with os.fdopen(fd, 'rb') as rf:\n"
+        "    data = rf.read()\n"
+        "with open(dst, 'wb') as wf:\n"
+        "    wf.write(data)\n"
+        "os.chmod(dst, 0o644)\n"
+    )
+    p_cp = run_as(CHECKER_USER, [sys.executable, "-I", "-c", copy_script, runner_olean, snap_olean],
+                  cwd="/", timeout=30)
+    if p_cp.returncode != 0:
+        emit(False, f"sandbox error: snapshot copy for {decomp_mod} failed: {tail(p_cp.stderr)}",
+             stage="sandbox")
+    run_as(RUNNER_USER, ["rm", "-rf", droot], cwd="/", timeout=30)
+    ensure_no_processes(RUNNER_USER)
+    return snap_lib, snap_olean
 
 
 def _build_overlay_for_mods(base_dir, overlay_dir, mods, extra_mod_oleans):
@@ -1935,7 +1975,9 @@ def lean_decompose_verify(task_id, *, lib_root, frozen_files, tasks,
 
     job = Job()
     try:
-        # 1. Trusted frozen spec + SunsteadStatements + DecompStatements (`sunstead-checker`).
+        # 1. Trusted frozen spec + SunsteadStatements (`sunstead-checker`).
+        #    Proposer-supplied DecompStatements_* are elaborated strictly as `sunstead-runner`,
+        #    snapshotted into checker-owned read-only storage, and kernel-replayed by SunsteadCheck.
         frozen_mods, frozen_contents, spec_base_dir, trusted_base_dir, checker_cwd = (
             _prepare_classic_trusted(
                 job, work, lib_root, frozen_files, tasks,
@@ -1946,23 +1988,23 @@ def lean_decompose_verify(task_id, *, lib_root, frozen_files, tasks,
         decomp_src = _decomp_statements_source(
             frozen_mods, ns_name, parsed_subgoals, preamble=statement_preamble
         )
-        decomp_olean = _compile_decomp_statements(
+        decomp_snap_lib, decomp_olean = _compile_decomp_statements(
             job, lib_root, frozen_mods, spec_base_dir,
             extra_lib_paths, decomp_mod, decomp_src,
-            fsize_mb, deadline, subdir="decomp_trusted",
+            fsize_mb, deadline, timeout_sec, subdir="decomp_runner",
         )
-        extra_trusted = [(decomp_mod, decomp_olean)]
+        untrusted_decomp_mods = [decomp_mod]
         extra_runner = [(decomp_mod, decomp_olean)]
         if parent_parsed is not None:
             parent_src = _decomp_statements_source(
                 frozen_mods, parent_ns, parent_parsed, preamble=statement_preamble
             )
-            parent_olean = _compile_decomp_statements(
+            _, parent_olean = _compile_decomp_statements(
                 job, lib_root, frozen_mods, spec_base_dir,
                 extra_lib_paths, parent_mod, parent_src,
-                fsize_mb, deadline, subdir="parent_decomp_trusted",
+                fsize_mb, deadline, timeout_sec, subdir="parent_decomp_runner",
             )
-            extra_trusted.append((parent_mod, parent_olean))
+            untrusted_decomp_mods = [parent_mod, decomp_mod]
             extra_runner.append((parent_mod, parent_olean))
             parent_stmts_mod = parent_mod
             parent_stmt_const = f"{parent_ns}.{parent_sub_id}"
@@ -1970,13 +2012,7 @@ def lean_decompose_verify(task_id, *, lib_root, frozen_files, tasks,
             parent_stmts_mod = f"{lib_root}.SunsteadStatements"
             parent_stmt_const = f"SunsteadStatements.{task_id}"
 
-        checker_overlay = os.path.join(job.checker_dir, "checker_overlay")
         runner_overlay = os.path.join(job.checker_dir, "runner_overlay")
-        _build_overlay_for_mods(
-            trusted_base_dir, checker_overlay,
-            frozen_mods + [f"{lib_root}.SunsteadStatements"],
-            extra_trusted,
-        )
         _build_overlay_for_mods(
             spec_base_dir, runner_overlay,
             frozen_mods,
@@ -2003,15 +2039,15 @@ def lean_decompose_verify(task_id, *, lib_root, frozen_files, tasks,
             emit(False, f"lean build {failed_mod} failed: {tail(combined)}",
                  stage=st, diagnostics=combined)
 
-        # 3. Trusted kernel replay + statement + anti-triviality + binder-usage check (`sunstead-checker`).
-        frozen_list = list(dict.fromkeys(
-            frozen_mods + [f"{lib_root}.SunsteadStatements"] + [m for m, _ in extra_trusted]
-        ))
+        # 3. Trusted kernel replay of DecompStatements_* + reduction module (`sunstead-checker`).
+        frozen_list = list(dict.fromkeys(frozen_mods + [f"{lib_root}.SunsteadStatements"]))
         subgoal_consts = [f"{ns_name}.{sid}" for sid, _ in parsed_subgoals]
         argv = _checker_cmd() + [
             "mode=decompose",
-            "trusted-lib=" + ":".join([checker_overlay] + extra_lib_paths),
+            "trusted-lib=" + ":".join([trusted_base_dir] + extra_lib_paths),
             "untrusted-lib=" + os.path.join(src_dir, ".lake", "build", "lib", "lean"),
+            "untrusted-decomp-lib=" + decomp_snap_lib,
+            "untrusted-decomp-modules=" + ",".join(untrusted_decomp_mods),
             "lib-root=" + lib_root,
             "frozen=" + ",".join(frozen_list),
             "statements-module=" + parent_stmts_mod,
@@ -2114,18 +2150,12 @@ def lean_subgoal_verify(task_id, *, lib_root, frozen_files, tasks,
         decomp_src = _decomp_statements_source(
             frozen_mods, ns_name, parsed_subgoals, preamble=statement_preamble
         )
-        decomp_olean = _compile_decomp_statements(
+        decomp_snap_lib, decomp_olean = _compile_decomp_statements(
             job, lib_root, frozen_mods, spec_base_dir,
             extra_lib_paths, decomp_mod, decomp_src,
-            fsize_mb, deadline, subdir="decomp_trusted",
+            fsize_mb, deadline, timeout_sec, subdir="decomp_runner",
         )
-        checker_overlay = os.path.join(job.checker_dir, "checker_overlay")
         runner_overlay = os.path.join(job.checker_dir, "runner_overlay")
-        _build_overlay_for_mods(
-            trusted_base_dir, checker_overlay,
-            frozen_mods + [f"{lib_root}.SunsteadStatements"],
-            [(decomp_mod, decomp_olean)],
-        )
         _build_overlay_for_mods(
             spec_base_dir, runner_overlay,
             frozen_mods,
@@ -2150,13 +2180,13 @@ def lean_subgoal_verify(task_id, *, lib_root, frozen_files, tasks,
             emit(False, f"lean build {failed_mod} failed: {tail(combined)}",
                  stage=st, diagnostics=combined)
 
-        frozen_list = list(dict.fromkeys(
-            frozen_mods + [f"{lib_root}.SunsteadStatements", decomp_mod]
-        ))
+        frozen_list = list(dict.fromkeys(frozen_mods + [f"{lib_root}.SunsteadStatements"]))
         argv = _checker_cmd() + [
             "mode=verify",
-            "trusted-lib=" + ":".join([checker_overlay] + extra_lib_paths),
+            "trusted-lib=" + ":".join([trusted_base_dir] + extra_lib_paths),
             "untrusted-lib=" + os.path.join(src_dir, ".lake", "build", "lib", "lean"),
+            "untrusted-decomp-lib=" + decomp_snap_lib,
+            "untrusted-decomp-modules=" + decomp_mod,
             "lib-root=" + lib_root,
             "frozen=" + ",".join(frozen_list),
             "statements-module=" + decomp_mod,
@@ -2234,33 +2264,30 @@ def lean_refute_verify(task_id, *, lib_root, frozen_files, tasks,
                 fsize_mb, deadline,
             )
         )
+        extra_decomp_args = []
         if is_subgoal_refute:
             decomp_src = _decomp_statements_source(
                 frozen_mods, ns_name, parsed_subgoals, preamble=statement_preamble
             )
-            decomp_olean = _compile_decomp_statements(
+            decomp_snap_lib, decomp_olean = _compile_decomp_statements(
                 job, lib_root, frozen_mods, spec_base_dir,
                 extra_lib_paths, decomp_mod, decomp_src,
-                fsize_mb, deadline, subdir="decomp_trusted",
+                fsize_mb, deadline, timeout_sec, subdir="decomp_runner",
             )
-            checker_overlay = os.path.join(job.checker_dir, "checker_overlay")
             runner_overlay = os.path.join(job.checker_dir, "runner_overlay")
-            _build_overlay_for_mods(
-                trusted_base_dir, checker_overlay,
-                frozen_mods + [f"{lib_root}.SunsteadStatements"],
-                [(decomp_mod, decomp_olean)],
-            )
             _build_overlay_for_mods(
                 spec_base_dir, runner_overlay,
                 frozen_mods,
                 [(decomp_mod, decomp_olean)],
             )
-            trusted_lib_paths = [checker_overlay] + extra_lib_paths
+            trusted_lib_paths = [trusted_base_dir] + extra_lib_paths
             runner_prebuilt_dir = runner_overlay
             runner_prebuilt_mods = set(frozen_mods) | {decomp_mod}
-            frozen_list = list(dict.fromkeys(
-                frozen_mods + [f"{lib_root}.SunsteadStatements", decomp_mod]
-            ))
+            frozen_list = list(dict.fromkeys(frozen_mods + [f"{lib_root}.SunsteadStatements"]))
+            extra_decomp_args = [
+                "untrusted-decomp-lib=" + decomp_snap_lib,
+                "untrusted-decomp-modules=" + decomp_mod,
+            ]
             stmts_mod = decomp_mod
             stmt_const = f"{ns_name}.{subgoal_id}"
             target_label = f"{task_id}/{decomp_id}/{subgoal_id}"
@@ -2295,6 +2322,7 @@ def lean_refute_verify(task_id, *, lib_root, frozen_files, tasks,
             "mode=refute",
             "trusted-lib=" + ":".join(trusted_lib_paths),
             "untrusted-lib=" + os.path.join(src_dir, ".lake", "build", "lib", "lean"),
+        ] + extra_decomp_args + [
             "lib-root=" + lib_root,
             "frozen=" + ",".join(frozen_list),
             "statements-module=" + stmts_mod,

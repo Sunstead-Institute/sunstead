@@ -1558,6 +1558,136 @@ end DecompLib
          "reduction_module": "DecompLib.Decomp_target_goal_d1",
          "reduction_theorem": "DecompLib.decomp_reduction",
      })),
+    ("v2-decomp-attack3f-dummy-use-eq-mpr-congrarg", "__synthetic_decompose__", "target_goal",
+     {"DecompLib/Decomp_target_goal_d1.lean": """import DecompLib.Spec
+import DecompLib.DecompStatements_target_goal_d1
+
+namespace DecompLib
+
+theorem decomp_reduction
+    (h1 : SunsteadDecomp_target_goal_d1.quad_expand)
+    (h2 : SunsteadDecomp_target_goal_d1.quad_pos) :
+    targetGoal :=
+  Eq.mpr (congrArg (fun _ : SunsteadDecomp_target_goal_d1.quad_pos => targetGoal) (Eq.refl h2))
+    ⟨h1, fun n => Nat.mul_pos (Nat.succ_pos n) (Nat.succ_pos n)⟩
+
+end DecompLib
+"""},
+     False, None, "dead `h2` hidden inside `Eq.mpr (congrArg (fun _ => T) (Eq.refl h2))` must be rejected by usage reduction",
+     ("decompose", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": _DECOMP_SUBGOALS_HONEST,
+         "reduction_module": "DecompLib.Decomp_target_goal_d1",
+         "reduction_theorem": "DecompLib.decomp_reduction",
+     })),
+    ("v2-decomp-attack3g-dummy-use-const-ite", "__synthetic_decompose__", "target_goal",
+     {"DecompLib/Decomp_target_goal_d1.lean": """import DecompLib.Spec
+import DecompLib.DecompStatements_target_goal_d1
+
+namespace DecompLib
+
+theorem decomp_reduction
+    (h1 : SunsteadDecomp_target_goal_d1.quad_expand)
+    (h2 : SunsteadDecomp_target_goal_d1.quad_pos) :
+    targetGoal :=
+  @ite targetGoal (h2 = h2) (Classical.propDecidable _)
+    ⟨h1, fun n => Nat.mul_pos (Nat.succ_pos n) (Nat.succ_pos n)⟩
+    ⟨h1, fun n => Nat.mul_pos (Nat.succ_pos n) (Nat.succ_pos n)⟩
+
+end DecompLib
+"""},
+     False, None, "dead `h2` hidden inside constant-branch `ite (h2 = h2) body body` must be rejected by usage reduction",
+     ("decompose", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": _DECOMP_SUBGOALS_HONEST,
+         "reduction_module": "DecompLib.Decomp_target_goal_d1",
+         "reduction_theorem": "DecompLib.decomp_reduction",
+     })),
+    ("v2-decomp-attack8a-subgoal-run-tac-io", "__synthetic_decompose__", "target_goal",
+     {"DecompLib/Decomp_target_goal_d1.lean": _DECOMP_REDUCTION_HONEST},
+     False, None, "subgoal statement using `by run_tac` IO must be rejected at lint and never execute",
+     ("decompose", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": [
+             {
+                 "id": "quad_expand",
+                 "statement": (
+                     'def quad_expand : Prop := (by run_tac (IO.FS.writeFile "/tmp/sunstead_pwn_runtac" "pwn"); '
+                     'exact (∀ n : Nat, DecompLib.quad n = n * n + 2 * n + 1))'
+                 ),
+             },
+             _DECOMP_SUBGOALS_HONEST[1],
+         ],
+         "reduction_module": "DecompLib.Decomp_target_goal_d1",
+         "reduction_theorem": "DecompLib.decomp_reduction",
+     })),
+    ("v2-decomp-attack8b-subgoal-by-elab-io", "__synthetic_decompose__", "target_goal",
+     {"DecompLib/Decomp_target_goal_d1.lean": _DECOMP_REDUCTION_HONEST},
+     False, None, "subgoal statement using `by_elab` must be rejected at lint",
+     ("decompose", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": [
+             {
+                 "id": "quad_expand",
+                 "statement": 'def quad_expand : Prop := by_elab return (Lean.mkConst `True)',
+             },
+             _DECOMP_SUBGOALS_HONEST[1],
+         ],
+         "reduction_module": "DecompLib.Decomp_target_goal_d1",
+         "reduction_theorem": "DecompLib.decomp_reduction",
+     })),
+    ("v2-decomp-attack8c-reduction-run-tac", "__synthetic_decompose__", "target_goal",
+     {"DecompLib/Decomp_target_goal_d1.lean": """import DecompLib.Spec
+import DecompLib.DecompStatements_target_goal_d1
+
+namespace DecompLib
+
+theorem decomp_reduction
+    (h1 : SunsteadDecomp_target_goal_d1.quad_expand)
+    (h2 : SunsteadDecomp_target_goal_d1.quad_pos) :
+    targetGoal := by
+  run_tac (pure ())
+  exact ⟨h1, h2⟩
+
+end DecompLib
+"""},
+     False, None, "`run_tac` inside a contributor Lean file must be rejected by LEAN_FORBIDDEN_ALWAYS_CORE",
+     ("decompose", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": _DECOMP_SUBGOALS_HONEST,
+         "reduction_module": "DecompLib.Decomp_target_goal_d1",
+         "reduction_theorem": "DecompLib.decomp_reduction",
+     })),
+    ("v2-decomp-attack8d-reduction-by-elab", "__synthetic_decompose__", "target_goal",
+     {"DecompLib/Decomp_target_goal_d1.lean": """import DecompLib.Spec
+import DecompLib.DecompStatements_target_goal_d1
+
+namespace DecompLib
+
+theorem decomp_reduction
+    (h1 : SunsteadDecomp_target_goal_d1.quad_expand)
+    (h2 : SunsteadDecomp_target_goal_d1.quad_pos) :
+    targetGoal := by_elab return (Lean.mkAppN (Lean.mkConst `And.intro) #[])
+
+end DecompLib
+"""},
+     False, None, "`by_elab` inside a contributor Lean file must be rejected by LEAN_FORBIDDEN_ALWAYS_CORE",
+     ("decompose", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": _DECOMP_SUBGOALS_HONEST,
+         "reduction_module": "DecompLib.Decomp_target_goal_d1",
+         "reduction_theorem": "DecompLib.decomp_reduction",
+     })),
+    ("v2-decomp-attack8e-privsep-and-replay-probe", "__synthetic_decompose__", "target_goal",
+     {"DecompLib/Decomp_target_goal_d1.lean": _DECOMP_REDUCTION_HONEST},
+     True, None, "direct container probe: bypassing lint proves _compile_decomp_statements runs as sunstead-runner (cannot write checker_dir) and SunsteadCheck rejects forged axiom / missing replay flag in DecompStatements",
+     ("decomp_privsep_probe", {})),
     ("v2-decomp-attack4d-sorryax-in-subgoal-stmt", "__synthetic_decompose__", "target_goal",
      {"DecompLib/Decomp_target_goal_d1.lean": _DECOMP_REDUCTION_HONEST},
      False, None, "`sorryAx` hidden inside a subgoal statement must be rejected at lint and kernel",
@@ -1861,21 +1991,159 @@ def parse_verdict(stdout):
     return None
 
 
+_DECOMP_PRIVSEP_PROBE_SCRIPT = r"""
+import json, os, pwd, sys, time
+sys.path.insert(0, "/opt/sunstead")
+import sunstead_sandbox as sb
+
+cfg = sb.extract_verify_config("/work/verify")
+lib_root = cfg["lib_root"]
+frozen_files = cfg["frozen_files"]
+tasks = cfg["tasks"]
+started = time.monotonic()
+deadline = lambda: max(5, int(110 - (time.monotonic() - started)))
+
+job = sb.Job()
+try:
+    frozen_mods, _, spec_base_dir, trusted_base_dir, checker_cwd = sb._prepare_classic_trusted(
+        job, "/work", lib_root, frozen_files, tasks, False, "", [], 512, deadline
+    )
+    # Probe 1: Bypass lint and inject a `by run_tac` IO payload that tries to write into
+    # `job.checker_dir` AND record the UID executing Lean elaboration.
+    checker_marker = os.path.join(job.checker_dir, "pwn_checker_marker")
+    uid_marker = os.path.join(job.runner_dir, "elab_uid.txt")
+    evil_src = (
+        f"import {lib_root}.Spec\n"
+        "import Lean\n"
+        "namespace SunsteadDecomp_target_goal_p1\n"
+        "def quad_expand : Prop := by\n"
+        f'  run_tac (do\n'
+        f'    let out ← IO.Process.output {{ cmd := "id", args := #["-u"] }}\n'
+        f'    IO.FS.writeFile "{uid_marker}" out.stdout\n'
+        f'    IO.FS.writeFile "{checker_marker}" "pwned")\n'
+        "  exact (∀ n : Nat, DecompLib.quad n = n * n + 2 * n + 1)\n"
+        "end SunsteadDecomp_target_goal_p1\n"
+    )
+    # Catch emit()'s SystemExit because writing checker_marker must fail with Permission denied!
+    got_exit = False
+    try:
+        sb._compile_decomp_statements(
+            job, lib_root, frozen_mods, spec_base_dir, [],
+            f"{lib_root}.DecompStatements_target_goal_p1", evil_src,
+            512, deadline, 110, subdir="probe_privsep",
+        )
+    except SystemExit as exc:
+        got_exit = (exc.code != 0)
+    if not got_exit:
+        print(json.dumps({"ok": False, "summary": "probe1 FAIL: evil run_tac write to checker_dir unexpectedly succeeded!"}))
+        sys.exit(1)
+    if os.path.exists(checker_marker):
+        print(json.dumps({"ok": False, "summary": "probe1 FAIL: checker_marker was created!"}))
+        sys.exit(1)
+    if not os.path.isfile(uid_marker):
+        print(json.dumps({"ok": False, "summary": "probe1 FAIL: expected uid_marker in runner_dir to confirm execution UID"}))
+        sys.exit(1)
+    actual_uid = int(open(uid_marker).read().strip())
+    runner_uid = pwd.getpwnam(sb.RUNNER_USER).pw_uid
+    checker_uid = pwd.getpwnam(sb.CHECKER_USER).pw_uid
+    if actual_uid != runner_uid or actual_uid == checker_uid:
+        print(json.dumps({"ok": False, "summary": f"probe1 FAIL: ran as uid={actual_uid}, expected runner={runner_uid} (checker={checker_uid})"}))
+        sys.exit(1)
+
+    # Probe 2: Compile a forged DecompStatements .olean containing `axiom evil : False`
+    # and assert SunsteadCheck rejects it during kernel replay.
+    forged_mod = f"{lib_root}.DecompStatements_target_goal_p2"
+    forged_src = (
+        f"import {lib_root}.Spec\n"
+        "namespace SunsteadDecomp_target_goal_p2\n"
+        "axiom evilAxiom : False\n"
+        "def quad_expand : Prop := ∀ n : Nat, DecompLib.quad n = n * n + 2 * n + 1\n"
+        "def quad_pos : Prop := ∀ n : Nat, 0 < DecompLib.quad n\n"
+        "end SunsteadDecomp_target_goal_p2\n"
+    )
+    snap_lib, snap_olean = sb._compile_decomp_statements(
+        job, lib_root, frozen_mods, spec_base_dir, [],
+        forged_mod, forged_src, 512, deadline, 110, subdir="probe_forged",
+    )
+    runner_overlay = os.path.join(job.checker_dir, "probe_runner_overlay")
+    sb._build_overlay_for_mods(spec_base_dir, runner_overlay, frozen_mods, [(forged_mod, snap_olean)])
+    red_src = (
+        f"import {lib_root}.Spec\n"
+        f"import {forged_mod}\n"
+        "namespace DecompLib\n"
+        "theorem decomp_reduction (h1 : SunsteadDecomp_target_goal_p2.quad_expand) "
+        "(h2 : SunsteadDecomp_target_goal_p2.quad_pos) : targetGoal := ⟨h1, h2⟩\n"
+        "end DecompLib\n"
+    )
+    src_dir = os.path.join(job.runner_dir, "probe_src")
+    sb.run_as(sb.RUNNER_USER, ["mkdir", "-p", os.path.join(src_dir, lib_root)], cwd="/", timeout=30)
+    job.write_as(sb.RUNNER_USER, os.path.join(src_dir, lib_root, "Decomp_target_goal_p2.lean"), red_src)
+    failed_mod, p = sb._compile_lean_graph(
+        sb.RUNNER_USER, src_dir, lib_root, [f"{lib_root}.Decomp_target_goal_p2"],
+        [], deadline, job.runner_dir, cpu_sec=240, fsize_mb=512,
+        prebuilt_dir=runner_overlay, prebuilt_modules=set(frozen_mods) | {forged_mod},
+    )
+    sb.ensure_no_processes(sb.RUNNER_USER)
+    if failed_mod is not None:
+        print(json.dumps({"ok": False, "summary": f"probe2 setup compile failed: {p.stderr[-200:]}"}))
+        sys.exit(1)
+    frozen_list = list(dict.fromkeys(frozen_mods + [f"{lib_root}.SunsteadStatements"]))
+    argv = sb._checker_cmd() + [
+        "mode=decompose",
+        "trusted-lib=" + trusted_base_dir,
+        "untrusted-lib=" + os.path.join(src_dir, ".lake", "build", "lib", "lean"),
+        "untrusted-decomp-lib=" + snap_lib,
+        "untrusted-decomp-modules=" + forged_mod,
+        "lib-root=" + lib_root,
+        "frozen=" + ",".join(frozen_list),
+        "statements-module=" + f"{lib_root}.SunsteadStatements",
+        "decomp-statements-module=" + forged_mod,
+        "statement=SunsteadStatements.target_goal",
+        "subgoal-consts=SunsteadDecomp_target_goal_p2.quad_expand,SunsteadDecomp_target_goal_p2.quad_pos",
+        "target-module=" + f"{lib_root}.Decomp_target_goal_p2",
+        "target-const=DecompLib.decomp_reduction",
+    ]
+    res = sb.run_as(sb.CHECKER_USER, argv, cwd=checker_cwd, timeout=deadline(),
+                    env_extra={"HOME": job.checker_dir}, fsize_mb=512)
+    sb.ensure_no_processes(sb.CHECKER_USER)
+    if res.returncode == 0 or "forbidden axiom" not in (res.stdout + res.stderr):
+        print(json.dumps({"ok": False, "summary": f"probe2 FAIL: expected forbidden axiom rejection, got rc={res.returncode} out={res.stdout[-200:]}"}))
+        sys.exit(1)
+
+    # Probe 3: Invoke SunsteadCheck in mode=decompose WITHOUT untrusted-decomp-modules
+    # and assert it fails closed rather than loading decomp-statements-module via importModules.
+    argv_bypass = [a for a in argv if not a.startswith("untrusted-decomp-")]
+    res3 = sb.run_as(sb.CHECKER_USER, argv_bypass, cwd=checker_cwd, timeout=deadline(),
+                     env_extra={"HOME": job.checker_dir}, fsize_mb=512)
+    sb.ensure_no_processes(sb.CHECKER_USER)
+    if res3.returncode == 0 or "untrusted-decomp-modules" not in (res3.stdout + res3.stderr):
+        print(json.dumps({"ok": False, "summary": f"probe3 FAIL: expected fail-closed replay requirement, got rc={res3.returncode} out={res3.stdout[-200:]}"}))
+        sys.exit(1)
+
+    print(json.dumps({"ok": True, "summary": f"privsep + decomp kernel-replay probes passed (elab uid={actual_uid}==runner, checker write denied, forged axiom rejected, bypass fail-closed)"}))
+finally:
+    job.cleanup()
+"""
+
+
 def run_docker(mission, task, work, timeout, action_info=None):
     image = IMAGES[mission]
     spec_host = None
     if action_info is not None:
         action, action_spec = action_info
-        cmd = [
-            "python3", "-I", "/opt/sunstead/sunstead_sandbox.py",
-            "--action", action,
-            "--spec", "/tmp/sunstead-action.json",
-            "--verify-path", "/work/verify",
-        ]
-        fd, spec_host = tempfile.mkstemp(prefix="sunstead-rt-spec-", suffix=".json")
-        with os.fdopen(fd, "w", encoding="utf-8") as sf:
-            json.dump(action_spec, sf)
-        os.chmod(spec_host, 0o644)
+        if action == "decomp_privsep_probe":
+            cmd = ["python3", "-I", "-c", _DECOMP_PRIVSEP_PROBE_SCRIPT]
+        else:
+            cmd = [
+                "python3", "-I", "/opt/sunstead/sunstead_sandbox.py",
+                "--action", action,
+                "--spec", "/tmp/sunstead-action.json",
+                "--verify-path", "/work/verify",
+            ]
+            fd, spec_host = tempfile.mkstemp(prefix="sunstead-rt-spec-", suffix=".json")
+            with os.fdopen(fd, "w", encoding="utf-8") as sf:
+                json.dump(action_spec, sf)
+            os.chmod(spec_host, 0o644)
     else:
         cmd = ["./verify", task]
     create = ["docker", "create", "--network=none", "--cpus=2", "--memory=6144m",
@@ -1901,6 +2169,12 @@ def run_docker(mission, task, work, timeout, action_info=None):
 def run_local(mission, task, work, timeout, action_info=None):
     if action_info is not None:
         action, action_spec = action_info
+        if action == "decomp_privsep_probe":
+            p = subprocess.run(
+                ["python3", "-I", "-c", _DECOMP_PRIVSEP_PROBE_SCRIPT],
+                cwd=work, capture_output=True, text=True, timeout=timeout,
+            )
+            return p.returncode, p.stdout, p.stderr
         fd, spec_host = tempfile.mkstemp(prefix="sunstead-rt-spec-", suffix=".json")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as sf:
