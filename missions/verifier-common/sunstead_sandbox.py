@@ -27,6 +27,7 @@ import os
 import pwd
 import re
 import resource
+import runpy
 import signal
 import subprocess
 import sys
@@ -55,7 +56,7 @@ BASE_PATH = os.environ.get("SUNSTEAD_BASE_PATH",
 MAX_DIAGNOSTICS_CHARS = 2000
 
 
-def emit(ok, summary, score=None, *, stage=None, diagnostics=None):
+def emit(ok, summary, score=None, *, stage=None, diagnostics=None, extra=None):
     out = {"ok": bool(ok), "summary": str(summary)[:600]}
     if score is not None:
         out["score"] = score
@@ -65,6 +66,10 @@ def emit(ok, summary, score=None, *, stage=None, diagnostics=None):
         clipped = diag_clip(str(diagnostics), MAX_DIAGNOSTICS_CHARS)
         if clipped:
             out["diagnostics"] = clipped
+    if extra and isinstance(extra, dict):
+        for k, v in extra.items():
+            if k not in ("ok", "summary"):
+                out[k] = v
     sys.stdout.write(json.dumps(out) + "\n")
     sys.stdout.flush()
     sys.exit(0 if ok else 1)
@@ -1103,10 +1108,54 @@ def check_seed_repo_snapshot(task_id, *, snapshot_id, frozen_files, tasks,
     )
 
 
+def lean_repo_snapshot_refute_verify(task_id, *, snapshot_id, frozen_files, tasks,
+                                     refute_module, refute_theorem,
+                                     allowed_import_prefixes, uses_mathlib=False,
+                                     lean_options=None, snapshot_source_dir=None,
+                                     target_files=None, timeout_sec=170):
+    """Verify a kernel-checked disproof (`¬ T`) of a repo-snapshot mission target."""
+    if task_id not in tasks:
+        emit(False, f"unknown task id: {task_id}")
+    base_task = dict(tasks[task_id])
+    refute_rel = _mod_to_rel_lean(refute_module)
+    tfiles = list(target_files) if target_files else [refute_rel]
+    if refute_rel not in tfiles:
+        tfiles.append(refute_rel)
+    prereqs = list(base_task.get("prereq_modules") or [])
+    if refute_module != base_task["module"] and base_task["module"] not in prereqs:
+        prereqs.append(base_task["module"])
+    refute_tasks = dict(tasks)
+    refute_tasks[task_id] = {
+        **base_task,
+        "module": refute_module,
+        "theorem": refute_theorem,
+        "frozen_target_module": base_task["module"],
+        "frozen_target_theorem": base_task["theorem"],
+        "target_files": tfiles,
+        "prereq_modules": prereqs,
+        "preserve_theorems": [],
+    }
+    _lean_repo_snapshot_check(
+        task_id,
+        snapshot_id=snapshot_id,
+        frozen_files=frozen_files,
+        tasks=refute_tasks,
+        allowed_import_prefixes=allowed_import_prefixes,
+        uses_mathlib=uses_mathlib,
+        lean_options=lean_options,
+        snapshot_source_dir=snapshot_source_dir,
+        allow_other_sorries=(refute_module != base_task["module"]),
+        timeout_sec=timeout_sec,
+        allow_sorry=False,
+        mode="refute",
+    )
+
+
 def _lean_repo_snapshot_check(task_id, *, snapshot_id, frozen_files, tasks,
                               allowed_import_prefixes, uses_mathlib,
                               lean_options, snapshot_source_dir,
-                              allow_other_sorries, timeout_sec, allow_sorry):
+                              allow_other_sorries, timeout_sec, allow_sorry,
+                              mode="verify"):
     require_root()
     task = tasks.get(task_id)
     if task is None:
@@ -1240,20 +1289,24 @@ def _lean_repo_snapshot_check(task_id, *, snapshot_id, frozen_files, tasks,
     job = Job()
     try:
         # 2. Resolve read-only trusted snapshot (`deps/` + `frozen-targets/` + optional `frozen-sources/`).
+        frozen_target_mod = task.get("frozen_target_module") or target_mod
+        frozen_target_segs = _validate_mod_name(frozen_target_mod)
         if snap_manifest is not None:
             deps_dir = os.path.join(snap_root, "deps")
             frozen_dir = os.path.join(snap_root, "frozen-targets")
             frozen_sources_dir = os.path.join(snap_root, "frozen-sources")
-            frozen_target_olean = os.path.join(frozen_dir, *target_segs) + ".olean"
+            frozen_target_olean = os.path.join(frozen_dir, *frozen_target_segs) + ".olean"
             if not (os.path.isdir(deps_dir) and os.path.isfile(frozen_target_olean)):
                 emit(False, f"sandbox error: incomplete prebuilt snapshot `{snapshot_id}`", stage="sandbox")
         elif snap_src_abs and os.path.isdir(snap_src_abs):
-            all_target_mods = list(dict.fromkeys(t["module"] for t in tasks.values()))
+            all_target_mods = list(dict.fromkeys(
+                (t.get("frozen_target_module") or t["module"]) for t in tasks.values()
+            ))
             deps_dir, frozen_dir, frozen_sources_dir = _build_live_snapshot(
                 job, snap_src_abs, all_target_mods, extra_lib_paths,
                 lean_opts, deadline, fsize_mb,
             )
-            frozen_target_olean = os.path.join(frozen_dir, *target_segs) + ".olean"
+            frozen_target_olean = os.path.join(frozen_dir, *frozen_target_segs) + ".olean"
         else:
             emit(False, f"sandbox error: prebuilt snapshot `{snapshot_id}` not found at {snap_root}",
                  stage="sandbox")
@@ -1373,11 +1426,13 @@ def _lean_repo_snapshot_check(task_id, *, snapshot_id, frozen_files, tasks,
         allowed_axioms = set(ALLOWED_AXIOMS) | ({"sorryAx"} if allow_sorry else set())
         target_axioms = []
         for check_mod, check_thm, is_primary in checks_to_run:
-            check_segs = _validate_mod_name(check_mod)
+            frozen_mod_for_check = frozen_target_mod if (is_primary and mode == "refute") else check_mod
+            check_segs = _validate_mod_name(frozen_mod_for_check)
             check_frozen_olean = os.path.join(frozen_dir, *check_segs) + ".olean"
             if not os.path.isfile(check_frozen_olean):
-                emit(False, f"sandbox error: missing frozen target .olean for `{check_mod}`", stage="sandbox")
+                emit(False, f"sandbox error: missing frozen target .olean for `{frozen_mod_for_check}`", stage="sandbox")
             argv = checker_cmd + [
+                "mode=" + (mode if is_primary else "verify"),
                 "trusted-lib=" + ":".join(trusted_lib_paths),
                 "untrusted-lib=" + out_lib,
                 "untrusted-modules=" + untrusted_mods_arg,
@@ -1385,6 +1440,8 @@ def _lean_repo_snapshot_check(task_id, *, snapshot_id, frozen_files, tasks,
                 "target-module=" + check_mod,
                 "target-const=" + check_thm,
             ]
+            if is_primary and mode == "refute" and task.get("frozen_target_theorem"):
+                argv.append("statement=" + task["frozen_target_theorem"])
             p = run_as(CHECKER_USER, argv, cwd=job.checker_dir, timeout=deadline(),
                        env_extra={"HOME": job.checker_dir}, fsize_mb=fsize_mb)
             ensure_no_processes(CHECKER_USER)
@@ -1419,7 +1476,955 @@ def _lean_repo_snapshot_check(task_id, *, snapshot_id, frozen_files, tasks,
         if allow_sorry:
             emit(True, f"repo-snapshot seed `{task['theorem']}` matches pinned upstream `.olean` "
                        f"(axioms: {', '.join(target_axioms) or 'none'}, {elapsed} ms)")
+        if mode == "refute":
+            emit(True, f"Lean 4 repo-snapshot refutation kernel-replayed `¬ {task_id}` (0 sorry, standard axioms only, {elapsed} ms)",
+                 score=1.0)
         emit(True, f"Lean 4 repo-snapshot kernel-replayed `{task_id}` (0 sorry, standard axioms only, {elapsed} ms)",
              score=1.0)
     finally:
         job.cleanup()
+
+
+# ---------------------------------------------------------------------------
+# v2 Decompose, Subgoal & Refute verification (docs/RFC-DECOMPOSE.md)
+# ---------------------------------------------------------------------------
+
+MIN_DECOMPOSE_SUBGOALS = 2
+MAX_DECOMPOSE_SUBGOALS = 6
+MAX_SUBGOAL_STATEMENT_BYTES = 4096
+
+_SUBGOAL_ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
+_DECOMP_ID_RE = re.compile(r"^[A-Za-z0-9_]{1,32}$")
+_DECOMP_TASK_ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,95}$")
+_LEAN_RESERVED_IDS = {
+    "True", "False", "Prop", "Type", "Sort", "def", "theorem", "lemma",
+    "example", "axiom", "opaque", "sorry", "sorryAx", "by", "let", "fun",
+    "in", "match", "with", "if", "then", "else", "do", "where", "end",
+    "open", "import", "namespace", "section", "variable", "universe",
+    "structure", "inductive", "class", "instance", "abbrev", "mutual",
+    "private", "protected", "public", "meta", "all", "module", "unsafe",
+    "partial", "noncomputable", "deriving", "local", "scoped", "attribute",
+    "reduction_goal",
+}
+_SUBGOAL_EXTRA_FORBIDDEN = [
+    (r"(?<![\w.])sorryAx(?![\w'])", "`sorryAx` is not allowed in subgoal statements"),
+    (r"(?<![\w.])set_option(?![\w'])", "`set_option` is not allowed in subgoal statements"),
+    (r"(?<![\w.])import(?![\w'])", "`import` is not allowed in subgoal statements"),
+    (r"@\[", "attributes (`@[...]`) are not allowed in subgoal statements"),
+    (
+        r"(?<![\w.])(def|abbrev|structure|inductive|class|instance|theorem|lemma|"
+        r"example|mutual|namespace|section|end|open|variable|universe|attribute|"
+        r"private|protected|noncomputable|partial|deriving|local|scoped)(?![\w'])",
+        "declarations and scope commands are not allowed inside subgoal statements",
+    ),
+]
+
+
+def _check_balanced_delimiters(code):
+    """Ensure `()`, `[]`, `{}` are balanced outside Lean string/char/guillemet literals."""
+    stack = []
+    pairs = {")": "(", "]": "[", "}": "{"}
+    i, n = 0, len(code)
+    while i < n:
+        ch = code[i]
+        if ch == "r" and (i == 0 or not _is_lean_id_char(code[i - 1])):
+            m = _LEAN_RAW_STR_RE.match(code, i)
+            if m:
+                closer = '"' + m.group(1)
+                end = code.find(closer, m.end())
+                if end < 0:
+                    return False
+                i = end + len(closer)
+                continue
+        if ch == '"':
+            j = i + 1
+            while j < n:
+                if code[j] == "\\":
+                    j += 2
+                elif code[j] == '"':
+                    j += 1
+                    break
+                else:
+                    j += 1
+            else:
+                return False
+            i = j
+            continue
+        if ch == "'" and (i == 0 or not _is_lean_id_char(code[i - 1])):
+            m = _LEAN_CHAR_RE.match(code, i)
+            if m:
+                i = m.end()
+                continue
+        if ch == "«":
+            end = code.find("»", i + 1)
+            if end < 0:
+                return False
+            i = end + 1
+            continue
+        if ch in "([{":
+            stack.append(ch)
+        elif ch in ")]}":
+            if not stack or stack[-1] != pairs[ch]:
+                return False
+            stack.pop()
+        i += 1
+    return not stack
+
+
+def lint_subgoal_statement(sub_id, raw_statement):
+    """Validate and extract the pure Prop body of a proposed decomposition subgoal.
+
+    Accepts either `def <sub_id> : Prop := <expr>` or bare `<expr>`, enforcing
+    the 4 KB cap, strict hygiene lint (no `sorry`, `axiom`, extra `def`/commands,
+    macros, `#eval`, imports, etc.), and balanced delimiters so the expression
+    cannot escape the `def <sub_id> : Prop := ( <expr> )` wrapper.
+    """
+    if not isinstance(sub_id, str) or not _SUBGOAL_ID_RE.match(sub_id) or sub_id in _LEAN_RESERVED_IDS:
+        return None, f"invalid subgoal id `{sub_id}`"
+    if not isinstance(raw_statement, str):
+        return None, f"subgoal `{sub_id}` statement must be a string"
+    if len(raw_statement.encode("utf-8")) > MAX_SUBGOAL_STATEMENT_BYTES:
+        return None, (
+            f"subgoal `{sub_id}` statement exceeds {MAX_SUBGOAL_STATEMENT_BYTES} byte limit"
+        )
+    code = _strip_lean_comments(raw_statement).strip()
+    if not code:
+        return None, f"subgoal `{sub_id}` statement is empty"
+    if re.match(r"^def\b", code):
+        m = re.match(r"^def\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*Prop\s*:=\s*(.+)$", code, re.DOTALL)
+        if not m:
+            return None, (
+                f"subgoal `{sub_id}` must have the exact form `def {sub_id} : Prop := <expr>` "
+                "(no parameters or universe variables)"
+            )
+        if m.group(1) != sub_id:
+            return None, (
+                f"subgoal `{sub_id}` statement defines `{m.group(1)}` instead of `{sub_id}`"
+            )
+        expr = m.group(2).strip()
+    else:
+        expr = code
+    if not expr:
+        return None, f"subgoal `{sub_id}` statement body is empty"
+    for pat, reason in LEAN_FORBIDDEN + _SUBGOAL_EXTRA_FORBIDDEN:
+        if re.search(pat, expr):
+            return None, f"subgoal `{sub_id}`: {reason}"
+    if not _check_balanced_delimiters(expr):
+        return None, f"subgoal `{sub_id}` has unbalanced delimiters or unterminated literal"
+    return expr, None
+
+
+def _is_reserved_decomp_rel(rel, lib_root):
+    norm = rel.replace("\\", "/")
+    if norm == f"{lib_root}/SunsteadStatements.lean":
+        return True
+    return bool(re.fullmatch(rf"{re.escape(lib_root)}/DecompStatements_[A-Za-z0-9_]+\.lean", norm))
+
+
+def _decomp_identifiers(lib_root, task_id, decomp_id):
+    if not isinstance(task_id, str) or not _DECOMP_TASK_ID_RE.match(task_id):
+        emit(False, f"invalid task id for decomposition: {task_id}", stage="lint")
+    if not isinstance(decomp_id, str) or not _DECOMP_ID_RE.match(decomp_id):
+        emit(False, f"invalid decomp_id: {decomp_id}", stage="lint")
+    tag = f"{task_id}_{decomp_id}"
+    ns_name = f"SunsteadDecomp_{tag}"
+    mod_name = f"{lib_root}.DecompStatements_{tag}"
+    _validate_mod_name(mod_name)
+    return mod_name, ns_name
+
+
+def _validate_subgoals_list(subgoals):
+    if not isinstance(subgoals, list):
+        emit(False, "subgoals must be a list", stage="lint")
+    if not (MIN_DECOMPOSE_SUBGOALS <= len(subgoals) <= MAX_DECOMPOSE_SUBGOALS):
+        msg = (
+            f"decomposition requires between {MIN_DECOMPOSE_SUBGOALS} and "
+            f"{MAX_DECOMPOSE_SUBGOALS} subgoals (got {len(subgoals)})"
+        )
+        emit(False, msg, stage="lint", diagnostics=msg)
+    seen = set()
+    parsed = []
+    for entry in subgoals:
+        if not isinstance(entry, dict):
+            emit(False, "each subgoal must be an object with `id` and `statement`", stage="lint")
+        sid = entry.get("id")
+        stmt = entry.get("statement")
+        if sid in seen:
+            msg = f"duplicate subgoal id `{sid}`"
+            emit(False, msg, stage="lint", diagnostics=msg)
+        expr, err = lint_subgoal_statement(sid, stmt)
+        if err:
+            emit(False, f"subgoal statement lint failed: {err}", stage="lint", diagnostics=err)
+        seen.add(sid)
+        parsed.append((sid, expr))
+    return parsed
+
+
+def _decomp_statements_source(frozen_mods, ns_name, parsed_subgoals, preamble=""):
+    """Generate read-only `<Lib>.DecompStatements_<T>_<d>.lean` importing ONLY frozen spec modules."""
+    lines = [f"import {mod}" for mod in frozen_mods]
+    lines.append("")
+    if preamble and preamble.strip():
+        lines.append(preamble.strip())
+        lines.append("")
+    lines.extend([f"namespace {ns_name}", ""])
+    for sid, expr in parsed_subgoals:
+        lines.append(f"/-- Frozen decomposition subgoal `{sid}`. -/")
+        lines.append(f"def {sid} : Prop := (")
+        lines.append(f"  {expr}")
+        lines.append(")")
+        lines.append("")
+    lines.append(f"end {ns_name}")
+    return "\n".join(lines) + "\n"
+
+
+def _subgoal_spec_sha256(frozen_contents, ns_name, sid, expr):
+    h = hashlib.sha256()
+    h.update(f"sunstead-subgoal-v2\0{ns_name}\0{sid}\0".encode("utf-8"))
+    for rel in sorted(frozen_contents.keys()):
+        h.update(rel.encode("utf-8") + b"\0" + frozen_contents[rel].encode("utf-8") + b"\0")
+    h.update(expr.encode("utf-8") + b"\n")
+    return "sha256:" + h.hexdigest()
+
+
+def _prepare_classic_trusted(job, work, lib_root, frozen_files, tasks,
+                             uses_mathlib, statement_preamble, extra_lib_paths,
+                             fsize_mb, deadline):
+    """Resolve or compile frozen spec modules + `SunsteadStatements` as `sunstead-checker`."""
+    frozen_contents = {}
+    for rel in frozen_files:
+        src = os.path.join(work, rel)
+        if not os.path.isfile(src):
+            continue
+        with open(src, "r", encoding="utf-8") as f:
+            frozen_contents[rel] = f.read()
+    stmts = {tid: t["statement"] for tid, t in tasks.items()}
+    statements_src = _statements_module_source(lib_root, stmts, preamble=statement_preamble)
+    frozen_mods = _frozen_lean_modules(lib_root, frozen_contents.keys())
+    if f"{lib_root}.Spec" not in frozen_mods:
+        frozen_mods.insert(0, f"{lib_root}.Spec")
+    cache_key = trusted_cache_key(lib_root, uses_mathlib, frozen_contents, statements_src)
+    cached = _lookup_prebuilt_cache(cache_key, lib_root, frozen_mods)
+    if cached is not None:
+        cache_spec_dir, cache_trusted_dir = cached
+        return frozen_mods, frozen_contents, cache_spec_dir, cache_trusted_dir, job.checker_dir
+    trusted = os.path.join(job.checker_dir, "trusted")
+    run_as(CHECKER_USER, ["mkdir", "-p", os.path.join(trusted, lib_root)], cwd="/", timeout=30)
+    for rel, content in frozen_contents.items():
+        dst = os.path.join(trusted, rel)
+        run_as(CHECKER_USER, ["mkdir", "-p", os.path.dirname(dst)], cwd="/", timeout=30)
+        job.write_as(CHECKER_USER, dst, content)
+    job.write_as(
+        CHECKER_USER,
+        os.path.join(trusted, lib_root, "SunsteadStatements.lean"),
+        statements_src,
+    )
+    failed_mod, p = _compile_lean_graph(
+        CHECKER_USER, trusted, lib_root,
+        frozen_mods + [f"{lib_root}.SunsteadStatements"],
+        extra_lib_paths, deadline, job.checker_dir, fsize_mb=fsize_mb,
+    )
+    ensure_no_processes(CHECKER_USER)
+    if failed_mod is not None:
+        combined = (p.stdout + "\n" + p.stderr).strip()
+        st = "timeout" if p.returncode == -9 else "sandbox"
+        emit(False, f"trusted spec build failed ({failed_mod}): {tail(combined)}",
+             stage=st, diagnostics=combined)
+    trusted_lib_dir = os.path.join(trusted, ".lake", "build", "lib", "lean")
+    return frozen_mods, frozen_contents, trusted_lib_dir, trusted_lib_dir, trusted
+
+
+def _compile_decomp_statements(job, lib_root, frozen_mods, spec_base_dir,
+                               extra_lib_paths, decomp_mod, decomp_src,
+                               fsize_mb, deadline, subdir="decomp_trusted"):
+    """Compile read-only `<Lib>.DecompStatements_<T>_<d>.lean` strictly as `sunstead-checker`."""
+    droot = os.path.join(job.checker_dir, subdir)
+    segs = _validate_mod_name(decomp_mod)
+    src_path = os.path.join(droot, *segs) + ".lean"
+    run_as(CHECKER_USER, ["mkdir", "-p", os.path.dirname(src_path)], cwd="/", timeout=30)
+    job.write_as(CHECKER_USER, src_path, decomp_src)
+    failed_mod, p = _compile_lean_graph(
+        CHECKER_USER, droot, lib_root,
+        [decomp_mod],
+        extra_lib_paths, deadline, job.checker_dir,
+        fsize_mb=fsize_mb,
+        prebuilt_dir=spec_base_dir,
+        prebuilt_modules=set(frozen_mods),
+    )
+    ensure_no_processes(CHECKER_USER)
+    if failed_mod is not None:
+        combined = (p.stdout + "\n" + p.stderr).strip()
+        st = "timeout" if p.returncode == -9 else "compile"
+        emit(False, f"subgoal statement elaboration failed ({failed_mod}): {tail(combined)}",
+             stage=st, diagnostics=combined)
+    return os.path.join(droot, ".lake", "build", "lib", "lean", *segs) + ".olean"
+
+
+def _build_overlay_for_mods(base_dir, overlay_dir, mods, extra_mod_oleans):
+    """Build a read-only-to-runner symlink overlay as `sunstead-checker`."""
+    for mod in mods:
+        segs = _validate_mod_name(mod)
+        src = os.path.join(base_dir, *segs) + ".olean"
+        dst = os.path.join(overlay_dir, *segs) + ".olean"
+        run_as(CHECKER_USER, ["mkdir", "-p", os.path.dirname(dst)], cwd="/", timeout=30)
+        p = run_as(CHECKER_USER, ["ln", "-sf", src, dst], cwd="/", timeout=30)
+        if p.returncode != 0:
+            emit(False, f"sandbox error: overlay link for {mod} failed: {tail(p.stderr)}", stage="sandbox")
+    for mod, src in extra_mod_oleans:
+        segs = _validate_mod_name(mod)
+        dst = os.path.join(overlay_dir, *segs) + ".olean"
+        run_as(CHECKER_USER, ["mkdir", "-p", os.path.dirname(dst)], cwd="/", timeout=30)
+        p = run_as(CHECKER_USER, ["ln", "-sf", src, dst], cwd="/", timeout=30)
+        if p.returncode != 0:
+            emit(False, f"sandbox error: overlay link for {mod} failed: {tail(p.stderr)}", stage="sandbox")
+
+
+def _run_sunstead_check(job, argv, cwd, deadline, fsize_mb):
+    p = run_as(CHECKER_USER, argv, cwd=cwd, timeout=deadline(),
+               env_extra={"HOME": job.checker_dir}, fsize_mb=fsize_mb)
+    ensure_no_processes(CHECKER_USER)
+    result = None
+    for line in reversed(p.stdout.splitlines()):
+        line = line.strip()
+        if line.startswith("{"):
+            try:
+                result = json.loads(line)
+                break
+            except ValueError:
+                pass
+    if result is None:
+        combined = (p.stdout + "\n" + p.stderr).strip()
+        st = "timeout" if p.returncode == -9 else "kernel"
+        emit(False, f"trusted checker produced no result: {tail(combined)}",
+             stage=st, diagnostics=combined)
+    if not result.get("ok"):
+        err_msg = str(result.get("error", "unknown error"))
+        emit(False, f"kernel check failed: {err_msg[:400]}",
+             stage="kernel", diagnostics=err_msg)
+    bad = [a for a in result.get("axioms", []) if a not in ALLOWED_AXIOMS]
+    if bad:
+        msg = f"forbidden axioms: {', '.join(bad)}"
+        emit(False, msg, stage="axioms",
+             diagnostics=f"{msg} (allowed: {', '.join(sorted(ALLOWED_AXIOMS))})")
+    return result
+
+
+def _lint_workspace_for_v2(work, lib_root, frozen_set, target_rel, allowed_imports,
+                           reserved_rels=None):
+    reserved = {f"{lib_root}/SunsteadStatements.lean"}
+    if reserved_rels:
+        reserved.update(r.replace("\\", "/") for r in reserved_rels if r)
+    lib_dir = os.path.join(work, lib_root)
+    if os.path.isdir(lib_dir):
+        for dirpath, _, files in os.walk(lib_dir):
+            for fn in sorted(files):
+                if not fn.endswith(".lean"):
+                    continue
+                rel = os.path.relpath(os.path.join(dirpath, fn), work).replace("\\", "/")
+                if rel in frozen_set:
+                    continue
+                if rel in reserved:
+                    msg = f"{rel}: reserved statements module name"
+                    emit(False, msg, stage="lint", diagnostics=msg)
+                problem = lint_lean_file(os.path.join(dirpath, fn), rel, lib_root, allowed_imports)
+                if problem and "`sorry`" not in problem:
+                    emit(False, f"hygiene check failed: {problem}", stage="lint", diagnostics=problem)
+    abs_target = os.path.join(work, target_rel)
+    if not os.path.isfile(abs_target):
+        msg = f"missing target file: {target_rel}"
+        emit(False, msg, stage="lint", diagnostics=msg)
+    problem = lint_lean_file(abs_target, target_rel, lib_root, allowed_imports, allow_sorry=False)
+    if problem:
+        emit(False, f"hygiene check failed: {problem}", stage="lint", diagnostics=problem)
+
+
+def _checker_cmd():
+    if os.path.isfile(LEAN_CHECKER_BIN) and os.access(LEAN_CHECKER_BIN, os.X_OK):
+        return [LEAN_CHECKER_BIN]
+    return ["lean", "--run", LEAN_CHECKER]
+
+
+def lean_decompose_verify(task_id, *, lib_root, frozen_files, tasks,
+                          decomp_id, subgoals, reduction_module, reduction_theorem,
+                          uses_mathlib=False, statement_preamble="",
+                          parent_decomp=None, timeout_sec=110):
+    """Verify a v2 decomposition `L_1 ∧ ... ∧ L_k → T` (RFC-DECOMPOSE.md §2)."""
+    require_root()
+    if task_id not in tasks:
+        emit(False, f"unknown task id: {task_id}", stage="lint")
+    started = time.monotonic()
+    deadline = lambda: max(5, int(timeout_sec - (time.monotonic() - started)))
+
+    parsed_subgoals = _validate_subgoals_list(subgoals)
+    decomp_mod, ns_name = _decomp_identifiers(lib_root, task_id, decomp_id)
+
+    red_segs = _validate_mod_name(reduction_module)
+    if red_segs[0] != lib_root:
+        msg = f"reduction module `{reduction_module}` must live under `{lib_root}.*`"
+        emit(False, msg, stage="lint", diagnostics=msg)
+    reduction_rel = "/".join(red_segs) + ".lean"
+    frozen_set = set(rel.replace("\\", "/") for rel in frozen_files)
+    if reduction_rel in frozen_set or _is_reserved_decomp_rel(reduction_rel, lib_root):
+        msg = f"invalid reduction module path: {reduction_rel}"
+        emit(False, msg, stage="lint", diagnostics=msg)
+
+    # Optional depth-2 parent decomposition validation.
+    parent_parsed = None
+    parent_mod = None
+    parent_ns = None
+    parent_sub_id = None
+    if parent_decomp:
+        if not isinstance(parent_decomp, dict):
+            emit(False, "parent_decomp must be an object", stage="lint")
+        parent_parsed = _validate_subgoals_list(parent_decomp.get("subgoals"))
+        parent_mod, parent_ns = _decomp_identifiers(
+            lib_root, task_id, parent_decomp.get("decomp_id")
+        )
+        parent_sub_id = parent_decomp.get("subgoal_id")
+        if parent_sub_id not in {sid for sid, _ in parent_parsed}:
+            emit(False, f"unknown parent subgoal id `{parent_sub_id}`", stage="lint")
+        if parent_mod == decomp_mod:
+            emit(False, "nested decomposition must use a distinct decomp_id", stage="lint")
+
+    work = os.getcwd()
+    allowed_imports = (
+        (lib_root, "Mathlib", "Std", "Init", "Batteries")
+        if uses_mathlib else (lib_root,)
+    )
+    extra_lib_paths = _mathlib_lib_paths() if uses_mathlib else []
+    fsize_mb = 1024 if uses_mathlib else 512
+
+    reserved_rels = [_mod_to_rel_lean(decomp_mod)]
+    if parent_mod:
+        reserved_rels.append(_mod_to_rel_lean(parent_mod))
+    _lint_workspace_for_v2(
+        work, lib_root, frozen_set, reduction_rel, allowed_imports,
+        reserved_rels=reserved_rels,
+    )
+
+    job = Job()
+    try:
+        # 1. Trusted frozen spec + SunsteadStatements + DecompStatements (`sunstead-checker`).
+        frozen_mods, frozen_contents, spec_base_dir, trusted_base_dir, checker_cwd = (
+            _prepare_classic_trusted(
+                job, work, lib_root, frozen_files, tasks,
+                uses_mathlib, statement_preamble, extra_lib_paths,
+                fsize_mb, deadline,
+            )
+        )
+        decomp_src = _decomp_statements_source(
+            frozen_mods, ns_name, parsed_subgoals, preamble=statement_preamble
+        )
+        decomp_olean = _compile_decomp_statements(
+            job, lib_root, frozen_mods, spec_base_dir,
+            extra_lib_paths, decomp_mod, decomp_src,
+            fsize_mb, deadline, subdir="decomp_trusted",
+        )
+        extra_trusted = [(decomp_mod, decomp_olean)]
+        extra_runner = [(decomp_mod, decomp_olean)]
+        if parent_parsed is not None:
+            parent_src = _decomp_statements_source(
+                frozen_mods, parent_ns, parent_parsed, preamble=statement_preamble
+            )
+            parent_olean = _compile_decomp_statements(
+                job, lib_root, frozen_mods, spec_base_dir,
+                extra_lib_paths, parent_mod, parent_src,
+                fsize_mb, deadline, subdir="parent_decomp_trusted",
+            )
+            extra_trusted.append((parent_mod, parent_olean))
+            extra_runner.append((parent_mod, parent_olean))
+            parent_stmts_mod = parent_mod
+            parent_stmt_const = f"{parent_ns}.{parent_sub_id}"
+        else:
+            parent_stmts_mod = f"{lib_root}.SunsteadStatements"
+            parent_stmt_const = f"SunsteadStatements.{task_id}"
+
+        checker_overlay = os.path.join(job.checker_dir, "checker_overlay")
+        runner_overlay = os.path.join(job.checker_dir, "runner_overlay")
+        _build_overlay_for_mods(
+            trusted_base_dir, checker_overlay,
+            frozen_mods + [f"{lib_root}.SunsteadStatements"],
+            extra_trusted,
+        )
+        _build_overlay_for_mods(
+            spec_base_dir, runner_overlay,
+            frozen_mods,
+            extra_runner,
+        )
+
+        # 2. Untrusted build of proposer's reduction module (`sunstead-runner`).
+        src_dir = os.path.join(job.runner_dir, "src")
+        job.copy_tree_as(RUNNER_USER, work, src_dir)
+        runner_cpu = max(timeout_sec * 4, 240)
+        runner_prebuilt_mods = set(frozen_mods) | {m for m, _ in extra_runner}
+        failed_mod, p = _compile_lean_graph(
+            RUNNER_USER, src_dir, lib_root,
+            [reduction_module],
+            extra_lib_paths, deadline, job.runner_dir,
+            cpu_sec=runner_cpu, fsize_mb=fsize_mb,
+            prebuilt_dir=runner_overlay,
+            prebuilt_modules=runner_prebuilt_mods,
+        )
+        ensure_no_processes(RUNNER_USER)
+        if failed_mod is not None:
+            combined = (p.stdout + "\n" + p.stderr).strip()
+            st = "timeout" if p.returncode == -9 else "compile"
+            emit(False, f"lean build {failed_mod} failed: {tail(combined)}",
+                 stage=st, diagnostics=combined)
+
+        # 3. Trusted kernel replay + statement + anti-triviality + binder-usage check (`sunstead-checker`).
+        frozen_list = list(dict.fromkeys(
+            frozen_mods + [f"{lib_root}.SunsteadStatements"] + [m for m, _ in extra_trusted]
+        ))
+        subgoal_consts = [f"{ns_name}.{sid}" for sid, _ in parsed_subgoals]
+        argv = _checker_cmd() + [
+            "mode=decompose",
+            "trusted-lib=" + ":".join([checker_overlay] + extra_lib_paths),
+            "untrusted-lib=" + os.path.join(src_dir, ".lake", "build", "lib", "lean"),
+            "lib-root=" + lib_root,
+            "frozen=" + ",".join(frozen_list),
+            "statements-module=" + parent_stmts_mod,
+            "decomp-statements-module=" + decomp_mod,
+            "statement=" + parent_stmt_const,
+            "subgoal-consts=" + ",".join(subgoal_consts),
+            "target-module=" + reduction_module,
+            "target-const=" + reduction_theorem,
+        ]
+        _run_sunstead_check(job, argv, checker_cwd, deadline, fsize_mb)
+        elapsed = int((time.monotonic() - started) * 1000)
+        subgoal_hashes = {
+            sid: _subgoal_spec_sha256(frozen_contents, ns_name, sid, expr)
+            for sid, expr in parsed_subgoals
+        }
+        emit(
+            True,
+            f"Lean 4 decomposition kernel-replayed `{task_id}` -> {len(parsed_subgoals)} subgoals "
+            f"(0 sorry, standard axioms only, {elapsed} ms)",
+            score=1.0,
+            extra={
+                "decomp_statements_module": decomp_mod,
+                "decomp_statements_namespace": ns_name,
+                "decomp_statements_source": decomp_src,
+                "subgoal_spec_sha256s": subgoal_hashes,
+            },
+        )
+    finally:
+        job.cleanup()
+
+
+def lean_subgoal_verify(task_id, *, lib_root, frozen_files, tasks,
+                        decomp_id, subgoals, subgoal_id,
+                        subgoal_module, subgoal_theorem,
+                        frozen_extra_files=None,
+                        uses_mathlib=False, statement_preamble="",
+                        timeout_sec=110):
+    """Verify a contributor's proof of a spawned decomposition subgoal `L_i`."""
+    require_root()
+    if task_id not in tasks:
+        emit(False, f"unknown task id: {task_id}", stage="lint")
+    started = time.monotonic()
+    deadline = lambda: max(5, int(timeout_sec - (time.monotonic() - started)))
+
+    parsed_subgoals = _validate_subgoals_list(subgoals)
+    if subgoal_id not in {sid for sid, _ in parsed_subgoals}:
+        msg = f"unknown subgoal id `{subgoal_id}`"
+        emit(False, msg, stage="lint", diagnostics=msg)
+    decomp_mod, ns_name = _decomp_identifiers(lib_root, task_id, decomp_id)
+
+    sub_segs = _validate_mod_name(subgoal_module)
+    if sub_segs[0] != lib_root:
+        msg = f"subgoal module `{subgoal_module}` must live under `{lib_root}.*`"
+        emit(False, msg, stage="lint", diagnostics=msg)
+    sub_rel = "/".join(sub_segs) + ".lean"
+    frozen_set = set(rel.replace("\\", "/") for rel in frozen_files)
+    if sub_rel in frozen_set or _is_reserved_decomp_rel(sub_rel, lib_root):
+        msg = f"invalid subgoal module path: {sub_rel}"
+        emit(False, msg, stage="lint", diagnostics=msg)
+
+    work = os.getcwd()
+    # Enforce immutable decomposition reduction file(s) during subgoal verification (RFC §7 Attack #5).
+    for rel, expected_sha in (frozen_extra_files or {}).items():
+        norm = rel.replace("\\", "/")
+        abs_p = os.path.join(work, norm)
+        if norm == sub_rel:
+            msg = f"{norm}: subgoal module cannot overwrite frozen decomposition file"
+            emit(False, msg, stage="lint", diagnostics=msg)
+        if not os.path.isfile(abs_p):
+            msg = f"{norm}: frozen decomposition file is missing"
+            emit(False, msg, stage="lint", diagnostics=msg)
+        want = expected_sha[7:] if isinstance(expected_sha, str) and expected_sha.startswith("sha256:") else expected_sha
+        actual = _sha256_file(abs_p)
+        if actual != want:
+            msg = f"{norm}: frozen decomposition file was modified"
+            emit(False, msg, stage="lint", diagnostics=msg)
+        frozen_set.add(norm)
+
+    allowed_imports = (
+        (lib_root, "Mathlib", "Std", "Init", "Batteries")
+        if uses_mathlib else (lib_root,)
+    )
+    extra_lib_paths = _mathlib_lib_paths() if uses_mathlib else []
+    fsize_mb = 1024 if uses_mathlib else 512
+
+    _lint_workspace_for_v2(
+        work, lib_root, frozen_set, sub_rel, allowed_imports,
+        reserved_rels=[_mod_to_rel_lean(decomp_mod)],
+    )
+
+    job = Job()
+    try:
+        frozen_mods, _, spec_base_dir, trusted_base_dir, checker_cwd = (
+            _prepare_classic_trusted(
+                job, work, lib_root, frozen_files, tasks,
+                uses_mathlib, statement_preamble, extra_lib_paths,
+                fsize_mb, deadline,
+            )
+        )
+        decomp_src = _decomp_statements_source(
+            frozen_mods, ns_name, parsed_subgoals, preamble=statement_preamble
+        )
+        decomp_olean = _compile_decomp_statements(
+            job, lib_root, frozen_mods, spec_base_dir,
+            extra_lib_paths, decomp_mod, decomp_src,
+            fsize_mb, deadline, subdir="decomp_trusted",
+        )
+        checker_overlay = os.path.join(job.checker_dir, "checker_overlay")
+        runner_overlay = os.path.join(job.checker_dir, "runner_overlay")
+        _build_overlay_for_mods(
+            trusted_base_dir, checker_overlay,
+            frozen_mods + [f"{lib_root}.SunsteadStatements"],
+            [(decomp_mod, decomp_olean)],
+        )
+        _build_overlay_for_mods(
+            spec_base_dir, runner_overlay,
+            frozen_mods,
+            [(decomp_mod, decomp_olean)],
+        )
+
+        src_dir = os.path.join(job.runner_dir, "src")
+        job.copy_tree_as(RUNNER_USER, work, src_dir)
+        runner_cpu = max(timeout_sec * 4, 240)
+        failed_mod, p = _compile_lean_graph(
+            RUNNER_USER, src_dir, lib_root,
+            [subgoal_module],
+            extra_lib_paths, deadline, job.runner_dir,
+            cpu_sec=runner_cpu, fsize_mb=fsize_mb,
+            prebuilt_dir=runner_overlay,
+            prebuilt_modules=set(frozen_mods) | {decomp_mod},
+        )
+        ensure_no_processes(RUNNER_USER)
+        if failed_mod is not None:
+            combined = (p.stdout + "\n" + p.stderr).strip()
+            st = "timeout" if p.returncode == -9 else "compile"
+            emit(False, f"lean build {failed_mod} failed: {tail(combined)}",
+                 stage=st, diagnostics=combined)
+
+        frozen_list = list(dict.fromkeys(
+            frozen_mods + [f"{lib_root}.SunsteadStatements", decomp_mod]
+        ))
+        argv = _checker_cmd() + [
+            "mode=verify",
+            "trusted-lib=" + ":".join([checker_overlay] + extra_lib_paths),
+            "untrusted-lib=" + os.path.join(src_dir, ".lake", "build", "lib", "lean"),
+            "lib-root=" + lib_root,
+            "frozen=" + ",".join(frozen_list),
+            "statements-module=" + decomp_mod,
+            "statement=" + f"{ns_name}.{subgoal_id}",
+            "target-module=" + subgoal_module,
+            "target-const=" + subgoal_theorem,
+        ]
+        _run_sunstead_check(job, argv, checker_cwd, deadline, fsize_mb)
+        elapsed = int((time.monotonic() - started) * 1000)
+        emit(
+            True,
+            f"Lean 4 subgoal kernel-replayed `{task_id}/{decomp_id}/{subgoal_id}` "
+            f"(0 sorry, standard axioms only, {elapsed} ms)",
+            score=1.0,
+        )
+    finally:
+        job.cleanup()
+
+
+def lean_refute_verify(task_id, *, lib_root, frozen_files, tasks,
+                       refute_module, refute_theorem,
+                       decomp_id=None, subgoals=None, subgoal_id=None,
+                       uses_mathlib=False, statement_preamble="",
+                       timeout_sec=110):
+    """Verify a kernel-checked disproof of `¬ L_i` or `¬ T` (RFC-DECOMPOSE.md §4)."""
+    require_root()
+    if task_id not in tasks:
+        emit(False, f"unknown task id: {task_id}", stage="lint")
+    started = time.monotonic()
+    deadline = lambda: max(5, int(timeout_sec - (time.monotonic() - started)))
+
+    is_subgoal_refute = subgoals is not None or decomp_id is not None or subgoal_id is not None
+    parsed_subgoals = None
+    decomp_mod = None
+    ns_name = None
+    if is_subgoal_refute:
+        if not (subgoals is not None and decomp_id and subgoal_id):
+            emit(False, "subgoal refutation requires `decomp_id`, `subgoals`, and `subgoal_id`",
+                 stage="lint")
+        parsed_subgoals = _validate_subgoals_list(subgoals)
+        if subgoal_id not in {sid for sid, _ in parsed_subgoals}:
+            msg = f"unknown subgoal id `{subgoal_id}`"
+            emit(False, msg, stage="lint", diagnostics=msg)
+        decomp_mod, ns_name = _decomp_identifiers(lib_root, task_id, decomp_id)
+
+    ref_segs = _validate_mod_name(refute_module)
+    if ref_segs[0] != lib_root:
+        msg = f"refutation module `{refute_module}` must live under `{lib_root}.*`"
+        emit(False, msg, stage="lint", diagnostics=msg)
+    ref_rel = "/".join(ref_segs) + ".lean"
+    frozen_set = set(rel.replace("\\", "/") for rel in frozen_files)
+    if ref_rel in frozen_set or _is_reserved_decomp_rel(ref_rel, lib_root):
+        msg = f"invalid refutation module path: {ref_rel}"
+        emit(False, msg, stage="lint", diagnostics=msg)
+
+    work = os.getcwd()
+    allowed_imports = (
+        (lib_root, "Mathlib", "Std", "Init", "Batteries")
+        if uses_mathlib else (lib_root,)
+    )
+    extra_lib_paths = _mathlib_lib_paths() if uses_mathlib else []
+    fsize_mb = 1024 if uses_mathlib else 512
+
+    _lint_workspace_for_v2(
+        work, lib_root, frozen_set, ref_rel, allowed_imports,
+        reserved_rels=[_mod_to_rel_lean(decomp_mod)] if decomp_mod else [],
+    )
+
+    job = Job()
+    try:
+        frozen_mods, _, spec_base_dir, trusted_base_dir, checker_cwd = (
+            _prepare_classic_trusted(
+                job, work, lib_root, frozen_files, tasks,
+                uses_mathlib, statement_preamble, extra_lib_paths,
+                fsize_mb, deadline,
+            )
+        )
+        if is_subgoal_refute:
+            decomp_src = _decomp_statements_source(
+                frozen_mods, ns_name, parsed_subgoals, preamble=statement_preamble
+            )
+            decomp_olean = _compile_decomp_statements(
+                job, lib_root, frozen_mods, spec_base_dir,
+                extra_lib_paths, decomp_mod, decomp_src,
+                fsize_mb, deadline, subdir="decomp_trusted",
+            )
+            checker_overlay = os.path.join(job.checker_dir, "checker_overlay")
+            runner_overlay = os.path.join(job.checker_dir, "runner_overlay")
+            _build_overlay_for_mods(
+                trusted_base_dir, checker_overlay,
+                frozen_mods + [f"{lib_root}.SunsteadStatements"],
+                [(decomp_mod, decomp_olean)],
+            )
+            _build_overlay_for_mods(
+                spec_base_dir, runner_overlay,
+                frozen_mods,
+                [(decomp_mod, decomp_olean)],
+            )
+            trusted_lib_paths = [checker_overlay] + extra_lib_paths
+            runner_prebuilt_dir = runner_overlay
+            runner_prebuilt_mods = set(frozen_mods) | {decomp_mod}
+            frozen_list = list(dict.fromkeys(
+                frozen_mods + [f"{lib_root}.SunsteadStatements", decomp_mod]
+            ))
+            stmts_mod = decomp_mod
+            stmt_const = f"{ns_name}.{subgoal_id}"
+            target_label = f"{task_id}/{decomp_id}/{subgoal_id}"
+        else:
+            trusted_lib_paths = [trusted_base_dir] + extra_lib_paths
+            runner_prebuilt_dir = spec_base_dir
+            runner_prebuilt_mods = set(frozen_mods)
+            frozen_list = list(dict.fromkeys(frozen_mods + [f"{lib_root}.SunsteadStatements"]))
+            stmts_mod = f"{lib_root}.SunsteadStatements"
+            stmt_const = f"SunsteadStatements.{task_id}"
+            target_label = task_id
+
+        src_dir = os.path.join(job.runner_dir, "src")
+        job.copy_tree_as(RUNNER_USER, work, src_dir)
+        runner_cpu = max(timeout_sec * 4, 240)
+        failed_mod, p = _compile_lean_graph(
+            RUNNER_USER, src_dir, lib_root,
+            [refute_module],
+            extra_lib_paths, deadline, job.runner_dir,
+            cpu_sec=runner_cpu, fsize_mb=fsize_mb,
+            prebuilt_dir=runner_prebuilt_dir,
+            prebuilt_modules=runner_prebuilt_mods,
+        )
+        ensure_no_processes(RUNNER_USER)
+        if failed_mod is not None:
+            combined = (p.stdout + "\n" + p.stderr).strip()
+            st = "timeout" if p.returncode == -9 else "compile"
+            emit(False, f"lean build {failed_mod} failed: {tail(combined)}",
+                 stage=st, diagnostics=combined)
+
+        argv = _checker_cmd() + [
+            "mode=refute",
+            "trusted-lib=" + ":".join(trusted_lib_paths),
+            "untrusted-lib=" + os.path.join(src_dir, ".lake", "build", "lib", "lean"),
+            "lib-root=" + lib_root,
+            "frozen=" + ",".join(frozen_list),
+            "statements-module=" + stmts_mod,
+            "statement=" + stmt_const,
+            "target-module=" + refute_module,
+            "target-const=" + refute_theorem,
+        ]
+        _run_sunstead_check(job, argv, checker_cwd, deadline, fsize_mb)
+        elapsed = int((time.monotonic() - started) * 1000)
+        emit(
+            True,
+            f"Lean 4 refutation kernel-replayed `¬ {target_label}` "
+            f"(0 sorry, standard axioms only, {elapsed} ms)",
+            score=1.0,
+        )
+    finally:
+        job.cleanup()
+
+
+def extract_verify_config(verify_path):
+    """Capture kwargs passed to `lean_verify` or `lean_repo_snapshot_verify` by a frozen `./verify`."""
+    if not os.path.isfile(verify_path):
+        emit(False, f"missing mission verify script: {verify_path}", stage="sandbox")
+    captured = {}
+
+    def _capture_classic(task_id, *, lib_root, frozen_files, tasks,
+                         uses_mathlib=False, statement_preamble="", timeout_sec=110):
+        captured.update(
+            kind="classic",
+            lib_root=lib_root,
+            frozen_files=list(frozen_files),
+            tasks=dict(tasks),
+            uses_mathlib=bool(uses_mathlib),
+            statement_preamble=statement_preamble,
+            timeout_sec=timeout_sec,
+        )
+
+    def _capture_snapshot(task_id, *, snapshot_id, frozen_files, tasks,
+                          allowed_import_prefixes, uses_mathlib=False,
+                          lean_options=None, snapshot_source_dir=None,
+                          allow_other_sorries=False, timeout_sec=170):
+        captured.update(
+            kind="snapshot",
+            snapshot_id=snapshot_id,
+            frozen_files=list(frozen_files),
+            tasks=dict(tasks),
+            allowed_import_prefixes=list(allowed_import_prefixes),
+            uses_mathlib=bool(uses_mathlib),
+            lean_options=list(lean_options or []),
+            snapshot_source_dir=snapshot_source_dir,
+            timeout_sec=timeout_sec,
+        )
+
+    mod = sys.modules[__name__]
+    prev_entry = sys.modules.get("sunstead_sandbox")
+    orig_classic = mod.lean_verify
+    orig_snapshot = mod.lean_repo_snapshot_verify
+    orig_argv = list(sys.argv)
+    try:
+        sys.modules["sunstead_sandbox"] = mod
+        mod.lean_verify = _capture_classic
+        mod.lean_repo_snapshot_verify = _capture_snapshot
+        sys.argv = [verify_path, "__inspect__"]
+        runpy.run_path(verify_path, run_name="__main__")
+    finally:
+        mod.lean_verify = orig_classic
+        mod.lean_repo_snapshot_verify = orig_snapshot
+        sys.argv = orig_argv
+        if prev_entry is None:
+            sys.modules.pop("sunstead_sandbox", None)
+        else:
+            sys.modules["sunstead_sandbox"] = prev_entry
+
+    if not captured:
+        emit(False, f"{verify_path} did not invoke lean_verify or lean_repo_snapshot_verify",
+             stage="sandbox")
+    return captured
+
+
+def _cli_main():
+    import argparse
+
+    ap = argparse.ArgumentParser(description="Sunstead v2 verifier action runner")
+    ap.add_argument("--action", required=True, choices=["decompose", "subgoal", "refute"])
+    ap.add_argument("--spec", required=True, help="Path to JSON action specification")
+    ap.add_argument("--verify-path", default="./verify", help="Path to frozen mission verify script")
+    args = ap.parse_args()
+
+    with open(args.spec, "r", encoding="utf-8") as f:
+        spec = json.load(f)
+    cfg = extract_verify_config(args.verify_path)
+    task_id = spec["task_id"]
+    timeout_sec = int(spec.get("timeout_sec") or cfg.get("timeout_sec") or 110)
+
+    if cfg["kind"] == "classic":
+        if args.action == "decompose":
+            lean_decompose_verify(
+                task_id,
+                lib_root=cfg["lib_root"],
+                frozen_files=cfg["frozen_files"],
+                tasks=cfg["tasks"],
+                decomp_id=spec["decomp_id"],
+                subgoals=spec["subgoals"],
+                reduction_module=spec["reduction_module"],
+                reduction_theorem=spec["reduction_theorem"],
+                uses_mathlib=cfg["uses_mathlib"],
+                statement_preamble=cfg["statement_preamble"],
+                parent_decomp=spec.get("parent_decomp"),
+                timeout_sec=timeout_sec,
+            )
+        elif args.action == "subgoal":
+            lean_subgoal_verify(
+                task_id,
+                lib_root=cfg["lib_root"],
+                frozen_files=cfg["frozen_files"],
+                tasks=cfg["tasks"],
+                decomp_id=spec["decomp_id"],
+                subgoals=spec["subgoals"],
+                subgoal_id=spec["subgoal_id"],
+                subgoal_module=spec["subgoal_module"],
+                subgoal_theorem=spec["subgoal_theorem"],
+                frozen_extra_files=spec.get("frozen_extra_files"),
+                uses_mathlib=cfg["uses_mathlib"],
+                statement_preamble=cfg["statement_preamble"],
+                timeout_sec=timeout_sec,
+            )
+        elif args.action == "refute":
+            lean_refute_verify(
+                task_id,
+                lib_root=cfg["lib_root"],
+                frozen_files=cfg["frozen_files"],
+                tasks=cfg["tasks"],
+                refute_module=spec["refute_module"],
+                refute_theorem=spec["refute_theorem"],
+                decomp_id=spec.get("decomp_id"),
+                subgoals=spec.get("subgoals"),
+                subgoal_id=spec.get("subgoal_id"),
+                uses_mathlib=cfg["uses_mathlib"],
+                statement_preamble=cfg["statement_preamble"],
+                timeout_sec=timeout_sec,
+            )
+    elif cfg["kind"] == "snapshot":
+        if args.action == "refute":
+            lean_repo_snapshot_refute_verify(
+                task_id,
+                snapshot_id=cfg["snapshot_id"],
+                frozen_files=cfg["frozen_files"],
+                tasks=cfg["tasks"],
+                refute_module=spec["refute_module"],
+                refute_theorem=spec["refute_theorem"],
+                allowed_import_prefixes=cfg["allowed_import_prefixes"],
+                uses_mathlib=cfg["uses_mathlib"],
+                lean_options=cfg["lean_options"],
+                snapshot_source_dir=cfg["snapshot_source_dir"],
+                target_files=spec.get("target_files"),
+                timeout_sec=timeout_sec,
+            )
+        else:
+            emit(False, f"action `{args.action}` is only supported for classic statement-based missions",
+                 stage="lint")
+
+
+if __name__ == "__main__":
+    _cli_main()

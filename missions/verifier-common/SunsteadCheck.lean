@@ -5,9 +5,9 @@ binary `/opt/sunstead/sunstead-check`, run as the `sunstead-checker` user after
 every `sunstead-runner` process is dead.
 
 It never elaborates contributor source and never loads environment extensions
-(`loadExts := false`). It supports two verification modes:
+(`loadExts := false`). It supports three verification modes (`mode=`):
 
-Mode A — Classic standalone mission (`statement=<SunsteadStatements.task>`):
+Mode A — Classic standalone mission (`mode=verify`, `statement=<SunsteadStatements.task>`):
 1. Loads the frozen modules (`<Lib>.Spec`, `<Lib>.SunsteadStatements`) from a
    trusted build directory, plus core (`Init`, ...) from the toolchain and any
    read-only prebuilt libraries (e.g. Mathlib at /opt/mathlib) listed in
@@ -21,7 +21,7 @@ Mode A — Classic standalone mission (`statement=<SunsteadStatements.task>`):
 4. Collects the axioms `_sunstead_check` depends on, and (for hill-climb tasks)
    reduces the score constant to a natural-number literal.
 
-Mode B — Repo-Snapshot mission (`frozen-target-olean=<path>`):
+Mode B — Repo-Snapshot mission (`mode=verify`, `frozen-target-olean=<path>`):
 1. Reads the pinned upstream commit's frozen target `.olean` (built read-only at
    image-build time, never placed on `LEAN_PATH`) via `readModuleData`,
    extracting the exact pinned `ConstantInfo` for `target-const` (must be
@@ -41,6 +41,17 @@ Mode B — Repo-Snapshot mission (`frozen-target-olean=<path>`):
    `Declaration.thmDecl` proving `frozenTargetCI.type` from `target-const`, and
    collects all axioms of `_sunstead_check`.
 
+Mode C — v2 Decomposition (`mode=decompose`) & Refutation (`mode=refute`):
+- `mode=decompose`: verifies 2–6 trusted subgoal definitions `L_1 .. L_k : Prop`
+  from `decomp-statements-module` (safe, monomorphic, standard axioms only,
+  none def-eq to `True`, `False`, parent `T`, or another `L_j`), replays the
+  proposer's reduction module through `Kernel.Environment.replay`, confirms
+  `L_1 → ... → L_k → T` with standard axioms only, and checks that the reduced
+  proof term genuinely references every hypothesis `h_1 .. h_k`.
+- `mode=refute`: replays a contributor proof of `¬ <frozen statement>` (for
+  either a root task or a spawned subgoal, in classic or repo-snapshot mode)
+  with 0 `sorryAx` and standard axioms only.
+
 Output: one JSON line on stdout, e.g. {"ok":true,"axioms":["propext"],"score":150}.
 Any error fails closed with {"ok":false,"error":"..."}.
 -/
@@ -50,7 +61,14 @@ import Std.Data.HashSet
 
 open Lean
 
+inductive CheckMode where
+  | verify
+  | decompose
+  | refute
+  deriving BEq
+
 structure Cfg where
+  mode : CheckMode := .verify
   trustedLibs : List System.FilePath := []
   untrustedLib : System.FilePath := ""
   libRoot : Name := .anonymous
@@ -62,6 +80,8 @@ structure Cfg where
   statement : Name := .anonymous
   scoreConst : Option Name := none
   statementsModule : Name := .anonymous
+  decompStatementsModule : Option Name := none
+  subgoalConsts : List Name := []
 
 /-- Strip surrounding French guillemets (`«AES-GCM»` → `"AES-GCM"`) using pure
 list ops so the helper compiles without warnings across Lean 4.31–4.37+. -/
@@ -93,13 +113,27 @@ partial def parseArgs : List String → Cfg → Except String Cfg
     | k :: vs =>
       let v := "=".intercalate vs
       match k with
+      | "mode" =>
+        match v with
+        | "verify" => parseArgs rest { c with mode := .verify }
+        | "decompose" => parseArgs rest { c with mode := .decompose }
+        | "refute" => parseArgs rest { c with mode := .refute }
+        | _ => .error s!"unknown mode {v}"
       | "trusted-lib" =>
         let paths := (v.splitOn ":").filter (!·.isEmpty) |>.map System.FilePath.mk
         parseArgs rest { c with trustedLibs := c.trustedLibs ++ paths }
       | "untrusted-lib" => parseArgs rest { c with untrustedLib := v }
       | "lib-root" =>
         let root := parseLeanName v
-        parseArgs rest { c with libRoot := root, statementsModule := Name.mkStr root "SunsteadStatements" }
+        let stmtsMod := if c.statementsModule.isAnonymous then Name.mkStr root "SunsteadStatements" else c.statementsModule
+        parseArgs rest { c with libRoot := root, statementsModule := stmtsMod }
+      | "statements-module" =>
+        parseArgs rest { c with statementsModule := parseLeanName v }
+      | "decomp-statements-module" =>
+        parseArgs rest { c with decompStatementsModule := some (parseLeanName v) }
+      | "subgoal-consts" =>
+        let consts := (v.splitOn ",").filter (!·.isEmpty) |>.map parseLeanName
+        parseArgs rest { c with subgoalConsts := consts }
       | "frozen" =>
         let mods := (v.splitOn ",").filter (!·.isEmpty) |>.map parseLeanName
         parseArgs rest { c with frozen := mods }
@@ -116,7 +150,9 @@ partial def parseArgs : List String → Cfg → Except String Cfg
     | [] => .error s!"unknown argument {a}"
 
 def Cfg.isUntrusted (c : Cfg) (m : Name) : Bool :=
-  if !c.untrustedModules.isEmpty then
+  if m == c.statementsModule || c.decompStatementsModule == some m then
+    false
+  else if !c.untrustedModules.isEmpty then
     c.untrustedModules.contains m
   else
     c.libRoot.isPrefixOf m && !c.frozen.contains m
@@ -223,6 +259,149 @@ def requireTheoremConst (name : Name) (ci : ConstantInfo) : CoreM Unit := do
   | .thmInfo _ => pure ()
   | _ => throwError "target constant {name} must be a theorem or lemma"
 
+def isStandardAxiom (ax : Name) : Bool :=
+  ax == ``propext || ax == ``Classical.choice || ax == ``Quot.sound
+
+/-- Pure recursive check for whether `target` occurs free in `e`. -/
+def exprHasFVar (target : FVarId) : Expr → Bool
+  | .fvar id => id == target
+  | .app f a => exprHasFVar target f || exprHasFVar target a
+  | .lam _ ty body _ => exprHasFVar target ty || exprHasFVar target body
+  | .forallE _ ty body _ => exprHasFVar target ty || exprHasFVar target body
+  | .letE _ ty val body _ =>
+    exprHasFVar target ty || exprHasFVar target val || exprHasFVar target body
+  | .mdata _ inner => exprHasFVar target inner
+  | .proj _ _ s => exprHasFVar target s
+  | _ => false
+
+structure UsageReduceState where
+  steps : Nat := 0
+  maxSteps : Nat := 6000
+  nextProbe : Nat := 0
+
+/-- Extract the body of a contributor `def` or `theorem` (unlike `ConstantInfo.value?`,
+which defaults `allowOpaque := false` and returns `none` for `.thmInfo`). -/
+def constBody? : ConstantInfo → Option Expr
+  | .defnInfo dv => some dv.value
+  | .thmInfo tv => some tv.value
+  | _ => none
+
+/-- Reduce a contributor glue proof term (beta, zeta, structure projection,
+transparent combinators, single-constructor dead-branch elimination, and
+cycle-guarded unfolding of contributor-defined constants ONLY) so dead-weight
+uses like `let _ := h2; body`, `(fun _ => body) h2`, `(And.intro body h2).1`,
+`And.rec (fun _ _ => body) h2`, or eta-contracted helper wrappers cannot hide
+an unused subgoal hypothesis. -/
+partial def reduceForUsage (env : Environment)
+    (untrusted : Std.HashMap Name ConstantInfo)
+    (unfolding : Std.HashSet Name)
+    (e : Expr) : StateM UsageReduceState Expr := do
+  let st ← get
+  if st.steps >= st.maxSteps then return e
+  set { st with steps := st.steps + 1 }
+  match e with
+  | .mdata _ inner => reduceForUsage env untrusted unfolding inner
+  | .letE _ _ val body _ =>
+    let val' ← reduceForUsage env untrusted unfolding val
+    reduceForUsage env untrusted unfolding (body.instantiate1 val')
+  | .lam n ty body bi =>
+    let ty' ← reduceForUsage env untrusted unfolding ty
+    let body' ← reduceForUsage env untrusted unfolding body
+    return .lam n ty' body' bi
+  | .proj sName idx s =>
+    let s' ← reduceForUsage env untrusted unfolding s
+    match s'.getAppFn with
+    | .const ctorName _ =>
+      match env.find? ctorName with
+      | some (.ctorInfo cv) =>
+        let args := s'.getAppArgs
+        if cv.induct == sName && args.size == cv.numParams + cv.numFields && idx < cv.numFields then
+          reduceForUsage env untrusted unfolding args[cv.numParams + idx]!
+        else
+          return .proj sName idx s'
+      | _ => return .proj sName idx s'
+    | _ => return .proj sName idx s'
+  | .app .. =>
+    let fn := e.getAppFn
+    let args := e.getAppArgs
+    match fn with
+    | .mdata _ inner =>
+      reduceForUsage env untrusted unfolding (mkAppN inner args)
+    | .lam .. =>
+      reduceForUsage env untrusted unfolding (fn.beta args)
+    | .letE _ _ val body _ =>
+      let val' ← reduceForUsage env untrusted unfolding val
+      reduceForUsage env untrusted unfolding (mkAppN (body.instantiate1 val') args)
+    | .const n ls =>
+      if !unfolding.contains n then
+        if let some ci := untrusted.get? n then
+          if let some val := constBody? ci then
+            let inst := val.instantiateLevelParams ci.levelParams ls
+            return ← reduceForUsage env untrusted (unfolding.insert n) (mkAppN inst args)
+      if n == ``id && args.size >= 2 then
+        return ← reduceForUsage env untrusted unfolding (mkAppN args[1]! (args.extract 2 args.size))
+      if n == ``Function.const && args.size >= 4 then
+        return ← reduceForUsage env untrusted unfolding (mkAppN args[2]! (args.extract 4 args.size))
+      if n == ``And.left && args.size >= 3 then
+        let p ← reduceForUsage env untrusted unfolding args[2]!
+        if p.getAppFn.isConstOf ``And.intro && p.getAppNumArgs == 4 then
+          return ← reduceForUsage env untrusted unfolding (mkAppN p.getAppArgs[2]! (args.extract 3 args.size))
+      if n == ``And.right && args.size >= 3 then
+        let p ← reduceForUsage env untrusted unfolding args[2]!
+        if p.getAppFn.isConstOf ``And.intro && p.getAppNumArgs == 4 then
+          return ← reduceForUsage env untrusted unfolding (mkAppN p.getAppArgs[3]! (args.extract 3 args.size))
+      if n == ``Prod.fst && args.size >= 3 then
+        let p ← reduceForUsage env untrusted unfolding args[2]!
+        if p.getAppFn.isConstOf ``Prod.mk && p.getAppNumArgs == 4 then
+          return ← reduceForUsage env untrusted unfolding (mkAppN p.getAppArgs[2]! (args.extract 3 args.size))
+      if n == ``Prod.snd && args.size >= 3 then
+        let p ← reduceForUsage env untrusted unfolding args[2]!
+        if p.getAppFn.isConstOf ``Prod.mk && p.getAppNumArgs == 4 then
+          return ← reduceForUsage env untrusted unfolding (mkAppN p.getAppArgs[3]! (args.extract 3 args.size))
+      if n == ``PProd.fst && args.size >= 3 then
+        let p ← reduceForUsage env untrusted unfolding args[2]!
+        if p.getAppFn.isConstOf ``PProd.mk && p.getAppNumArgs == 4 then
+          return ← reduceForUsage env untrusted unfolding (mkAppN p.getAppArgs[2]! (args.extract 3 args.size))
+      if n == ``PProd.snd && args.size >= 3 then
+        let p ← reduceForUsage env untrusted unfolding args[2]!
+        if p.getAppFn.isConstOf ``PProd.mk && p.getAppNumArgs == 4 then
+          return ← reduceForUsage env untrusted unfolding (mkAppN p.getAppArgs[3]! (args.extract 3 args.size))
+      if (n == ``And.rec || n == ``Exists.rec) && args.size >= 5 then
+        let minor ← reduceForUsage env untrusted unfolding args[3]!
+        let cur ← get
+        let p1 := FVarId.mk (Name.mkNum `_sunstead_unused_probe cur.nextProbe)
+        let p2 := FVarId.mk (Name.mkNum `_sunstead_unused_probe (cur.nextProbe + 1))
+        set { cur with nextProbe := cur.nextProbe + 2 }
+        let body ← reduceForUsage env untrusted unfolding (minor.beta #[.fvar p1, .fvar p2])
+        if !exprHasFVar p1 body && !exprHasFVar p2 body then
+          return ← reduceForUsage env untrusted unfolding (mkAppN body (args.extract 5 args.size))
+      if (n == ``And.casesOn || n == ``Exists.casesOn || n == ``Exists.elim) && args.size >= 5 then
+        let minor ← reduceForUsage env untrusted unfolding args[4]!
+        let cur ← get
+        let p1 := FVarId.mk (Name.mkNum `_sunstead_unused_probe cur.nextProbe)
+        let p2 := FVarId.mk (Name.mkNum `_sunstead_unused_probe (cur.nextProbe + 1))
+        set { cur with nextProbe := cur.nextProbe + 2 }
+        let body ← reduceForUsage env untrusted unfolding (minor.beta #[.fvar p1, .fvar p2])
+        if !exprHasFVar p1 body && !exprHasFVar p2 body then
+          return ← reduceForUsage env untrusted unfolding (mkAppN body (args.extract 5 args.size))
+      let args' ← args.mapM (reduceForUsage env untrusted unfolding)
+      return mkAppN fn args'
+    | _ =>
+      let fn' ← reduceForUsage env untrusted unfolding fn
+      let args' ← args.mapM (reduceForUsage env untrusted unfolding)
+      if fn'.isLambda then
+        reduceForUsage env untrusted unfolding (fn'.beta args')
+      else
+        return mkAppN fn' args'
+  | .const n ls =>
+    if !unfolding.contains n then
+      if let some ci := untrusted.get? n then
+        if let some val := constBody? ci then
+          let inst := val.instantiateLevelParams ci.levelParams ls
+          return ← reduceForUsage env untrusted (unfolding.insert n) inst
+    return e
+  | _ => return e
+
 def checkClassicM (c : Cfg) : CoreM Json := do
   let env ← getEnv
   let kenv := env.toKernelEnv
@@ -236,7 +415,11 @@ def checkClassicM (c : Cfg) : CoreM Json := do
   let lvls := sci.levelParams.map Level.param
   let mut stmt := mkConst c.statement lvls
   let mut fields : List (String × Json) := []
-  if let some k := c.scoreConst then
+  if c.mode == .refute then
+    if c.scoreConst.isSome then
+      throwError "refute mode does not accept score-const"
+    stmt := mkApp (mkConst ``Not) stmt
+  else if let some k := c.scoreConst then
     unless sci.levelParams.isEmpty do
       throwError "hill-climb statement must not be universe polymorphic"
     let some kci := kenv.find? k | throwError "score constant {k} not found"
@@ -252,11 +435,116 @@ def checkClassicM (c : Cfg) : CoreM Json := do
         | none => throwError "score constant {k} does not reduce to a numeral"
     stmt := mkApp stmt (mkNatLit n)
     fields := fields ++ [("score", toJson n)]
-  let checkName := `_sunstead_check
+  let checkName := if c.mode == .refute then `_sunstead_refute_check else `_sunstead_check
   addDecl <| Declaration.thmDecl
     { name := checkName, levelParams := sci.levelParams, type := stmt, value := mkConst c.targetConst lvls, all := [checkName] }
   let axs ← collectAxioms checkName
   return Json.mkObj ([("ok", Json.bool true), ("axioms", toJson (axs.map toString))] ++ fields)
+
+/-- Validate trusted subgoal definitions `L_1 .. L_k` inside the trusted
+environment BEFORE replaying contributor code: each `L_i` must be a safe,
+monomorphic `Prop` definition with standard axioms only (0 `sorryAx`), and none
+may be definitionally equal to `True`, `False`, parent `T`, or another `L_j`. -/
+def checkDecompSubgoalsM (c : Cfg) : CoreM (Array Name) := do
+  let k := c.subgoalConsts.length
+  unless k >= 2 && k <= 6 do
+    throwError "decomposition requires 2 to 6 subgoals (got {k})"
+  let env ← getEnv
+  let kenv := env.toKernelEnv
+  let some pci := kenv.find? c.statement
+    | throwError "parent frozen statement {c.statement} not found"
+  unless pci.levelParams.isEmpty do
+    throwError "parent statement {c.statement} must not be universe polymorphic for decomposition"
+  let parentExpr := mkConst c.statement []
+  let parentBody := pci.value?.getD parentExpr
+  let mut allAxioms : Std.HashSet Name := {}
+  let mut bodies : Array (Name × Expr) := #[]
+  for subName in c.subgoalConsts do
+    let some sci := kenv.find? subName
+      | throwError "trusted subgoal statement {subName} not found"
+    let dv ← match sci with
+      | .defnInfo dv => pure dv
+      | _ => throwError "subgoal {subName} must be a safe Prop definition"
+    unless dv.levelParams.isEmpty do
+      throwError "subgoal {subName} must not be universe polymorphic"
+    unless dv.safety == .safe do
+      throwError "subgoal {subName} must be safe"
+    let isProp ← Meta.MetaM.run' <| Meta.isDefEq dv.type (Expr.sort Level.zero)
+    unless isProp do
+      throwError "subgoal {subName} must have type Prop"
+    let axs ← collectAxioms subName
+    for ax in axs do
+      unless isStandardAxiom ax do
+        throwError "subgoal statement {subName} uses forbidden axiom {ax}"
+      allAxioms := allAxioms.insert ax
+    let isTrue ← Meta.MetaM.run' <| Meta.isDefEq dv.value (mkConst ``True)
+    if isTrue then
+      throwError "subgoal {subName} is trivially definitionally equal to True"
+    let isFalse ← Meta.MetaM.run' <| Meta.isDefEq dv.value (mkConst ``False)
+    if isFalse then
+      throwError "subgoal {subName} is vacuously definitionally equal to False"
+    let isParent ← Meta.MetaM.run' <| do
+      if ← Meta.isDefEq dv.value parentBody then return true
+      Meta.isDefEq (mkConst subName []) parentExpr
+    if isParent then
+      throwError "subgoal {subName} is trivially definitionally equal to parent statement {c.statement}"
+    for (prevName, prevBody) in bodies do
+      let isDup ← Meta.MetaM.run' <| Meta.isDefEq dv.value prevBody
+      if isDup then
+        throwError "subgoal {subName} is definitionally equal to earlier subgoal {prevName}"
+    bodies := bodies.push (subName, dv.value)
+  return allAxioms.toArray
+
+/-- Check the replayed reduction theorem `L_1 → ... → L_k → T` and verify every
+hypothesis `h_1 .. h_k` is genuinely referenced after reduction. -/
+def checkDecompReductionM (c : Cfg) (untrusted : Std.HashMap Name ConstantInfo)
+    (subgoalAxioms : Array Name) : CoreM Json := do
+  let env ← getEnv
+  let kenv := env.toKernelEnv
+  let some tci := kenv.find? c.targetConst
+    | throwError "reduction theorem {c.targetConst} not found"
+  let tv ← match tci with
+    | .thmInfo tv => pure tv
+    | _ => throwError "reduction target {c.targetConst} must be a theorem or lemma"
+  unless tv.levelParams.isEmpty do
+    throwError "reduction theorem {c.targetConst} must not be universe polymorphic"
+  let parentExpr := mkConst c.statement []
+  let reductionGoal := c.subgoalConsts.foldr (init := parentExpr) fun subName acc =>
+    Expr.forallE `_ (mkConst subName []) acc .default
+  let checkName := `_sunstead_decomp_check
+  addDecl <| Declaration.thmDecl
+    { name := checkName
+      levelParams := []
+      type := reductionGoal
+      value := mkConst c.targetConst []
+      all := [checkName] }
+  let axs ← collectAxioms checkName
+  let mut axSet : Std.HashSet Name := {}
+  for ax in subgoalAxioms do
+    axSet := axSet.insert ax
+  for ax in axs do
+    axSet := axSet.insert ax
+  -- Check that the reduction proof genuinely uses every subgoal hypothesis `h_1 .. h_k`.
+  let mut hypIds : Array (Name × FVarId) := #[]
+  let mut hypExprs : Array Expr := #[]
+  let mut idx := 0
+  for subName in c.subgoalConsts do
+    let fid := FVarId.mk (Name.mkNum `_sunstead_hyp idx)
+    hypIds := hypIds.push (subName, fid)
+    hypExprs := hypExprs.push (Expr.fvar fid)
+    idx := idx + 1
+  let applied := mkAppN tv.value hypExprs
+  let (reduced, _) := (reduceForUsage env untrusted {} applied).run {}
+  let mut hIdx : Nat := 1
+  for (subName, fid) in hypIds do
+    unless exprHasFVar fid reduced do
+      throwError "reduction proof does not use subgoal hypothesis #{hIdx} ({subName})"
+    hIdx := hIdx + 1
+  return Json.mkObj [
+    ("ok", Json.bool true),
+    ("axioms", toJson (axSet.toArray.map toString)),
+    ("subgoals", toJson (c.subgoalConsts.map toString))
+  ]
 
 def checkSnapshotM (c : Cfg) (frozenTargetCI : ConstantInfo)
     (frozenMap : Std.HashMap Name ConstantInfo)
@@ -275,11 +563,16 @@ def checkSnapshotM (c : Cfg) (frozenTargetCI : ConstantInfo)
   unless tci.levelParams.length == frozenTargetCI.levelParams.length do
     throwError "universe parameter count mismatch: got {tci.levelParams.length}, expected {frozenTargetCI.levelParams.length}"
   let lvls := frozenTargetCI.levelParams.map Level.param
-  let checkName := `_sunstead_check
+  let targetType :=
+    if c.mode == .refute then
+      mkApp (mkConst ``Not) frozenTargetCI.type
+    else
+      frozenTargetCI.type
+  let checkName := if c.mode == .refute then `_sunstead_refute_check else `_sunstead_check
   addDecl <| Declaration.thmDecl
     { name := checkName
       levelParams := frozenTargetCI.levelParams
-      type := frozenTargetCI.type
+      type := targetType
       value := mkConst c.targetConst lvls
       all := [checkName] }
   let axs ← collectAxioms checkName
@@ -312,6 +605,8 @@ def run (args : List String) : IO Json := do
 
   match c.frozenTargetOlean with
   | some frozenPath =>
+    if c.mode == .decompose then
+      throw <| IO.userError "decompose mode is only supported for classic statement-based missions"
     unless (← frozenPath.pathExists) do
       throw <| IO.userError s!"missing frozen target .olean: {frozenPath}"
     let frozenPriv : System.FilePath := frozenPath.toString ++ ".private"
@@ -323,12 +618,14 @@ def run (args : List String) : IO Json := do
     let mut frozenMap : Std.HashMap Name ConstantInfo := {}
     for (n, ci) in frozenMod.constNames.zip frozenMod.constants do
       frozenMap := frozenMap.insert n ci
-    let some frozenTargetCI := frozenMap.get? c.targetConst
-      | throw <| IO.userError s!"target constant {c.targetConst} not found in frozen upstream .olean"
+    let frozenConstName :=
+      if c.mode == .refute && !c.statement.isAnonymous then c.statement else c.targetConst
+    let some frozenTargetCI := frozenMap.get? frozenConstName
+      | throw <| IO.userError s!"target constant {frozenConstName} not found in frozen upstream .olean"
     match frozenTargetCI with
     | .thmInfo _ => pure ()
-    | _ => throw <| IO.userError s!"frozen upstream target {c.targetConst} is not a theorem/lemma"
-    let frozenTypeDeps := collectFrozenTypeDeps frozenMap c.targetConst frozenTargetCI.type
+    | _ => throw <| IO.userError s!"frozen upstream target {frozenConstName} is not a theorem/lemma"
+    let frozenTypeDeps := collectFrozenTypeDeps frozenMap frozenConstName frozenTargetCI.type
 
     let env ← importModules a.trusted {} 0 (loadExts := false)
     for (n, _) in a.consts do
@@ -339,14 +636,32 @@ def run (args : List String) : IO Json := do
     let (j, _) ← (checkSnapshotM c frozenTargetCI frozenMap frozenTypeDeps).toIO ctx { env := env }
     return j
   | none =>
-    let env ← importModules (a.trusted.push { module := c.statementsModule }) {} 0 (loadExts := false)
+    let mut trustedImports := a.trusted
+    let mut seenTrusted : Std.HashSet Name := {}
+    for imp in a.trusted do
+      seenTrusted := seenTrusted.insert imp.module
+    if !c.statementsModule.isAnonymous && !seenTrusted.contains c.statementsModule then
+      trustedImports := trustedImports.push { module := c.statementsModule }
+      seenTrusted := seenTrusted.insert c.statementsModule
+    if let some dm := c.decompStatementsModule then
+      if !dm.isAnonymous && !seenTrusted.contains dm then
+        trustedImports := trustedImports.push { module := dm }
+        seenTrusted := seenTrusted.insert dm
+    let env ← importModules trustedImports {} 0 (loadExts := false)
     for (n, _) in a.consts do
       if env.contains n then
         throw <| IO.userError s!"contributor module redefines trusted constant {n}"
-    let env ← sunsteadReplay a.consts env
     let ctx : Core.Context := { fileName := "<sunstead-check>", fileMap := default }
-    let (j, _) ← (checkClassicM c).toIO ctx { env := env }
-    return j
+    if c.mode == .decompose then
+      -- Validate subgoal statements strictly against the trusted environment BEFORE replaying contributor code.
+      let (subAxs, _) ← (checkDecompSubgoalsM c).toIO ctx { env := env }
+      let env ← sunsteadReplay a.consts env
+      let (j, _) ← (checkDecompReductionM c a.consts subAxs).toIO ctx { env := env }
+      return j
+    else
+      let env ← sunsteadReplay a.consts env
+      let (j, _) ← (checkClassicM c).toIO ctx { env := env }
+      return j
 
 def main (args : List String) : IO UInt32 := do
   if args == ["selftest"] then
