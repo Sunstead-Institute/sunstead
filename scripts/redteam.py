@@ -28,6 +28,7 @@ IMAGES = {
     "arklib-near-capacity-primes": DEFAULT_IMAGE,
     "pnt-analytic-foundations": DEFAULT_IMAGE,
     "lnsym-aes-gcm-armv8": V435_IMAGE,
+    "lnsym-gcm-gmult-armv8": V435_IMAGE,
     "matrix-rank444-f2": DEFAULT_IMAGE,
     "__synthetic_mathlib__": DEFAULT_IMAGE,
     "__synthetic_hillclimb__": DEFAULT_IMAGE,
@@ -148,6 +149,9 @@ abbrev targetScale (n : Nat) : Nat := scale n
 theorem target_add (a b : Nat) : targetScale (a + b) = targetScale a + targetScale b := by
   sorry
 
+theorem target_zero : targetScale 0 = 0 := by
+  sorry
+
 end SnapLib
 """
 
@@ -160,6 +164,24 @@ abbrev targetScale (n : Nat) : Nat := scale n
 theorem target_add (a b : Nat) : targetScale (a + b) = targetScale a + targetScale b := by
   unfold targetScale scale secretFactor
   omega
+
+theorem target_zero : targetScale 0 = 0 := by
+  exact scale_zero
+
+end SnapLib
+"""
+
+_SNAP_TARGET_ONLY_T2 = """import SnapLib.Core
+
+namespace SnapLib
+
+abbrev targetScale (n : Nat) : Nat := scale n
+
+theorem target_add (a b : Nat) : targetScale (a + b) = targetScale a + targetScale b := by
+  sorry
+
+theorem target_zero : targetScale 0 = 0 := by
+  exact scale_zero
 
 end SnapLib
 """
@@ -180,7 +202,13 @@ SYNTHETIC_REPO_SNAPSHOT_TREE = {
         "    'module': 'SnapLib.Target',\n"
         "    'theorem': 'SnapLib.target_add',\n"
         "    'target_files': ['SnapLib/Target.lean'],\n"
-        "  }\n"
+        "  },\n"
+        "  'target_zero': {\n"
+        "    'module': 'SnapLib.Target',\n"
+        "    'theorem': 'SnapLib.target_zero',\n"
+        "    'target_files': ['SnapLib/Target.lean'],\n"
+        "    'preserve_theorems': ['SnapLib.target_add'],\n"
+        "  },\n"
         "}\n"
         "lean_repo_snapshot_verify(\n"
         "  sys.argv[1],\n"
@@ -190,6 +218,7 @@ SYNTHETIC_REPO_SNAPSHOT_TREE = {
         "  allowed_import_prefixes=['SnapLib', 'Init'],\n"
         "  uses_mathlib=False,\n"
         "  snapshot_source_dir='.sunstead-frozen-snapshot',\n"
+        "  allow_other_sorries=(sys.argv[1] == 'target_zero'),\n"
         "  timeout_sec=120,\n"
         ")\n"
     ),
@@ -536,6 +565,48 @@ elab_rules : command
   | `(#print axioms $_) => logInfo "clean"
 """},
      False, None, "LNSym `elab_rules` + `import Lean` spoofing must be rejected"),
+
+    # --- Same-file multi-task `preserve_theorems` guard + LNSym GCM-GMULT mission (Lean v4.35.0) ---
+    ("repo-snapshot-preserve-prior-honest", "__synthetic_repo_snapshot__", "target_zero",
+     {}, True, None, "multi-task repo-snapshot task 2 with task 1 preserved must pass"),
+    ("repo-snapshot-revert-prior-task", "__synthetic_repo_snapshot__", "target_zero",
+     {"SnapLib/Target.lean": _SNAP_TARGET_ONLY_T2},
+     False, None, "reverting a preserved prior theorem back to `sorry` in a shared file must be rejected"),
+    ("lnsym-gcm-unproved-seed-t1", "lnsym-gcm-gmult-armv8", "gcm_polyval_mul_eq_polynomial_mult",
+     {}, False, None, "unmodified LNSym GCM-GMULT seed task 1 must be rejected (`sorryAx`)"),
+    ("lnsym-gcm-unproved-seed-t2", "lnsym-gcm-gmult-armv8", "polynomial_mult_append",
+     {}, False, None, "unmodified LNSym GCM-GMULT seed task 2 must be rejected (`sorryAx`)"),
+    ("lnsym-gcm-new-native-decide", "lnsym-gcm-gmult-armv8", "polynomial_mult_append",
+     {"Proofs/AES-GCM/GCMGmultV8Sym.lean": """import Specs.GCMV8
+import Tests.«AES-GCM».GCMGmultV8Program
+namespace GCMGmultV8Program
+theorem gcm_polyval_mul_eq_polynomial_mult {x y : BitVec 128} :
+  GCMV8.gcm_polyval_mul x y = DPSFP.polynomial_mult x y := by sorry
+theorem DPSFP.polynomial_mult_append {p q x y : BitVec 64} :
+  DPSFP.polynomial_mult (p ++ q) (x ++ y) =
+  ((DPSFP.polynomial_mult p x) ++ 0#128) ^^^
+   (0#128 ++ (DPSFP.polynomial_mult q y)) ^^^
+   (0#64 ++ (DPSFP.polynomial_mult p y) ++ 0#64) ^^^
+   (0#64 ++ (DPSFP.polynomial_mult q x) ++ 0#64) := by native_decide
+end GCMGmultV8Program
+"""},
+     False, None, "introducing a new `native_decide` line in GCMGmultV8Sym must be rejected at lint"),
+    ("lnsym-gcm-new-eval", "lnsym-gcm-gmult-armv8", "gcm_polyval_mul_eq_polynomial_mult",
+     {"Proofs/AES-GCM/GCMGmultV8Sym.lean": """import Specs.GCMV8
+#eval 1 + 1
+namespace GCMGmultV8Program
+theorem gcm_polyval_mul_eq_polynomial_mult : True := trivial
+end GCMGmultV8Program
+"""},
+     False, None, "introducing a new `#eval` line in GCMGmultV8Sym must be rejected at lint"),
+    ("lnsym-gcm-weakened-statement", "lnsym-gcm-gmult-armv8", "gcm_polyval_mul_eq_polynomial_mult",
+     {"Proofs/AES-GCM/GCMGmultV8Sym.lean": """import Specs.GCMV8
+import Tests.«AES-GCM».GCMGmultV8Program
+namespace GCMGmultV8Program
+theorem gcm_polyval_mul_eq_polynomial_mult : True := trivial
+end GCMGmultV8Program
+"""},
+     False, None, "weakening `gcm_polyval_mul_eq_polynomial_mult` to `: True` must be rejected by kernel"),
 ]
 
 

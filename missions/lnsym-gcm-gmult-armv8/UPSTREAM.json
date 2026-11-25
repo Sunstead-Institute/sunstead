@@ -1,0 +1,19 @@
+{
+  "mode": "repo-snapshot",
+  "repo": "leanprover/LNSym",
+  "commit": "49f8a1d9e46f8dcfc345f4bc15d35b0ba845ff5c",
+  "license": "Apache-2.0",
+  "checks": [
+    {
+      "local_file": "lean-toolchain",
+      "upstream_file": "lean-toolchain",
+      "exact_sha256": "ca5f1f601d34c49079e38d7e7041eb0f2a9c227fbc1df0f404820069a052330c"
+    },
+    {
+      "local_file": "Proofs/AES-GCM/GCMGmultV8Sym.lean",
+      "upstream_file": "Proofs/AES-GCM/GCMGmultV8Sym.lean",
+      "exact_sha256": "27e246f8e48ff609c75a77317b3190f96278e36dbc3916a4530b19d9dbc02e51",
+      "upstream_anchor": "theorem DPSFP.polynomial_mult_append {p q x y : BitVec 64} :"
+    }
+  ]
+}

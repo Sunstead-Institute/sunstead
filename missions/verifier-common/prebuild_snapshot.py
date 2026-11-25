@@ -53,7 +53,8 @@ def _extract_snapshot_config(mission_dir):
 
     def _capture(task_id, *, snapshot_id, frozen_files, tasks,
                  allowed_import_prefixes, uses_mathlib=False,
-                 lean_options=None, snapshot_source_dir=None, timeout_sec=170):
+                 lean_options=None, snapshot_source_dir=None,
+                 allow_other_sorries=False, timeout_sec=170):
         captured.update(
             snapshot_id=snapshot_id,
             frozen_files=list(frozen_files),
@@ -62,6 +63,7 @@ def _extract_snapshot_config(mission_dir):
             uses_mathlib=bool(uses_mathlib),
             lean_options=list(lean_options or []),
             snapshot_source_dir=snapshot_source_dir,
+            allow_other_sorries=bool(allow_other_sorries),
         )
 
     orig_verify = sb.lean_repo_snapshot_verify
@@ -158,7 +160,57 @@ def _compile_module(upstream_dir, mod, out_dir, lean_path, lean_options):
     return out_olean
 
 
-def prebuild_snapshot_mission(mission_dir, snapshot_base, upstream_dir=None, jobs=None):
+def _reuse_compatible_deps(snapshot_base, snapshot_id, repo, commit, toolchain,
+                           uses_mathlib, lean_options, dep_graph, deps_dir):
+    """Hardlink prebuilt `.olean`s from an existing snapshot in `snapshot_base`
+    with identical `(repo, commit, toolchain, uses_mathlib, lean_options)`.
+
+    Avoids recompiling and duplicating identical dependency `.olean`s across
+    multiple missions pinned to the same upstream commit (e.g. LNSym missions).
+    """
+    reused = {}
+    if not os.path.isdir(snapshot_base):
+        return reused
+    for entry in sorted(os.listdir(snapshot_base)):
+        if entry == snapshot_id:
+            continue
+        other_root = os.path.join(snapshot_base, entry)
+        other_manifest_path = os.path.join(other_root, "manifest.json")
+        other_deps_dir = os.path.join(other_root, "deps")
+        if not (os.path.isfile(other_manifest_path) and os.path.isdir(other_deps_dir)):
+            continue
+        try:
+            with open(other_manifest_path, "r", encoding="utf-8") as f:
+                other = json.load(f)
+        except (OSError, ValueError):
+            continue
+        if (other.get("repo") != repo or other.get("commit") != commit
+                or other.get("toolchain") != toolchain
+                or bool(other.get("uses_mathlib")) != bool(uses_mathlib)
+                or list(other.get("lean_options") or []) != list(lean_options or [])):
+            continue
+        other_hashes = other.get("dep_olean_hashes") or {}
+        for mod in sorted(dep_graph.keys()):
+            if mod in reused or mod not in other_hashes:
+                continue
+            segs = sb._validate_mod_name(mod)
+            src_olean = os.path.join(other_deps_dir, *segs) + ".olean"
+            if not os.path.isfile(src_olean):
+                continue
+            actual_hash = _sha256_file(src_olean)
+            if actual_hash != other_hashes[mod]:
+                continue
+            dst_olean = os.path.join(deps_dir, *segs) + ".olean"
+            os.makedirs(os.path.dirname(dst_olean), exist_ok=True)
+            try:
+                os.link(src_olean, dst_olean)
+            except OSError:
+                shutil.copy2(src_olean, dst_olean)
+            reused[mod] = actual_hash
+    return reused
+
+
+def prebuild_snapshot_mission(mission_dir, snapshot_base, upstream_dir=None, jobs=None, clone_cache=None):
     started = time.monotonic()
     mission_name = os.path.basename(os.path.normpath(mission_dir))
     manifest_path = os.path.join(mission_dir, "sunstead.json")
@@ -181,6 +233,7 @@ def prebuild_snapshot_mission(mission_dir, snapshot_base, upstream_dir=None, job
     lean_options = cfg["lean_options"]
     uses_mathlib = cfg["uses_mathlib"]
     tasks = cfg["tasks"]
+    toolchain = open(os.path.join(mission_dir, "lean-toolchain"), encoding="utf-8").read().strip()
 
     target_modules = list(dict.fromkeys(t["module"] for t in tasks.values()))
     target_rels = set()
@@ -200,14 +253,23 @@ def prebuild_snapshot_mission(mission_dir, snapshot_base, upstream_dir=None, job
 
     tmp_ctx = tempfile.TemporaryDirectory(prefix=f"sunstead-snap-{snapshot_id}-")
     try:
+        cache_key = (repo, commit)
         if upstream_dir:
             src_root = os.path.abspath(upstream_dir)
+        elif clone_cache is not None and cache_key in clone_cache:
+            src_root = clone_cache[cache_key]
+            print(f"[prebuild-snapshot] reusing cached checkout for {repo}@{commit[:12]}", flush=True)
         else:
-            src_root = os.path.join(tmp_ctx.name, "upstream")
+            if clone_cache is not None:
+                src_root = tempfile.mkdtemp(prefix=f"sunstead-clone-{commit[:12]}-")
+                clone_cache[cache_key] = src_root
+            else:
+                src_root = os.path.join(tmp_ctx.name, "upstream")
             print(f"[prebuild-snapshot] fetching {repo}@{commit[:12]}...", flush=True)
             _clone_pinned_upstream(repo, commit, src_root)
 
         # Verify lean-toolchain and every local target file match pinned upstream byte-for-byte.
+        seed_allowed_lint_lines = {}
         for rel in sorted({"lean-toolchain"} | target_rels):
             local_f = os.path.join(mission_dir, rel)
             up_f = os.path.join(src_root, rel)
@@ -215,10 +277,15 @@ def prebuild_snapshot_mission(mission_dir, snapshot_base, upstream_dir=None, job
                 raise RuntimeError(f"{mission_name}: missing local file {rel}")
             if not os.path.isfile(up_f):
                 raise RuntimeError(f"{mission_name}: missing upstream file {rel} at {commit[:12]}")
-            if open(local_f, "rb").read() != open(up_f, "rb").read():
+            local_bytes = open(local_f, "rb").read()
+            if local_bytes != open(up_f, "rb").read():
                 raise RuntimeError(
                     f"{mission_name}: {rel} does not match pinned {repo}@{commit[:12]} byte-for-byte"
                 )
+            if rel in target_rels and rel.endswith(".lean"):
+                allowed_lines = sb.extract_seed_allowed_lint_lines(local_bytes.decode("utf-8"))
+                if allowed_lines:
+                    seed_allowed_lint_lines[rel] = allowed_lines
 
         # Trace minimal transitive dependency graph for the target module(s).
         graph = _trace_dependency_graph(src_root, target_modules)
@@ -239,16 +306,21 @@ def prebuild_snapshot_mission(mission_dir, snapshot_base, upstream_dir=None, job
                     f"{mission_name}: upstream dependency `{mod}` ({rel}) contains `sorry`"
                 )
 
+        dep_olean_hashes = _reuse_compatible_deps(
+            snapshot_base, snapshot_id, repo, commit, toolchain,
+            uses_mathlib, lean_options, dep_graph, deps_dir,
+        )
+        built = set(dep_olean_hashes.keys())
+        to_build = len(dep_graph) - len(built)
+
         workers = jobs or max(1, min(os.cpu_count() or 2, 8))
         deps_lean_path = ":".join([deps_dir] + extra_lib_paths)
         print(
-            f"[prebuild-snapshot] building {len(dep_graph)} dependency module(s) for "
-            f"{mission_name} ({workers} workers)...",
+            f"[prebuild-snapshot] {mission_name}: reusing {len(built)} hardlinked dep(s), "
+            f"building {to_build} remaining dep(s) ({workers} workers)...",
             flush=True,
         )
 
-        built = set()
-        dep_olean_hashes = {}
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
             while len(built) < len(dep_graph):
                 wave = sorted(
@@ -283,7 +355,7 @@ def prebuild_snapshot_mission(mission_dir, snapshot_base, upstream_dir=None, job
             "snapshot_id": snapshot_id,
             "repo": repo,
             "commit": commit,
-            "toolchain": open(os.path.join(mission_dir, "lean-toolchain"), encoding="utf-8").read().strip(),
+            "toolchain": toolchain,
             "uses_mathlib": uses_mathlib,
             "lean_options": lean_options,
             "target_modules": target_modules,
@@ -292,6 +364,7 @@ def prebuild_snapshot_mission(mission_dir, snapshot_base, upstream_dir=None, job
             "frozen_file_hashes": dep_source_hashes,
             "dep_olean_hashes": dep_olean_hashes,
             "frozen_target_olean_hashes": frozen_target_hashes,
+            "seed_allowed_lint_lines": seed_allowed_lint_lines,
             "build_ms": elapsed_ms,
         }
         with open(os.path.join(snap_root, "manifest.json"), "w", encoding="utf-8") as f:
@@ -317,11 +390,19 @@ def main():
     snapshot_base = sb.SNAPSHOT_CACHE_DIR
     os.makedirs(snapshot_base, exist_ok=True)
     built = 0
-    for d in args.mission_dirs:
-        if not os.path.isdir(d) or not os.path.isfile(os.path.join(d, "sunstead.json")):
-            continue
-        if prebuild_snapshot_mission(d, snapshot_base, upstream_dir=args.upstream_dir, jobs=args.jobs):
-            built += 1
+    clone_cache = {}
+    try:
+        for d in sorted(args.mission_dirs):
+            if not os.path.isdir(d) or not os.path.isfile(os.path.join(d, "sunstead.json")):
+                continue
+            if prebuild_snapshot_mission(
+                d, snapshot_base, upstream_dir=args.upstream_dir,
+                jobs=args.jobs, clone_cache=clone_cache,
+            ):
+                built += 1
+    finally:
+        for cloned in clone_cache.values():
+            shutil.rmtree(cloned, ignore_errors=True)
     if built == 0:
         sys.stderr.write("prebuild_snapshot.py: no repo-snapshot missions found\n")
         sys.exit(1)

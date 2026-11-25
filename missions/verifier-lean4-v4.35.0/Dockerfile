@@ -32,6 +32,7 @@ RUN SYSROOT="$(lean --print-prefix)" \
 
 # Prebuild pinned upstream repo-snapshot `.olean` caches for bundled v4.35.0 missions.
 COPY lnsym-aes-gcm-armv8 /tmp/prebuild-snapshots/lnsym-aes-gcm-armv8
+COPY lnsym-gcm-gmult-armv8 /tmp/prebuild-snapshots/lnsym-gcm-gmult-armv8
 RUN python3 /opt/sunstead/prebuild_snapshot.py /tmp/prebuild-snapshots/* \
     && rm -rf /tmp/prebuild-snapshots \
     && chmod -R a-w,a+rX /opt/sunstead

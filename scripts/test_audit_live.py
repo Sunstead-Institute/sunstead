@@ -284,6 +284,21 @@ diff --git a/Proof.lean b/Proof.lean
         with self.assertRaisesRegex(ValueError, "non-standard axiom.*sorryAx"):
             audit.check_lean_repo_snapshot(image, raw, snap_id, opts, checks, expected_version=version)
 
+    @unittest.skipUnless(has_verifier_image(IMAGE_V435), f"requires local {IMAGE_V435} container image")
+    def test_container_lnsym_gcm_real_seed_detects_sorry_axiom(self):
+        gcm_dir = audit.ROOT / "missions" / "lnsym-gcm-gmult-armv8"
+        manifest = json.loads((gcm_dir / "sunstead.json").read_text(encoding="utf-8"))
+        contracts, _ = audit.proof_contract(gcm_dir)
+        rel = "Proofs/AES-GCM/GCMGmultV8Sym.lean"
+        seed_bytes = (gcm_dir / rel).read_bytes()
+        tree = {rel: (seed_bytes, False)}
+        image, version = audit.resolve_audit_target(gcm_dir, manifest)
+        for tid in ("gcm_polyval_mul_eq_polynomial_mult", "polynomial_mult_append"):
+            with self.subTest(task=tid):
+                raw, snap_id, opts, checks = audit.repo_snapshot_input(tree, tree, manifest, [tid], contracts)
+                with self.assertRaisesRegex(ValueError, "non-standard axiom.*sorryAx"):
+                    audit.check_lean_repo_snapshot(image, raw, snap_id, opts, checks, expected_version=version)
+
 
 if __name__ == "__main__":
     unittest.main()
