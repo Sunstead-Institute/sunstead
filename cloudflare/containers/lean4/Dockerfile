@@ -29,6 +29,7 @@ RUN mkdir -p /opt/mathlib \
     && chmod -R a-w,a+rX /opt/mathlib
 
 COPY missions/arklib-near-capacity-primes /missions/arklib-near-capacity-primes
+COPY missions/ieantn-chebyshev-kernel /missions/ieantn-chebyshev-kernel
 COPY missions/pnt-analytic-foundations /missions/pnt-analytic-foundations
 COPY missions/matrix-rank444-f2 /missions/matrix-rank444-f2
 COPY missions/onboarding-sandbox /missions/onboarding-sandbox

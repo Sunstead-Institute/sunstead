@@ -1,0 +1,39 @@
+{
+  "id": "ieantn-chebyshev-kernel",
+  "title": "IEANTN (Terence Tao): Kernel-Checked Chebyshev ψ(n) ≤ 1.11 n Bound",
+  "description": "Verbatim open challenge from Terence Tao's Integrated Explicit Analytic Number Theory Network (teorth/IEANTN@cd9c2dd3, Apache-2.0). Proves `∀ n : ℕ, (n : ℝ) ≤ 11723 → Chebyshev.psi n ≤ 1.11 * n` purely inside the Lean 4 kernel (0 sorry, standard axioms only — no `native_decide` / `Lean.ofReduceBool`), upgrading `Chebyshev.v1.psi_upper_clean` (`ψ(x) ≤ 1.11 x` for all `x > 0`) from an unchecked numerical assertion to a Comparator-verified Lean proof.",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/teorth/IEANTN",
+  "upstream": {
+    "repo": "teorth/IEANTN",
+    "commit": "cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3",
+    "license": "Apache-2.0"
+  },
+  "frozen_paths": [
+    "IEANTN/Nodes/ChebyshevNumerics/v1/Conclusions.lean",
+    "IEANTN/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": ["./verify"],
+    "timeout_sec": 240,
+    "memory_mb": 6144
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "psi_le_below_11723",
+      "title": "Kernel-check Chebyshev ψ(n) ≤ 1.11 n for all n ≤ 11723 (no native_decide)",
+      "description": "Prove `ChebyshevNumerics.v1.challenge_psi_le_below_11723 : ∀ n : ℕ, (n : ℝ) ≤ 11723 → Chebyshev.psi n ≤ 1.11 * n` inside the Lean 4 kernel with 0 sorry and standard axioms only (`propext`, `Classical.choice`, `Quot.sound` — `native_decide` / `Lean.ofReduceBool` is rejected). A rational-interval or certificate-based proof checked inside the kernel discharges the sole remaining unverified finite base case behind `Chebyshev.v1.psi_upper_clean` in `teorth/IEANTN`.",
+      "target_files": ["IEANTN/Nodes/ChebyshevNumerics/v1/Challenge.lean"],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/ChebyshevNumerics/v1/Challenge.lean#L19-L20"
+    }
+  ]
+}

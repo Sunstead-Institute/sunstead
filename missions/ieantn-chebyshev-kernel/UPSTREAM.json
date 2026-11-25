@@ -1,0 +1,17 @@
+{
+  "repo": "teorth/IEANTN",
+  "commit": "cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3",
+  "license": "Apache-2.0",
+  "checks": [
+    {
+      "local_file": "IEANTN/Nodes/ChebyshevNumerics/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/ChebyshevNumerics/v1/Conclusions.lean",
+      "exact_sha256": "50ef328cde3878345608ec9be8c51cb6547e624754612a2a7729519d35e4be8f"
+    },
+    {
+      "local_file": "IEANTN/Nodes/ChebyshevNumerics/v1/Challenge.lean",
+      "upstream_file": "IEANTN/Nodes/ChebyshevNumerics/v1/Challenge.lean",
+      "exact_sha256": "ded2d7044f5fa04158be5677d20cc7f5c2ac640f08a2b50ea6d5a1645b1abda0"
+    }
+  ]
+}

@@ -45,6 +45,7 @@ RUN SYSROOT="$(lean --print-prefix)" \
 
 # Prebuild SHA-256-keyed read-only frozen `.olean` caches for bundled missions.
 COPY arklib-near-capacity-primes /tmp/prebuild-missions/arklib-near-capacity-primes
+COPY ieantn-chebyshev-kernel /tmp/prebuild-missions/ieantn-chebyshev-kernel
 COPY pnt-analytic-foundations /tmp/prebuild-missions/pnt-analytic-foundations
 COPY matrix-rank444-f2 /tmp/prebuild-missions/matrix-rank444-f2
 COPY onboarding-sandbox /tmp/prebuild-missions/onboarding-sandbox

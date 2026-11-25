@@ -230,12 +230,34 @@ lemma isCompletelyMultiplicative_liouville :
 
           <div class="arena-row">
             <div class="arena-meta">
+              <span class="badge-gold">Tier 1 · Cryptography</span>
+              <span class="badge-teal">leanprover/LNSym · 2-Node DAG</span>
+            </div>
+            <h3>LNSym ARMv8 AES-GCM GHASH/POLYVAL Carryless Multiplication</h3>
+            <p>
+              Two foundational GF(2)[x] carryless polynomial multiplication theorems from <a href="https://github.com/leanprover/LNSym" target="_blank" rel="noopener">leanprover/LNSym</a> (Apache-2.0, 97 sorry-free prebuilt upstream dependencies) backing AWS-LC's ARMv8 <code>gcm_gmult_v8</code> multiplier: proving RFC 8452 POLYVAL equals ARMv8 <code>PMULL</code> and proving the 128-bit → four 64-bit schoolbook split.
+            </p>
+          </div>
+
+          <div class="arena-row">
+            <div class="arena-meta">
               <span class="badge-gold">Tier 1 · Certified Optimization</span>
               <span class="badge-teal">tejasvi/rank444-f2 · Hill-Climb</span>
             </div>
             <h3>Matrix Multiplication Rank 4×4×4 over F₂ (Beat AlphaTensor's 47)</h3>
             <p>
               A formally verified optimization record mission using the verbatim Apache-2.0 specification from <a href="https://github.com/tejasvi/rank444-f2" target="_blank" rel="noopener">tejasvi/rank444-f2</a>. Seeded with AlphaTensor's verified <code>r = 47</code> scheme; any contributor who submits an explicit valid scheme with strictly fewer than 47 multiplications (kernel-checked across all 4,096 Brent equations via <code>decide +kernel</code>) sets a new verified record.
+            </p>
+          </div>
+
+          <div class="arena-row">
+            <div class="arena-meta">
+              <span class="badge-gold">Tier 1 · Number Theory</span>
+              <span class="badge-teal">teorth/IEANTN · Pure Kernel</span>
+            </div>
+            <h3>IEANTN (Terence Tao): Kernel-Checked Chebyshev ψ(n) ≤ 1.11 n Bound</h3>
+            <p>
+              Verbatim open challenge from Terence Tao's <a href="https://github.com/teorth/IEANTN" target="_blank" rel="noopener">teorth/IEANTN</a> (Apache-2.0): prove <code>∀ n ≤ 11723, Chebyshev.psi n ≤ 1.11 * n</code> purely inside the Lean 4 kernel without <code>native_decide</code>, upgrading <code>ψ(x) ≤ 1.11 x</code> for all <code>x &gt; 0</code> to a 100% Comparator-verified proof.
             </p>
           </div>
 
