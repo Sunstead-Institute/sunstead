@@ -1,3 +1,4 @@
+import { clearGithubVerification, startGithubVerification, confirmGithubVerification } from "./github_verification";
 import { DurableObject } from "cloudflare:workers";
 import {
   applyClaim,
@@ -22,6 +23,7 @@ import {
   PROOF_HASH_RE,
   type LedgerMissionInfo,
   type LedgerRow,
+  verifiedGithubHandle,
   buildTaskFilesView,
   sanitizeFailureDiagnostics,
   type FailureStage,
@@ -74,6 +76,8 @@ type ContributorRecord = {
   handle: string;
   display_name: string;
   github: string | null;
+  github_verified_handle: string | null;
+  github_verified_at: number | null;
   x_handle: string | null;
   linkedin_handle: string | null;
   created_at: number;
@@ -277,6 +281,11 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     this.ensureColumn("submissions", "points", "INTEGER NOT NULL DEFAULT 0");
     this.ensureColumn("contributors", "x_handle", "TEXT");
     this.ensureColumn("contributors", "linkedin_handle", "TEXT");
+    this.ensureColumn("contributors", "github_verified_handle", "TEXT");
+    this.ensureColumn("contributors", "github_verified_at", "INTEGER");
+    this.ensureColumn("contributors", "github_challenge", "TEXT");
+    this.ensureColumn("contributors", "github_challenge_expires", "INTEGER");
+    this.ctx.storage.sql.exec(clearGithubVerification);
     // Ledger permalink key: SHA-256 of the stored (possibly normalized) patch.
     // Rows from before this column are filled in by backfillPatchHashes().
     this.ensureColumn("accepted_patches", "patch_sha256", "TEXT");
@@ -750,6 +759,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         contributor: string;
         display_name: string | null;
         github: string | null;
+        github_verified_handle: string | null;
         x_handle: string | null;
         linkedin_handle: string | null;
         verified_tasks: number;
@@ -760,7 +770,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         `SELECT
            s.contributor AS contributor,
            c.display_name AS display_name,
-           c.github AS github,
+           c.github AS github, c.github_verified_handle AS github_verified_handle,
            c.x_handle AS x_handle,
            c.linkedin_handle AS linkedin_handle,
            COUNT(DISTINCT CASE WHEN s.accepted = 1 THEN s.mission_id || ':' || s.task_id END) AS verified_tasks,
@@ -785,6 +795,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         contributor: r.contributor,
         display_name: r.display_name || r.contributor,
         github: social.github,
+        github_verified_handle: verifiedGithubHandle(social.github, r.github_verified_handle),
         x: social.x,
         linkedin: social.linkedin,
         social_links: buildSocialLinksFromHandles(social),
@@ -861,6 +872,24 @@ export class SunsteadHub extends DurableObject<HubEnv> {
 
     if (method === "PATCH" && path === "/api/me") {
       return this.handlePatchMe(request);
+    }
+
+    if (method === "POST" && (path === "/api/me/verify/github/start" || path === "/api/me/verify/github/confirm")) {
+      const auth = await this.resolveContributor(request);
+      if (!auth.ok) return jsonResp({ error: auth.error }, auth.status);
+      const now = Math.floor(Date.now() / 1000);
+      const key = `github-verification:${auth.handle}`;
+      const limit = this.checkRateLimit(key, 12, 3600, now);
+      if (!limit.allowed) return jsonResp({ error: "Verification rate limit reached" }, 429, {
+        "Retry-After": String(limit.retryAfterSec),
+      });
+      this.recordRateEvent(key, now);
+      const sql = this.ctx.storage.sql;
+      const result = path.endsWith("/start")
+        ? startGithubVerification(sql, auth.handle, now)
+        : await confirmGithubVerification(sql, auth.handle,
+            (await request.json<{gist_id?: unknown}>().catch(() => null))?.gist_id);
+      return jsonResp(result.body, result.status, { "Cache-Control": "no-store" });
     }
 
     const contribMatch = path.match(/^\/api\/contributors\/([^/]+)$/);
@@ -1131,7 +1160,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
   private getOwnProfileResponse(handle: string): Response {
     const rows = this.ctx.storage.sql
       .exec<ContributorRecord>(
-        "SELECT handle, display_name, github, x_handle, linkedin_handle, created_at FROM contributors WHERE handle = ?",
+        "SELECT handle, display_name, github, github_verified_handle, github_verified_at, x_handle, linkedin_handle, created_at FROM contributors WHERE handle = ?",
         handle
       )
       .toArray();
@@ -1152,6 +1181,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       x: row.x_handle,
       linkedin: row.linkedin_handle,
       social_links: buildSocialLinksFromHandles(handles),
+      github_verified_handle: row.github_verified_handle,
+      github_verified_at: row.github_verified_at,
       links_public: nonDemoVerified >= 1,
       non_demo_verified_proofs: nonDemoVerified,
       created_at: row.created_at,
@@ -1238,7 +1269,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
   private handleGetContributor(handle: string): Response {
     const profileRows = this.ctx.storage.sql
       .exec<ContributorRecord>(
-        "SELECT handle, display_name, github, x_handle, linkedin_handle, created_at FROM contributors WHERE handle = ?",
+        "SELECT handle, display_name, github, github_verified_handle, github_verified_at, x_handle, linkedin_handle, created_at FROM contributors WHERE handle = ?",
         handle
       )
       .toArray();
@@ -1282,6 +1313,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         handle: row?.handle ?? handle,
         display_name: row?.display_name || handle,
         github: social.github,
+        github_verified_handle: verifiedGithubHandle(social.github, row?.github_verified_handle),
         x: social.x,
         linkedin: social.linkedin,
         social_links: buildSocialLinksFromHandles(social),
@@ -1460,7 +1492,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       .exec<AcceptedProofRow>(
         `SELECT a.seq, a.mission_id, a.task_id, a.submission_id, a.contributor,
                 COALESCE(c.display_name, a.contributor) AS display_name,
-                c.github AS github, c.x_handle AS x, c.linkedin_handle AS linkedin,
+                c.github AS github, c.github_verified_handle AS github_verified_handle, c.x_handle AS x, c.linkedin_handle AS linkedin,
                 a.summary, a.patch, a.spec_sha256, a.created_at, s.verify_ms AS verify_ms
          FROM accepted_patches a
          LEFT JOIN contributors c ON c.handle = a.contributor
@@ -1507,7 +1539,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
   private static readonly LEDGER_SELECT = `
     SELECT a.seq, a.mission_id, a.task_id, a.submission_id, a.contributor,
            COALESCE(c.display_name, a.contributor) AS display_name,
-           c.github AS github, c.x_handle AS x, c.linkedin_handle AS linkedin,
+           c.github AS github, c.github_verified_handle AS github_verified_handle, c.x_handle AS x, c.linkedin_handle AS linkedin,
            a.summary, a.patch, a.patch_sha256, a.spec_sha256, a.created_at, s.verify_ms AS verify_ms
     FROM accepted_patches a
     LEFT JOIN contributors c ON c.handle = a.contributor

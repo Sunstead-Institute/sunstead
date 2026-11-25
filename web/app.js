@@ -508,7 +508,7 @@ function renderSocialLinksHtml(entry) {
   const gh = typeof entry?.github === "string" && GITHUB_HANDLE_RE.test(entry.github) ? entry.github : null;
   if (gh) {
     parts.push(
-      `<a class="social-link" href="https://github.com/${encodeURIComponent(gh)}" target="_blank" rel="noopener noreferrer nofollow ugc" title="GitHub: ${escapeHtml(gh)}">${SOCIAL_ICONS.github}<span>@${escapeHtml(gh)}</span></a>`
+      `<a class="social-link" href="https://github.com/${encodeURIComponent(gh)}" target="_blank" rel="noopener noreferrer nofollow ugc" title="GitHub: ${escapeHtml(gh)}">${SOCIAL_ICONS.github}<span>@${escapeHtml(gh)}</span>${entry.github_verified_handle === gh ? ' <span class="github-verification">Verified GitHub</span>' : ""}</a>`
     );
   }
   const x = typeof entry?.x === "string" && X_HANDLE_RE.test(entry.x) ? entry.x : null;
