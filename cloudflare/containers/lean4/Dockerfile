@@ -30,6 +30,7 @@ RUN mkdir -p /opt/mathlib \
 
 COPY missions/arklib-near-capacity-primes /missions/arklib-near-capacity-primes
 COPY missions/pnt-analytic-foundations /missions/pnt-analytic-foundations
+COPY missions/matrix-rank444-f2 /missions/matrix-rank444-f2
 COPY missions/onboarding-sandbox /missions/onboarding-sandbox
 COPY missions/verifier-common/sunstead_sandbox.py missions/verifier-common/SunsteadCheck.lean missions/verifier-common/prebuild_cache.py missions/verifier-common/prebuild_snapshot.py /opt/sunstead/
 COPY cloudflare/containers/verifier_server.py /opt/verifier_server.py

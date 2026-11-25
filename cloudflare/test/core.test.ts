@@ -2,6 +2,7 @@
 // Run with: npm test   (node --test with built-in TypeScript type stripping)
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   applyClaim,
   applyVerdict,
@@ -216,6 +217,20 @@ test("globMatches handles *, ** and exact paths", () => {
   assert.ok(!globMatches("MetaComplexity/*.lean", "MetaComplexity/a/Spec.lean"));
   assert.ok(globMatches("verify", "verify"));
   assert.ok(!globMatches("verify", "verify2"));
+});
+
+test("rank mission only permits coefficient table patches", () => {
+  const manifest = JSON.parse(readFileSync(new URL(
+    "../../missions/matrix-rank444-f2/sunstead.json", import.meta.url
+  ), "utf8")) as MissionManifest;
+  const [rank] = manifest.tasks;
+  assert.equal(manifest.score_direction, "minimize");
+  assert.equal(rank.baseline_score, 47);
+  assert.deepEqual(rank.target_files, ["Rank444/Certificate.lean"]);
+  for (const file of ["Rank444/Bound.lean", "Rank444/Spec.lean", "verify"]) {
+    assert.throws(() => validatePatch(patchFor(file), manifest.frozen_paths, rank.target_files), /frozen/);
+  }
+  validatePatch(patchFor(rank.target_files[0]), manifest.frozen_paths, rank.target_files);
 });
 
 test("validatePatch blocks frozen paths and files outside target_files", () => {

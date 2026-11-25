@@ -28,6 +28,7 @@ IMAGES = {
     "arklib-near-capacity-primes": DEFAULT_IMAGE,
     "pnt-analytic-foundations": DEFAULT_IMAGE,
     "lnsym-aes-gcm-armv8": V435_IMAGE,
+    "matrix-rank444-f2": DEFAULT_IMAGE,
     "__synthetic_mathlib__": DEFAULT_IMAGE,
     "__synthetic_hillclimb__": DEFAULT_IMAGE,
     "__synthetic_repo_snapshot__": DEFAULT_IMAGE,
@@ -201,7 +202,19 @@ SYNTHETIC_TREES = {
 }
 
 # Each case: (name, mission, task, {path: content}, expect_ok, expect_score_or_None, why)
+with open(os.path.join(MISSIONS, "matrix-rank444-f2", "Rank444", "Certificate.lean"),
+          encoding="utf-8") as f:
+    RANK_BASELINE = f.read()
+
 CASES = [
+    ("rank444-wrong-score", "matrix-rank444-f2", "reduce_rank",
+     {"Rank444/Certificate.lean": RANK_BASELINE.replace("Nat := 47", "Nat := 46", 1)},
+     False, None, "score must equal the actual number of terms"),
+    ("rank444-published-baseline", "matrix-rank444-f2", "reduce_rank",
+     {}, True, 47, "published decomposition must kernel-replay at its table length"),
+    ("rank444-invalid-table", "matrix-rank444-f2", "reduce_rank",
+     {"Rank444/Certificate.lean": "def B334.score : Nat := 1\ndef certificate : List (Nat × Nat × Nat) := [(0, 0, 0)]\n"},
+     False, None, "a shorter table must still compute the full multiplication tensor"),
     # --- Pure Lean 4.36.0 attacks + honest control (`onboarding-sandbox`) ---
     ("lean-honest-control", "onboarding-sandbox", "decoder_injective",
      {"OnboardingSandbox/DecoderInjective.lean": HONEST_DECODER}, True, None,

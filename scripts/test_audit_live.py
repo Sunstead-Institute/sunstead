@@ -32,6 +32,14 @@ def bundle(entries):
 
 
 class AuditTests(unittest.TestCase):
+    def test_rank_baseline_and_corrupt_certificates(self):
+        source = (audit.ROOT / "missions/matrix-rank444-f2/Rank444/Certificate.lean").read_text()
+        self.assertEqual(audit.check_rank_table(source), 47)
+        with self.assertRaisesRegex(ValueError, "term count"):
+            audit.check_rank_table(source.replace("Nat := 47", "Nat := 46"))
+        with self.assertRaisesRegex(ValueError, "matrix product differs"):
+            audit.check_rank_table(source.replace("(256,", "(257,", 1))
+
     def test_archive_ignores_git_and_rejects_paths(self):
         self.assertEqual(audit.archive_files(bundle([(".git/config", b"untrusted"), ("Spec.lean", b"x")])),
                          {"Spec.lean": (b"x", False)})

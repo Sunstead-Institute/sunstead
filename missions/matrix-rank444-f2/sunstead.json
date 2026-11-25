@@ -1,0 +1,46 @@
+{
+  "id": "matrix-rank444-f2",
+  "title": "Matrix multiplication over F₂: improve the 4×4 rank bound",
+  "description": "Sunstead specializes the upstream tensor-rank predicate to upper bounds for 4×4 matrix multiplication over F₂. This hill-climb is a Sunstead challenge. The public baseline uses 47 rank-one terms. A smaller verified table certifies a new upper bound for this mission.",
+  "tier": 2,
+  "mode": "hillclimb",
+  "repo": "https://github.com/tejasvi/rank444-f2",
+  "upstream": {
+    "repo": "tejasvi/rank444-f2",
+    "commit": "22f87dd705718246e3256f4cb5b5bc47311eb53d",
+    "license": "Apache-2.0"
+  },
+  "score_direction": "minimize",
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 180,
+    "memory_mb": 6144
+  },
+  "frozen_paths": [
+    "Rank444/Spec.lean",
+    "Rank444/Bound.lean",
+    "LICENSE",
+    "README.md",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "tasks": [
+    {
+      "id": "reduce_rank",
+      "title": "Reduce the number of binary products",
+      "description": "Submit your coefficient triples in Rank444/Certificate.lean. The frozen proof checks every coefficient and the kernel computes the table length. Only strict improvements earn credit.",
+      "baseline_score": 47,
+      "target_files": [
+        "Rank444/Certificate.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/tejasvi/rank444-f2/blob/22f87dd705718246e3256f4cb5b5bc47311eb53d/lean/B334/Statement.lean#L27-L49"
+    }
+  ]
+}
