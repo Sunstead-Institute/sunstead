@@ -352,6 +352,16 @@ class TimeoutAndLiveTests(unittest.TestCase):
             live,
         )
 
+    def test_checkout_files_chunks_large_file_lists(self):
+        calls = []
+        files = [f"Pkg/File{i}.lean" for i in range(1205)]
+        scout.checkout_files("/tmp/repo", "abc123", files, chunk_size=500, runner=lambda cmd, **kw: calls.append((cmd, kw)))
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(len(calls[0][0]) - 8, 500)
+        self.assertEqual(len(calls[1][0]) - 8, 500)
+        self.assertEqual(len(calls[2][0]) - 8, 205)
+        self.assertEqual(calls[0][1]["timeout"], scout.GIT_TIMEOUT)
+
 
 class NoNetworkTests(unittest.TestCase):
     def test_suite_makes_no_subprocess_calls(self):

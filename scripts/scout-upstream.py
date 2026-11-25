@@ -658,6 +658,17 @@ def mathlib_rev(manifest_text):
     return None
 
 
+def checkout_files(repo_dir, commit, files, chunk_size=500, runner=None):
+    """Check out `files` at `commit` in bounded argv batches to avoid OS E2BIG."""
+    run = runner or subprocess.run
+    for i in range(0, len(files), chunk_size):
+        run(
+            ["git", "-C", repo_dir, "checkout", "-q", "--force", commit, "--", *files[i : i + chunk_size]],
+            capture_output=True,
+            timeout=GIT_TIMEOUT,
+        )
+
+
 def scout_repo(repo, workdir, toolchain, live, check_prs=False, gh=run_gh):
     info = {"repo": repo, "domain": DOMAIN_OF.get(repo, "other"), "error": None}
     try:
@@ -694,7 +705,7 @@ def scout_repo(repo, workdir, toolchain, live, check_prs=False, gh=run_gh):
     contents = {}
     if files:
         try:
-            subprocess.run(["git", "-C", d, "checkout", "-q", "--force", commit, "--", *files], capture_output=True, timeout=GIT_TIMEOUT)
+            checkout_files(d, commit, files)
         except subprocess.TimeoutExpired:
             info["error"] = f"git checkout timed out after {GIT_TIMEOUT}s"
             return info, []
