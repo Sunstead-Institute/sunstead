@@ -19,7 +19,8 @@ What it does, for one accepted proof (by ledger id, or a saved ledger JSON):
    replaces its proof with the Sunstead one (helpers go just above it).
 4. Unless `--no-build`: runs `lake exe cache get` and `lake build <module>` on the
    full upstream checkout, fails if that declaration still uses `sorry`, checks
-   `#print axioms` lists only propext, Classical.choice and Quot.sound, and runs
+   its axioms (read by a standalone `collectAxioms` checker, not `#print axioms`)
+   are only propext, Classical.choice and Quot.sound, and runs
    each `--lint-cmd` given.
 5. Writes `<out>/upstream.patch` (git diff against the pinned commit),
    `PR_BODY.md` (attribution, Sunstead permalink, checks run), `metadata.json`
@@ -421,7 +422,7 @@ def pr_body(proof: dict, mission: dict, decl_name: str, contrib: dict, checks: d
     if built:
         lines += [
             f"- `lake build {lean_module(mission['upstream_path'])}`: ok",
-            f"- `#print axioms {decl_name}`: {', '.join(checks.get('axioms') or []) or 'none'}",
+            f"- Axioms of `{decl_name}` (collectAxioms on the built module): {', '.join(checks.get('axioms') or []) or 'none'}",
         ]
         for l in checks.get("lint", []):
             lines.append(f"- `{l['cmd']}`: {'ok' if l['ok'] else 'FAILED'}")
