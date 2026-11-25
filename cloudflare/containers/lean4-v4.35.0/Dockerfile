@@ -16,6 +16,7 @@ RUN curl -sSf https://raw.githubusercontent.com/leanprover/elan/v4.0.0/elan-init
     && chmod -R a-w,a+rX /opt/elan
 
 COPY missions/lnsym-aes-gcm-armv8 /missions/lnsym-aes-gcm-armv8
+COPY missions/lnsym-gcm-gmult-armv8 /missions/lnsym-gcm-gmult-armv8
 COPY missions/verifier-common/sunstead_sandbox.py missions/verifier-common/SunsteadCheck.lean missions/verifier-common/prebuild_snapshot.py /opt/sunstead/
 COPY cloudflare/containers/verifier_server.py /opt/verifier_server.py
 

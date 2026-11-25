@@ -1,0 +1,51 @@
+{
+  "id": "lnsym-gcm-gmult-armv8",
+  "title": "LNSym ARMv8 AES-GCM GHASH/POLYVAL Carryless Polynomial Multiplication",
+  "description": "Full-repository upstream cryptography snapshot from AWS Automated Reasoning's leanprover/LNSym (commit 49f8a1d9, Lean v4.35.0, Apache-2.0). Closes two foundational GF(2)[x] carryless polynomial multiplication `sorry`s in `Proofs/AES-GCM/GCMGmultV8Sym.lean` backing AWS-LC's ARMv8 `gcm_gmult_v8` GHASH multiplier: equivalence between RFC 8452 POLYVAL `GCMV8.gcm_polyval_mul` and ARMv8 `PMULL` `DPSFP.polynomial_mult`, and the 128-bit to four 64-bit schoolbook split identity `DPSFP.polynomial_mult_append`, verified against 97 sorry-free prebuilt upstream `.olean` dependencies.",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/leanprover/LNSym",
+  "upstream": {
+    "repo": "leanprover/LNSym",
+    "commit": "49f8a1d9e46f8dcfc345f4bc15d35b0ba845ff5c",
+    "license": "Apache-2.0"
+  },
+  "snapshot": {
+    "mode": "repo-snapshot",
+    "snapshot_id": "lnsym-gcm-gmult-armv8",
+    "lean_options": ["linter.unusedSimpArgs=false"],
+    "allowed_import_prefixes": ["Arm", "Correctness", "Specs", "Tactics", "Proofs", "Tests", "Std", "Init"]
+  },
+  "frozen_paths": [
+    "UPSTREAM.json",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4-v4.35.0:v0.1",
+    "toolchain": "leanprover/lean4:v4.35.0",
+    "command": ["./verify"],
+    "timeout_sec": 240,
+    "memory_mb": 4096
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "gcm_polyval_mul_eq_polynomial_mult",
+      "title": "Prove RFC 8452 POLYVAL `gcm_polyval_mul` equals ARMv8 `DPSFP.polynomial_mult` on 128-bit vectors",
+      "description": "Closes `GCMGmultV8Program.gcm_polyval_mul_eq_polynomial_mult` at `Proofs/AES-GCM/GCMGmultV8Sym.lean:51-53`: prove `GCMV8.gcm_polyval_mul x y = DPSFP.polynomial_mult x y` for all `x y : BitVec 128` with 0 sorry and standard axioms only. Accepted patches apply directly upstream to `leanprover/LNSym@49f8a1d9`.",
+      "target_files": ["Proofs/AES-GCM/GCMGmultV8Sym.lean"],
+      "depends_on": [],
+      "upstream_url": "https://github.com/leanprover/LNSym/blob/49f8a1d9e46f8dcfc345f4bc15d35b0ba845ff5c/Proofs/AES-GCM/GCMGmultV8Sym.lean#L51-L53"
+    },
+    {
+      "id": "polynomial_mult_append",
+      "title": "Prove 128-bit `DPSFP.polynomial_mult` splits into four 64-bit `PMULL` products",
+      "description": "Closes `GCMGmultV8Program.DPSFP.polynomial_mult_append` at `Proofs/AES-GCM/GCMGmultV8Sym.lean:166-172`: prove `DPSFP.polynomial_mult (p ++ q) (x ++ y)` equals the XOR of the four shifted 64-bit products for all `p q x y : BitVec 64` (preserving the verified proof of `gcm_polyval_mul_eq_polynomial_mult` in the same file) with 0 sorry and standard axioms only. Accepted patches apply directly upstream to `leanprover/LNSym@49f8a1d9`.",
+      "target_files": ["Proofs/AES-GCM/GCMGmultV8Sym.lean"],
+      "depends_on": ["gcm_polyval_mul_eq_polynomial_mult"],
+      "upstream_url": "https://github.com/leanprover/LNSym/blob/49f8a1d9e46f8dcfc345f4bc15d35b0ba845ff5c/Proofs/AES-GCM/GCMGmultV8Sym.lean#L166-L172"
+    }
+  ]
+}

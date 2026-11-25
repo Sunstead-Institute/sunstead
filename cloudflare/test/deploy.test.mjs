@@ -191,6 +191,7 @@ test("multi-toolchain deploy tracks both v4.36.0 and v4.35.0 verifier container 
   );
   for (const expected of [
     "missions/lnsym-aes-gcm-armv8",
+    "missions/lnsym-gcm-gmult-armv8",
     "missions/verifier-common/sunstead_sandbox.py",
     "missions/verifier-common/SunsteadCheck.lean",
     "missions/verifier-common/prebuild_snapshot.py",

@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+"""Frozen repo-snapshot verifier for `lnsym-gcm-gmult-armv8`.
+
+Uses the shared trusted harness baked into `/opt/sunstead/sunstead_sandbox.py`
+with Lean 4.35.0 and the read-only prebuilt upstream `.olean` snapshot of
+`leanprover/LNSym@49f8a1d9e46f8dcfc345f4bc15d35b0ba845ff5c`.
+"""
+import sys
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_repo_snapshot_verify  # noqa: E402
+
+SNAPSHOT_ID = "lnsym-gcm-gmult-armv8"
+FROZEN_FILES = [
+    "UPSTREAM.json",
+    "lean-toolchain",
+]
+ALLOWED_IMPORT_PREFIXES = [
+    "Arm",
+    "Correctness",
+    "Specs",
+    "Tactics",
+    "Proofs",
+    "Tests",
+    "Std",
+    "Init",
+]
+LEAN_OPTIONS = ["linter.unusedSimpArgs=false"]
+
+TASKS = {
+    "gcm_polyval_mul_eq_polynomial_mult": {
+        "module": "Proofs.«AES-GCM».GCMGmultV8Sym",
+        "theorem": "GCMGmultV8Program.gcm_polyval_mul_eq_polynomial_mult",
+        "target_files": ["Proofs/AES-GCM/GCMGmultV8Sym.lean"],
+    },
+    "polynomial_mult_append": {
+        "module": "Proofs.«AES-GCM».GCMGmultV8Sym",
+        "theorem": "GCMGmultV8Program.DPSFP.polynomial_mult_append",
+        "target_files": ["Proofs/AES-GCM/GCMGmultV8Sym.lean"],
+        "preserve_theorems": [
+            "GCMGmultV8Program.gcm_polyval_mul_eq_polynomial_mult",
+        ],
+    },
+}
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>")
+    lean_repo_snapshot_verify(
+        sys.argv[1],
+        snapshot_id=SNAPSHOT_ID,
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        allowed_import_prefixes=ALLOWED_IMPORT_PREFIXES,
+        uses_mathlib=False,
+        lean_options=LEAN_OPTIONS,
+        allow_other_sorries=True,
+        timeout_sec=230,
+    )

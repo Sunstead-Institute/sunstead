@@ -399,7 +399,7 @@ def _strip_lean_comments(src):
     return "".join(out)
 
 
-LEAN_FORBIDDEN = [
+LEAN_FORBIDDEN_ALWAYS = [
     (r"(?m)^\s*module\b",
      "Lean 4 `module` files are not allowed in target files"),
     (r"(?<![\w.])(?:public|private|meta|all)\s+import\b",
@@ -407,14 +407,41 @@ LEAN_FORBIDDEN = [
     (r"(?<![\w.])(elab|elab_rules|macro|macro_rules|syntax|declare_syntax_cat|notation|infix|infixl|infixr|prefix|postfix)\b",
      "custom syntax, macros and elaborators are not allowed in target files"),
     (r"(?<![\w.])(initialize|builtin_initialize)\b", "`initialize` blocks are not allowed"),
-    (r"#(eval|exit|reduce)\b|(?<![\w.])(run_cmd|run_elab|run_meta)\b",
-     "build-time code execution (`#eval`, `run_cmd`, ...) is not allowed"),
     (r"(?<![\w.])(implemented_by|extern|unsafe|opaque|axiom)\b",
      "`axiom`, `opaque`, `unsafe`, `extern` and `implemented_by` are not allowed"),
+]
+LEAN_BASELINE_ELIGIBLE = [
+    (r"#(eval|exit|reduce)\b|(?<![\w.])(run_cmd|run_elab|run_meta)\b",
+     "build-time code execution (`#eval`, `run_cmd`, ...) is not allowed"),
     (r"\bnative_decide\b|\bofReduceBool\b", "`native_decide` is not allowed"),
+]
+LEAN_FORBIDDEN = LEAN_FORBIDDEN_ALWAYS + LEAN_BASELINE_ELIGIBLE + [
     (r"(?<![\w.])sorry\b", "`sorry` is not allowed"),
 ]
 LEAN_ALLOWED_OPTIONS = {"maxHeartbeats", "maxRecDepth", "linter.unusedVariables"}
+
+
+def extract_seed_allowed_lint_lines(src_text):
+    """Return `{stripped_line: count}` for verbatim baseline lines in a pinned upstream
+    seed file that use `#eval`, `native_decide`, or non-default `set_option`.
+
+    Never allows `module`, `elab*`/`macro*`, `initialize`, or `axiom`/`unsafe`/etc.
+    """
+    counts = {}
+    code = _strip_lean_comments(src_text)
+    for raw_line in code.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if any(re.search(pat, line) for pat, _ in LEAN_FORBIDDEN_ALWAYS):
+            continue
+        eligible = any(re.search(pat, line) for pat, _ in LEAN_BASELINE_ELIGIBLE)
+        if not eligible:
+            opts = re.findall(r"\bset_option\s+([\w.]+)", line)
+            eligible = any(o not in LEAN_ALLOWED_OPTIONS for o in opts)
+        if eligible:
+            counts[line] = counts.get(line, 0) + 1
+    return counts
 
 
 def _import_allowed(mod, allowed_prefixes):
@@ -434,16 +461,36 @@ def _extract_imports(code):
     return mods
 
 
-def lint_lean_file(path, rel, lib_root, allowed_import_prefixes=None):
+def lint_lean_file(path, rel, lib_root, allowed_import_prefixes=None,
+                   allow_sorry=False, allowed_seed_lines=None):
     allowed = tuple(allowed_import_prefixes) if allowed_import_prefixes else (lib_root,)
     with open(path, "r", encoding="utf-8") as f:
         code = _strip_lean_comments(f.read())
-    for pat, reason in LEAN_FORBIDDEN:
+    for pat, reason in LEAN_FORBIDDEN_ALWAYS:
         if re.search(pat, code):
             return f"{rel}: {reason}"
-    for opt in re.findall(r"\bset_option\s+([\w.]+)", code):
-        if opt not in LEAN_ALLOWED_OPTIONS:
-            return f"{rel}: `set_option {opt}` is not allowed"
+    budget = dict(allowed_seed_lines or {})
+    for raw_line in code.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        hit_reason = None
+        for pat, reason in LEAN_BASELINE_ELIGIBLE:
+            if re.search(pat, line):
+                hit_reason = reason
+                break
+        if hit_reason is None:
+            for opt in re.findall(r"\bset_option\s+([\w.]+)", line):
+                if opt not in LEAN_ALLOWED_OPTIONS:
+                    hit_reason = f"`set_option {opt}` is not allowed"
+                    break
+        if hit_reason is not None:
+            if budget.get(line, 0) > 0:
+                budget[line] -= 1
+            else:
+                return f"{rel}: {hit_reason}"
+    if not allow_sorry and re.search(r"(?<![\w.])sorry\b", code):
+        return f"{rel}: `sorry` is not allowed"
     allowed_desc = ", ".join(f"{p}.*" for p in allowed)
     for mod in _extract_imports(code):
         if not _import_allowed(mod, allowed):
@@ -920,7 +967,7 @@ def _build_live_snapshot(job, snap_src_abs, target_modules, extra_lib_paths,
 def lean_repo_snapshot_verify(task_id, *, snapshot_id, frozen_files, tasks,
                               allowed_import_prefixes, uses_mathlib=False,
                               lean_options=None, snapshot_source_dir=None,
-                              timeout_sec=170):
+                              allow_other_sorries=False, timeout_sec=170):
     """Verify a Lean 4 repo-snapshot task against a pinned upstream `.olean` snapshot."""
     _lean_repo_snapshot_check(
         task_id,
@@ -931,6 +978,7 @@ def lean_repo_snapshot_verify(task_id, *, snapshot_id, frozen_files, tasks,
         uses_mathlib=uses_mathlib,
         lean_options=lean_options,
         snapshot_source_dir=snapshot_source_dir,
+        allow_other_sorries=allow_other_sorries,
         timeout_sec=timeout_sec,
         allow_sorry=False,
     )
@@ -939,7 +987,7 @@ def lean_repo_snapshot_verify(task_id, *, snapshot_id, frozen_files, tasks,
 def check_seed_repo_snapshot(task_id, *, snapshot_id, frozen_files, tasks,
                              allowed_import_prefixes, uses_mathlib=False,
                              lean_options=None, snapshot_source_dir=None,
-                             timeout_sec=170):
+                             allow_other_sorries=False, timeout_sec=170):
     """CI only (scripts/check-statements.py): check unmodified repo-snapshot seed."""
     _lean_repo_snapshot_check(
         task_id,
@@ -950,6 +998,7 @@ def check_seed_repo_snapshot(task_id, *, snapshot_id, frozen_files, tasks,
         uses_mathlib=uses_mathlib,
         lean_options=lean_options,
         snapshot_source_dir=snapshot_source_dir,
+        allow_other_sorries=allow_other_sorries,
         timeout_sec=timeout_sec,
         allow_sorry=True,
     )
@@ -958,7 +1007,7 @@ def check_seed_repo_snapshot(task_id, *, snapshot_id, frozen_files, tasks,
 def _lean_repo_snapshot_check(task_id, *, snapshot_id, frozen_files, tasks,
                               allowed_import_prefixes, uses_mathlib,
                               lean_options, snapshot_source_dir,
-                              timeout_sec, allow_sorry):
+                              allow_other_sorries, timeout_sec, allow_sorry):
     require_root()
     task = tasks.get(task_id)
     if task is None:
@@ -1039,12 +1088,23 @@ def _lean_repo_snapshot_check(task_id, *, snapshot_id, frozen_files, tasks,
                     emit(False, msg, stage="lint", diagnostics=msg)
 
     # 1. Lint every target file.
+    seed_lint_map = (snap_manifest or {}).get("seed_allowed_lint_lines") or {}
     for rel in sorted(target_files):
         abs_p = os.path.join(work, rel)
         if not os.path.isfile(abs_p):
             emit(False, f"missing target file: {rel}", stage="lint", diagnostics=f"missing target file: {rel}")
-        problem = lint_lean_file(abs_p, rel, target_segs[0], allowed_imports)
-        if problem and not (allow_sorry and "`sorry`" in problem):
+        allowed_lines = seed_lint_map.get(rel)
+        if allowed_lines is None and snap_src_abs is not None:
+            ref_p = os.path.join(snap_src_abs, rel)
+            if os.path.isfile(ref_p):
+                with open(ref_p, "r", encoding="utf-8") as rf:
+                    allowed_lines = extract_seed_allowed_lint_lines(rf.read())
+        problem = lint_lean_file(
+            abs_p, rel, target_segs[0], allowed_imports,
+            allow_sorry=(allow_sorry or allow_other_sorries),
+            allowed_seed_lines=allowed_lines,
+        )
+        if problem:
             emit(False, f"hygiene check failed: {problem}", stage="lint", diagnostics=problem)
 
     job = Job()
@@ -1108,45 +1168,56 @@ def _lean_repo_snapshot_check(task_id, *, snapshot_id, frozen_files, tasks,
         else:
             checker_cmd = ["lean", "--run", LEAN_CHECKER]
         trusted_lib_paths = [deps_dir] + extra_lib_paths
-        argv = checker_cmd + [
-            "trusted-lib=" + ":".join(trusted_lib_paths),
-            "untrusted-lib=" + out_lib,
-            "untrusted-modules=" + target_mod,
-            "frozen-target-olean=" + frozen_target_olean,
-            "target-module=" + target_mod,
-            "target-const=" + task["theorem"],
-        ]
-        p = run_as(CHECKER_USER, argv, cwd=job.checker_dir, timeout=deadline(),
-                   env_extra={"HOME": job.checker_dir}, fsize_mb=fsize_mb)
-        ensure_no_processes(CHECKER_USER)
-        result = None
-        for line in reversed(p.stdout.splitlines()):
-            line = line.strip()
-            if line.startswith("{"):
-                try:
-                    result = json.loads(line)
-                    break
-                except ValueError:
-                    pass
-        if result is None:
-            combined = (p.stdout + "\n" + p.stderr).strip()
-            st = "timeout" if p.returncode == -9 else "kernel"
-            emit(False, f"trusted checker produced no result: {tail(combined)}",
-                 stage=st, diagnostics=combined)
-        if not result.get("ok"):
-            err_msg = str(result.get("error", "unknown error"))
-            emit(False, f"kernel check failed: {err_msg[:400]}",
-                 stage="kernel", diagnostics=err_msg)
+        theorems_to_check = [task["theorem"]]
+        if not allow_sorry:
+            for prev_thm in task.get("preserve_theorems") or []:
+                if prev_thm not in theorems_to_check:
+                    theorems_to_check.append(prev_thm)
         allowed_axioms = set(ALLOWED_AXIOMS) | ({"sorryAx"} if allow_sorry else set())
-        bad = [a for a in result.get("axioms", []) if a not in allowed_axioms]
-        if bad:
-            msg = f"forbidden axioms: {', '.join(bad)}"
-            emit(False, msg, stage="axioms",
-                 diagnostics=f"{msg} (allowed: {', '.join(sorted(allowed_axioms))})")
+        target_axioms = []
+        for check_thm in theorems_to_check:
+            argv = checker_cmd + [
+                "trusted-lib=" + ":".join(trusted_lib_paths),
+                "untrusted-lib=" + out_lib,
+                "untrusted-modules=" + target_mod,
+                "frozen-target-olean=" + frozen_target_olean,
+                "target-module=" + target_mod,
+                "target-const=" + check_thm,
+            ]
+            p = run_as(CHECKER_USER, argv, cwd=job.checker_dir, timeout=deadline(),
+                       env_extra={"HOME": job.checker_dir}, fsize_mb=fsize_mb)
+            ensure_no_processes(CHECKER_USER)
+            result = None
+            for line in reversed(p.stdout.splitlines()):
+                line = line.strip()
+                if line.startswith("{"):
+                    try:
+                        result = json.loads(line)
+                        break
+                    except ValueError:
+                        pass
+            if result is None:
+                combined = (p.stdout + "\n" + p.stderr).strip()
+                st = "timeout" if p.returncode == -9 else "kernel"
+                emit(False, f"trusted checker produced no result ({check_thm}): {tail(combined)}",
+                     stage=st, diagnostics=combined)
+            if not result.get("ok"):
+                err_msg = str(result.get("error", "unknown error"))
+                prefix = "" if check_thm == task["theorem"] else f"preserved prior theorem `{check_thm}` broken: "
+                emit(False, f"kernel check failed: {prefix}{err_msg[:400]}",
+                     stage="kernel", diagnostics=prefix + err_msg)
+            bad = [a for a in result.get("axioms", []) if a not in allowed_axioms]
+            if bad:
+                prefix = "" if check_thm == task["theorem"] else f"preserved prior theorem `{check_thm}` uses "
+                msg = f"{prefix}forbidden axioms: {', '.join(bad)}"
+                emit(False, msg, stage="axioms",
+                     diagnostics=f"{msg} (allowed: {', '.join(sorted(allowed_axioms))})")
+            if check_thm == task["theorem"]:
+                target_axioms = result.get("axioms", [])
         elapsed = int((time.monotonic() - started) * 1000)
         if allow_sorry:
             emit(True, f"repo-snapshot seed `{task['theorem']}` matches pinned upstream `.olean` "
-                       f"(axioms: {', '.join(result.get('axioms', [])) or 'none'}, {elapsed} ms)")
+                       f"(axioms: {', '.join(target_axioms) or 'none'}, {elapsed} ms)")
         emit(True, f"Lean 4 repo-snapshot kernel-replayed `{task_id}` (0 sorry, standard axioms only, {elapsed} ms)",
              score=1.0)
     finally:
