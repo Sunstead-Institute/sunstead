@@ -496,6 +496,7 @@ export type AcceptedProofRow = {
   contributor: string;
   display_name: string;
   github: string | null;
+  github_verified_handle?: string | null;
   x?: string | null;
   linkedin?: string | null;
   summary: string;
@@ -516,6 +517,10 @@ export interface ContributorSocialHandles {
   github: string | null;
   x: string | null;
   linkedin: string | null;
+}
+
+export function verifiedGithubHandle(visible: string | null, verified?: string | null): string | null {
+  return visible && visible.toLowerCase() === verified?.toLowerCase() ? visible : null;
 }
 
 export interface SocialLink {
@@ -700,6 +705,7 @@ export function buildProofView(
     contributor: row.contributor,
     display_name: row.display_name || row.contributor,
     github: social.github,
+    github_verified_handle: verifiedGithubHandle(social.github, row.github_verified_handle),
     x: social.x,
     linkedin: social.linkedin,
     social_links: buildSocialLinksFromHandles(social),
@@ -807,6 +813,7 @@ export function buildLedgerEntry(
     contributor: row.contributor,
     display_name: row.display_name || row.contributor,
     github: social.github,
+    github_verified_handle: verifiedGithubHandle(social.github, row.github_verified_handle),
     x: social.x,
     linkedin: social.linkedin,
     social_links: buildSocialLinksFromHandles(social),
