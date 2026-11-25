@@ -277,6 +277,48 @@ class CheckPrsTests(unittest.TestCase):
             scout.fetch_open_work("o/r", boom)
 
 
+LS_TREE = (
+    "100644 blob aaaa\tLICENSE\n"
+    "100644 blob bbbb\tlean-toolchain\n"
+    "100644 blob cccc\tlake-manifest.json\n"
+    "100644 blob dddd\tFoo/Bar.lean\n"
+    "100644 blob eeee\tblueprint/src/content.tex\n"
+    "100644 blob ffff\tREADME.md\n"
+    "100644 blob 1111\tdocs/img.png\n"
+    "040000 tree 2222\tFoo\n"
+    "160000 commit 3333\tvendor/sub\n"
+)
+
+
+class PrefetchTests(unittest.TestCase):
+    def test_wanted_blobs(self):
+        self.assertEqual(scout.wanted_blobs(LS_TREE), ["aaaa", "bbbb", "cccc", "dddd", "eeee"])
+
+    def test_prefetch_is_one_batched_blob_fetch(self):
+        calls = []
+
+        class R:
+            returncode = 0
+
+        def run(cmd, **kw):
+            calls.append((cmd, kw))
+            return R()
+        self.assertEqual(scout.prefetch_blobs("/repo", LS_TREE, run), 5)
+        self.assertEqual(len(calls), 1)
+        cmd, kw = calls[0]
+        self.assertEqual(cmd[:3], ["git", "-C", "/repo"])
+        self.assertIn("fetch", cmd)
+        self.assertIn("--stdin", cmd)
+        self.assertIn("--filter=blob:none", cmd)
+        self.assertEqual(kw["input"], "aaaa\nbbbb\ncccc\ndddd\neeee\n")
+
+    def test_prefetch_failure_and_empty_are_harmless(self):
+        class Bad:
+            returncode = 128
+        self.assertEqual(scout.prefetch_blobs("/repo", LS_TREE, lambda *a, **k: Bad()), 0)
+        self.assertEqual(scout.prefetch_blobs("/repo", "", lambda *a, **k: self.fail("no call")), 0)
+
+
 class NoNetworkTests(unittest.TestCase):
     def test_suite_makes_no_subprocess_calls(self):
         """The offline tests above must never reach gh/git: guard subprocess.run."""
@@ -285,6 +327,7 @@ class NoNetworkTests(unittest.TestCase):
         try:
             suite = unittest.defaultTestLoader.loadTestsFromTestCase(CheckPrsTests)
             suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(MultiToolchainTests))
+            suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(PrefetchTests))
             result = unittest.TestResult()
             suite.run(result)
             self.assertTrue(result.wasSuccessful(), result.failures + result.errors)
