@@ -45,4 +45,6 @@ jobs:
       - name: Verify audit spoofing resistance against v4.36.0, v4.35.0, and v4.31.0 container images
         run: python3 -m unittest discover -s scripts -p 'test_audit_live.py' -v
       - name: Reproduce published proofs with stock Lean and leanchecker across toolchains
-        run: python3 scripts/audit-live.py
+        env:
+          SUNSTEAD_AUDIT_TOKEN: ${{ secrets.SUNSTEAD_AUDIT_TOKEN }}
+        run: python3 scripts/audit-live.py --publish-audit

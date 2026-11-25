@@ -40,8 +40,20 @@ import {
   publicVerifierImage,
   buildMissionLocalSetup,
   renderRepoSnapshotBootstrapScript,
+  HILLCLIMB_LOG_SCALE,
+  VerifierSlotPool,
+  VERIFIER_POOL_SIZE,
+  verifierSlotName,
+  isMissionCompleted,
+  sortMissionSummaries,
+  parseAuditAttestation,
+  parseStoredAudit,
+  constantTimeEqual,
+  shouldRunAsyncSubmit,
+  formatSubmissionStatusView,
   type AcceptedProofRow,
   type MissionManifest,
+  type SubmissionStatusRow,
   type TaskState,
 } from "../src/core.ts";
 import { renderJoinTxt } from "../src/join_txt.ts";
@@ -347,13 +359,15 @@ test("hill-climb accepts only strict improvements in the score direction", () =>
   assert.equal(applyVerdict("hillclimb", "maximize", FROZEN, SPEC, tasks, "x", p, v(1001)).new_best_score, 1001);
 });
 
-test("hill-climb points follow the log ratio, so farming tiny steps never pays", () => {
+test("hill-climb points follow the log ratio, reward tight open records, and prevent farming", () => {
   const m = mission("hillclimb", 2);
   const t = task("x");
-  assert.equal(computePoints(m, t, 1000, 999), 0, "a 0.1% improvement earns nothing");
-  assert.equal(computePoints(m, t, 1000, 500), 173, "halving earns floor(250 ln 2)");
-  assert.equal(computePoints(m, t, 1000, 150), 474);
-  assert.equal(computePoints(m, t, 100, 200), 173, "maximize direction uses the same ratio");
+  assert.equal(HILLCLIMB_LOG_SCALE, 5000);
+  assert.equal(computePoints(m, t, 10000, 9999), 0, "a 0.01% improvement earns nothing");
+  assert.equal(computePoints(m, t, 47, 46), 107, "breaking 47->46 on matrix-rank444-f2 awards meaningful credit");
+  assert.equal(computePoints(m, t, 23, 22), 222, "breaking 23->22 on <3,3,3> awards substantial credit");
+  assert.equal(computePoints(m, t, 1000, 500), Math.floor(5000 * Math.log(2)), "halving earns floor(5000 ln 2)");
+  assert.equal(computePoints(m, t, 100, 200), Math.floor(5000 * Math.log(2)), "maximize direction uses the same ratio");
   assert.equal(computePoints(m, t, null, 500), 100, "first record without a baseline");
   let farmed = 0;
   for (let s = 1000; s > 150; s--) farmed += computePoints(m, t, s, s - 1);
@@ -995,4 +1009,203 @@ test("renderJoinTxt uses ghcr.io/sunstead-institute, accurate per-mission toolch
   assert.match(txt, /lnsym-gcm-gmult-armv8\/bootstrap\.sh/);
   assert.match(txt, /reduce_rank \(best: 47, minimize\)/);
   assert.match(txt, /Rank444\/Certificate\.lean/);
+  assert.match(txt, /submit\?async=1/);
+  assert.match(txt, /floor\(5000 x \|ln\(new\/old\)\|\)/);
+});
+
+// ---------------------------------------------------------------- async submit, pooling, sorting, audit & UI
+
+test("VerifierSlotPool fans out concurrent verifications on one mission and prefers warm affinity slots", async () => {
+  assert.equal(VERIFIER_POOL_SIZE.lean4, 6);
+  assert.equal(VERIFIER_POOL_SIZE["lean4-v4.35.0"], 4);
+  assert.equal(VERIFIER_POOL_SIZE["lean4-v4.31.0"], 4);
+  assert.equal(verifierSlotName("lean4", "sunstead/verifier-lean4:v0.2", 2), "lean4:sunstead/verifier-lean4:v0.2:slot-2");
+
+  const pool = new VerifierSlotPool({ lean4: 2, "lean4-v4.35.0": 2, "lean4-v4.31.0": 2 });
+  const s0 = await pool.acquire("lean4", "img:v1", "mission-a");
+  const s1 = await pool.acquire("lean4", "img:v1", "mission-a");
+  assert.notEqual(s0, s1, "concurrent submissions on the same mission use distinct slots");
+
+  // Third concurrent caller waits until one of the 2 slots is released.
+  let thirdResolved = false;
+  const thirdPromise = pool.acquire("lean4", "img:v1", "mission-b").then((slot) => {
+    thirdResolved = true;
+    return slot;
+  });
+  await Promise.resolve();
+  assert.equal(thirdResolved, false);
+
+  pool.release("lean4", "img:v1", s1);
+  const s2 = await thirdPromise;
+  assert.equal(s2, s1);
+
+  pool.release("lean4", "img:v1", s0);
+  pool.release("lean4", "img:v1", s2);
+
+  // Idle affinity: mission-b should re-acquire slot s2 (warm for mission-b), mission-a gets s0.
+  const warmB = await pool.acquire("lean4", "img:v1", "mission-b");
+  assert.equal(warmB, s2);
+  const warmA = await pool.acquire("lean4", "img:v1", "mission-a");
+  assert.equal(warmA, s0);
+  pool.release("lean4", "img:v1", warmB);
+  pool.release("lean4", "img:v1", warmA);
+});
+
+test("shouldRunAsyncSubmit respects query flag, JSON body, and Prefer header", () => {
+  const u = (s: string) => new URL(`https://sunstead.org/api/missions/m/tasks/t/submit${s}`);
+  assert.equal(shouldRunAsyncSubmit(u(""), {}, new Headers()), false);
+  assert.equal(shouldRunAsyncSubmit(u("?async=1"), {}, new Headers()), true);
+  assert.equal(shouldRunAsyncSubmit(u("?async=true"), {}, new Headers()), true);
+  assert.equal(shouldRunAsyncSubmit(u("?async=0"), { async: true }, new Headers({ Prefer: "respond-async" })), false);
+  assert.equal(shouldRunAsyncSubmit(u(""), { async: true }, new Headers()), true);
+  assert.equal(shouldRunAsyncSubmit(u(""), {}, new Headers({ Prefer: "respond-async" })), true);
+});
+
+test("formatSubmissionStatusView reports verifying, accepted (with normalized proof_id/permalink), and rejected states", () => {
+  const baseRow: SubmissionStatusRow = {
+    id: "sub-123",
+    mission_id: "pnt-analytic-foundations",
+    task_id: "liouville",
+    contributor: "alice",
+    status: "verifying",
+    accepted: 0,
+    score: null,
+    points: 0,
+    summary: "Verifying…",
+    patch_sha256: `sha256:${LEDGER_SHA}`,
+    proof_id: null,
+    verify_ms: 0,
+    stage: null,
+    diagnostics: null,
+    error: null,
+    unlocked_dependents_json: null,
+    created_at: 1000,
+    completed_at: null,
+  };
+  const pending = formatSubmissionStatusView(baseRow, "https://sunstead.org");
+  assert.equal(pending.status, "verifying");
+  assert.equal(pending.accepted, null);
+  assert.equal(pending.proof_id, null);
+  assert.equal(pending.permalink, null);
+
+  const accepted = formatSubmissionStatusView(
+    {
+      ...baseRow,
+      status: "accepted",
+      accepted: 1,
+      points: 150,
+      proof_id: LEDGER_SHA,
+      unlocked_dependents_json: JSON.stringify(["next_lemma"]),
+      verify_ms: 4200,
+      completed_at: 1005,
+    },
+    "https://sunstead.org"
+  );
+  assert.equal(accepted.status, "accepted");
+  assert.equal(accepted.accepted, true);
+  assert.equal(accepted.patch_sha256, `sha256:${LEDGER_SHA}`);
+  assert.equal(accepted.proof_id, LEDGER_SHA);
+  assert.equal(accepted.permalink, `https://sunstead.org/proofs/${LEDGER_SHA}`);
+  assert.deepEqual(accepted.unlocked_dependents, ["next_lemma"]);
+
+  const rejected = formatSubmissionStatusView(
+    {
+      ...baseRow,
+      status: "rejected",
+      accepted: 0,
+      stage: "axioms",
+      diagnostics: "sorryAx detected",
+      error: "non-standard axioms",
+      completed_at: 1004,
+    },
+    "https://sunstead.org"
+  );
+  assert.equal(rejected.status, "rejected");
+  assert.equal(rejected.accepted, false);
+  assert.equal(rejected.stage, "axioms");
+  assert.equal(rejected.diagnostics, "sorryAx detected");
+  assert.equal(rejected.error, "non-standard axioms");
+});
+
+test("sortMissionSummaries places active Tier 1 DAGs first, then Tier 2 hill-climb, then Completed Showcase, then demo", () => {
+  const sorted = sortMissionSummaries([
+    { id: "matrix-rank444-f2", tier: 2, mode: "hillclimb", demo: false, total_tasks: 1, verified_tasks: 1 },
+    { id: "pnt-analytic-foundations", tier: 1, mode: "dag", demo: false, total_tasks: 6, verified_tasks: 6 },
+    { id: "onboarding-sandbox", tier: 0, mode: "dag", demo: true, total_tasks: 4, verified_tasks: 2 },
+    { id: "arklib-near-capacity-primes", tier: 1, mode: "dag", demo: false, total_tasks: 1, verified_tasks: 0 },
+    { id: "lnsym-aes-gcm-armv8", tier: 1, mode: "dag", demo: false, total_tasks: 1, verified_tasks: 1 },
+    { id: "curve25519-dalek", tier: 1, mode: "dag", demo: false, total_tasks: 2, verified_tasks: 0 },
+  ]);
+  assert.deepEqual(
+    sorted.map((m) => m.id),
+    [
+      "arklib-near-capacity-primes",
+      "curve25519-dalek",
+      "matrix-rank444-f2",
+      "lnsym-aes-gcm-armv8",
+      "pnt-analytic-foundations",
+      "onboarding-sandbox",
+    ]
+  );
+  assert.equal(isMissionCompleted(sorted[2]), false, "hillclimb missions stay open even when tasks are verified");
+  assert.equal(isMissionCompleted(sorted[3]), true);
+  assert.equal(isMissionCompleted(sorted[0]), false);
+});
+
+test("parseAuditAttestation validates attestations and buildLedgerEntry exposes persisted audit records", () => {
+  const att = parseAuditAttestation(
+    {
+      status: "passed",
+      auditor: "github-actions/audit-proofs",
+      toolchain: "lean4:v4.36.0",
+      run_url: "https://github.com/Sunstead-Institute/sunstead/actions/runs/12345",
+      commit_sha: "abcdef1234567",
+      axioms: ["propext", "Classical.choice"],
+      summary: "Stock Lean 4.36.0 + leanchecker passed",
+    },
+    1700000000
+  );
+  assert.equal(att.status, "passed");
+  assert.equal(att.audited_at, 1700000000);
+  assert.throws(() => parseAuditAttestation({ status: "bogus", auditor: "x" }), /status/);
+  assert.throws(() => parseAuditAttestation({ status: "passed", auditor: "x", run_url: "javascript:alert(1)" }), /https/);
+  assert.throws(() => parseAuditAttestation({ status: "passed", auditor: "x", commit_sha: "not-hex!" }), /commit_sha/);
+
+  const entry = buildLedgerEntry(
+    { ...proofRow({ audit_json: JSON.stringify(att) }), patch_sha256: `sha256:${LEDGER_SHA}` },
+    ledgerMission(),
+    "https://sunstead.org"
+  );
+  assert.deepEqual(entry.audit, att);
+  assert.equal(parseStoredAudit("{invalid json"), null);
+  assert.equal(constantTimeEqual("secret-token", "secret-token"), true);
+  assert.equal(constantTimeEqual("secret-token", "secret-tokeN"), false);
+  assert.equal(constantTimeEqual("short", "longer"), false);
+});
+
+test("web/app.js hill-climb nodePalette preserves CLAIMED/OPEN status and SSE invalidates proofCache", async () => {
+  const vm = await import("node:vm");
+  const appJs = readFileSync(new URL("../../web/app.js", import.meta.url), "utf8");
+  const paletteMatch = appJs.match(/function nodePalette\(task, mode\) \{[\s\S]*?\n\}/);
+  assert.ok(paletteMatch, "nodePalette(task, mode) must exist in web/app.js");
+  assert.match(appJs, /state\.proofCache\.delete\(`\$\{ev\.mission_id\}\/\$\{ev\.task_id\}`\)/);
+  assert.match(appJs, /state\.proofCache\.clear\(\)/);
+  assert.match(appJs, /completed-missions-section/);
+
+  const ctx: Record<string, unknown> = {};
+  vm.runInNewContext(`${paletteMatch[0]}\nthis.nodePalette = nodePalette;`, ctx);
+  const nodePalette = ctx.nodePalette as (t: Record<string, unknown>, mode: string) => { badge: string };
+
+  assert.equal(
+    nodePalette({ unlocked: true, status: "verified", active_lease: { contributor: "alice" } }, "hillclimb").badge,
+    "CLAIMED"
+  );
+  assert.equal(
+    nodePalette({ unlocked: true, status: "verified", active_lease: null }, "hillclimb").badge,
+    "RECORD · OPEN"
+  );
+  assert.equal(
+    nodePalette({ unlocked: true, status: "verified", active_lease: null }, "dag").badge,
+    "VERIFIED"
+  );
 });

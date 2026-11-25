@@ -120,6 +120,10 @@ async function loadHealth() {
   }
 }
 
+function isMissionCompleted(m) {
+  return m && m.mode === "dag" && m.total_tasks > 0 && m.verified_tasks >= m.total_tasks;
+}
+
 async function loadMissions() {
   const data = await fetchJson("/api/missions");
   state.missions = data.missions || [];
@@ -135,7 +139,8 @@ async function loadMissions() {
     state.missions.length > 0 &&
     (!state.activeMissionId || !state.missions.some((m) => m.id === state.activeMissionId))
   ) {
-    state.activeMissionId = state.missions[0].id;
+    const firstActive = state.missions.find((m) => !isMissionCompleted(m)) || state.missions[0];
+    state.activeMissionId = firstActive.id;
     state.selectedTaskId = null;
   }
   renderMissionTabs();
@@ -144,38 +149,63 @@ async function loadMissions() {
   }
 }
 
-function renderMissionTabs() {
-  const container = $("mission-tabs");
-  container.innerHTML = state.missions
-    .map((m) => {
-      const pct = m.total_tasks > 0 ? Math.round((m.verified_tasks / m.total_tasks) * 100) : 0;
-      const active = m.id === state.activeMissionId ? "active" : "";
-      const modeLabel = m.mode === "hillclimb" ? "HILL-CLIMB" : "BLUEPRINT";
-      const demoBadge = m.demo
-        ? `<span class="badge-demo" title="Protocol sandbox: awards 0 leaderboard points">SANDBOX</span>`
-        : "";
-      return `
-        <button class="mission-tab ${active}" data-id="${escapeHtml(m.id)}">
-          <div class="tab-top">
-            <span style="display:inline-flex;align-items:center;gap:6px"><span class="badge-gold">Tier ${m.tier}</span>${demoBadge}</span>
-            <span class="badge-teal">${modeLabel} · ${m.verified_tasks}/${m.total_tasks}</span>
-          </div>
-          <div class="tab-title">${escapeHtml(m.title)}</div>
-          <div class="muted small" style="font-family:var(--mono)">${escapeHtml(m.id)}</div>
-          <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
-        </button>
-      `;
-    })
-    .join("");
+function renderMissionCardHtml(m, completed) {
+  const pct = m.total_tasks > 0 ? Math.round((m.verified_tasks / m.total_tasks) * 100) : 0;
+  const active = m.id === state.activeMissionId ? "active" : "";
+  const doneClass = completed ? "mission-tab-completed" : "";
+  const modeLabel = m.mode === "hillclimb" ? "HILL-CLIMB" : completed ? "COMPLETE" : "BLUEPRINT";
+  const demoBadge = m.demo
+    ? `<span class="badge-demo" title="Protocol sandbox: awards 0 leaderboard points">SANDBOX</span>`
+    : "";
+  return `
+    <button class="mission-tab ${doneClass} ${active}" data-id="${escapeHtml(m.id)}">
+      <div class="tab-top">
+        <span style="display:inline-flex;align-items:center;gap:6px"><span class="badge-gold">Tier ${m.tier}</span>${demoBadge}</span>
+        <span class="badge-teal">${modeLabel} · ${m.verified_tasks}/${m.total_tasks}</span>
+      </div>
+      <div class="tab-title">${escapeHtml(m.title)}</div>
+      <div class="muted small" style="font-family:var(--mono)">${escapeHtml(m.id)}</div>
+      <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+    </button>
+  `;
+}
 
-  container.querySelectorAll(".mission-tab").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      state.activeMissionId = btn.dataset.id;
-      state.selectedTaskId = null;
-      renderMissionTabs();
-      loadMissionDetail(state.activeMissionId);
+function renderMissionTabs() {
+  const activeContainer = $("mission-tabs");
+  const completedSection = $("completed-missions-section");
+  const completedContainer = $("completed-mission-tabs");
+  const completedCount = $("completed-missions-count");
+
+  const activeMissions = state.missions.filter((m) => !isMissionCompleted(m));
+  const completedMissions = state.missions.filter((m) => isMissionCompleted(m));
+
+  activeContainer.innerHTML = activeMissions.map((m) => renderMissionCardHtml(m, false)).join("");
+  if (completedSection && completedContainer) {
+    if (completedMissions.length > 0) {
+      completedSection.classList.remove("hidden");
+      if (completedCount) {
+        completedCount.textContent = `${completedMissions.length} completed mission${completedMissions.length === 1 ? "" : "s"}`;
+      }
+      completedContainer.innerHTML = completedMissions.map((m) => renderMissionCardHtml(m, true)).join("");
+    } else {
+      completedSection.classList.add("hidden");
+      completedContainer.innerHTML = "";
+    }
+  }
+
+  const wire = (root) => {
+    if (!root) return;
+    root.querySelectorAll(".mission-tab").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.activeMissionId = btn.dataset.id;
+        state.selectedTaskId = null;
+        renderMissionTabs();
+        loadMissionDetail(state.activeMissionId);
+      });
     });
-  });
+  };
+  wire(activeContainer);
+  wire(completedContainer);
 }
 
 async function loadMissionDetail(missionId) {
@@ -239,16 +269,7 @@ function computeLayers(tasks) {
   return new Map([...layers.entries()].sort((a, b) => a[0] - b[0]));
 }
 
-function nodePalette(task) {
-  if (task.status === "verified") {
-    return {
-      fill: "#EEF7F7",
-      stroke: "#2A7D7F",
-      badge: "VERIFIED",
-      badgeColor: "#2A7D7F",
-      titleColor: "#0D1B3D",
-    };
-  }
+function nodePalette(task, mode) {
   if (!task.unlocked) {
     return {
       fill: "#F2EFE7",
@@ -256,6 +277,42 @@ function nodePalette(task) {
       badge: "WAITING",
       badgeColor: "#7A7E87",
       titleColor: "#5A5E66",
+    };
+  }
+  if (mode === "hillclimb") {
+    if (task.active_lease) {
+      return {
+        fill: "#EDF1F8",
+        stroke: "#0D1B3D",
+        badge: "CLAIMED",
+        badgeColor: "#0D1B3D",
+        titleColor: "#0D1B3D",
+      };
+    }
+    if (task.status === "verified") {
+      return {
+        fill: "#EEF7F7",
+        stroke: "#C6A15A",
+        badge: "RECORD · OPEN",
+        badgeColor: "#2A7D7F",
+        titleColor: "#0D1B3D",
+      };
+    }
+    return {
+      fill: "#FDFBF5",
+      stroke: "#C6A15A",
+      badge: "READY",
+      badgeColor: "#9F7C38",
+      titleColor: "#1B1D1F",
+    };
+  }
+  if (task.status === "verified") {
+    return {
+      fill: "#EEF7F7",
+      stroke: "#2A7D7F",
+      badge: "VERIFIED",
+      badgeColor: "#2A7D7F",
+      titleColor: "#0D1B3D",
     };
   }
   if (task.active_lease) {
@@ -344,7 +401,7 @@ function renderDag(detail) {
   let nodesHtml = "";
   for (const t of tasks) {
     const p = pos.get(t.def.id);
-    const c = nodePalette(t);
+    const c = nodePalette(t, manifest.mode);
     const sel = t.def.id === state.selectedTaskId ? "selected" : "";
     const shortTitle =
       t.def.title.length > 33 ? t.def.title.slice(0, 32) + "…" : t.def.title;
@@ -352,7 +409,13 @@ function renderDag(detail) {
       t.def.id.length > 23 ? t.def.id.slice(0, 22) + "…" : t.def.id;
     let footer = `${t.attempts} run${t.attempts === 1 ? "" : "s"}`;
     if (manifest.mode === "hillclimb" && t.best_score !== null && t.best_score !== undefined) {
-      footer = `best: ${t.best_score} · ${footer}`;
+      if (t.active_lease) {
+        footer = `best: ${t.best_score} · claimed: ${t.active_lease.contributor}`;
+      } else if (t.verified_by) {
+        footer = `best: ${t.best_score} · by ${t.verified_by}`;
+      } else {
+        footer = `best: ${t.best_score} · ${footer}`;
+      }
     } else if (t.verified_by) {
       footer = `verified by ${t.verified_by}`;
     } else if (t.active_lease) {
@@ -617,10 +680,30 @@ function renderProofPanel(proof) {
 
 function ledgerBadges(p) {
   const out = [];
+  if (p.audit && p.audit.status === "passed") {
+    out.push(`<span class="ledger-badge ledger-badge-ok" title="Independently replayed with stock Lean and leanchecker">audited ✓</span>`);
+  } else if (p.audit && p.audit.status === "failed") {
+    out.push(`<span class="ledger-badge ledger-badge-warn" title="Independent audit reported a failure">audit failed</span>`);
+  }
   if (p.mission_retired) out.push(`<span class="ledger-badge ledger-badge-muted">retired mission</span>`);
   if (p.mission_demo) out.push(`<span class="ledger-badge ledger-badge-muted">demo · 0 pts</span>`);
   if (!p.spec_is_current && !p.mission_retired) out.push(`<span class="ledger-badge ledger-badge-warn">earlier spec</span>`);
   return out.join(" ");
+}
+
+function renderAuditHtml(audit) {
+  if (!audit) return "not run yet";
+  const parts = [`<strong>${escapeHtml(audit.status)}</strong>`];
+  if (audit.toolchain) parts.push(`<code>${escapeHtml(audit.toolchain)}</code>`);
+  if (Array.isArray(audit.axioms)) {
+    parts.push(`axioms: <code>${escapeHtml(audit.axioms.join(", ") || "none")}</code>`);
+  }
+  if (audit.audited_at) parts.push(escapeHtml(fmtUtc(audit.audited_at)));
+  const runHref = safeHttpUrl(audit.run_url);
+  if (runHref) {
+    parts.push(`<a class="proof-link" href="${escapeHtml(runHref)}" target="_blank" rel="noopener">audit run ↗</a>`);
+  }
+  return parts.join(" · ");
 }
 
 function ledgerRowHtml(p) {
@@ -697,7 +780,7 @@ async function loadLedgerProof(root, hash) {
       <a class="btn-outline-ink" href="${escapeHtml(proof.history_mbox)}">history.mbox ↓</a>
     </div>
     <div class="small ledger-upstream">Upstream: ${upstreamHtml(proof.upstream)}</div>
-    <div class="small muted">Independent audit: ${proof.audit ? escapeHtml(proof.audit.status) : "not run yet"}</div>
+    <div class="small muted">Independent audit: ${renderAuditHtml(proof.audit)}</div>
     ${proofDetailHtml(proof)}
     ${also ? `<div class="small ledger-also"><div class="kv-label">The same patch was also accepted as</div><ul>${also}</ul></div>` : ""}
   `;
@@ -717,11 +800,16 @@ async function loadInitialFeedAndLeaderboard() {
   ]);
 
   state.events = (subs.submissions || []).map((s) => ({
-    kind: s.accepted ? "submission_accepted" : "submission_rejected",
+    kind:
+      s.status === "verifying"
+        ? "verification_started"
+        : s.accepted
+          ? "submission_accepted"
+          : "submission_rejected",
     mission_id: s.mission_id,
     task_id: s.task_id,
     contributor: s.contributor,
-    accepted: s.accepted,
+    accepted: s.status === "verifying" ? null : s.accepted,
     score: s.score,
     summary: s.summary,
     timestamp: s.created_at,
@@ -800,6 +888,7 @@ function connectSse() {
     ind.textContent = "LIVE";
     if (wasDisconnected) {
       wasDisconnected = false;
+      state.proofCache.clear();
       scheduleRefresh();
     }
   };
@@ -840,6 +929,9 @@ function connectSse() {
   const handle = (e) => {
     try {
       const ev = JSON.parse(e.data);
+      if (ev.kind === "submission_accepted" && ev.mission_id && ev.task_id) {
+        state.proofCache.delete(`${ev.mission_id}/${ev.task_id}`);
+      }
       state.events.unshift(ev);
       state.events = state.events.slice(0, 40);
       renderEvents();

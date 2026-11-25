@@ -20,10 +20,17 @@ TASKS = {
 
 def check_certificate(path):
     # Restrict the editable source to a concrete table that can be replayed outside Lean.
-    source = path.read_bytes()
+    try:
+        source = path.read_bytes()
+    except OSError as exc:
+        emit(False, f"Cannot read certificate: {exc}", stage="lint")
     if len(source) > 8192:
         emit(False, "Certificate exceeds 8192 bytes", stage="lint")
-    score_line, _, table = source.decode("utf-8").partition("\n")
+    try:
+        text = source.decode("utf-8")
+    except UnicodeDecodeError:
+        emit(False, "Certificate must be valid UTF-8", stage="lint")
+    score_line, _, table = text.partition("\n")
     if not re.fullmatch(r"def B334.score : Nat := [1-9][0-9]?", score_line):
         emit(False, "Expected a literal natural-number score", stage="lint")
     source = table.strip()
@@ -38,6 +45,8 @@ def check_certificate(path):
 
 
 if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>", stage="lint")
     check_certificate(Path(__file__).resolve().parent / "Rank444" / "Certificate.lean")
     lean_verify(
         sys.argv[1], lib_root="Rank444", frozen_files=["Rank444/Spec.lean", "UPSTREAM.json",

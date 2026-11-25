@@ -439,6 +439,31 @@ code, pre { font-family: var(--mono); }
   gap: 16px;
 }
 
+.completed-missions {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--bone-rule-strong);
+}
+
+.completed-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.mission-tab-completed {
+  background: rgba(238, 247, 247, 0.55);
+  border-color: rgba(42, 125, 127, 0.25);
+}
+
+.ledger-badge-ok {
+  background: rgba(42, 125, 127, 0.14);
+  color: var(--teal);
+  border: 1px solid rgba(42, 125, 127, 0.35);
+}
+
 .mission-tab {
   background: var(--bone-card);
   border: 1px solid var(--bone-rule);
