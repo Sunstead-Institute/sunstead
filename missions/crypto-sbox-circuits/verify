@@ -1,0 +1,157 @@
+#!/usr/bin/env python3
+"""Verify explicit straight-line Boolean circuits for SM4, AES Inverse, and Camellia SBOX1."""
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify
+
+TASKS = {
+    "sm4_total_gates": {
+        "module": "CryptoSbox.Sm4TotalBound",
+        "theorem": "CryptoSbox.sm4_total_bound",
+        "score_const": "CryptoSbox.sm4TotalScore",
+        "statement": "def sm4_total_gates (n : Nat) : Prop := CryptoSbox.ValidTotalCircuit CryptoSbox.sm4Sbox n",
+        "label": "{score} total gates",
+    },
+    "sm4_and_gates": {
+        "module": "CryptoSbox.Sm4AndBound",
+        "theorem": "CryptoSbox.sm4_and_bound",
+        "score_const": "CryptoSbox.sm4AndScore",
+        "statement": "def sm4_and_gates (n : Nat) : Prop := CryptoSbox.ValidAndCircuit CryptoSbox.sm4Sbox n",
+        "label": "{score} AND gates",
+    },
+    "aes_inv_total_gates": {
+        "module": "CryptoSbox.AesInvTotalBound",
+        "theorem": "CryptoSbox.aes_inv_total_bound",
+        "score_const": "CryptoSbox.aesInvTotalScore",
+        "statement": "def aes_inv_total_gates (n : Nat) : Prop := CryptoSbox.ValidTotalCircuit CryptoSbox.aesInvSbox n",
+        "label": "{score} total gates",
+    },
+    "aes_inv_and_gates": {
+        "module": "CryptoSbox.AesInvAndBound",
+        "theorem": "CryptoSbox.aes_inv_and_bound",
+        "score_const": "CryptoSbox.aesInvAndScore",
+        "statement": "def aes_inv_and_gates (n : Nat) : Prop := CryptoSbox.ValidAndCircuit CryptoSbox.aesInvSbox n",
+        "label": "{score} AND gates",
+    },
+    "camellia_total_gates": {
+        "module": "CryptoSbox.CamelliaTotalBound",
+        "theorem": "CryptoSbox.camellia_total_bound",
+        "score_const": "CryptoSbox.camelliaTotalScore",
+        "statement": "def camellia_total_gates (n : Nat) : Prop := CryptoSbox.ValidTotalCircuit CryptoSbox.camelliaSbox1 n",
+        "label": "{score} total gates",
+    },
+    "camellia_and_gates": {
+        "module": "CryptoSbox.CamelliaAndBound",
+        "theorem": "CryptoSbox.camellia_and_bound",
+        "score_const": "CryptoSbox.camelliaAndScore",
+        "statement": "def camellia_and_gates (n : Nat) : Prop := CryptoSbox.ValidAndCircuit CryptoSbox.camelliaSbox1 n",
+        "label": "{score} AND gates",
+    },
+}
+
+CIRCUIT_TARGETS = {
+    "sm4_total_gates": (
+        "CryptoSbox/Sm4TotalCircuit.lean",
+        "CryptoSbox.sm4TotalScore",
+        "CryptoSbox.sm4TotalGates",
+        "CryptoSbox.sm4TotalOutputs",
+    ),
+    "sm4_and_gates": (
+        "CryptoSbox/Sm4AndCircuit.lean",
+        "CryptoSbox.sm4AndScore",
+        "CryptoSbox.sm4AndGates",
+        "CryptoSbox.sm4AndOutputs",
+    ),
+    "aes_inv_total_gates": (
+        "CryptoSbox/AesInvTotalCircuit.lean",
+        "CryptoSbox.aesInvTotalScore",
+        "CryptoSbox.aesInvTotalGates",
+        "CryptoSbox.aesInvTotalOutputs",
+    ),
+    "aes_inv_and_gates": (
+        "CryptoSbox/AesInvAndCircuit.lean",
+        "CryptoSbox.aesInvAndScore",
+        "CryptoSbox.aesInvAndGates",
+        "CryptoSbox.aesInvAndOutputs",
+    ),
+    "camellia_total_gates": (
+        "CryptoSbox/CamelliaTotalCircuit.lean",
+        "CryptoSbox.camelliaTotalScore",
+        "CryptoSbox.camelliaTotalGates",
+        "CryptoSbox.camelliaTotalOutputs",
+    ),
+    "camellia_and_gates": (
+        "CryptoSbox/CamelliaAndCircuit.lean",
+        "CryptoSbox.camelliaAndScore",
+        "CryptoSbox.camelliaAndGates",
+        "CryptoSbox.camelliaAndOutputs",
+    ),
+}
+
+MAX_BYTES = 16384
+MAX_GATES = 1024
+
+
+def check_circuit(path, score_name, gates_name, outputs_name):
+    # Restrict the editable source to concrete circuit literals replayable outside Lean.
+    if not path.is_file():
+        emit(False, f"Missing circuit file: {path.name}", stage="lint")
+    raw = path.read_bytes()
+    if len(raw) > MAX_BYTES:
+        emit(False, f"Circuit file exceeds {MAX_BYTES} bytes", stage="lint")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        emit(False, "Circuit file must be valid UTF-8", stage="lint")
+
+    nat = r"(?:0|[1-9][0-9]{0,3})"
+    triple = rf"\(\s*{nat}\s*,\s*{nat}\s*,\s*{nat}\s*\)"
+    header_re = (
+        rf"\s*def\s+{re.escape(score_name)}\s*:\s*Nat\s*:=\s*({nat})\s*\n"
+        rf"\s*def\s+{re.escape(gates_name)}\s*:\s*List\s*\(Nat\s*×\s*Nat\s*×\s*Nat\)\s*:=\s*\[\s*(.*?)\s*\]\s*\n"
+        rf"\s*def\s+{re.escape(outputs_name)}\s*:\s*List\s+Nat\s*:=\s*\[\s*(.*?)\s*\]\s*"
+    )
+    match = re.fullmatch(header_re, text, re.DOTALL)
+    if not match:
+        emit(
+            False,
+            f"Expected only literal definitions for {score_name}, {gates_name}, and {outputs_name}",
+            stage="lint",
+        )
+    gates_body = match.group(2)
+    outputs_body = match.group(3)
+    if not gates_body or not re.fullmatch(
+        rf"{triple}(?:\s*,\s*{triple}){{0,{MAX_GATES - 1}}}", gates_body
+    ):
+        emit(
+            False,
+            f"Expected 1 to {MAX_GATES} literal (op, w1, w2) gate triples",
+            stage="lint",
+        )
+    if not re.fullmatch(rf"{nat}(?:\s*,\s*{nat}){{7}}", outputs_body):
+        emit(False, "Expected exactly 8 literal output wire indices", stage="lint")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>", stage="lint")
+    task_id = sys.argv[1]
+    if task_id in CIRCUIT_TARGETS:
+        rel_path, score_name, gates_name, outputs_name = CIRCUIT_TARGETS[task_id]
+        check_circuit(
+            Path(__file__).resolve().parent / rel_path,
+            score_name,
+            gates_name,
+            outputs_name,
+        )
+    lean_verify(
+        task_id,
+        lib_root="CryptoSbox",
+        frozen_files=["CryptoSbox/Spec.lean", "UPSTREAM.json", "lakefile.toml", "lean-toolchain"],
+        tasks=TASKS,
+        uses_mathlib=False,
+        timeout_sec=60,
+    )

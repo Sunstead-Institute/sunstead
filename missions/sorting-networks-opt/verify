@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+"""Verify an explicit comparator sorting network on n = 9..16 wires."""
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify
+
+TASKS = {
+    "sort_n9": {
+        "module": "SortNet.Bound9",
+        "theorem": "SortNet.bound_9",
+        "score_const": "SortNet.score9",
+        "statement": "def sort_n9 (k : Nat) : Prop := SortNet.ValidSortingNetwork 9 k",
+        "label": "{score} comparators (n=9)",
+    },
+    "sort_n10": {
+        "module": "SortNet.Bound10",
+        "theorem": "SortNet.bound_10",
+        "score_const": "SortNet.score10",
+        "statement": "def sort_n10 (k : Nat) : Prop := SortNet.ValidSortingNetwork 10 k",
+        "label": "{score} comparators (n=10)",
+    },
+    "sort_n11": {
+        "module": "SortNet.Bound11",
+        "theorem": "SortNet.bound_11",
+        "score_const": "SortNet.score11",
+        "statement": "def sort_n11 (k : Nat) : Prop := SortNet.ValidSortingNetwork 11 k",
+        "label": "{score} comparators (n=11)",
+    },
+    "sort_n12": {
+        "module": "SortNet.Bound12",
+        "theorem": "SortNet.bound_12",
+        "score_const": "SortNet.score12",
+        "statement": "def sort_n12 (k : Nat) : Prop := SortNet.ValidSortingNetwork 12 k",
+        "label": "{score} comparators (n=12)",
+    },
+    "sort_n13": {
+        "module": "SortNet.Bound13",
+        "theorem": "SortNet.bound_13",
+        "score_const": "SortNet.score13",
+        "statement": "def sort_n13 (k : Nat) : Prop := SortNet.ValidSortingNetwork 13 k",
+        "label": "{score} comparators (n=13)",
+    },
+    "sort_n14": {
+        "module": "SortNet.Bound14",
+        "theorem": "SortNet.bound_14",
+        "score_const": "SortNet.score14",
+        "statement": "def sort_n14 (k : Nat) : Prop := SortNet.ValidSortingNetwork 14 k",
+        "label": "{score} comparators (n=14)",
+    },
+    "sort_n15": {
+        "module": "SortNet.Bound15",
+        "theorem": "SortNet.bound_15",
+        "score_const": "SortNet.score15",
+        "statement": "def sort_n15 (k : Nat) : Prop := SortNet.ValidSortingNetwork 15 k",
+        "label": "{score} comparators (n=15)",
+    },
+    "sort_n16": {
+        "module": "SortNet.Bound16",
+        "theorem": "SortNet.bound_16",
+        "score_const": "SortNet.score16",
+        "statement": "def sort_n16 (k : Nat) : Prop := SortNet.ValidSortingNetwork 16 k",
+        "label": "{score} comparators (n=16)",
+    },
+}
+
+NET_TARGETS = {
+    "sort_n9": ("SortNet/Net9.lean", "SortNet.score9", "SortNet.net9"),
+    "sort_n10": ("SortNet/Net10.lean", "SortNet.score10", "SortNet.net10"),
+    "sort_n11": ("SortNet/Net11.lean", "SortNet.score11", "SortNet.net11"),
+    "sort_n12": ("SortNet/Net12.lean", "SortNet.score12", "SortNet.net12"),
+    "sort_n13": ("SortNet/Net13.lean", "SortNet.score13", "SortNet.net13"),
+    "sort_n14": ("SortNet/Net14.lean", "SortNet.score14", "SortNet.net14"),
+    "sort_n15": ("SortNet/Net15.lean", "SortNet.score15", "SortNet.net15"),
+    "sort_n16": ("SortNet/Net16.lean", "SortNet.score16", "SortNet.net16"),
+}
+
+MAX_BYTES = 16384
+MAX_COMPARATORS = 256
+
+
+def check_network(path, score_name, net_name):
+    # Restrict the editable source to concrete comparator literals replayable outside Lean.
+    if not path.is_file():
+        emit(False, f"Missing network file: {path.name}", stage="lint")
+    raw = path.read_bytes()
+    if len(raw) > MAX_BYTES:
+        emit(False, f"Network file exceeds {MAX_BYTES} bytes", stage="lint")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        emit(False, "Network file must be valid UTF-8", stage="lint")
+
+    nat = r"(?:0|[1-9][0-9]{0,2})"
+    pair = rf"\(\s*{nat}\s*,\s*{nat}\s*\)"
+    header_re = (
+        rf"\s*def\s+{re.escape(score_name)}\s*:\s*Nat\s*:=\s*({nat})\s*\n"
+        rf"\s*def\s+{re.escape(net_name)}\s*:\s*List\s*\(Nat\s*×\s*Nat\)\s*:=\s*\[\s*(.*?)\s*\]\s*"
+    )
+    match = re.fullmatch(header_re, text, re.DOTALL)
+    if not match:
+        emit(
+            False,
+            f"Expected only literal definitions for {score_name} and {net_name}",
+            stage="lint",
+        )
+    net_body = match.group(2)
+    if not net_body or not re.fullmatch(
+        rf"{pair}(?:\s*,\s*{pair}){{0,{MAX_COMPARATORS - 1}}}", net_body
+    ):
+        emit(
+            False,
+            f"Expected 1 to {MAX_COMPARATORS} literal (i, j) comparator pairs",
+            stage="lint",
+        )
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>", stage="lint")
+    task_id = sys.argv[1]
+    if task_id in NET_TARGETS:
+        rel_path, score_name, net_name = NET_TARGETS[task_id]
+        check_network(
+            Path(__file__).resolve().parent / rel_path,
+            score_name,
+            net_name,
+        )
+    lean_verify(
+        task_id,
+        lib_root="SortNet",
+        frozen_files=["SortNet/Spec.lean", "UPSTREAM.json", "lakefile.toml", "lean-toolchain"],
+        tasks=TASKS,
+        uses_mathlib=False,
+        timeout_sec=90,
+    )

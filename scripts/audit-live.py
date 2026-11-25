@@ -740,34 +740,44 @@ def audit_rank_history(repo, mid, accepted, tasks_by_id):
         require(final_score == tasks_by_id[task_id]["best_score"], "published best score differs from certificate")
 
 
+def _gf256_mul(a, b, red):
+    res = 0
+    for _ in range(8):
+        if b & 1:
+            res ^= a
+        hi = a & 0x80
+        a = (a << 1) & 0xFF
+        if hi:
+            a ^= red
+        b >>= 1
+    return res
+
+
+def _gf256_inv(x, red):
+    if x == 0:
+        return 0
+    res, base, exp = 1, x, 254
+    while exp:
+        if exp & 1:
+            res = _gf256_mul(res, base, red)
+        base = _gf256_mul(base, base, red)
+        exp >>= 1
+    return res
+
+
+def _lin_map8(rows, x):
+    out = 0
+    for i, r in enumerate(rows):
+        if bin(x & r).count("1") & 1:
+            out |= 1 << i
+    return out
+
+
 def _fips197_aes_sbox():
     """Independently compute the 256-entry NIST FIPS 197 AES S-box over GF(2^8)."""
-    def gf_mul(a, b):
-        res = 0
-        for _ in range(8):
-            if b & 1:
-                res ^= a
-            hi = a & 0x80
-            a = (a << 1) & 0xFF
-            if hi:
-                a ^= 0x1B
-            b >>= 1
-        return res
-
-    def gf_inv(x):
-        if x == 0:
-            return 0
-        res, base, exp = 1, x, 254
-        while exp:
-            if exp & 1:
-                res = gf_mul(res, base)
-            base = gf_mul(base, base)
-            exp >>= 1
-        return res
-
     table = []
     for x in range(256):
-        b = gf_inv(x)
+        b = _gf256_inv(x, 0x1B)
         out = 0
         for i in range(8):
             bit = (
@@ -783,7 +793,57 @@ def _fips197_aes_sbox():
     return table
 
 
+def _sm4_sbox():
+    """Independently compute the 256-entry RFC 8998 / ISO 18033-3 SM4 S-box over GF(2^8) mod 0x1f5."""
+    def affine(b):
+        out = 0
+        for i in range(8):
+            bit = (
+                (b >> i)
+                ^ (b >> ((i + 1) % 8))
+                ^ (b >> ((i + 2) % 8))
+                ^ (b >> ((i + 5) % 8))
+                ^ (b >> ((i + 7) % 8))
+                ^ (0xD3 >> i)
+            ) & 1
+            out |= bit << i
+        return out
+
+    return [affine(_gf256_inv(affine(x), 0xF5)) for x in range(256)]
+
+
+def _fips197_aes_inv_sbox():
+    """Independently compute the 256-entry NIST FIPS 197 §5.3.2 AES Inverse S-box over GF(2^8) mod 0x11b."""
+    table = []
+    for x in range(256):
+        aff = 0
+        for i in range(8):
+            bit = (
+                (x >> ((i + 2) % 8))
+                ^ (x >> ((i + 5) % 8))
+                ^ (x >> ((i + 7) % 8))
+                ^ (0x05 >> i)
+            ) & 1
+            aff |= bit << i
+        table.append(_gf256_inv(aff, 0x1B))
+    return table
+
+
+def _camellia_sbox1():
+    """Independently compute the 256-entry RFC 3713 §2.4 / ISO 18033-3 Camellia SBOX1 over GF(2^8) mod 0x165."""
+    g_rows = (0x55, 0x58, 0x86, 0x09, 0x23, 0x31, 0x4F, 0x02)
+    h_rows = (0x9C, 0x08, 0x4A, 0xF4, 0x09, 0x5C, 0x11, 0x14)
+    return [
+        _lin_map8(h_rows, _gf256_inv(_lin_map8(g_rows, x ^ 0xC5), 0x65)) ^ 0x6E
+        for x in range(256)
+    ]
+
+
 _AES_SBOX_TABLE = _fips197_aes_sbox()
+_SM4_SBOX_TABLE = _sm4_sbox()
+_AES_INV_SBOX_TABLE = _fips197_aes_inv_sbox()
+_CAMELLIA_SBOX1_TABLE = _camellia_sbox1()
+
 _AES_SBOX_TARGETS = {
     "minimize_total_gates": (
         "AesSbox/TotalCircuit.lean",
@@ -799,40 +859,95 @@ _AES_SBOX_TARGETS = {
     ),
 }
 
+_CRYPTO_SBOX_TARGETS = {
+    "sm4_total_gates": (
+        "CryptoSbox/Sm4TotalCircuit.lean",
+        "CryptoSbox.sm4TotalScore",
+        "CryptoSbox.sm4TotalGates",
+        "CryptoSbox.sm4TotalOutputs",
+        "total",
+        "SM4 S-box",
+        _SM4_SBOX_TABLE,
+    ),
+    "sm4_and_gates": (
+        "CryptoSbox/Sm4AndCircuit.lean",
+        "CryptoSbox.sm4AndScore",
+        "CryptoSbox.sm4AndGates",
+        "CryptoSbox.sm4AndOutputs",
+        "and",
+        "SM4 S-box",
+        _SM4_SBOX_TABLE,
+    ),
+    "aes_inv_total_gates": (
+        "CryptoSbox/AesInvTotalCircuit.lean",
+        "CryptoSbox.aesInvTotalScore",
+        "CryptoSbox.aesInvTotalGates",
+        "CryptoSbox.aesInvTotalOutputs",
+        "total",
+        "AES Inverse S-box",
+        _AES_INV_SBOX_TABLE,
+    ),
+    "aes_inv_and_gates": (
+        "CryptoSbox/AesInvAndCircuit.lean",
+        "CryptoSbox.aesInvAndScore",
+        "CryptoSbox.aesInvAndGates",
+        "CryptoSbox.aesInvAndOutputs",
+        "and",
+        "AES Inverse S-box",
+        _AES_INV_SBOX_TABLE,
+    ),
+    "camellia_total_gates": (
+        "CryptoSbox/CamelliaTotalCircuit.lean",
+        "CryptoSbox.camelliaTotalScore",
+        "CryptoSbox.camelliaTotalGates",
+        "CryptoSbox.camelliaTotalOutputs",
+        "total",
+        "Camellia SBOX1",
+        _CAMELLIA_SBOX1_TABLE,
+    ),
+    "camellia_and_gates": (
+        "CryptoSbox/CamelliaAndCircuit.lean",
+        "CryptoSbox.camelliaAndScore",
+        "CryptoSbox.camelliaAndGates",
+        "CryptoSbox.camelliaAndOutputs",
+        "and",
+        "Camellia SBOX1",
+        _CAMELLIA_SBOX1_TABLE,
+    ),
+}
 
-def check_aes_sbox_circuit(source, task_id):
-    """Read only literal gate/output definitions and verify all 256 FIPS 197 AES S-box inputs."""
-    require(task_id in _AES_SBOX_TARGETS, f"unknown AES S-box task: {task_id}")
-    require(len(source.encode("utf-8")) <= 16384, "AES S-box circuit exceeds 16384 bytes")
-    _, score_name, gates_name, outputs_name = _AES_SBOX_TARGETS[task_id]
+
+def _check_sbox_circuit_literal(source, score_name, gates_name, outputs_name, metric, sbox_label, expected_table):
+    """Read only literal gate/output definitions and verify all 256 S-box inputs."""
+    require(len(source.encode("utf-8")) <= 16384, f"{sbox_label} circuit exceeds 16384 bytes")
     pattern = (
         rf"\s*def\s+{re.escape(score_name)}\s*:\s*Nat\s*:=\s*(0|[1-9][0-9]{{0,3}})\s*\n"
         rf"\s*def\s+{re.escape(gates_name)}\s*:\s*List\s*\(Nat\s*×\s*Nat\s*×\s*Nat\)\s*:=\s*(\[[\s\S]*?\])\s*\n"
         rf"\s*def\s+{re.escape(outputs_name)}\s*:\s*List\s+Nat\s*:=\s*(\[[\s\S]*?\])\s*"
     )
     match = re.fullmatch(pattern, source)
-    require(match, "unexpected AES S-box circuit format")
+    require(match, f"unexpected {sbox_label} circuit format")
     claimed_score = int(match[1])
     gates_lit, outputs_lit = match[2], match[3]
-    require(re.fullmatch(r"[0-9\s(),\[\]]+", gates_lit), "invalid AES S-box gate table")
-    require(re.fullmatch(r"[0-9\s,\[\]]+", outputs_lit), "invalid AES S-box output list")
+    require(re.fullmatch(r"[0-9\s(),\[\]]+", gates_lit), f"invalid {sbox_label} gate table")
+    require(re.fullmatch(r"[0-9\s,\[\]]+", outputs_lit), f"invalid {sbox_label} output list")
     gates = ast.literal_eval(gates_lit)
     outputs = ast.literal_eval(outputs_lit)
-    require(type(gates) is list and 1 <= len(gates) <= 1024, "invalid AES S-box gate count")
-    require(type(outputs) is list and len(outputs) == 8, "invalid AES S-box output count")
+    require(type(gates) is list and 1 <= len(gates) <= 1024, f"invalid {sbox_label} gate count")
+    require(type(outputs) is list and len(outputs) == 8, f"invalid {sbox_label} output count")
     for i, gate in enumerate(gates):
         require(
             type(gate) is tuple and len(gate) == 3 and all(type(v) is int for v in gate),
-            "invalid AES S-box gate triple",
+            f"invalid {sbox_label} gate triple",
         )
         op, w1, w2 = gate
-        require(0 <= op < 4, f"invalid AES S-box opcode {op} at gate {i}")
+        require(0 <= op < 4, f"invalid {sbox_label} opcode {op} at gate {i}")
         require(0 <= w1 < 8 + i and 0 <= w2 < 8 + i, f"non-causal wire index at gate {i}")
     num_wires = 8 + len(gates)
     require(all(type(w) is int and 0 <= w < num_wires for w in outputs), "out-of-range output wire index")
 
-    actual_score = len(gates) if task_id == "minimize_total_gates" else sum(1 for op, _, _ in gates if op == 2)
-    require(actual_score == claimed_score, "invalid AES S-box circuit score")
+    actual_score = len(gates) if metric == "total" else sum(1 for op, _, _ in gates if op == 2)
+    require(actual_score == claimed_score, f"invalid {sbox_label} circuit score")
 
     mask = (1 << 256) - 1
     wires = [sum(((x >> b) & 1) << x for x in range(256)) for b in range(8)]
@@ -848,8 +963,27 @@ def check_aes_sbox_circuit(source, task_id):
             wires.append(v1 ^ mask)
     for x in range(256):
         got = sum(((wires[ow] >> x) & 1) << b for b, ow in enumerate(outputs))
-        require(got == _AES_SBOX_TABLE[x], f"AES S-box differs at input 0x{x:02x}")
+        require(got == expected_table[x], f"{sbox_label} differs at input 0x{x:02x}")
     return actual_score
+
+
+def check_aes_sbox_circuit(source, task_id):
+    """Read only literal gate/output definitions and verify all 256 FIPS 197 AES S-box inputs."""
+    require(task_id in _AES_SBOX_TARGETS, f"unknown AES S-box task: {task_id}")
+    _, score_name, gates_name, outputs_name = _AES_SBOX_TARGETS[task_id]
+    metric = "total" if task_id == "minimize_total_gates" else "and"
+    return _check_sbox_circuit_literal(
+        source, score_name, gates_name, outputs_name, metric, "AES S-box", _AES_SBOX_TABLE
+    )
+
+
+def check_crypto_sbox_circuit(source, task_id):
+    """Read only literal gate/output definitions and verify all 256 SM4 / AES-Inv / Camellia SBOX1 inputs."""
+    require(task_id in _CRYPTO_SBOX_TARGETS, f"unknown crypto S-box task: {task_id}")
+    _, score_name, gates_name, outputs_name, metric, label, table = _CRYPTO_SBOX_TARGETS[task_id]
+    return _check_sbox_circuit_literal(
+        source, score_name, gates_name, outputs_name, metric, label, table
+    )
 
 
 def audit_aes_sbox_history(repo, accepted, snapshot_tasks, manifest):
@@ -868,6 +1002,108 @@ def audit_aes_sbox_history(repo, accepted, snapshot_tasks, manifest):
         score = check_aes_sbox_circuit(source, task_id)
         require(score < previous[task_id], f"invalid AES S-box progression for {task_id}")
         print(f"  PASS {commit[:12]} ({task_id}): all 256 FIPS 197 inputs verified at score {score}")
+        previous[task_id] = score
+    for task in snapshot_tasks:
+        tid = task["def"]["id"]
+        if task["status"] == "verified":
+            require(previous[tid] == task["best_score"], f"published best score differs from circuit for {tid}")
+
+
+_SORTNET_TARGETS = {
+    f"sort_n{n}": (n, f"SortNet/Net{n}.lean", f"SortNet.score{n}", f"SortNet.net{n}")
+    for n in range(9, 17)
+}
+
+
+def check_sorting_network(source, task_id):
+    """Read only literal comparator pairs and verify sorting across all 2^n Boolean inputs."""
+    require(task_id in _SORTNET_TARGETS, f"unknown sorting-network task: {task_id}")
+    require(len(source.encode("utf-8")) <= 16384, "sorting network file exceeds 16384 bytes")
+    n, _, score_name, net_name = _SORTNET_TARGETS[task_id]
+    pattern = (
+        rf"\s*def\s+{re.escape(score_name)}\s*:\s*Nat\s*:=\s*(0|[1-9][0-9]{{0,2}})\s*\n"
+        rf"\s*def\s+{re.escape(net_name)}\s*:\s*List\s*\(Nat\s*×\s*Nat\)\s*:=\s*(\[[\s\S]*?\])\s*"
+    )
+    match = re.fullmatch(pattern, source)
+    require(match, "unexpected sorting network format")
+    claimed_score = int(match[1])
+    net_lit = match[2]
+    require(re.fullmatch(r"[0-9\s(),\[\]]+", net_lit), "invalid sorting network comparator table")
+    comparators = ast.literal_eval(net_lit)
+    require(type(comparators) is list and 1 <= len(comparators) <= 256, "invalid comparator count")
+    for idx, comp in enumerate(comparators):
+        require(
+            type(comp) is tuple and len(comp) == 2
+            and type(comp[0]) is int and type(comp[1]) is int,
+            f"invalid comparator pair at index {idx}",
+        )
+        i, j = comp
+        require(0 <= i < j < n, f"invalid comparator wire index ({i}, {j}) for n={n} at index {idx}")
+    require(len(comparators) == claimed_score, "invalid sorting network score")
+
+    total_inputs = 1 << n
+    wires = []
+    for b in range(n):
+        block = ((1 << (1 << b)) - 1) << (1 << b)
+        w = block
+        step = 1 << (b + 1)
+        while step < total_inputs:
+            w |= w << step
+            step <<= 1
+        wires.append(w)
+    for i, j in comparators:
+        a, b = wires[i], wires[j]
+        wires[i] = a & b
+        wires[j] = a | b
+    for i in range(n - 1):
+        bad = wires[i] & ~wires[i + 1]
+        if bad:
+            failing_input = (bad & -bad).bit_length() - 1
+            raise ValueError(
+                f"sorting network unsorted at wires ({i}, {i + 1}) for input 0x{failing_input:x}"
+            )
+    return len(comparators)
+
+
+def audit_sorting_network_history(repo, accepted, snapshot_tasks, manifest):
+    commits = repo_git(repo, "rev-list", "--reverse", "HEAD").decode().splitlines()
+    require(len(commits) == 1 + len(accepted), "unexpected sorting network history length")
+    baselines = {t["id"]: t["baseline_score"] for t in manifest["tasks"]}
+    previous = {}
+    for task_id, (_, rel_path, _, _) in _SORTNET_TARGETS.items():
+        seed_src = repo_git(repo, "show", commits[0] + ":" + rel_path).decode("utf-8")
+        seed_score = check_sorting_network(seed_src, task_id)
+        require(seed_score == baselines[task_id], f"unexpected sorting network seed baseline for {task_id}")
+        previous[task_id] = seed_score
+    for commit, task_id in zip(commits[1:], accepted):
+        n, rel_path, _, _ = _SORTNET_TARGETS[task_id]
+        source = repo_git(repo, "show", commit + ":" + rel_path).decode("utf-8")
+        score = check_sorting_network(source, task_id)
+        require(score < previous[task_id], f"invalid sorting network progression for {task_id}")
+        print(f"  PASS {commit[:12]} ({task_id}): all {1 << n} inputs sorted at {score} comparators")
+        previous[task_id] = score
+    for task in snapshot_tasks:
+        tid = task["def"]["id"]
+        if task["status"] == "verified":
+            require(previous[tid] == task["best_score"], f"published best score differs from network for {tid}")
+
+
+def audit_crypto_sbox_history(repo, accepted, snapshot_tasks, manifest):
+    commits = repo_git(repo, "rev-list", "--reverse", "HEAD").decode().splitlines()
+    require(len(commits) == 1 + len(accepted), "unexpected crypto S-box history length")
+    baselines = {t["id"]: t["baseline_score"] for t in manifest["tasks"]}
+    previous = {}
+    for task_id, (rel_path, _, _, _, _, _, _) in _CRYPTO_SBOX_TARGETS.items():
+        seed_src = repo_git(repo, "show", commits[0] + ":" + rel_path).decode("utf-8")
+        seed_score = check_crypto_sbox_circuit(seed_src, task_id)
+        require(seed_score == baselines[task_id], f"unexpected crypto S-box seed baseline for {task_id}")
+        previous[task_id] = seed_score
+    for commit, task_id in zip(commits[1:], accepted):
+        rel_path, _, _, _, _, label, _ = _CRYPTO_SBOX_TARGETS[task_id]
+        source = repo_git(repo, "show", commit + ":" + rel_path).decode("utf-8")
+        score = check_crypto_sbox_circuit(source, task_id)
+        require(score < previous[task_id], f"invalid crypto S-box progression for {task_id}")
+        print(f"  PASS {commit[:12]} ({task_id}): all 256 {label} inputs verified at score {score}")
         previous[task_id] = score
     for task in snapshot_tasks:
         tid = task["def"]["id"]
@@ -987,7 +1223,9 @@ def main():
         manifest = json.loads((mission / "sunstead.json").read_text(encoding="utf-8"))
         rank_mission = mid in ("matrix-rank444-f2", "matrix-rank-alphatensor-f2") and manifest["mode"] == "hillclimb"
         aes_sbox_mission = mid == "aes-sbox-circuit" and manifest["mode"] == "hillclimb"
-        hillclimb_mission = rank_mission or aes_sbox_mission
+        sortnet_mission = mid == "sorting-networks-opt" and manifest["mode"] == "hillclimb"
+        crypto_sbox_mission = mid == "crypto-sbox-circuits" and manifest["mode"] == "hillclimb"
+        hillclimb_mission = rank_mission or aes_sbox_mission or sortnet_mission or crypto_sbox_mission
         require(not manifest.get("demo") and (hillclimb_mission or manifest["mode"] == "dag"), "unsupported audited mission")
         require(manifest == detail["manifest"], "live manifest differs from trusted checkout")
         history = json.loads(download(endpoint + "/history"))["commits"]
@@ -1030,6 +1268,40 @@ def main():
                                 toolchain="python-fips197-evaluator",
                                 axioms=[],
                                 summary=f"Independent 256-input FIPS 197 AES S-box audit passed for {mid}/{row['task_id']}",
+                                run_url=run_url,
+                                commit_sha=commit_sha,
+                            ),
+                        ))
+                count += len(accepted)
+                continue
+            if sortnet_mission:
+                audit_sorting_network_history(Path(tmp) / "repo", accepted, snapshot["tasks"], manifest)
+                for row in history:
+                    pid = seq_to_proof_id.get(row["seq"])
+                    if pid:
+                        attestations.append((
+                            pid,
+                            build_audit_attestation(
+                                toolchain="python-sortnet-evaluator",
+                                axioms=[],
+                                summary=f"Independent 2^n-input sorting-network audit passed for {mid}/{row['task_id']}",
+                                run_url=run_url,
+                                commit_sha=commit_sha,
+                            ),
+                        ))
+                count += len(accepted)
+                continue
+            if crypto_sbox_mission:
+                audit_crypto_sbox_history(Path(tmp) / "repo", accepted, snapshot["tasks"], manifest)
+                for row in history:
+                    pid = seq_to_proof_id.get(row["seq"])
+                    if pid:
+                        attestations.append((
+                            pid,
+                            build_audit_attestation(
+                                toolchain="python-gf256-sbox-evaluator",
+                                axioms=[],
+                                summary=f"Independent 256-input GF(2^8) S-box audit passed for {mid}/{row['task_id']}",
                                 run_url=run_url,
                                 commit_sha=commit_sha,
                             ),

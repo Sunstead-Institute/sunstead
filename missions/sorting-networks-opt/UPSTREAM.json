@@ -1,0 +1,33 @@
+{
+  "repo": "bertdobbelaere/SorterHunter",
+  "commit": "3d8b3454bad15062f4b0030052f12d6550f8d89d",
+  "license": "MIT",
+  "specialization": "Sunstead pins Bert Dobbelaere\u2019s SorterHunter optimal sorting-network benchmarks for n = 9..16 (including Sort_10_29_8.json, Sort_13_45_10.json, Sort_16_60_10.json, and sorting_networks.html) and formalizes comparator-network semantics, Knuth\u2019s Zero-One Principle, and a bit-sliced kernel evaluator in pure Lean 4.36.0. Each track starts from a textbook Batcher odd-even merge-exchange seed and challenges contributors to minimize comparator count.",
+  "checks": [
+    {
+      "local_file": "LICENSE",
+      "upstream_file": "LICENSE",
+      "verbatim_snippet": "MIT License\n\nCopyright (c) 2017 bertdobbelaere"
+    },
+    {
+      "local_file": "SortNet/Spec.lean",
+      "upstream_file": "Networks/Sorters/Sort_10_29_8.json",
+      "upstream_anchor": "\"N\": 10,\n  \"L\": 29,\n  \"D\": 8,"
+    },
+    {
+      "local_file": "SortNet/Spec.lean",
+      "upstream_file": "Networks/Sorters/Sort_13_45_10.json",
+      "upstream_anchor": "\"N\": 13,\n  \"L\": 45,\n  \"D\": 10,"
+    },
+    {
+      "local_file": "SortNet/Spec.lean",
+      "upstream_file": "Networks/Sorters/Sort_16_60_10.json",
+      "upstream_anchor": "\"N\": 16,\n  \"L\": 60,\n  \"D\": 10,"
+    },
+    {
+      "local_file": "README.md",
+      "upstream_file": "sorting_networks.html",
+      "upstream_anchor": "Smallest and fastest sorting networks for a given number of inputs"
+    }
+  ]
+}
