@@ -150,6 +150,17 @@ diff --git a/Proof.lean b/Proof.lean
         lnsym_manifest = json.loads((lnsym_dir / "sunstead.json").read_text(encoding="utf-8"))
         self.assertEqual(audit.resolve_audit_target(lnsym_dir, lnsym_manifest), (IMAGE_V435, "4.35.0"))
         self.assertTrue(audit.is_repo_snapshot(lnsym_manifest))
+        tc_map = audit.parse_toolchain_images(["v4.35.0=custom/v435:test", "leanprover/lean4:v4.36.0=custom/v436:test"])
+        self.assertEqual(audit.resolve_audit_target(lnsym_dir, lnsym_manifest, toolchain_images=tc_map), ("custom/v435:test", "4.35.0"))
+        self.assertEqual(audit.resolve_audit_target(pnt_dir, pnt_manifest, toolchain_images=tc_map), ("custom/v436:test", "4.36.0"))
+        self.assertEqual(
+            audit.resolve_audit_target(
+                lnsym_dir, lnsym_manifest, toolchain_images=audit.parse_toolchain_images([], image_v435="alt/v435:1")
+            ),
+            ("alt/v435:1", "4.35.0"),
+        )
+        with self.assertRaisesRegex(ValueError, "invalid --toolchain-image"):
+            audit.parse_toolchain_images(["badspec"])
 
         bad_img = {**lnsym_manifest, "verifier": {**lnsym_manifest["verifier"], "image": "evil/image:latest"}}
         with self.assertRaisesRegex(ValueError, "unsupported verifier image"):

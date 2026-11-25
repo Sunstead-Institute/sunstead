@@ -59,7 +59,24 @@ def module_to_relpath(module):
     return "/".join(parts) + ".lean"
 
 
-def resolve_audit_target(mission, manifest, image_override=None):
+def parse_toolchain_images(specs, image_v435=None):
+    mapping = {}
+    if image_v435:
+        mapping["4.35.0"] = image_v435
+    for spec in specs or ():
+        require("=" in spec, f"invalid --toolchain-image (expected TOOLCHAIN=IMAGE): {spec}")
+        tc_key, img = spec.split("=", 1)
+        tc_key = tc_key.strip()
+        img = img.strip()
+        require(tc_key and img, f"invalid --toolchain-image (empty key or image): {spec}")
+        if tc_key.startswith("leanprover/lean4:"):
+            tc_key = tc_key[len("leanprover/lean4:"):]
+        tc_key = tc_key.lstrip("v")
+        mapping[tc_key] = img
+    return mapping
+
+
+def resolve_audit_target(mission, manifest, image_override=None, toolchain_images=None):
     tc_path = mission / "lean-toolchain"
     require(tc_path.is_file(), "mission missing lean-toolchain")
     tc = tc_path.read_text(encoding="utf-8").strip()
@@ -69,8 +86,10 @@ def resolve_audit_target(mission, manifest, image_override=None):
     verifier = manifest.get("verifier") or {}
     if verifier.get("toolchain"):
         require(verifier["toolchain"].strip() == tc, "manifest verifier.toolchain disagrees with lean-toolchain")
-    image = image_override or verifier.get("image") or DEFAULT_IMAGE
-    if not image_override:
+    tc_override = (toolchain_images or {}).get(expected_version)
+    override = tc_override or image_override
+    image = override or verifier.get("image") or DEFAULT_IMAGE
+    if not override:
         require(image in ALLOWED_IMAGES, f"unsupported verifier image: {image}")
     return image, expected_version
 
@@ -605,9 +624,18 @@ def audit_rank_history(repo, accepted, best_score):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--image", default=None, help="override stock Lean toolchain image (default: per-mission verifier image)")
+    parser.add_argument("--image-v435", default=None, help="override stock Lean v4.35.0 image (default: sunstead/verifier-lean4-v4.35.0:v0.1)")
+    parser.add_argument(
+        "--toolchain-image",
+        action="append",
+        default=[],
+        metavar="TOOLCHAIN=IMAGE",
+        help="override image for a specific toolchain (e.g. v4.35.0=sunstead/verifier-lean4-v4.35.0:v0.1); repeatable",
+    )
     parser.add_argument("--mission", help="limit audit to this mission ID")
     args = parser.parse_args()
     require(not args.mission or SLUG.fullmatch(args.mission), "invalid mission ID")
+    toolchain_images = parse_toolchain_images(args.toolchain_image, image_v435=args.image_v435)
     source = json.loads(download("/api/missions"))["missions"]
     count = 0
     for item in source:
@@ -638,7 +666,9 @@ def main():
                 audit_rank_history(Path(tmp) / "repo", accepted, task["best_score"])
                 count += len(accepted)
                 continue
-            image, expected_version = resolve_audit_target(mission, manifest, image_override=args.image)
+            image, expected_version = resolve_audit_target(
+                mission, manifest, image_override=args.image, toolchain_images=toolchain_images
+            )
             contracts, preamble = proof_contract(mission)
             if is_repo_snapshot(manifest):
                 data, snapshot_id, lean_options, checks = repo_snapshot_input(
