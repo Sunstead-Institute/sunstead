@@ -46,12 +46,15 @@ jobs:
             cloudflare/containers/verifier_server.py \
             scripts/check-upstream.py scripts/check-statements.py scripts/redteam.py scripts/e2e.py \
             scripts/scout-upstream.py scripts/test_scout_upstream.py \
-            scripts/export-upstream.py scripts/test_export_upstream.py
+            scripts/export-upstream.py scripts/test_export_upstream.py \
+            scripts/audit-live.py scripts/test_audit_live.py
           for f in missions/*/verify; do python3 -m py_compile "$f"; done
       - name: Upstream scout unit tests (offline)
         run: python3 scripts/test_scout_upstream.py
       - name: Upstream export unit tests (offline, no Lean)
         run: python3 scripts/test_export_upstream.py
+      - name: Independent audit unit tests (offline)
+        run: python3 scripts/test_audit_live.py
       - name: Verify verbatim upstream provenance against pinned commits
         run: python3 scripts/check-upstream.py
 
