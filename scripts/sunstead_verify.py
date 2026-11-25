@@ -497,6 +497,20 @@ def transplant(upstream_src: str, mission: dict, contrib: dict) -> tuple:
     return text, d, span, ref
 
 
+def check_imports_resolve(updir: str, contrib: dict) -> None:
+    """A new import of a module from the upstream package itself must exist there.
+    Sunstead task files (another task's proof) are not upstream modules."""
+    roots = set(os.listdir(updir))
+    for mod in contrib["new_imports"]:
+        rel = "/".join(seg.strip("«»") for seg in mod.split(".")) + ".lean"
+        top = rel.split("/")[0]
+        if (top in roots or top + ".lean" in roots) and not os.path.isfile(os.path.join(updir, rel)):
+            raise NotUpstreamCheckable(
+                f"the proof imports `{mod}`, which is not a module of the upstream repository at the "
+                "pinned commit (it is probably another Sunstead task's proof file)"
+            )
+
+
 REF_SUFFIX = "sunsteadRefStatement"
 REF_DECL_RE = re.compile(
     r"^(?:@\[[^\n]*?\]\s*)*(?P<mods>(?:(?:" + "|".join(MODIFIERS) + r")\s+)*)"
@@ -778,6 +792,7 @@ def verify(args) -> dict:
         target = os.path.join(updir, mission["upstream_path"])
         if not os.path.isfile(target):
             raise VerifyError(f"{mission['upstream_path']} not in upstream at the pinned commit")
+        check_imports_resolve(updir, contrib)
         new_src, decl, span, ref = transplant(read(target), mission, contrib)
         checks = {}
         if args.no_build:

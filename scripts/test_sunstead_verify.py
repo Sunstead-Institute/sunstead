@@ -277,6 +277,13 @@ class VerifyTests(fx.ExportTests.__base__):
         with self.assertRaises(sv.VerifyError):
             sv.read_axioms("MISSING Up.sunsteadRefStatement\nSUNSTEAD_AXIOMS_DONE\n", "Up.isCM_liouville")
 
+    def test_import_of_another_task_file_is_not_upstream_checkable(self):
+        # Upstream has `Up/`, so `Up.Ch2` would have to exist there; it does not.
+        proved = fx.PROVED_FILE.replace("import Mathlib.Tactic.Ring\n", "import Mathlib.Tactic.Ring\nimport Up.Ch2\n")
+        code, err, _ = self.run_verify(self.proof_with(fx.make_patch("M1/Mult.lean", fx.SEED_FILE, proved)))
+        self.assertEqual(code, 3, err)
+        self.assertIn("`Up.Ch2`, which is not a module of the upstream repository", err)
+
     def test_bad_proof_id_argument(self):
         err = io.StringIO()
         with contextlib.redirect_stderr(err):

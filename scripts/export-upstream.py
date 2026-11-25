@@ -142,6 +142,7 @@ def export(args) -> dict:
             if not os.path.isfile(target):
                 raise ExportError(f"{mission['upstream_path']} not in upstream at the pinned commit")
             src = read(target)
+            sv.check_imports_resolve(updir, contrib)
             new_src, decl, span, ref = transplant(src, mission, contrib)
             checks = {}
             if not args.no_build:
