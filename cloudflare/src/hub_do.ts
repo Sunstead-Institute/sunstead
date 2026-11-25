@@ -651,7 +651,11 @@ export class SunsteadHub extends DurableObject<HubEnv> {
   }
 
   private getVerifierStub(mission: SeedMission) {
-    return this.env.LEAN4_VERIFIER.getByName(`lean4:${mission.manifest.id}`);
+    // Include the verifier image tag so bumping the verifier image always routes
+    // to a fresh container DO instead of a pre-rollout container instance.
+    return this.env.LEAN4_VERIFIER.getByName(
+      `lean4:${mission.manifest.verifier.image}:${mission.manifest.id}`
+    );
   }
 
   private computeLeaderboard(limit = 30) {

@@ -8,7 +8,7 @@ const lean4Container = defineContainer({
     buildContext: "..",
   },
   instanceType: "standard-3", // 2 vCPU, 8 GiB RAM, 16 GB disk (Lean 4.36.0 + Mathlib v4.36.0)
-  maxInstances: 4,
+  maxInstances: 6,
 });
 
 const worker = defineWorker({
@@ -21,11 +21,6 @@ const worker = defineWorker({
   exports: {
     SunsteadHub: exports.durableObject({ storage: "sqlite" }),
     Lean4Verifier: exports.durableObject({ storage: "sqlite", container: lean4Container }),
-    // Tombstones retiring the v0.2 Rust/Verus verifier DO namespaces on the
-    // first Lean-only v1 deploy. Safe to delete once `cf deploy` reports them
-    // as stale_tombstone (see docs/DEPLOYMENT.md).
-    RustVerifier: exports.durableObject({ state: "deleted" }),
-    VerusVerifier: exports.durableObject({ state: "deleted" }),
   },
   env: {
     HUB: bindings.durableObject({ worker: "sunstead", exportName: "SunsteadHub" }),
