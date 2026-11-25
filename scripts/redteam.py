@@ -26,6 +26,7 @@ V435_IMAGE = "sunstead/verifier-lean4-v4.35.0:v0.1"
 IMAGES = {
     "onboarding-sandbox": DEFAULT_IMAGE,
     "arklib-near-capacity-primes": DEFAULT_IMAGE,
+    "ieantn-chebyshev-kernel": DEFAULT_IMAGE,
     "pnt-analytic-foundations": DEFAULT_IMAGE,
     "lnsym-aes-gcm-armv8": V435_IMAGE,
     "lnsym-gcm-gmult-armv8": V435_IMAGE,
@@ -565,7 +566,6 @@ elab_rules : command
   | `(#print axioms $_) => logInfo "clean"
 """},
      False, None, "LNSym `elab_rules` + `import Lean` spoofing must be rejected"),
-
     # --- Same-file multi-task `preserve_theorems` guard + LNSym GCM-GMULT mission (Lean v4.35.0) ---
     ("repo-snapshot-preserve-prior-honest", "__synthetic_repo_snapshot__", "target_zero",
      {}, True, None, "multi-task repo-snapshot task 2 with task 1 preserved must pass"),
@@ -607,6 +607,28 @@ theorem gcm_polyval_mul_eq_polynomial_mult : True := trivial
 end GCMGmultV8Program
 """},
      False, None, "weakening `gcm_polyval_mul_eq_polynomial_mult` to `: True` must be rejected by kernel"),
+
+    # --- IEANTN ChebyshevNumerics.v1 (Teorth) ---
+    ("ieantn-seed-sorry", "ieantn-chebyshev-kernel", "psi_le_below_11723",
+     {},
+     False, None, "unmodified IEANTN Chebyshev seed still has sorry and must be rejected"),
+    ("ieantn-native-decide", "ieantn-chebyshev-kernel", "psi_le_below_11723",
+     {"IEANTN/Nodes/ChebyshevNumerics/v1/Challenge.lean": """import IEANTN.Nodes.ChebyshevNumerics.v1.Conclusions
+
+private theorem native_helper : (1 + 1 == 2) = true := by native_decide
+
+theorem ChebyshevNumerics.v1.challenge_psi_le_below_11723 :
+    ChebyshevNumerics.v1.psi_le_below_11723 := by
+  have _ := native_helper
+  exact sorryAx _ false
+"""},
+     False, None, "IEANTN Chebyshev proof using `native_decide` (`Lean.ofReduceBool`) must be rejected"),
+    ("ieantn-weakened-statement", "ieantn-chebyshev-kernel", "psi_le_below_11723",
+     {"IEANTN/Nodes/ChebyshevNumerics/v1/Challenge.lean": """import IEANTN.Nodes.ChebyshevNumerics.v1.Conclusions
+
+theorem ChebyshevNumerics.v1.challenge_psi_le_below_11723 : True := trivial
+"""},
+     False, None, "IEANTN Chebyshev weakened statement must be rejected"),
 ]
 
 
