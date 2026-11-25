@@ -27,12 +27,52 @@ BASE = "https://sunstead.org"
 LIMIT = 32 * 1024 * 1024
 SLUG = re.compile(r"[a-z0-9][a-z0-9_-]{0,119}\Z")
 IDENT = re.compile(r"[A-Za-z_][A-Za-z_0-9]*(?:\.[A-Za-z_][A-Za-z_0-9]*)*\Z")
+MOD_SEGMENT = r"(?:[A-Za-z_][A-Za-z_0-9']*|\u00ab[A-Za-z0-9_ -]+\u00bb)"
+MOD_IDENT = re.compile(rf"{MOD_SEGMENT}(?:\.{MOD_SEGMENT})*\Z")
+LEAN_OPT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_.]*=(?:true|false|[0-9]+)\Z")
+TOOLCHAIN_VERSION_RE = re.compile(r"leanprover/lean4:v([0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.]+)?)\Z")
+DEFAULT_IMAGE = "sunstead/verifier-lean4:v0.2"
+ALLOWED_IMAGES = {
+    "sunstead/verifier-lean4:v0.2",
+    "sunstead/verifier-lean4-v4.35.0:v0.1",
+}
 AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
 
 
 def require(value, reason):
     if not value:
         raise ValueError(reason)
+
+
+def is_repo_snapshot(manifest):
+    return (manifest.get("snapshot") or {}).get("mode") == "repo-snapshot"
+
+
+def module_to_relpath(module):
+    require(MOD_IDENT.fullmatch(module), "invalid Lean module identifier")
+    parts = []
+    for seg in module.split("."):
+        if seg.startswith("\u00ab") and seg.endswith("\u00bb"):
+            seg = seg[1:-1]
+        require(seg and seg not in (".", "..") and "/" not in seg and "\\" not in seg, "invalid Lean module segment")
+        parts.append(seg)
+    return "/".join(parts) + ".lean"
+
+
+def resolve_audit_target(mission, manifest, image_override=None):
+    tc_path = mission / "lean-toolchain"
+    require(tc_path.is_file(), "mission missing lean-toolchain")
+    tc = tc_path.read_text(encoding="utf-8").strip()
+    m = TOOLCHAIN_VERSION_RE.fullmatch(tc)
+    require(m, f"unsupported lean-toolchain: {tc}")
+    expected_version = m[1]
+    verifier = manifest.get("verifier") or {}
+    if verifier.get("toolchain"):
+        require(verifier["toolchain"].strip() == tc, "manifest verifier.toolchain disagrees with lean-toolchain")
+    image = image_override or verifier.get("image") or DEFAULT_IMAGE
+    if not image_override:
+        require(image in ALLOWED_IMAGES, f"unsupported verifier image: {image}")
+    return image, expected_version
 
 
 def download(path):
@@ -145,29 +185,171 @@ def replay(root, mission, manifest, history, mbox, seed, live, current_hash):
 AUDIT_CHECKER_LEAN = r"""import Lean
 open Lean
 
+def stripGuillemets (raw : String) : String :=
+  match raw.toList with
+  | '«' :: rest =>
+    match rest.reverse with
+    | '»' :: innerRev => String.ofList innerRev.reverse
+    | _ => raw
+  | _ => raw
+
+def parseLeanName (s : String) : Name :=
+  (s.splitOn ".").foldl (fun acc part => Name.str acc (stripGuillemets part)) Name.anonymous
+
+def optExprEq : Option Expr → Option Expr → Bool
+  | none, none => true
+  | some a, some b => a == b
+  | _, _ => false
+
+def constInfoStructEq (a b : ConstantInfo) : Bool :=
+  if a.levelParams != b.levelParams || a.type != b.type then
+    false
+  else
+    match a, b with
+    | .axiomInfo x, .axiomInfo y => x.isUnsafe == y.isUnsafe
+    | .defnInfo x, .defnInfo y =>
+      x.value == y.value && x.hints == y.hints && x.safety == y.safety && x.all == y.all
+    | .thmInfo x, .thmInfo y => x.all == y.all
+    | .opaqueInfo x, .opaqueInfo y =>
+      x.value == y.value && x.isUnsafe == y.isUnsafe && x.all == y.all
+    | .quotInfo x, .quotInfo y => x.kind == y.kind
+    | .inductInfo x, .inductInfo y =>
+      x.numParams == y.numParams && x.numIndices == y.numIndices &&
+      x.all == y.all && x.ctors == y.ctors && x.numNested == y.numNested &&
+      x.isRec == y.isRec && x.isUnsafe == y.isUnsafe && x.isReflexive == y.isReflexive
+    | .ctorInfo x, .ctorInfo y =>
+      x.induct == y.induct && x.cidx == y.cidx &&
+      x.numParams == y.numParams && x.numFields == y.numFields && x.isUnsafe == y.isUnsafe
+    | .recInfo x, .recInfo y =>
+      x.all == y.all && x.numParams == y.numParams && x.numIndices == y.numIndices &&
+      x.numMotives == y.numMotives && x.numMinors == y.numMinors &&
+      x.k == y.k && x.isUnsafe == y.isUnsafe &&
+      x.rules.length == y.rules.length &&
+      (x.rules.zip y.rules).all fun (rx, ry) =>
+        rx.ctor == ry.ctor && rx.nfields == ry.nfields && rx.rhs == ry.rhs
+    | _, _ => false
+
+def collectFrozenTypeDeps (frozenMap : Std.HashMap Name ConstantInfo) (rootExpr : Expr) : List Name :=
+  let initNames := rootExpr.getUsedConstants.toList
+  let rec go (fuel : Nat) (queue : List Name) (visited : NameSet) (acc : List Name) : List Name :=
+    match fuel, queue with
+    | 0, _ => acc
+    | _, [] => acc
+    | fuel + 1, n :: rest =>
+      if visited.contains n then
+        go fuel rest visited acc
+      else
+        match frozenMap[n]? with
+        | none => go fuel rest (visited.insert n) acc
+        | some ci =>
+          let visited' := visited.insert n
+          let extraFromVal :=
+            match ci with
+            | .defnInfo v => v.value.getUsedConstants.toList
+            | .opaqueInfo v => v.value.getUsedConstants.toList
+            | .inductInfo v => v.ctors ++ v.all
+            | .ctorInfo v => [v.induct]
+            | .recInfo v => v.all ++ (v.rules.flatMap fun r => r.ctor :: r.rhs.getUsedConstants.toList)
+            | _ => []
+          let next := ci.type.getUsedConstants.toList ++ extraFromVal
+          go fuel (next ++ rest) visited' (n :: acc)
+  go 100000 initNames {} []
+
+def verifyTargetOleanClean (targetMod : Name) : IO UInt32 := do
+  let targetPath ← findOLean targetMod
+  let privPath : System.FilePath := targetPath.toString ++ ".private"
+  if (← privPath.pathExists) then
+    IO.eprintln s!"PRIVATE_OLEAN {targetMod}"
+    return 2
+  let (modData, _) ← readModuleData targetPath
+  if modData.isModule then
+    IO.eprintln s!"MODULE_SYSTEM_DISALLOWED {targetMod}"
+    return 2
+  return 0
+
 def main (args : List String) : IO UInt32 := do
   match args with
-  | [specModStr, targetModStr, specConstStr, targetConstStr] =>
-    let specMod := specModStr.toName
-    let targetMod := targetModStr.toName
-    let specConst := specConstStr.toName
-    let targetConst := targetConstStr.toName
+  | ["--repo-snapshot", frozenOleanPath, targetModStr, targetConstStr] =>
+    let targetMod := parseLeanName targetModStr
+    let targetConst := parseLeanName targetConstStr
     initSearchPath (← findSysroot)
-    let targetPath ← findOLean targetMod
-    let privPath : System.FilePath := targetPath.toString ++ ".private"
-    if (← privPath.pathExists) then
-      IO.eprintln s!"PRIVATE_OLEAN {targetMod}"
+    let cleanRc ← verifyTargetOleanClean targetMod
+    if cleanRc != 0 then return cleanRc
+    let (frozenData, _) ← readModuleData (System.FilePath.mk frozenOleanPath)
+    if frozenData.isModule then
+      IO.eprintln s!"FROZEN_MODULE_SYSTEM_DISALLOWED {targetMod}"
       return 2
-    let (modData, _) ← readModuleData targetPath
-    if modData.isModule then
-      IO.eprintln s!"MODULE_SYSTEM_DISALLOWED {targetMod}"
-      return 2
+    let mut frozenMap : Std.HashMap Name ConstantInfo := {}
+    for i in [:frozenData.constNames.size] do
+      if h1 : i < frozenData.constNames.size then
+        if h2 : i < frozenData.constants.size then
+          frozenMap := frozenMap.insert frozenData.constNames[i] frozenData.constants[i]
+    let some frozenCi := frozenMap[targetConst]?
+      | do IO.eprintln s!"MISSING_FROZEN_TARGET {targetConst}"; return 3
+    match frozenCi with
+    | .thmInfo _ => pure ()
+    | _ =>
+      IO.eprintln s!"FROZEN_NOT_THEOREM {targetConst}"
+      return 3
+    -- loadExts := false ensures untrusted contributor elab_rules/macro_rules/initialize never run.
+    let env ← importModules #[{ module := targetMod }] {} 0 (loadExts := false)
+    let some tci := env.find? targetConst
+      | do IO.eprintln s!"MISSING_TARGET {targetConst}"; return 4
+    match tci with
+    | .thmInfo _ => pure ()
+    | _ =>
+      IO.eprintln s!"TARGET_NOT_THEOREM {targetConst}"
+      return 4
+    unless tci.levelParams.length == frozenCi.levelParams.length do
+      IO.eprintln s!"UNIVERSE_MISMATCH {targetConst}"
+      return 5
+    -- Lock every local definition/abbrev/inductive referenced by the theorem's type against modification.
+    let frozenDeps := collectFrozenTypeDeps frozenMap frozenCi.type
+    for depName in frozenDeps do
+      if depName == targetConst then
+        continue
+      match frozenMap[depName]?, env.find? depName with
+      | some fci, some lci =>
+        unless constInfoStructEq fci lci do
+          IO.eprintln s!"FROZEN_DEP_MODIFIED {depName}"
+          return 6
+      | _, _ =>
+        IO.eprintln s!"FROZEN_DEP_MISSING {depName}"
+        return 6
+    let ctx : Core.Context := { fileName := "<sunstead-audit>", fileMap := default }
+    let lvls := frozenCi.levelParams.map Level.param
+    let checkName := `_sunstead_audit_check
+    let (axs, _) ← (do
+      addDecl <| Declaration.thmDecl
+        { name := checkName
+          levelParams := frozenCi.levelParams
+          type := frozenCi.type
+          value := mkConst targetConst lvls
+          all := [checkName] }
+      collectAxioms checkName : CoreM (Array Name)).toIO ctx { env := env }
+    for a in axs do
+      IO.println s!"SUNSTEAD_AUDIT_AXIOM {targetConst} {a}"
+    IO.println s!"SUNSTEAD_AUDIT_OK {targetConst}"
+    return 0
+  | [specModStr, targetModStr, specConstStr, targetConstStr] =>
+    let specMod := parseLeanName specModStr
+    let targetMod := parseLeanName targetModStr
+    let specConst := parseLeanName specConstStr
+    let targetConst := parseLeanName targetConstStr
+    initSearchPath (← findSysroot)
+    let cleanRc ← verifyTargetOleanClean targetMod
+    if cleanRc != 0 then return cleanRc
     -- loadExts := false ensures untrusted contributor elab_rules/macro_rules/initialize never run.
     let env ← importModules #[{ module := specMod }, { module := targetMod }] {} 0 (loadExts := false)
     let some sci := env.find? specConst
       | do IO.eprintln s!"MISSING_SPEC {specConst}"; return 3
     let some tci := env.find? targetConst
       | do IO.eprintln s!"MISSING_TARGET {targetConst}"; return 4
+    match tci with
+    | .thmInfo _ => pure ()
+    | _ =>
+      IO.eprintln s!"TARGET_NOT_THEOREM {targetConst}"
+      return 4
     unless tci.levelParams.length == sci.levelParams.length do
       IO.eprintln s!"UNIVERSE_MISMATCH {targetConst}"
       return 5
@@ -187,7 +369,7 @@ def main (args : List String) : IO UInt32 := do
     IO.println s!"SUNSTEAD_AUDIT_OK {targetConst}"
     return 0
   | _ =>
-    IO.eprintln "usage: lean --run SunsteadAuditCheck.lean <specMod> <targetMod> <specConst> <targetConst>"
+    IO.eprintln "usage: lean --run SunsteadAuditCheck.lean <specMod> <targetMod> <specConst> <targetConst> | --repo-snapshot <frozenOlean> <targetMod> <targetConst>"
     return 2
 """
 
@@ -229,6 +411,41 @@ def lean_input(tree, manifest, accepted, contracts, preamble):
     return out.getvalue(), frozen, modules, checks
 
 
+def repo_snapshot_input(seed_tree, live_tree, manifest, accepted, contracts):
+    snap = manifest.get("snapshot") or {}
+    snapshot_id = snap.get("snapshot_id", "")
+    require(SLUG.fullmatch(snapshot_id), "invalid repo-snapshot snapshot_id")
+    lean_options = snap.get("lean_options") or []
+    require(isinstance(lean_options, list) and all(isinstance(o, str) and LEAN_OPT_RE.fullmatch(o) for o in lean_options),
+            "invalid repo-snapshot lean_options")
+    touched = {t["id"]: t["target_files"] for t in manifest["tasks"]}
+    checks = []  # list of (target_module, rel_no_ext, target_const)
+    packed = set()
+    out = io.BytesIO()
+    with tarfile.open(fileobj=out, mode="w") as tar:
+        def add(name, data):
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+
+        for task in accepted:
+            entry = contracts[task]
+            symbol, module = entry["theorem"], entry["module"]
+            require(IDENT.fullmatch(symbol) and MOD_IDENT.fullmatch(module), "invalid Lean identifier")
+            rel = module_to_relpath(module)
+            require(rel in touched[task], "audit module is outside task scope")
+            require(rel in seed_tree and rel in live_tree, "missing snapshot target file in bundle")
+            if rel not in packed:
+                add("seed/" + rel, seed_tree[rel][0])
+                add("live/" + rel, live_tree[rel][0])
+                packed.add(rel)
+            checks.append((module, rel[:-5], symbol))
+        add("SunsteadAuditCheck.lean", AUDIT_CHECKER_LEAN.encode("utf-8"))
+        check_manifest = "\n".join(f"{mod}\t{rel_no_ext}\t{target_c}" for mod, rel_no_ext, target_c in checks) + "\n"
+        add("audit_checks.txt", check_manifest.encode("utf-8"))
+    return out.getvalue(), snapshot_id, lean_options, checks
+
+
 RUN = r"""
 mkdir /tmp/work /tmp/home
 cd /tmp/work
@@ -255,8 +472,45 @@ done < audit_checks.txt
 """
 
 
-def parse_audit_output(out, checks):
-    require(re.search(r"^Lean \(version 4\.36\.0,", out, re.MULTILINE), "wrong Lean version")
+RUN_REPO_SNAPSHOT = r"""
+snapshot_id="$1"
+shift
+mkdir -p /tmp/work /tmp/home /tmp/frozen /tmp/merged
+cd /tmp/work
+tar xf -
+export HOME=/tmp/home
+deps="/opt/sunstead/snapshots/$snapshot_id/deps"
+test -d "$deps"
+cp -rs "$deps/." /tmp/merged/
+find /tmp/merged -type d -exec chmod 755 {} +
+base_path="$deps"
+merged_path="/tmp/merged"
+for p in /opt/mathlib/.lake/packages/*/.lake/build/lib/lean; do
+    if [ -d "$p" ]; then
+        base_path="$base_path:$p"
+        merged_path="$merged_path:$p"
+    fi
+done
+lean --version
+checker="$(lean --print-prefix)/bin/leanchecker"
+test -x "$checker"
+tab="$(printf '\t')"
+while IFS="$tab" read -r mod rel_no_ext target_const; do
+    [ -n "$mod" ] || continue
+    mkdir -p "$(dirname "/tmp/frozen/$rel_no_ext.olean")" "$(dirname "/tmp/merged/$rel_no_ext.olean")"
+    rm -f "/tmp/merged/$rel_no_ext.olean" "/tmp/merged/$rel_no_ext.olean.private"
+    LEAN_PATH="$base_path" lean "$@" --root=/tmp/work/seed -o "/tmp/frozen/$rel_no_ext.olean" "/tmp/work/seed/$rel_no_ext.lean"
+    test ! -e "/tmp/frozen/$rel_no_ext.olean.private"
+    LEAN_PATH="$base_path" lean "$@" --root=/tmp/work/live -o "/tmp/merged/$rel_no_ext.olean" "/tmp/work/live/$rel_no_ext.lean"
+    test ! -e "/tmp/merged/$rel_no_ext.olean.private"
+    LEAN_PATH="$merged_path" "$checker" "$mod"
+    LEAN_PATH="$merged_path" lean --run /tmp/work/SunsteadAuditCheck.lean --repo-snapshot "/tmp/frozen/$rel_no_ext.olean" "$mod" "$target_const"
+done < /tmp/work/audit_checks.txt
+"""
+
+
+def parse_audit_output(out, checks, expected_version="4.36.0"):
+    require(re.search(rf"^Lean \(version {re.escape(expected_version)},", out, re.MULTILINE), "wrong Lean version")
     results = {}
     for _mod, _spec_c, theorem in checks:
         oks = re.findall(r"^SUNSTEAD_AUDIT_OK " + re.escape(theorem) + r"\s*$", out, re.MULTILINE)
@@ -269,15 +523,14 @@ def parse_audit_output(out, checks):
     return results
 
 
-def check_lean(image, data, frozen, modules, checks):
-    all_mods = [*frozen, *modules]
+def _run_container(image, script, script_args, data, tmpfs_size="512m"):
     with tempfile.TemporaryDirectory(prefix="sunstead-audit-container-") as tmp:
         cid = Path(tmp) / "cid"
         cmd = ["docker", "run", "--rm", "-i", "--pull=never",
-               "--network=none", "--read-only", "--tmpfs=/tmp:rw,nosuid,nodev,size=512m,mode=1777",
+               "--network=none", "--read-only", f"--tmpfs=/tmp:rw,nosuid,nodev,size={tmpfs_size},mode=1777",
                "--user=10003:10003", "--cap-drop=ALL", "--security-opt=no-new-privileges",
                "--pids-limit=128", "--memory=5g", "--cpus=2", f"--cidfile={cid}",
-               "--entrypoint=/bin/sh", image, "-ceu", RUN, "sunstead-audit", *all_mods]
+               "--entrypoint=/bin/sh", image, "-ceu", script, "sunstead-audit", *script_args]
         try:
             result = subprocess.run(cmd, input=data, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                     timeout=360, check=True)
@@ -287,11 +540,24 @@ def check_lean(image, data, frozen, modules, checks):
                 if re.fullmatch(r"[a-f0-9]{64}", container):
                     subprocess.run(["docker", "rm", "-f", container], stdout=subprocess.DEVNULL,
                                    stderr=subprocess.DEVNULL, timeout=20, check=False)
-    out = result.stdout.decode("utf-8", errors="replace")
-    results = parse_audit_output(out, checks)
+    return result.stdout.decode("utf-8", errors="replace")
+
+
+def check_lean(image, data, frozen, modules, checks, expected_version="4.36.0"):
+    out = _run_container(image, RUN, [*frozen, *modules], data)
+    results = parse_audit_output(out, checks, expected_version=expected_version)
     for _mod, _spec_c, theorem in checks:
         actual = results[theorem]
-        print(f"  PASS {theorem}: stock Lean + leanchecker + loadExts:=false kernel check; axioms: {', '.join(actual) or 'none'}")
+        print(f"  PASS {theorem}: stock Lean {expected_version} + leanchecker + loadExts:=false kernel check; axioms: {', '.join(actual) or 'none'}")
+
+
+def check_lean_repo_snapshot(image, data, snapshot_id, lean_options, checks, expected_version="4.35.0"):
+    opt_flags = [f"-D{opt}" for opt in lean_options]
+    out = _run_container(image, RUN_REPO_SNAPSHOT, [snapshot_id, *opt_flags], data, tmpfs_size="1g")
+    results = parse_audit_output(out, checks, expected_version=expected_version)
+    for _mod, _rel, theorem in checks:
+        actual = results[theorem]
+        print(f"  PASS {theorem}: stock Lean {expected_version} + leanchecker + repo-snapshot FrozenTypeDeps check; axioms: {', '.join(actual) or 'none'}")
 
 
 def check_rank_table(source):
@@ -338,7 +604,7 @@ def audit_rank_history(repo, accepted, best_score):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--image", default="sunstead/verifier-lean4:v0.2", help="preinstalled stock Lean/Mathlib toolchain image")
+    parser.add_argument("--image", default=None, help="override stock Lean toolchain image (default: per-mission verifier image)")
     parser.add_argument("--mission", help="limit audit to this mission ID")
     args = parser.parse_args()
     require(not args.mission or SLUG.fullmatch(args.mission), "invalid mission ID")
@@ -361,19 +627,30 @@ def main():
         require(history and (rank_mission or len(history) == item["verified_tasks"]), "history incomplete or changed during audit")
         verified = {t["def"]["id"] for t in snapshot["tasks"] if t["status"] == "verified"}
         require(verified == {row["task_id"] for row in history}, "verified tasks and history disagree")
+        seed_files = archive_files(download(endpoint + "/bundle.tar.gz?base=seed"))
+        live_files = archive_files(download(endpoint + "/bundle.tar.gz"))
         with tempfile.TemporaryDirectory(prefix="sunstead-independent-audit-") as tmp:
             accepted, tree = replay(Path(tmp) / "repo", mission, manifest, history,
                                     download(endpoint + "/history.mbox"),
-                                    archive_files(download(endpoint + "/bundle.tar.gz?base=seed")),
-                                    archive_files(download(endpoint + "/bundle.tar.gz")), detail["spec_sha256"])
+                                    seed_files, live_files, detail["spec_sha256"])
             if rank_mission:
                 task, = snapshot["tasks"]
                 audit_rank_history(Path(tmp) / "repo", accepted, task["best_score"])
                 count += len(accepted)
                 continue
-            data, frozen, modules, checks = lean_input(tree, manifest, accepted, *proof_contract(mission))
+            image, expected_version = resolve_audit_target(mission, manifest, image_override=args.image)
+            contracts, preamble = proof_contract(mission)
+            if is_repo_snapshot(manifest):
+                data, snapshot_id, lean_options, checks = repo_snapshot_input(
+                    seed_files, tree, manifest, accepted, contracts
+                )
+                print(f"{mid}: {len(accepted)} accepted patches replayed against matching frozen repo-snapshot spec", flush=True)
+                check_lean_repo_snapshot(image, data, snapshot_id, lean_options, checks, expected_version=expected_version)
+                count += len(checks)
+                continue
+            data, frozen, modules, checks = lean_input(tree, manifest, accepted, contracts, preamble)
             print(f"{mid}: {len(accepted)} accepted patches replayed against matching frozen spec", flush=True)
-            check_lean(args.image, data, frozen, modules, checks)
+            check_lean(image, data, frozen, modules, checks, expected_version=expected_version)
             count += len(checks)
     require(count > 0, "no accepted non-demo proofs audited")
     print(f"Independently verified {count} proof(s).")

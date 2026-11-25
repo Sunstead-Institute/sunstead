@@ -279,13 +279,123 @@ class ExportTests(unittest.TestCase):
         )
 
     def test_real_missions_resolve(self):
-        """Every live task's upstream_url, pin and verify theorem line up."""
-        for mid in ("pnt-analytic-foundations", "arklib-near-capacity-primes"):
-            manifest = json.loads(read(os.path.join(ROOT, "missions", mid, "sunstead.json")))
+        """Every live non-demo DAG task's upstream_url, pin and verify theorem line up."""
+        missions_dir = os.path.join(ROOT, "missions")
+        checked = []
+        for mid in sorted(os.listdir(missions_dir)):
+            mpath = os.path.join(missions_dir, mid, "sunstead.json")
+            if not os.path.isfile(mpath):
+                continue
+            manifest = json.loads(read(mpath))
+            if manifest.get("demo") or manifest.get("mode") != "dag":
+                continue
+            checked.append(mid)
             for t in manifest["tasks"]:
-                m = ex.load_mission(os.path.join(ROOT, "missions"), {"mission_id": mid, "task_id": t["id"]})
+                m = ex.load_mission(missions_dir, {"mission_id": mid, "task_id": t["id"]})
                 self.assertTrue(m["upstream_path"].endswith(".lean"), (mid, t["id"]))
                 self.assertTrue(m["theorem"], (mid, t["id"]))
+        self.assertIn("pnt-analytic-foundations", checked)
+        self.assertIn("arklib-near-capacity-primes", checked)
+
+    def test_lean_module_quotes_hyphenated_segments(self):
+        self.assertEqual(ex.lean_module("Up/Ch1.lean"), "Up.Ch1")
+        self.assertEqual(
+            ex.lean_module("Proofs/AES-GCM/AESGCMEncKernelSym.lean"),
+            "Proofs.«AES-GCM».AESGCMEncKernelSym",
+        )
+        self.assertIn("loadExts := false", ex.AXIOM_CHECKER)
+        self.assertIn("parseLeanName", ex.AXIOM_CHECKER)
+
+    def test_repo_snapshot_preserves_scoped_set_option_and_native_namespace(self):
+        """Repo-snapshot exports keep `set_option ... in` attached to the theorem
+        when inserting helpers and do not warn on native upstream namespaces."""
+        snap_upstream = (
+            "import Up.«AES-GCM».Pre\n\n"
+            "namespace AESProgram\n\n"
+            "abbrev rounds : Nat := 14\n\n"
+            "set_option maxRecDepth 1000000 in\n"
+            "theorem run_kernel :\n"
+            "    rounds = 14 := by\n"
+            "  sorry\n\n"
+            "end AESProgram\n"
+        )
+        snap_proved = (
+            "import Up.«AES-GCM».Pre\n"
+            "import AESProgram.Extra\n\n"
+            "namespace AESProgram\n\n"
+            "abbrev rounds : Nat := 14\n\n"
+            "theorem helper_rounds : AESProgram.rounds = 14 := rfl\n\n"
+            "set_option maxRecDepth 1000000 in\n"
+            "theorem run_kernel :\n"
+            "    rounds = 14 := by\n"
+            "  exact AESProgram.helper_rounds\n\n"
+            "end AESProgram\n"
+        )
+        with tempfile.TemporaryDirectory() as t:
+            up = os.path.join(t, "upstream")
+            os.makedirs(os.path.join(up, "Up", "AES-GCM"))
+            write(os.path.join(up, "Up", "AES-GCM", "Kernel.lean"), snap_upstream)
+            git(up, "init", "-q")
+            git(up, "add", "-A")
+            git(up, "commit", "-q", "-m", "upstream")
+            git(up, "config", "uploadpack.allowReachableSHA1InWant", "true")
+            sha = git(up, "rev-parse", "HEAD").strip()
+
+            missions = os.path.join(t, "missions")
+            m = os.path.join(missions, "snap-aes")
+            os.makedirs(os.path.join(m, "Up", "AES-GCM"))
+            write(os.path.join(m, "sunstead.json"), json.dumps({
+                "id": "snap-aes", "title": "Snap AES", "tier": 1, "mode": "dag",
+                "upstream": {"repo": "o/lnsym", "commit": sha, "license": "Apache-2.0"},
+                "snapshot": {"mode": "repo-snapshot", "snapshot_id": "snap-aes"},
+                "frozen_paths": ["UPSTREAM.json"],
+                "tasks": [{
+                    "id": "run_kernel", "title": "run",
+                    "target_files": ["Up/AES-GCM/Kernel.lean"],
+                    "upstream_url": f"https://github.com/o/lnsym/blob/{sha}/Up/AES-GCM/Kernel.lean#L8-L10",
+                }],
+            }))
+            write(os.path.join(m, "UPSTREAM.json"), json.dumps({
+                "repo": "o/lnsym", "commit": sha, "license": "Apache-2.0", "checks": [],
+            }))
+            write(os.path.join(m, "verify"), (
+                'TASKS = {\n'
+                '    "run_kernel": {\n'
+                '        "theorem": "AESProgram.run_kernel",\n'
+                '        "module": "Up.«AES-GCM».Kernel",\n'
+                '        "target_files": ["Up/AES-GCM/Kernel.lean"],\n'
+                '    },\n'
+                '}\n'
+            ))
+            write(os.path.join(m, "Up", "AES-GCM", "Kernel.lean"), snap_upstream)
+
+            pj = os.path.join(t, "proof.json")
+            write(pj, json.dumps({
+                "proof_id": "cd" * 32,
+                "permalink": "https://sunstead.org/proofs/" + "cd" * 32,
+                "mission_id": "snap-aes",
+                "task_id": "run_kernel",
+                "contributor": "alice",
+                "spec_is_current": True,
+                "patch": make_patch("Up/AES-GCM/Kernel.lean", snap_upstream, snap_proved),
+            }))
+            out_dir = os.path.join(t, "bundle")
+            err, stdout = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stderr(err), contextlib.redirect_stdout(stdout):
+                code = ex.main([
+                    "--proof-json", pj, "--out", out_dir, "--missions-root", missions,
+                    "--upstream-url", "file://" + up, "--no-build",
+                ])
+            self.assertEqual(code, 0, err.getvalue())
+            meta = json.loads(read(os.path.join(out_dir, "metadata.json")))
+            self.assertEqual(meta["warnings"], [], "repo-snapshot must not warn on native upstream namespace")
+            subprocess.run(["git", "apply", os.path.join(out_dir, "upstream.patch")], cwd=up, check=True)
+            patched = read(os.path.join(up, "Up", "AES-GCM", "Kernel.lean"))
+            self.assertIn(
+                "theorem helper_rounds : AESProgram.rounds = 14 := rfl\n\nset_option maxRecDepth 1000000 in\ntheorem run_kernel :",
+                patched,
+                "helper must be inserted above `set_option ... in`, keeping it attached to `theorem run_kernel`",
+            )
 
 
 
@@ -422,6 +532,92 @@ class BuildTests(unittest.TestCase):
         code, err, _ = self.export_with(proved)
         self.assertEqual(code, 1, err)
         self.assertIn("non-standard axioms: ['Up.cheat']", err)
+
+    def test_builds_and_checks_guillemet_module_path(self):
+        """Full `lake build` + `AXIOM_CHECKER` on a repo-snapshot mission with a
+        hyphenated directory (`Up/AES-GCM/Kernel.lean` -> `Up.«AES-GCM».Kernel`)
+        and `set_option ... in`."""
+        snap_src = (
+            "namespace AESProgram\n\n"
+            "abbrev rounds : Nat := 14\n\n"
+            "set_option maxRecDepth 1000000 in\n"
+            "theorem run_kernel :\n"
+            "    rounds = 14 := by\n"
+            "  sorry\n\n"
+            "end AESProgram\n"
+        )
+        snap_proved = (
+            "namespace AESProgram\n\n"
+            "abbrev rounds : Nat := 14\n\n"
+            "theorem helper_rounds : AESProgram.rounds = 14 := rfl\n\n"
+            "set_option maxRecDepth 1000000 in\n"
+            "theorem run_kernel :\n"
+            "    rounds = 14 := by\n"
+            "  exact AESProgram.helper_rounds\n\n"
+            "end AESProgram\n"
+        )
+        with tempfile.TemporaryDirectory() as t:
+            up = os.path.join(t, "upstream")
+            os.makedirs(os.path.join(up, "Up", "AES-GCM"))
+            write(os.path.join(up, "Up", "AES-GCM", "Kernel.lean"), snap_src)
+            write(os.path.join(up, "Up.lean"), "import Up.«AES-GCM».Kernel\n")
+            write(os.path.join(up, "lakefile.toml"), 'name = "up"\ndefaultTargets = ["Up"]\n\n[[lean_lib]]\nname = "Up"\n')
+            toolchain = os.environ.get("SUNSTEAD_TEST_TOOLCHAIN") or read(
+                os.path.join(ROOT, "missions", "pnt-analytic-foundations", "lean-toolchain")
+            ).strip()
+            write(os.path.join(up, "lean-toolchain"), toolchain + "\n")
+            git(up, "init", "-q")
+            git(up, "add", "-A")
+            git(up, "commit", "-q", "-m", "upstream")
+            git(up, "config", "uploadpack.allowReachableSHA1InWant", "true")
+            sha = git(up, "rev-parse", "HEAD").strip()
+
+            missions = os.path.join(t, "missions")
+            m = os.path.join(missions, "snap-aes")
+            os.makedirs(os.path.join(m, "Up", "AES-GCM"))
+            write(os.path.join(m, "sunstead.json"), json.dumps({
+                "id": "snap-aes", "title": "Snap AES", "tier": 1, "mode": "dag",
+                "upstream": {"repo": "o/lnsym", "commit": sha, "license": "Apache-2.0"},
+                "snapshot": {"mode": "repo-snapshot", "snapshot_id": "snap-aes"},
+                "frozen_paths": [],
+                "tasks": [{
+                    "id": "run_kernel", "title": "run",
+                    "target_files": ["Up/AES-GCM/Kernel.lean"],
+                    "upstream_url": f"https://github.com/o/lnsym/blob/{sha}/Up/AES-GCM/Kernel.lean#L6-L8",
+                }],
+            }))
+            write(os.path.join(m, "UPSTREAM.json"), json.dumps({
+                "repo": "o/lnsym", "commit": sha, "license": "Apache-2.0",
+            }))
+            write(os.path.join(m, "verify"), (
+                'TASKS = {\n'
+                '    "run_kernel": {\n'
+                '        "module": "Up.«AES-GCM».Kernel",\n'
+                '        "theorem": "AESProgram.run_kernel",\n'
+                '    },\n'
+                '}\n'
+            ))
+            write(os.path.join(m, "Up", "AES-GCM", "Kernel.lean"), snap_src)
+
+            pj = os.path.join(t, "proof.json")
+            write(pj, json.dumps({
+                "mission_id": "snap-aes", "task_id": "run_kernel", "spec_is_current": True,
+                "patch": make_patch("Up/AES-GCM/Kernel.lean", snap_src, snap_proved),
+            }))
+            out_dir = os.path.join(t, "bundle")
+            err, stdout = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stderr(err), contextlib.redirect_stdout(stdout):
+                code = ex.main([
+                    "--proof-json", pj, "--out", out_dir, "--missions-root", missions,
+                    "--upstream-url", "file://" + up,
+                ])
+            self.assertEqual(code, 0, err.getvalue() + stdout.getvalue())
+            meta = json.loads(read(os.path.join(out_dir, "metadata.json")))
+            self.assertTrue(meta["built"])
+            self.assertTrue(meta["checks"]["lake_build"])
+            self.assertEqual(meta["checks"]["axioms"], [])
+            self.assertEqual(meta["warnings"], [])
+            self.assertIn("lake build Up.«AES-GCM».Kernel`: ok", read(os.path.join(out_dir, "PR_BODY.md")))
 
 
 if __name__ == "__main__":
