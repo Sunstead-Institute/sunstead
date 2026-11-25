@@ -48,6 +48,7 @@ COPY arklib-near-capacity-primes /tmp/prebuild-missions/arklib-near-capacity-pri
 COPY ieantn-chebyshev-kernel /tmp/prebuild-missions/ieantn-chebyshev-kernel
 COPY pnt-analytic-foundations /tmp/prebuild-missions/pnt-analytic-foundations
 COPY matrix-rank444-f2 /tmp/prebuild-missions/matrix-rank444-f2
+COPY aes-sbox-circuit /tmp/prebuild-missions/aes-sbox-circuit
 COPY onboarding-sandbox /tmp/prebuild-missions/onboarding-sandbox
 RUN python3 /opt/sunstead/prebuild_cache.py /tmp/prebuild-missions/* \
     && rm -rf /tmp/prebuild-missions \

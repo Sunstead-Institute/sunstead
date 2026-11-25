@@ -233,6 +233,32 @@ test("rank mission only permits coefficient table patches", () => {
   validatePatch(patchFor(rank.target_files[0]), manifest.frozen_paths, rank.target_files);
 });
 
+test("aes-sbox-circuit mission isolates independent total and AND circuit targets", () => {
+  const manifest = JSON.parse(readFileSync(new URL(
+    "../../missions/aes-sbox-circuit/sunstead.json", import.meta.url
+  ), "utf8")) as MissionManifest;
+  assert.equal(manifest.mode, "hillclimb");
+  assert.equal(manifest.score_direction, "minimize");
+  assert.equal(manifest.tier, 2);
+  const byId = Object.fromEntries(manifest.tasks.map((t) => [t.id, t]));
+  assert.equal(byId.minimize_total_gates.baseline_score, 130);
+  assert.equal(byId.minimize_and_gates.baseline_score, 36);
+  assert.deepEqual(byId.minimize_total_gates.target_files, ["AesSbox/TotalCircuit.lean"]);
+  assert.deepEqual(byId.minimize_and_gates.target_files, ["AesSbox/AndCircuit.lean"]);
+  for (const file of ["AesSbox/Spec.lean", "AesSbox/TotalBound.lean", "AesSbox/AndBound.lean", "verify"]) {
+    assert.throws(
+      () => validatePatch(patchFor(file), manifest.frozen_paths, byId.minimize_total_gates.target_files),
+      /frozen/
+    );
+  }
+  assert.throws(
+    () => validatePatch(patchFor("AesSbox/AndCircuit.lean"), manifest.frozen_paths, byId.minimize_total_gates.target_files),
+    /outside/
+  );
+  validatePatch(patchFor("AesSbox/TotalCircuit.lean"), manifest.frozen_paths, byId.minimize_total_gates.target_files);
+  validatePatch(patchFor("AesSbox/AndCircuit.lean"), manifest.frozen_paths, byId.minimize_and_gates.target_files);
+});
+
 test("validatePatch blocks frozen paths and files outside target_files", () => {
   assert.throws(
     () => validatePatch(patchFor("MetaComplexity/Spec.lean"), FROZEN, ["MetaComplexity/X.lean"]),
