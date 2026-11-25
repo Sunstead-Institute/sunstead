@@ -124,11 +124,42 @@ Inside `SunsteadHub`, `seedMissions()` prunes retired missions from the active
 `missions`, `tasks`, `mission_files` and `bundle_cache` tables and keeps the
 historical `submissions`, `contributors`, `claims_log` and `accepted_patches`.
 
+### Durable Object code updates (new hub code runs within about 15 seconds)
+
+By default Cloudflare applies new code to an active Durable Object only once it
+hibernates, or after 300 seconds. `SunsteadHub` never hibernates while a browser
+holds `/api/events` open, so every deploy used to take about 5 minutes to reach
+the hub. Shortening each stream would not help: browsers reconnect at once, so
+some stream is always open.
+
+`cloudflare.config.ts` therefore sends
+`code_update_strategy: { mode: "deferred", max_delay: 15 }` with every deploy
+(through `unsafe.metadata`, because `cf/config` has no typed field for it yet;
+`cf deploy --dry-run` prints it under "unsafe metadata"). Both deploy modes use it.
+
+What a deploy does to traffic:
+
+- Within 15 seconds of the deploy, Cloudflare resets any Durable Object still
+  running the old code (in practice `SunsteadHub`, plus `Lean4Verifier` if a
+  verification is running) onto the new code. Storage is untouched.
+- Every SSE stream drops. Each stream starts with `retry: 2000`, so browsers
+  reconnect after about 2 seconds, and the UI reloads missions and the
+  leaderboard on reconnect to catch events it missed.
+- A claim, release or other short request finishes inside the 15 seconds.
+- A verification still running when the reset happens is cut off and the
+  contributor gets an error and resubmits. Nothing is lost: the hub writes the
+  verdict, points and files only after the verifier answers. To avoid this,
+  deploy when the live feed shows no "Verifying patch" in progress.
+
+To change the delay, edit `DO_CODE_UPDATE_MAX_DELAY_SEC` (0 to 86400 seconds).
+`mode: "immediate"` would reset at once and cut off even short requests.
+
 ## After deploy
 
 - `curl https://sunstead.org/join.txt` returns the Lean 4.36.0 + Mathlib onboarding guide.
 - `curl https://sunstead.org/api/missions` lists the 3 Lean 4 missions (`arklib-near-capacity-primes`, `pnt-analytic-foundations`, `onboarding-sandbox`) with pinned upstream provenance, spec hashes, and `demo` flags.
 - `curl https://sunstead.org/api/stats` returns the contributor funnel.
+- The live feed indicator goes back to LIVE within about 20 seconds (the hub reset plus the 2-second reconnect).
 - Watch the first real submission in the live feed.
 
 ## Publishing mission history

@@ -15,6 +15,8 @@ if (prebuiltVerifierImage && !VERIFIER_IMAGE_RE.test(prebuiltVerifierImage)) {
   );
 }
 
+const DO_CODE_UPDATE_MAX_DELAY_SEC = 15;
+
 const lean4Container = defineContainer({
   name: "sunstead-verifier-lean4",
   image: prebuiltVerifierImage
@@ -33,6 +35,17 @@ const worker = defineWorker({
   compatibilityFlags: ["nodejs_compat"],
   entrypoint,
   workersDev: true,
+  // Durable Object code updates. Cloudflare's default ("deferred", 300 s) keeps an
+  // active object on the old code until it hibernates. SunsteadHub never hibernates
+  // while browsers hold /api/events open, so every deploy used to wait the full
+  // 5 minutes. 15 s lets in-flight claims finish; a verification still running then
+  // is cut off and the contributor gets a 5xx and resubmits (nothing is written until
+  // the verdict arrives). See docs/DEPLOYMENT.md "Durable Object code updates".
+  unsafe: {
+    metadata: {
+      code_update_strategy: { mode: "deferred", max_delay: DO_CODE_UPDATE_MAX_DELAY_SEC },
+    },
+  },
   domains: ["sunstead.org", "www.sunstead.org"],
   exports: {
     SunsteadHub: exports.durableObject({ storage: "sqlite" }),

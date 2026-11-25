@@ -614,11 +614,19 @@ function renderLeaderboard(entries) {
 function connectSse() {
   const es = new EventSource("/api/events");
   const ind = $("sse-indicator");
+  // After a dropped stream (for example a deploy resetting the hub), events
+  // sent while disconnected are lost, so reload state once the stream is back.
+  let wasDisconnected = false;
   es.onopen = () => {
     ind.textContent = "LIVE";
+    if (wasDisconnected) {
+      wasDisconnected = false;
+      scheduleRefresh();
+    }
   };
   es.onerror = () => {
     ind.textContent = "RECONNECTING";
+    wasDisconnected = true;
   };
 
   let refreshTimer = null;

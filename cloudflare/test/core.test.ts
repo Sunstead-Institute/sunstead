@@ -15,6 +15,8 @@ import {
   validatePatch,
   buildProofView,
   howToRebuild,
+  sseHello,
+  SSE_RETRY_MS,
   type AcceptedProofRow,
   type MissionManifest,
   type TaskState,
@@ -404,4 +406,12 @@ test("howToRebuild quotes URLs so shells do not glob ?base=seed", () => {
       "curl -sL 'https://sunstead.org/api/missions/onboarding-sandbox/history.mbox' | git am"
   );
   assert.match(howToRebuild("https://h", "it's"), /mkdir 'it'\\''s'/);
+});
+
+test("SSE streams open with a retry directive so clients reconnect fast after a deploy", () => {
+  const hello = sseHello();
+  // The `retry:` field must be its own line, before the blank line that ends the event.
+  assert.match(hello, /^retry: \d+\n/);
+  assert.equal(hello, `retry: ${SSE_RETRY_MS}\n: connected\n\n`);
+  assert.ok(SSE_RETRY_MS >= 1000 && SSE_RETRY_MS <= 5000);
 });
