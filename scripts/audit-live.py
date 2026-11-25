@@ -610,6 +610,7 @@ def check_lean(image, data, frozen, modules, checks, expected_version="4.36.0"):
     for _mod, _spec_c, theorem in checks:
         actual = results[theorem]
         print(f"  PASS {theorem}: stock Lean {expected_version} + leanchecker + loadExts:=false kernel check; axioms: {', '.join(actual) or 'none'}")
+    return results
 
 
 def check_lean_repo_snapshot(image, data, snapshot_id, lean_options, checks, expected_version="4.35.0"):
@@ -619,6 +620,7 @@ def check_lean_repo_snapshot(image, data, snapshot_id, lean_options, checks, exp
     for _mod, _rel, theorem in checks:
         actual = results[theorem]
         print(f"  PASS {theorem}: stock Lean {expected_version} + leanchecker + repo-snapshot FrozenTypeDeps check; axioms: {', '.join(actual) or 'none'}")
+    return results
 
 
 RANK_TASK_SPECS = {
@@ -825,6 +827,78 @@ def audit_aes_sbox_history(repo, accepted, snapshot_tasks, manifest):
             require(previous[tid] == task["best_score"], f"published best score differs from circuit for {tid}")
 
 
+def build_audit_attestation(
+    *,
+    status="passed",
+    auditor="github-actions/audit-proofs",
+    toolchain=None,
+    axioms=None,
+    summary=None,
+    run_url=None,
+    commit_sha=None,
+    audited_at=None,
+):
+    payload = {
+        "status": status,
+        "auditor": auditor,
+    }
+    if audited_at is not None:
+        payload["audited_at"] = int(audited_at)
+    if toolchain:
+        payload["toolchain"] = toolchain
+    if axioms is not None:
+        payload["axioms"] = list(axioms)
+    if summary:
+        payload["summary"] = summary
+    if run_url:
+        payload["run_url"] = run_url
+    if commit_sha:
+        payload["commit_sha"] = commit_sha
+    return payload
+
+
+def github_actions_run_url(env=None):
+    env = os.environ if env is None else env
+    server = (env.get("GITHUB_SERVER_URL") or "").rstrip("/")
+    repo = (env.get("GITHUB_REPOSITORY") or "").strip("/")
+    run_id = (env.get("GITHUB_RUN_ID") or "").strip()
+    if server.startswith("https://") and repo and run_id.isdigit():
+        return f"{server}/{repo}/actions/runs/{run_id}"
+    return None
+
+
+def publish_audit_attestation(proof_id, payload, token, hub_base=None, opener=None):
+    base = (hub_base or BASE).rstrip("/")
+    key = proof_id.lower().removeprefix("sha256:")
+    require(re.fullmatch(r"[0-9a-f]{64}", key), f"invalid proof_id for audit publication: {proof_id}")
+    req = urllib.request.Request(
+        f"{base}/api/proofs/{key}/audit",
+        data=json.dumps(payload).encode("utf-8"),
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}",
+            "User-Agent": "sunstead-independent-audit",
+        },
+    )
+    do_open = urllib.request.urlopen if opener is None else opener
+    with do_open(req, timeout=30) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def mission_ledger_proof_ids(mid):
+    """Map seq -> proof_id (64-hex) for accepted proofs of one mission."""
+    try:
+        data = json.loads(download(f"/api/proofs?mission_id={mid}&limit=200"))
+    except Exception:
+        return {}
+    return {
+        row["seq"]: row["proof_id"]
+        for row in data.get("proofs", [])
+        if isinstance(row.get("seq"), int) and isinstance(row.get("proof_id"), str)
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--image", default=None, help="override stock Lean toolchain image (default: per-mission verifier image)")
@@ -838,6 +912,11 @@ def main():
         help="override image for a specific toolchain (e.g. v4.35.0=sunstead/verifier-lean4-v4.35.0:v0.1); repeatable",
     )
     parser.add_argument("--mission", help="limit audit to this mission ID")
+    parser.add_argument(
+        "--publish-audit",
+        action="store_true",
+        help="POST verified audit attestations to /api/proofs/:id/audit when SUNSTEAD_AUDIT_TOKEN is set",
+    )
     args = parser.parse_args()
     require(not args.mission or SLUG.fullmatch(args.mission), "invalid mission ID")
     toolchain_images = parse_toolchain_images(
@@ -845,6 +924,9 @@ def main():
     )
     source = json.loads(download("/api/missions"))["missions"]
     count = 0
+    attestations = []
+    run_url = github_actions_run_url()
+    commit_sha = (os.environ.get("GITHUB_SHA") or "").strip() or None
     for item in source:
         mid = item["id"]
         require(SLUG.fullmatch(mid), "invalid mission ID in index")
@@ -864,6 +946,7 @@ def main():
         verified = {t["def"]["id"] for t in snapshot["tasks"] if t["status"] == "verified"}
         require(history and (hillclimb_mission or len(history) == len(verified)), "history incomplete or changed during audit")
         require(verified == {row["task_id"] for row in history}, "verified tasks and history disagree")
+        seq_to_proof_id = mission_ledger_proof_ids(mid) if args.publish_audit else {}
         seed_files = archive_files(download(endpoint + "/bundle.tar.gz?base=seed"))
         live_files = archive_files(download(endpoint + "/bundle.tar.gz"))
         with tempfile.TemporaryDirectory(prefix="sunstead-independent-audit-") as tmp:
@@ -873,10 +956,36 @@ def main():
             if rank_mission:
                 tasks_by_id = {t["def"]["id"]: t for t in snapshot["tasks"]}
                 audit_rank_history(Path(tmp) / "repo", mid, accepted, tasks_by_id)
+                for row in history:
+                    pid = seq_to_proof_id.get(row["seq"])
+                    if pid:
+                        attestations.append((
+                            pid,
+                            build_audit_attestation(
+                                toolchain="python-f2-evaluator",
+                                axioms=[],
+                                summary=f"Independent F2 multiplication tensor audit passed for {mid}/{row['task_id']}",
+                                run_url=run_url,
+                                commit_sha=commit_sha,
+                            ),
+                        ))
                 count += len(accepted)
                 continue
             if aes_sbox_mission:
                 audit_aes_sbox_history(Path(tmp) / "repo", accepted, snapshot["tasks"], manifest)
+                for row in history:
+                    pid = seq_to_proof_id.get(row["seq"])
+                    if pid:
+                        attestations.append((
+                            pid,
+                            build_audit_attestation(
+                                toolchain="python-fips197-evaluator",
+                                axioms=[],
+                                summary=f"Independent 256-input FIPS 197 AES S-box audit passed for {mid}/{row['task_id']}",
+                                run_url=run_url,
+                                commit_sha=commit_sha,
+                            ),
+                        ))
                 count += len(accepted)
                 continue
             image, expected_version = resolve_audit_target(
@@ -888,15 +997,51 @@ def main():
                     seed_files, tree, manifest, accepted, contracts
                 )
                 print(f"{mid}: {len(accepted)} accepted patches replayed against matching frozen repo-snapshot spec", flush=True)
-                check_lean_repo_snapshot(image, data, snapshot_id, lean_options, checks, expected_version=expected_version)
+                axiom_map = check_lean_repo_snapshot(image, data, snapshot_id, lean_options, checks, expected_version=expected_version)
+                for row, (_mod, _rel, theorem) in zip(history, checks):
+                    pid = seq_to_proof_id.get(row["seq"])
+                    if pid:
+                        attestations.append((
+                            pid,
+                            build_audit_attestation(
+                                toolchain=f"lean4:v{expected_version}",
+                                axioms=axiom_map.get(theorem, []),
+                                summary=f"Stock Lean {expected_version} + leanchecker + FrozenTypeDeps audit passed for {theorem}",
+                                run_url=run_url,
+                                commit_sha=commit_sha,
+                            ),
+                        ))
                 count += len(checks)
                 continue
             data, frozen, modules, checks = lean_input(tree, manifest, accepted, contracts, preamble)
             print(f"{mid}: {len(accepted)} accepted patches replayed against matching frozen spec", flush=True)
-            check_lean(image, data, frozen, modules, checks, expected_version=expected_version)
+            axiom_map = check_lean(image, data, frozen, modules, checks, expected_version=expected_version)
+            for row, (_mod, _spec_c, theorem) in zip(history, checks):
+                pid = seq_to_proof_id.get(row["seq"])
+                if pid:
+                    attestations.append((
+                        pid,
+                        build_audit_attestation(
+                            toolchain=f"lean4:v{expected_version}",
+                            axioms=axiom_map.get(theorem, []),
+                            summary=f"Stock Lean {expected_version} + leanchecker + loadExts:=false audit passed for {theorem}",
+                            run_url=run_url,
+                            commit_sha=commit_sha,
+                        ),
+                    ))
             count += len(checks)
     require(count > 0, "no accepted non-demo proofs audited")
     print(f"Independently verified {count} proof(s).")
+    if args.publish_audit:
+        token = (os.environ.get("SUNSTEAD_AUDIT_TOKEN") or "").strip()
+        if not token:
+            print("Skipping audit attestation publication (SUNSTEAD_AUDIT_TOKEN not set).")
+        else:
+            published = 0
+            for proof_id, payload in attestations:
+                publish_audit_attestation(proof_id, payload, token)
+                published += 1
+            print(f"Published {published} independent audit attestation(s) to {BASE}.")
 
 
 if __name__ == "__main__":

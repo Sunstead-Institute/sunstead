@@ -36,6 +36,17 @@ import {
   publicVerifierImage,
   buildMissionLocalSetup,
   renderRepoSnapshotBootstrapScript,
+  VerifierSlotPool,
+  VERIFIER_POOL_SIZE,
+  verifierSlotName,
+  sortMissionSummaries,
+  proofIdFromPatchSha,
+  parseAuditAttestation,
+  constantTimeEqual,
+  shouldRunAsyncSubmit,
+  formatSubmissionStatusView,
+  type SubmissionStatus,
+  type SubmissionStatusRow,
 } from "./core";
 import { SEED_MISSIONS, type SeedMission } from "./generated/missions";
 import { renderJoinTxt } from "./join_txt";
@@ -46,6 +57,8 @@ export interface HubEnv {
   LEAN4_VERIFIER: DurableObjectNamespace<Lean4Verifier>;
   LEAN4_V435_VERIFIER: DurableObjectNamespace<Lean4V435Verifier>;
   LEAN4_V431_VERIFIER: DurableObjectNamespace<Lean4V431Verifier>;
+  GITHUB_API_TOKEN?: string;
+  AUDIT_API_TOKEN?: string;
 }
 
 function parseVerifierKind(kind: string): SeedMission["verifier_kind"] {
@@ -63,6 +76,7 @@ interface HubEvent {
   score: number | null;
   summary: string;
   timestamp: number;
+  submission_id?: string | null;
 }
 
 interface SubmissionRecord {
@@ -70,13 +84,20 @@ interface SubmissionRecord {
   mission_id: string;
   task_id: string;
   contributor: string;
+  status: SubmissionStatus;
   accepted: boolean;
   score: number | null;
   points: number;
   summary: string;
   patch_sha256: string;
+  proof_id?: string | null;
   verify_ms: number;
+  stage?: string | null;
+  diagnostics?: string | null;
+  error?: string | null;
+  unlocked_dependents_json?: string | null;
   created_at: number;
+  completed_at?: number | null;
 }
 
 type ContributorRecord = {
@@ -177,7 +198,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
   private sseClients = new Set<WritableStreamDefaultWriter<Uint8Array>>();
   private encoder = new TextEncoder();
   private stateLocks = new Map<string, Promise<void>>();
-  private verifyLocks = new Map<string, Promise<void>>();
+  private verifierPool = new VerifierSlotPool(VERIFIER_POOL_SIZE);
 
   constructor(ctx: DurableObjectState, env: HubEnv) {
     super(ctx, env);
@@ -296,8 +317,45 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     // Ledger permalink key: SHA-256 of the stored (possibly normalized) patch.
     // Rows from before this column are filled in by backfillPatchHashes().
     this.ensureColumn("accepted_patches", "patch_sha256", "TEXT");
+    this.ensureColumn("accepted_patches", "audit_json", "TEXT");
     this.ctx.storage.sql.exec(
       "CREATE INDEX IF NOT EXISTS idx_accepted_patches_sha ON accepted_patches(patch_sha256)"
+    );
+
+    // Async verification status & normalized permalink columns on submissions.
+    this.ensureColumn("submissions", "status", "TEXT NOT NULL DEFAULT 'completed'");
+    this.ensureColumn("submissions", "stage", "TEXT");
+    this.ensureColumn("submissions", "diagnostics", "TEXT");
+    this.ensureColumn("submissions", "proof_id", "TEXT");
+    this.ensureColumn("submissions", "unlocked_dependents_json", "TEXT");
+    this.ensureColumn("submissions", "error", "TEXT");
+    this.ensureColumn("submissions", "completed_at", "INTEGER");
+    this.ctx.storage.sql.exec(
+      `UPDATE submissions
+       SET status = CASE WHEN accepted = 1 THEN 'accepted' ELSE 'rejected' END,
+           completed_at = COALESCE(completed_at, created_at)
+       WHERE status = 'completed'`
+    );
+    // Sync historical accepted submissions.patch_sha256 + proof_id to the
+    // canonical normalized patch hash recorded in accepted_patches.
+    this.ctx.storage.sql.exec(
+      `UPDATE submissions
+       SET patch_sha256 = (
+             SELECT a.patch_sha256 FROM accepted_patches a
+             WHERE a.submission_id = submissions.id AND a.patch_sha256 IS NOT NULL
+             ORDER BY a.seq DESC LIMIT 1
+           ),
+           proof_id = REPLACE((
+             SELECT a.patch_sha256 FROM accepted_patches a
+             WHERE a.submission_id = submissions.id AND a.patch_sha256 IS NOT NULL
+             ORDER BY a.seq DESC LIMIT 1
+           ), 'sha256:', '')
+       WHERE accepted = 1
+         AND EXISTS (
+           SELECT 1 FROM accepted_patches a
+           WHERE a.submission_id = submissions.id AND a.patch_sha256 IS NOT NULL
+             AND (a.patch_sha256 != submissions.patch_sha256 OR submissions.proof_id IS NULL)
+         )`
     );
   }
 
@@ -504,11 +562,18 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       verifier_kind: parseVerifierKind(r.verifier_kind),
     }));
 
-    parsed.sort((a, b) =>
-      b.manifest.tier !== a.manifest.tier
-        ? b.manifest.tier - a.manifest.tier
-        : a.manifest.id.localeCompare(b.manifest.id)
-    );
+    parsed.sort((a, b) => {
+      const aDemo = a.manifest.demo ? 1 : 0;
+      const bDemo = b.manifest.demo ? 1 : 0;
+      if (aDemo !== bDemo) return aDemo - bDemo;
+      const aTier = a.manifest.tier > 0 ? a.manifest.tier : Number.MAX_SAFE_INTEGER;
+      const bTier = b.manifest.tier > 0 ? b.manifest.tier : Number.MAX_SAFE_INTEGER;
+      if (aTier !== bTier) return aTier - bTier;
+      const aMode = a.manifest.mode === "dag" ? 0 : 1;
+      const bMode = b.manifest.mode === "dag" ? 0 : 1;
+      if (aMode !== bMode) return aMode - bMode;
+      return a.manifest.id.localeCompare(b.manifest.id);
+    });
     return parsed;
   }
 
@@ -599,16 +664,19 @@ export class SunsteadHub extends DurableObject<HubEnv> {
             mission_id: string;
             task_id: string;
             contributor: string;
+            status: string;
             accepted: number;
             score: number | null;
             points: number;
             summary: string;
             patch_sha256: string;
+            proof_id: string | null;
             verify_ms: number;
             created_at: number;
+            completed_at: number | null;
           }>(
-            `SELECT id, mission_id, task_id, contributor, accepted, score, points, summary,
-                    patch_sha256, verify_ms, created_at
+            `SELECT id, mission_id, task_id, contributor, status, accepted, score, points, summary,
+                    patch_sha256, proof_id, verify_ms, created_at, completed_at
              FROM submissions WHERE mission_id = ? ORDER BY created_at DESC LIMIT ?`,
             missionId,
             limit
@@ -620,40 +688,111 @@ export class SunsteadHub extends DurableObject<HubEnv> {
             mission_id: string;
             task_id: string;
             contributor: string;
+            status: string;
             accepted: number;
             score: number | null;
             points: number;
             summary: string;
             patch_sha256: string;
+            proof_id: string | null;
             verify_ms: number;
             created_at: number;
+            completed_at: number | null;
           }>(
-            `SELECT id, mission_id, task_id, contributor, accepted, score, points, summary,
-                    patch_sha256, verify_ms, created_at
+            `SELECT id, mission_id, task_id, contributor, status, accepted, score, points, summary,
+                    patch_sha256, proof_id, verify_ms, created_at, completed_at
              FROM submissions ORDER BY created_at DESC LIMIT ?`,
             limit
           )
           .toArray();
 
-    return rows.map((r) => ({ ...r, accepted: r.accepted !== 0 }));
+    return rows.map((r) => {
+      const status: SubmissionStatus =
+        r.status === "verifying" || r.status === "accepted" || r.status === "rejected" || r.status === "error"
+          ? r.status
+          : r.accepted !== 0
+            ? "accepted"
+            : "rejected";
+      return {
+        ...r,
+        status,
+        accepted: r.accepted !== 0,
+      };
+    });
   }
 
   private insertSubmission(rec: SubmissionRecord): void {
     this.ctx.storage.sql.exec(
       `INSERT INTO submissions
-       (id, mission_id, task_id, contributor, accepted, score, points, summary, patch_sha256, verify_ms, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, mission_id, task_id, contributor, status, accepted, score, points, summary, patch_sha256, proof_id, verify_ms, stage, diagnostics, error, unlocked_dependents_json, created_at, completed_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       rec.id,
       rec.mission_id,
       rec.task_id,
       rec.contributor,
+      rec.status,
       rec.accepted ? 1 : 0,
       rec.score,
       rec.points,
       rec.summary,
       rec.patch_sha256,
+      rec.proof_id ?? null,
       rec.verify_ms,
-      rec.created_at
+      rec.stage ?? null,
+      rec.diagnostics ?? null,
+      rec.error ?? null,
+      rec.unlocked_dependents_json ?? null,
+      rec.created_at,
+      rec.completed_at ?? null
+    );
+  }
+
+  private updateSubmissionOutcome(rec: {
+    id: string;
+    status: SubmissionStatus;
+    accepted: boolean;
+    score: number | null;
+    points: number;
+    summary: string;
+    patch_sha256: string;
+    proof_id?: string | null;
+    verify_ms: number;
+    stage?: string | null;
+    diagnostics?: string | null;
+    error?: string | null;
+    unlocked_dependents_json?: string | null;
+    completed_at: number;
+  }): void {
+    this.ctx.storage.sql.exec(
+      `UPDATE submissions
+       SET status = ?,
+           accepted = ?,
+           score = ?,
+           points = ?,
+           summary = ?,
+           patch_sha256 = ?,
+           proof_id = ?,
+           verify_ms = ?,
+           stage = ?,
+           diagnostics = ?,
+           error = ?,
+           unlocked_dependents_json = ?,
+           completed_at = ?
+       WHERE id = ?`,
+      rec.status,
+      rec.accepted ? 1 : 0,
+      rec.score,
+      rec.points,
+      rec.summary,
+      rec.patch_sha256,
+      rec.proof_id ?? null,
+      rec.verify_ms,
+      rec.stage ?? null,
+      rec.diagnostics ?? null,
+      rec.error ?? null,
+      rec.unlocked_dependents_json ?? null,
+      rec.completed_at,
+      rec.id
     );
   }
 
@@ -692,10 +831,11 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     }
   }
 
-  private getVerifierStub(mission: SeedMission) {
-    // Route each mission to its pinned Lean toolchain container, keying by image
-    // tag so bumping the verifier image always routes to a fresh container DO.
-    const key = `${mission.verifier_kind}:${mission.manifest.verifier.image}:${mission.manifest.id}`;
+  private getVerifierStub(mission: SeedMission, slot: number) {
+    // Route across pooled container slots per toolchain & image tag so concurrent
+    // submissions on the same mission run in parallel up to `maxInstances`, and
+    // bumping the verifier image always routes to a fresh container DO pool.
+    const key = verifierSlotName(mission.verifier_kind, mission.manifest.verifier.image, slot);
     if (mission.verifier_kind === "lean4-v4.35.0") {
       return this.env.LEAN4_V435_VERIFIER.getByName(key);
     }
@@ -787,10 +927,11 @@ export class SunsteadHub extends DurableObject<HubEnv> {
            c.linkedin_handle AS linkedin_handle,
            COUNT(DISTINCT CASE WHEN s.accepted = 1 THEN s.mission_id || ':' || s.task_id END) AS verified_tasks,
            SUM(CASE WHEN s.accepted = 1 THEN 1 ELSE 0 END) AS accepted_submissions,
-           COUNT(*) AS total_submissions,
+           SUM(CASE WHEN s.status != 'verifying' THEN 1 ELSE 0 END) AS total_submissions,
            SUM(CASE WHEN s.accepted = 1 THEN s.points ELSE 0 END) AS base_points
          FROM submissions s
          LEFT JOIN contributors c ON c.handle = s.contributor
+         WHERE s.status != 'verifying'
          GROUP BY s.contributor`
       )
       .toArray();
@@ -846,10 +987,21 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     }
 
     if (method === "GET" && path === "/join.txt") {
-      const missions = this.listMissionsRows().map((m) => ({
-        manifest: m.manifest,
-        tasks: this.getTasks(m.manifest.id),
-      }));
+      const missions = sortMissionSummaries(
+        this.listMissionsRows().map((m) => {
+          const tasks = this.getTasks(m.manifest.id);
+          return {
+            id: m.manifest.id,
+            tier: m.manifest.tier,
+            mode: m.manifest.mode,
+            demo: Boolean(m.manifest.demo),
+            total_tasks: tasks.length,
+            verified_tasks: tasks.filter((t) => t.status === "verified").length,
+            manifest: m.manifest,
+            tasks,
+          };
+        })
+      );
       const base = `${url.protocol}//${url.host}`;
       return new Response(renderJoinTxt(base, missions), {
         headers: {
@@ -899,8 +1051,14 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       const sql = this.ctx.storage.sql;
       const result = path.endsWith("/start")
         ? startGithubVerification(sql, auth.handle, now)
-        : await confirmGithubVerification(sql, auth.handle,
-            (await request.json<{gist_id?: unknown}>().catch(() => null))?.gist_id);
+        : await confirmGithubVerification(
+            sql,
+            auth.handle,
+            (await request.json<{ gist_id?: unknown }>().catch(() => null))?.gist_id,
+            fetch,
+            () => Math.floor(Date.now() / 1000),
+            this.env.GITHUB_API_TOKEN
+          );
       return jsonResp(result.body, result.status, { "Cache-Control": "no-store" });
     }
 
@@ -934,13 +1092,18 @@ export class SunsteadHub extends DurableObject<HubEnv> {
           frontier_task_ids: computeFrontier(m.manifest.mode, tasks),
         };
       });
-      return jsonResp({ missions: summaries });
+      return jsonResp({ missions: sortMissionSummaries(summaries) });
     }
 
     if (method === "GET" && path === "/api/submissions") {
       const missionId = url.searchParams.get("mission_id");
       const limit = Math.max(1, Math.min(Number(url.searchParams.get("limit") || 40), 200));
       return jsonResp({ submissions: this.getRecentSubmissions(missionId, limit) });
+    }
+
+    const subStatusMatch = path.match(/^\/api\/submissions\/([^/]+)$/);
+    if (method === "GET" && subStatusMatch) {
+      return this.handleGetSubmission(decodeURIComponent(subStatusMatch[1]), url.origin);
     }
 
     if (method === "GET" && path === "/api/leaderboard") {
@@ -1016,6 +1179,11 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     const ledgerMatch = path.match(/^\/api\/proofs\/([^/]+)$/);
     if (method === "GET" && ledgerMatch) {
       return this.handleLedgerProof(decodeURIComponent(ledgerMatch[1]), url.origin);
+    }
+
+    const auditMatch = path.match(/^\/api\/proofs\/([^/]+)\/audit$/);
+    if (method === "POST" && auditMatch) {
+      return this.handleRecordAudit(decodeURIComponent(auditMatch[1]), request);
     }
 
     const taskFilesMatch = path.match(/^\/api\/missions\/([^/]+)\/tasks\/([^/]+)\/files$/);
@@ -1434,10 +1602,10 @@ export class SunsteadHub extends DurableObject<HubEnv> {
   }
 
   /**
-   * Ask the mission's verifier container to act on the current accepted state.
-   * The first attempt sends only the state hash; a warm container that already
-   * holds that state uses it, otherwise it answers 409 {need_files} and we
-   * resend with the files.
+   * Ask a pooled verifier container for this toolchain to act on the current
+   * accepted state. Acquires an affinity-preferred idle slot across up to
+   * `maxInstances` containers and buffers the response body before releasing the
+   * slot so concurrent submissions on one mission run in parallel cleanly.
    */
   private async callVerifier(
     mission: SeedMission,
@@ -1446,30 +1614,46 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     body: Record<string, unknown>,
     precomputedSha?: string
   ): Promise<Response> {
-    const stub = this.getVerifierStub(mission);
     const stateSha = precomputedSha ?? (await filesStateSha256(files));
-    const send = (withFiles: boolean) =>
-      stub.fetch(
-        new Request(`http://verifier${path}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...body,
-            current_files_sha256: stateSha,
-            ...(withFiles ? { current_files: files } : {}),
-          }),
-        })
-      );
-    if (body.cache_state === false) {
-      return send(true);
-    }
-    const first = await send(false);
-    if (first.status !== 409) return first;
-    const info = (await first.json().catch(() => ({}))) as { need_files?: boolean };
-    if (!info.need_files) {
-      return new Response(JSON.stringify(info), { status: 409, headers: { "Content-Type": "application/json" } });
-    }
-    return send(true);
+    return this.verifierPool.withSlot(
+      mission.verifier_kind,
+      mission.manifest.verifier.image,
+      mission.manifest.id,
+      async (slot) => {
+        const stub = this.getVerifierStub(mission, slot);
+        const send = (withFiles: boolean) =>
+          stub.fetch(
+            new Request(`http://verifier${path}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                ...body,
+                current_files_sha256: stateSha,
+                ...(withFiles ? { current_files: files } : {}),
+              }),
+            })
+          );
+        const materialize = async (resp: Response) =>
+          new Response(await resp.arrayBuffer(), {
+            status: resp.status,
+            statusText: resp.statusText,
+            headers: resp.headers,
+          });
+        if (body.cache_state === false) {
+          return materialize(await send(true));
+        }
+        const first = await send(false);
+        if (first.status !== 409) return materialize(first);
+        const info = (await first.json().catch(() => ({}))) as { need_files?: boolean };
+        if (!info.need_files) {
+          return new Response(JSON.stringify(info), {
+            status: 409,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        return materialize(await send(true));
+      }
+    );
   }
 
   private handleHistory(missionId: string, mbox: boolean): Response {
@@ -1530,7 +1714,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         `SELECT a.seq, a.mission_id, a.task_id, a.submission_id, a.contributor,
                 COALESCE(c.display_name, a.contributor) AS display_name,
                 c.github AS github, c.github_verified_handle AS github_verified_handle, c.x_handle AS x, c.linkedin_handle AS linkedin,
-                a.summary, a.patch, a.spec_sha256, a.created_at, s.verify_ms AS verify_ms
+                a.summary, a.patch, a.spec_sha256, a.created_at, s.verify_ms AS verify_ms, a.audit_json AS audit_json
          FROM accepted_patches a
          LEFT JOIN contributors c ON c.handle = a.contributor
          LEFT JOIN submissions s ON s.id = a.submission_id
@@ -1577,7 +1761,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     SELECT a.seq, a.mission_id, a.task_id, a.submission_id, a.contributor,
            COALESCE(c.display_name, a.contributor) AS display_name,
            c.github AS github, c.github_verified_handle AS github_verified_handle, c.x_handle AS x, c.linkedin_handle AS linkedin,
-           a.summary, a.patch, a.patch_sha256, a.spec_sha256, a.created_at, s.verify_ms AS verify_ms
+           a.summary, a.patch, a.patch_sha256, a.spec_sha256, a.created_at, s.verify_ms AS verify_ms, a.audit_json AS audit_json
     FROM accepted_patches a
     LEFT JOIN contributors c ON c.handle = a.contributor
     LEFT JOIN submissions s ON s.id = a.submission_id`;
@@ -1661,6 +1845,76 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         accepted_at: r.created_at,
       })),
     });
+  }
+
+  /** GET /api/submissions/:id: inspect status/verdict of an async or sync submission. */
+  private handleGetSubmission(submissionId: string, hubOrigin: string): Response {
+    const id = submissionId.trim();
+    if (!id || id.length > 128) {
+      return jsonResp({ error: "invalid submission_id" }, 400);
+    }
+    const rows = this.ctx.storage.sql
+      .exec<SubmissionStatusRow>(
+        `SELECT id, mission_id, task_id, contributor, status, accepted, score, points,
+                summary, patch_sha256, proof_id, verify_ms, stage, diagnostics, error,
+                unlocked_dependents_json, created_at, completed_at
+         FROM submissions
+         WHERE id = ?
+         LIMIT 1`,
+        id
+      )
+      .toArray();
+    if (rows.length === 0) {
+      return jsonResp({ error: `unknown submission: ${id}` }, 404);
+    }
+    return jsonResp(formatSubmissionStatusView(rows[0], hubOrigin), 200, {
+      "Cache-Control": "no-store",
+    });
+  }
+
+  /**
+   * POST /api/proofs/:proof_id/audit: authenticated endpoint for `audit-proofs.yml`
+   * to record independent stock-Lean + `leanchecker` attestations on accepted proofs.
+   */
+  private async handleRecordAudit(hash: string, request: Request): Promise<Response> {
+    const expectedToken = this.env.AUDIT_API_TOKEN?.trim();
+    if (!expectedToken) {
+      return jsonResp({ error: "audit attestation endpoint is not configured" }, 503);
+    }
+    const provided = extractBearerToken(request);
+    if (!provided || !constantTimeEqual(provided, expectedToken)) {
+      return jsonResp({ error: "unauthorized audit attestation token" }, 401);
+    }
+    const key = hash.toLowerCase().replace(/^sha256:/, "");
+    if (!PROOF_HASH_RE.test(key)) {
+      return jsonResp({ error: "proof id must be a 64-character hex SHA-256" }, 400);
+    }
+    let rawBody: unknown;
+    try {
+      rawBody = await request.json();
+    } catch {
+      return jsonResp({ error: "invalid JSON body" }, 400);
+    }
+    let audit: ReturnType<typeof parseAuditAttestation>;
+    try {
+      audit = parseAuditAttestation(rawBody);
+    } catch (e) {
+      return jsonResp({ error: e instanceof Error ? e.message : String(e) }, 400);
+    }
+    await this.backfillPatchHashes();
+    const patchSha = `sha256:${key}`;
+    const exists = this.ctx.storage.sql
+      .exec<{ seq: number }>("SELECT seq FROM accepted_patches WHERE patch_sha256 = ? LIMIT 1", patchSha)
+      .toArray();
+    if (exists.length === 0) {
+      return jsonResp({ error: `no accepted proof with patch ${patchSha}` }, 404);
+    }
+    this.ctx.storage.sql.exec(
+      "UPDATE accepted_patches SET audit_json = ? WHERE patch_sha256 = ?",
+      JSON.stringify(audit),
+      patchSha
+    );
+    return jsonResp({ ok: true, proof_id: key, patch_sha256: patchSha, audit });
   }
 
   /** Single-request inspection of a task's current target files + frozen specs (no container wake-up). */
@@ -1901,14 +2155,15 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     taskId: string,
     request: Request
   ): Promise<Response> {
+    const url = new URL(request.url);
     const rawText = await request.text();
     if (new TextEncoder().encode(rawText).byteLength > MAX_BODY_BYTES) {
       return jsonResp({ error: "payload exceeds 512 KB limit" }, 413);
     }
 
-    let body: { contributor?: string; patch?: string };
+    let body: { contributor?: string; patch?: string; async?: unknown };
     try {
-      body = JSON.parse(rawText) as { contributor?: string; patch?: string };
+      body = JSON.parse(rawText) as { contributor?: string; patch?: string; async?: unknown };
     } catch {
       return jsonResp({ error: "invalid JSON body" }, 400);
     }
@@ -1977,26 +2232,34 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
       const summary = `policy rejected: ${detail}`;
+      const subId = crypto.randomUUID();
+      const diag = sanitizeFailureDiagnostics("patch", detail);
       this.ctx.storage.sql.exec(
         "UPDATE tasks SET attempts = attempts + 1 WHERE mission_id = ? AND task_id = ?",
         missionId,
         taskId
       );
       this.insertSubmission({
-        id: crypto.randomUUID(),
+        id: subId,
         mission_id: missionId,
         task_id: taskId,
         contributor,
+        status: "rejected",
         accepted: false,
         score: null,
         points: 0,
         summary,
         patch_sha256: patchSha,
         verify_ms: 0,
+        stage: diag.stage ?? "patch",
+        diagnostics: diag.diagnostics ?? null,
+        error: summary,
         created_at: now,
+        completed_at: now,
       });
       this.emit({
         kind: "submission_rejected",
+        submission_id: subId,
         mission_id: missionId,
         task_id: taskId,
         contributor,
@@ -2005,224 +2268,426 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         summary,
         timestamp: now,
       });
-      const diag = sanitizeFailureDiagnostics("patch", detail);
-      return jsonResp({ error: summary, ...diag }, 422);
+      return jsonResp({ accepted: false, status: "rejected", submission_id: subId, error: summary, ...diag }, 422);
     }
+
+    const subId = crypto.randomUUID();
+    const asyncMode = shouldRunAsyncSubmit(url, body, request.headers);
+    const startSummary = `Verifying patch from ${contributor} in internet-less Firecracker Container…`;
+
+    this.insertSubmission({
+      id: subId,
+      mission_id: missionId,
+      task_id: taskId,
+      contributor,
+      status: "verifying",
+      accepted: false,
+      score: null,
+      points: 0,
+      summary: startSummary,
+      patch_sha256: patchSha,
+      verify_ms: 0,
+      created_at: now,
+      completed_at: null,
+    });
 
     this.emit({
       kind: "verification_started",
+      submission_id: subId,
       mission_id: missionId,
       task_id: taskId,
       contributor,
       accepted: null,
       score: null,
-      summary: `Verifying patch from ${contributor} in internet-less Firecracker Container…`,
+      summary: startSummary,
       timestamp: now,
     });
 
-    // Serialize slow container invocations per mission on `verifyLocks` so
-    // fast claims & releases on `stateLocks` never block behind a 120s verify.
-    return this.withLock(this.verifyLocks, missionId, async () => {
-      const preVerifyTasks = this.getTasks(missionId);
-      const preVerifyTask = preVerifyTasks.find((t) => t.def.id === taskId);
-      if (!preVerifyTask) return jsonResp({ error: `unknown task: ${taskId}` }, 404);
-      if (!isTaskUnlocked(preVerifyTask, preVerifyTasks)) {
-        return jsonResp({ error: `task '${taskId}' is blocked on unverified dependencies` }, 409);
-      }
-      if (mission.manifest.mode === "dag" && preVerifyTask.status === "verified") {
-        return jsonResp({ error: `task '${taskId}' is already verified` }, 409);
-      }
+    const work = this.runVerificationJob({
+      subId,
+      mission,
+      task,
+      missionId,
+      taskId,
+      contributor,
+      patch,
+      patchSha,
+      hubOrigin: url.origin,
+    });
 
-      let cRes: ContainerVerifyResponse;
-      try {
-        const resp = await this.callVerifier(mission, "/verify", this.getMissionFiles(missionId), {
+    if (asyncMode) {
+      this.ctx.waitUntil(work.then(() => undefined, () => undefined));
+      return jsonResp(
+        {
+          accepted: null,
+          status: "verifying",
+          submission_id: subId,
           mission_id: missionId,
           task_id: taskId,
-          patch,
-          frozen_paths: mission.manifest.frozen_paths,
-          target_files: task.def.target_files,
-          timeout_sec: mission.manifest.verifier.timeout_sec ?? 90,
-        });
-        if (!resp.ok) {
-          const errText = await resp.text().catch(() => "");
-          return jsonResp(
-            {
-              error: `verifier container returned HTTP ${resp.status}${errText ? `: ${errText.slice(0, 300)}` : ""}`,
-            },
-            502
-          );
-        }
-        const parsed = (await resp.json()) as Partial<ContainerVerifyResponse>;
-        if (!parsed || typeof parsed !== "object" || typeof parsed.ok !== "boolean") {
-          return jsonResp({ error: "verifier container returned malformed verdict JSON" }, 502);
-        }
-        cRes = parsed as ContainerVerifyResponse;
-      } catch (e) {
-        return jsonResp(
-          { error: `verifier container invocation failed: ${e instanceof Error ? e.message : String(e)}` },
-          502
-        );
-      }
+          contributor,
+          status_url: `${url.origin}/api/submissions/${encodeURIComponent(subId)}`,
+          summary: "Verification queued in internet-less Firecracker Container; poll status_url or watch /api/events.",
+        },
+        202,
+        { "Cache-Control": "no-store" }
+      );
+    }
 
-      // Hash outside the state lock so nothing awaits between its reads and writes.
-      const storedPatch =
-        cRes.normalized_patch && cRes.normalized_patch.trim() ? cRes.normalized_patch : patch;
-      const storedPatchSha = await sha256Hex(storedPatch);
+    const outcome = await work;
+    return jsonResp(outcome.body, outcome.status);
+  }
 
-      return this.withLock(this.stateLocks, missionId, async () => {
-        const latestTasks = this.getTasks(missionId);
-        const latestTask = latestTasks.find((t) => t.def.id === taskId) || task;
+  /**
+   * Run container verification across the toolchain's pooled container slots
+   * (no per-mission verify lock!), then serialize only the fast SQLite commit
+   * on `stateLocks`.
+   */
+  private async runVerificationJob(params: {
+    subId: string;
+    mission: SeedMission;
+    task: TaskState;
+    missionId: string;
+    taskId: string;
+    contributor: string;
+    patch: string;
+    patchSha: string;
+    hubOrigin: string;
+  }): Promise<{ status: number; body: Record<string, unknown> }> {
+    const { subId, mission, task, missionId, taskId, contributor, patch, patchSha, hubOrigin } = params;
+
+    const preVerifyTasks = this.getTasks(missionId);
+    const preVerifyTask = preVerifyTasks.find((t) => t.def.id === taskId);
+    if (!preVerifyTask) {
+      const reason = `unknown task: ${taskId}`;
+      const finishedAt = Math.floor(Date.now() / 1000);
+      this.updateSubmissionOutcome({
+        id: subId,
+        status: "rejected",
+        accepted: false,
+        score: null,
+        points: 0,
+        summary: reason,
+        patch_sha256: patchSha,
+        verify_ms: 0,
+        error: reason,
+        completed_at: finishedAt,
+      });
+      return { status: 404, body: { accepted: false, status: "rejected", submission_id: subId, error: reason } };
+    }
+    if (!isTaskUnlocked(preVerifyTask, preVerifyTasks)) {
+      const reason = `task '${taskId}' is blocked on unverified dependencies`;
+      const finishedAt = Math.floor(Date.now() / 1000);
+      this.updateSubmissionOutcome({
+        id: subId,
+        status: "rejected",
+        accepted: false,
+        score: null,
+        points: 0,
+        summary: reason,
+        patch_sha256: patchSha,
+        verify_ms: 0,
+        error: reason,
+        completed_at: finishedAt,
+      });
+      return { status: 409, body: { accepted: false, status: "rejected", submission_id: subId, error: reason } };
+    }
+    if (mission.manifest.mode === "dag" && preVerifyTask.status === "verified") {
+      const reason = `task '${taskId}' is already verified`;
+      const finishedAt = Math.floor(Date.now() / 1000);
+      this.updateSubmissionOutcome({
+        id: subId,
+        status: "rejected",
+        accepted: false,
+        score: null,
+        points: 0,
+        summary: reason,
+        patch_sha256: patchSha,
+        verify_ms: 0,
+        error: reason,
+        completed_at: finishedAt,
+      });
+      return { status: 409, body: { accepted: false, status: "rejected", submission_id: subId, error: reason } };
+    }
+
+    let cRes: ContainerVerifyResponse;
+    try {
+      const resp = await this.callVerifier(mission, "/verify", this.getMissionFiles(missionId), {
+        mission_id: missionId,
+        task_id: taskId,
+        patch,
+        frozen_paths: mission.manifest.frozen_paths,
+        target_files: task.def.target_files,
+        timeout_sec: mission.manifest.verifier.timeout_sec ?? 90,
+      });
+      if (!resp.ok) {
+        const errText = await resp.text().catch(() => "");
+        const error = `verifier container returned HTTP ${resp.status}${errText ? `: ${errText.slice(0, 300)}` : ""}`;
         const finishedAt = Math.floor(Date.now() / 1000);
-        const verifyMs = cRes.verify_ms ?? 0;
+        this.updateSubmissionOutcome({
+          id: subId,
+          status: "error",
+          accepted: false,
+          score: null,
+          points: 0,
+          summary: error,
+          patch_sha256: patchSha,
+          verify_ms: 0,
+          stage: "sandbox",
+          error,
+          completed_at: finishedAt,
+        });
+        this.emit({
+          kind: "submission_rejected",
+          submission_id: subId,
+          mission_id: missionId,
+          task_id: taskId,
+          contributor,
+          accepted: false,
+          score: null,
+          summary: error,
+          timestamp: finishedAt,
+        });
+        return {
+          status: 502,
+          body: { accepted: false, status: "error", submission_id: subId, error, stage: "sandbox" },
+        };
+      }
+      const parsed = (await resp.json()) as Partial<ContainerVerifyResponse>;
+      if (!parsed || typeof parsed !== "object" || typeof parsed.ok !== "boolean") {
+        const error = "verifier container returned malformed verdict JSON";
+        const finishedAt = Math.floor(Date.now() / 1000);
+        this.updateSubmissionOutcome({
+          id: subId,
+          status: "error",
+          accepted: false,
+          score: null,
+          points: 0,
+          summary: error,
+          patch_sha256: patchSha,
+          verify_ms: 0,
+          stage: "sandbox",
+          error,
+          completed_at: finishedAt,
+        });
+        this.emit({
+          kind: "submission_rejected",
+          submission_id: subId,
+          mission_id: missionId,
+          task_id: taskId,
+          contributor,
+          accepted: false,
+          score: null,
+          summary: error,
+          timestamp: finishedAt,
+        });
+        return {
+          status: 502,
+          body: { accepted: false, status: "error", submission_id: subId, error, stage: "sandbox" },
+        };
+      }
+      cRes = parsed as ContainerVerifyResponse;
+    } catch (e) {
+      const error = `verifier container invocation failed: ${e instanceof Error ? e.message : String(e)}`;
+      const finishedAt = Math.floor(Date.now() / 1000);
+      this.updateSubmissionOutcome({
+        id: subId,
+        status: "error",
+        accepted: false,
+        score: null,
+        points: 0,
+        summary: error,
+        patch_sha256: patchSha,
+        verify_ms: 0,
+        stage: "sandbox",
+        error,
+        completed_at: finishedAt,
+      });
+      this.emit({
+        kind: "submission_rejected",
+        submission_id: subId,
+        mission_id: missionId,
+        task_id: taskId,
+        contributor,
+        accepted: false,
+        score: null,
+        summary: error,
+        timestamp: finishedAt,
+      });
+      return {
+        status: 502,
+        body: { accepted: false, status: "error", submission_id: subId, error, stage: "sandbox" },
+      };
+    }
 
-        try {
-          const outcome = applyVerdict(
-            mission.manifest.mode,
-            mission.manifest.score_direction ?? "maximize",
-            mission.manifest.frozen_paths,
-            mission.spec_sha256,
-            latestTasks,
-            taskId,
-            patch,
-            {
-              ok: cRes.ok,
-              score: cRes.score ?? null,
-              summary: cRes.summary,
-              spec_sha256: cRes.spec_sha256,
-            }
-          );
+    // Hash outside the state lock so nothing awaits between its reads and writes.
+    const storedPatch =
+      cRes.normalized_patch && cRes.normalized_patch.trim() ? cRes.normalized_patch : patch;
+    const storedPatchSha = await sha256Hex(storedPatch);
+    const proofId = proofIdFromPatchSha(storedPatchSha);
+    const permalink = `${hubOrigin}/proofs/${proofId}`;
 
-          const awardedPoints = computePoints(
-            mission.manifest,
-            latestTask,
-            latestTask.best_score,
-            outcome.new_best_score
-          );
+    return this.withLock(this.stateLocks, missionId, async () => {
+      const latestTasks = this.getTasks(missionId);
+      const latestTask = latestTasks.find((t) => t.def.id === taskId) || task;
+      const finishedAt = Math.floor(Date.now() / 1000);
+      const verifyMs = cRes.verify_ms ?? 0;
 
-          for (const [relPath, content] of Object.entries(cRes.updated_files || {})) {
-            this.ctx.storage.sql.exec(
-              `INSERT INTO mission_files (mission_id, rel_path, content)
-               VALUES (?, ?, ?)
-               ON CONFLICT(mission_id, rel_path) DO UPDATE SET content = excluded.content`,
-              missionId,
-              relPath,
-              content
-            );
-          }
-          this.ctx.storage.sql.exec("DELETE FROM bundle_cache WHERE mission_id = ?", missionId);
-
-          this.ctx.storage.sql.exec(
-            `UPDATE tasks
-             SET status = 'verified',
-                 best_score = ?,
-                 verified_by = ?,
-                 lease_contributor = NULL,
-                 lease_token = NULL,
-                 lease_expires_at = NULL,
-                 lease_ip = NULL,
-                 attempts = attempts + 1
-             WHERE mission_id = ? AND task_id = ?`,
-            outcome.new_best_score,
-            contributor,
-            missionId,
-            taskId
-          );
-
-          const subId = crypto.randomUUID();
-          this.insertSubmission({
-            id: subId,
-            mission_id: missionId,
-            task_id: taskId,
-            contributor,
-            accepted: true,
-            score: outcome.new_best_score,
-            points: awardedPoints,
+      try {
+        const outcome = applyVerdict(
+          mission.manifest.mode,
+          mission.manifest.score_direction ?? "maximize",
+          mission.manifest.frozen_paths,
+          mission.spec_sha256,
+          latestTasks,
+          taskId,
+          patch,
+          {
+            ok: cRes.ok,
+            score: cRes.score ?? null,
             summary: cRes.summary,
-            patch_sha256: patchSha,
-            verify_ms: verifyMs,
-            created_at: finishedAt,
-          });
+            spec_sha256: cRes.spec_sha256,
+          }
+        );
+
+        const awardedPoints = computePoints(
+          mission.manifest,
+          latestTask,
+          latestTask.best_score,
+          outcome.new_best_score
+        );
+
+        for (const [relPath, content] of Object.entries(cRes.updated_files || {})) {
           this.ctx.storage.sql.exec(
-            `INSERT INTO accepted_patches
-             (mission_id, task_id, submission_id, contributor, summary, patch, spec_sha256, created_at, patch_sha256)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO mission_files (mission_id, rel_path, content)
+             VALUES (?, ?, ?)
+             ON CONFLICT(mission_id, rel_path) DO UPDATE SET content = excluded.content`,
             missionId,
-            taskId,
-            subId,
-            contributor,
-            cRes.summary,
-            storedPatch,
-            mission.spec_sha256,
-            finishedAt,
-            storedPatchSha
+            relPath,
+            content
           );
+        }
+        this.ctx.storage.sql.exec("DELETE FROM bundle_cache WHERE mission_id = ?", missionId);
 
-          this.emit({
-            kind: "submission_accepted",
-            mission_id: missionId,
-            task_id: taskId,
-            contributor,
-            accepted: true,
-            score: outcome.new_best_score,
-            summary: `${cRes.summary} (+${awardedPoints} pts)`,
-            timestamp: finishedAt,
-          });
+        this.ctx.storage.sql.exec(
+          `UPDATE tasks
+           SET status = 'verified',
+               best_score = ?,
+               verified_by = ?,
+               lease_contributor = NULL,
+               lease_token = NULL,
+               lease_expires_at = NULL,
+               lease_ip = NULL,
+               attempts = attempts + 1
+           WHERE mission_id = ? AND task_id = ?`,
+          outcome.new_best_score,
+          contributor,
+          missionId,
+          taskId
+        );
 
-          return jsonResp({
+        this.updateSubmissionOutcome({
+          id: subId,
+          status: "accepted",
+          accepted: true,
+          score: outcome.new_best_score,
+          points: awardedPoints,
+          summary: cRes.summary,
+          patch_sha256: storedPatchSha,
+          proof_id: proofId,
+          verify_ms: verifyMs,
+          unlocked_dependents_json: JSON.stringify(outcome.unlocked_dependents),
+          completed_at: finishedAt,
+        });
+        this.ctx.storage.sql.exec(
+          `INSERT INTO accepted_patches
+           (mission_id, task_id, submission_id, contributor, summary, patch, spec_sha256, created_at, patch_sha256)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          missionId,
+          taskId,
+          subId,
+          contributor,
+          cRes.summary,
+          storedPatch,
+          mission.spec_sha256,
+          finishedAt,
+          storedPatchSha
+        );
+
+        this.emit({
+          kind: "submission_accepted",
+          submission_id: subId,
+          mission_id: missionId,
+          task_id: taskId,
+          contributor,
+          accepted: true,
+          score: outcome.new_best_score,
+          summary: `${cRes.summary} (+${awardedPoints} pts)`,
+          timestamp: finishedAt,
+        });
+
+        return {
+          status: 200,
+          body: {
             accepted: true,
+            status: "accepted",
             submission_id: subId,
             task_id: taskId,
             contributor,
             points_awarded: awardedPoints,
             score: outcome.new_best_score,
             unlocked_dependents: outcome.unlocked_dependents,
+            patch_sha256: storedPatchSha,
+            proof_id: proofId,
+            permalink,
             verify_ms: verifyMs,
             summary: cRes.summary,
-          });
-        } catch (e) {
-          const reason = e instanceof Error ? e.message : String(e);
-          const subId = crypto.randomUUID();
-          this.ctx.storage.sql.exec(
-            "UPDATE tasks SET attempts = attempts + 1 WHERE mission_id = ? AND task_id = ?",
-            missionId,
-            taskId
-          );
-          this.insertSubmission({
-            id: subId,
-            mission_id: missionId,
-            task_id: taskId,
-            contributor,
+          },
+        };
+      } catch (e) {
+        const reason = e instanceof Error ? e.message : String(e);
+        const diag = sanitizeFailureDiagnostics(cRes.stage, cRes.diagnostics);
+        this.ctx.storage.sql.exec(
+          "UPDATE tasks SET attempts = attempts + 1 WHERE mission_id = ? AND task_id = ?",
+          missionId,
+          taskId
+        );
+        this.updateSubmissionOutcome({
+          id: subId,
+          status: "rejected",
+          accepted: false,
+          score: cRes.score ?? null,
+          points: 0,
+          summary: reason,
+          patch_sha256: patchSha,
+          verify_ms: verifyMs,
+          stage: diag.stage ?? null,
+          diagnostics: diag.diagnostics ?? null,
+          error: reason,
+          completed_at: finishedAt,
+        });
+        this.emit({
+          kind: "submission_rejected",
+          submission_id: subId,
+          mission_id: missionId,
+          task_id: taskId,
+          contributor,
+          accepted: false,
+          score: cRes.score ?? null,
+          summary: reason,
+          timestamp: finishedAt,
+        });
+        return {
+          status: 422,
+          body: {
             accepted: false,
-            score: cRes.score ?? null,
-            points: 0,
-            summary: reason,
-            patch_sha256: patchSha,
+            status: "rejected",
+            submission_id: subId,
+            error: reason,
             verify_ms: verifyMs,
-            created_at: finishedAt,
-          });
-          this.emit({
-            kind: "submission_rejected",
-            mission_id: missionId,
-            task_id: taskId,
-            contributor,
-            accepted: false,
-            score: cRes.score ?? null,
-            summary: reason,
-            timestamp: finishedAt,
-          });
-          const diag = sanitizeFailureDiagnostics(cRes.stage, cRes.diagnostics);
-          return jsonResp(
-            {
-              accepted: false,
-              submission_id: subId,
-              error: reason,
-              verify_ms: verifyMs,
-              ...diag,
-            },
-            422
-          );
-        }
-      });
+            ...diag,
+          },
+        };
+      }
     });
   }
 }

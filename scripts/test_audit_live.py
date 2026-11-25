@@ -447,6 +447,84 @@ diff --git a/Proof.lean b/Proof.lean
         with self.assertRaisesRegex(ValueError, "matrix product differs"):
             audit.check_rank_table(bad, 3, 3, 3, 23, "B334.score333", "B334.cert333", 16384)
 
+    def test_audit_attestation_builder_and_publisher(self):
+        run_url = audit.github_actions_run_url({
+            "GITHUB_SERVER_URL": "https://github.com",
+            "GITHUB_REPOSITORY": "Sunstead-Institute/sunstead",
+            "GITHUB_RUN_ID": "987654321",
+        })
+        self.assertEqual(run_url, "https://github.com/Sunstead-Institute/sunstead/actions/runs/987654321")
+        self.assertIsNone(audit.github_actions_run_url({}))
+
+        payload = audit.build_audit_attestation(
+            toolchain="lean4:v4.36.0",
+            axioms=["propext", "Classical.choice"],
+            summary="Stock Lean 4.36.0 + leanchecker passed",
+            run_url=run_url,
+            commit_sha="0123456789abcdef",
+            audited_at=1700000000,
+        )
+        seen = {}
+
+        class FakeResp:
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                return False
+            def read(self):
+                return json.dumps({"ok": True, "audit": payload}).encode("utf-8")
+
+        def fake_open(req, timeout=30):
+            seen["url"] = req.full_url
+            seen["method"] = req.get_method()
+            seen["auth"] = req.get_header("Authorization")
+            seen["body"] = json.loads(req.data.decode("utf-8"))
+            return FakeResp()
+
+        pid = "ab" * 32
+        res = audit.publish_audit_attestation(f"sha256:{pid}", payload, "tok-secret", hub_base="https://sunstead.test", opener=fake_open)
+        self.assertTrue(res["ok"])
+        self.assertEqual(seen["url"], f"https://sunstead.test/api/proofs/{pid}/audit")
+        self.assertEqual(seen["method"], "POST")
+        self.assertEqual(seen["auth"], "Bearer tok-secret")
+        self.assertEqual(seen["body"]["status"], "passed")
+        self.assertEqual(seen["body"]["toolchain"], "lean4:v4.36.0")
+
+        with self.assertRaisesRegex(ValueError, "invalid proof_id"):
+            audit.publish_audit_attestation("not-a-hash", payload, "tok-secret", opener=fake_open)
+
+    def test_matrix_rank444_verify_guards_missing_arg_and_non_utf8(self):
+        verify_path = audit.ROOT / "missions/matrix-rank444-f2/verify"
+        with tempfile.TemporaryDirectory() as tmp:
+            # Copy verify + Rank444/Certificate.lean and verify stubs into temp dir
+            dst = Path(tmp) / "m"
+            (dst / "Rank444").mkdir(parents=True)
+            shutil.copy2(verify_path, dst / "verify")
+            (dst / "Rank444/Certificate.lean").write_bytes(b"\xff\xfe\xfd invalid utf8")
+            # Inject a tiny local sunstead_sandbox stub on PYTHONPATH so we test verify's own guards cleanly.
+            stub_dir = Path(tmp) / "stub"
+            stub_dir.mkdir()
+            (stub_dir / "sunstead_sandbox.py").write_text(
+                "import json, sys\n"
+                "def emit(ok, summary, stage=None, **kw):\n"
+                "    print(json.dumps({'ok': ok, 'summary': summary, 'stage': stage}))\n"
+                "    sys.exit(0 if ok else 1)\n"
+                "def lean_verify(*a, **kw):\n"
+                "    emit(True, 'stub')\n",
+                encoding="utf-8",
+            )
+            env = {**audit.os.environ, "PYTHONPATH": str(stub_dir)}
+            # Missing argv[1] emits JSON lint error cleanly instead of IndexError.
+            p_noarg = subprocess.run([audit.sys.executable, str(dst / "verify")], capture_output=True, text=True, env=env)
+            self.assertNotEqual(p_noarg.returncode, 0)
+            self.assertEqual(json.loads(p_noarg.stdout.strip())["stage"], "lint")
+            # Non-UTF-8 certificate emits JSON lint error cleanly instead of UnicodeDecodeError.
+            p_utf8 = subprocess.run([audit.sys.executable, str(dst / "verify"), "reduce_rank"], capture_output=True, text=True, env=env)
+            self.assertNotEqual(p_utf8.returncode, 0)
+            verdict = json.loads(p_utf8.stdout.strip())
+            self.assertEqual(verdict["stage"], "lint")
+            self.assertIn("UTF-8", verdict["summary"])
+
 
 if __name__ == "__main__":
     unittest.main()

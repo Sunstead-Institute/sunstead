@@ -52,3 +52,21 @@ test("rotated challenge or changed handle during fetch invalidates the pending c
     assert.equal(db.prepare("SELECT github_verified_handle FROM contributors").get().github_verified_handle, null);
   }
 });
+
+test("optional GITHUB_API_TOKEN sends Bearer authorization when configured", async () => {
+  const { sql, gist } = fixture();
+  let authHeader: string | null = null;
+  const result = await confirmGithubVerification(
+    sql,
+    "sam",
+    "abcd",
+    async (_url, opts) => {
+      authHeader = new Headers(opts?.headers).get("Authorization");
+      return Response.json(gist);
+    },
+    () => 1001,
+    "ghp_test_token_123"
+  );
+  assert.equal(result.status, 200);
+  assert.equal(authHeader, "Bearer ghp_test_token_123");
+});

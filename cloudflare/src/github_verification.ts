@@ -18,16 +18,28 @@ export function startGithubVerification(sql: Storage, handle: string, now: numbe
   return { status: 200, body: { github: row.github, challenge, expires_at: expires } };
 }
 
-export async function confirmGithubVerification(sql: Storage, handle: string, id: unknown,
-    fetchGist: typeof fetch = fetch, clock = () => Math.floor(Date.now() / 1000)): Promise<Result> {
+export async function confirmGithubVerification(
+  sql: Storage,
+  handle: string,
+  id: unknown,
+  fetchGist: typeof fetch = fetch,
+  clock = () => Math.floor(Date.now() / 1000),
+  githubToken?: string
+): Promise<Result> {
   if (typeof id !== "string" || !/^[0-9a-f]{1,64}$/i.test(id)) return failure(400, "Expected a GitHub Gist ID");
   const [pending] = sql.exec<{github: string; github_challenge: string}>(
     `SELECT github, github_challenge FROM contributors WHERE handle=? AND github IS NOT NULL
      AND github_challenge IS NOT NULL AND github_challenge_expires>?`, handle, clock()).toArray();
   if (!pending) return failure(409, "Start a new verification challenge");
   try {
+    const headers: Record<string, string> = {
+      Accept: "application/vnd.github+json",
+      "User-Agent": "Sunstead-Gist-Verification",
+    };
+    const token = githubToken?.trim();
+    if (token) headers.Authorization = `Bearer ${token}`;
     const response = await fetchGist(`https://api.github.com/gists/${id}`, {
-      headers: { Accept: "application/vnd.github+json", "User-Agent": "Sunstead-Gist-Verification" },
+      headers,
       redirect: "error", signal: AbortSignal.timeout(8000),
     });
     if (response.status === 404) return failure(422, "Public gist not found");

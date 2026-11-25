@@ -25,24 +25,137 @@ export interface RepoSnapshotConfig {
 
 export const SUPPORTED_VERIFIER_TOOLCHAINS: Record<
   VerifierKind,
-  { toolchain: string; container_app: string; default_image: string }
+  { toolchain: string; container_app: string; default_image: string; max_instances: number }
 > = {
   lean4: {
     toolchain: "leanprover/lean4:v4.36.0",
     container_app: "sunstead-verifier-lean4",
     default_image: "sunstead/verifier-lean4:v0.2",
+    max_instances: 6,
   },
   "lean4-v4.35.0": {
     toolchain: "leanprover/lean4:v4.35.0",
     container_app: "sunstead-verifier-lean4-v435",
     default_image: "sunstead/verifier-lean4-v4.35.0:v0.1",
+    max_instances: 4,
   },
   "lean4-v4.31.0": {
     toolchain: "leanprover/lean4:v4.31.0",
     container_app: "sunstead-verifier-lean4-v431",
     default_image: "sunstead/verifier-lean4-v4.31.0:v0.1",
+    max_instances: 4,
   },
 };
+
+export const VERIFIER_POOL_SIZE: Record<VerifierKind, number> = {
+  lean4: SUPPORTED_VERIFIER_TOOLCHAINS.lean4.max_instances,
+  "lean4-v4.35.0": SUPPORTED_VERIFIER_TOOLCHAINS["lean4-v4.35.0"].max_instances,
+  "lean4-v4.31.0": SUPPORTED_VERIFIER_TOOLCHAINS["lean4-v4.31.0"].max_instances,
+};
+
+/**
+ * Affinity-aware container slot pool across each toolchain's `maxInstances`.
+ * Concurrent verifications on the same mission fan out across distinct container
+ * slots instead of queueing on a single per-mission container, while preferring
+ * an idle slot that already holds that mission's warm state cache.
+ */
+export class VerifierSlotPool {
+  private readonly sizes: Record<VerifierKind, number>;
+  private readonly pools = new Map<
+    string,
+    {
+      busy: boolean[];
+      lastMission: Array<string | null>;
+      lastUsed: number[];
+      waiters: Array<{ missionId: string; resolve: (slot: number) => void }>;
+      tick: number;
+    }
+  >();
+
+  constructor(sizes: Record<VerifierKind, number> = VERIFIER_POOL_SIZE) {
+    this.sizes = { ...sizes };
+  }
+
+  private getPool(kind: VerifierKind, image: string) {
+    const key = `${kind}:${image}`;
+    let pool = this.pools.get(key);
+    if (!pool) {
+      const size = Math.max(1, this.sizes[kind] ?? 1);
+      pool = {
+        busy: Array<boolean>(size).fill(false),
+        lastMission: Array<string | null>(size).fill(null),
+        lastUsed: Array<number>(size).fill(0),
+        waiters: [],
+        tick: 0,
+      };
+      this.pools.set(key, pool);
+    }
+    return pool;
+  }
+
+  async acquire(kind: VerifierKind, image: string, missionId: string): Promise<number> {
+    const pool = this.getPool(kind, image);
+    // 1. Prefer an idle slot already warm with this mission's accepted state.
+    let chosen = -1;
+    for (let i = 0; i < pool.busy.length; i++) {
+      if (!pool.busy[i] && pool.lastMission[i] === missionId) {
+        chosen = i;
+        break;
+      }
+    }
+    // 2. Otherwise choose the least-recently-used idle slot (unused slots have tick 0).
+    if (chosen === -1) {
+      for (let i = 0; i < pool.busy.length; i++) {
+        if (!pool.busy[i] && (chosen === -1 || pool.lastUsed[i] < pool.lastUsed[chosen])) {
+          chosen = i;
+        }
+      }
+    }
+    if (chosen !== -1) {
+      pool.busy[chosen] = true;
+      pool.lastMission[chosen] = missionId;
+      pool.lastUsed[chosen] = ++pool.tick;
+      return chosen;
+    }
+    // 3. All slots busy: queue FIFO until a running verification finishes.
+    return new Promise<number>((resolve) => {
+      pool.waiters.push({ missionId, resolve });
+    });
+  }
+
+  release(kind: VerifierKind, image: string, slot: number): void {
+    const pool = this.getPool(kind, image);
+    if (slot < 0 || slot >= pool.busy.length) return;
+    if (pool.waiters.length > 0) {
+      // Hand off to a waiter matching this slot's warm mission if one is queued; else FIFO.
+      const warmIdx = pool.waiters.findIndex((w) => w.missionId === pool.lastMission[slot]);
+      const next = pool.waiters.splice(warmIdx >= 0 ? warmIdx : 0, 1)[0];
+      pool.lastMission[slot] = next.missionId;
+      pool.lastUsed[slot] = ++pool.tick;
+      next.resolve(slot);
+      return;
+    }
+    pool.busy[slot] = false;
+  }
+
+  async withSlot<T>(
+    kind: VerifierKind,
+    image: string,
+    missionId: string,
+    fn: (slot: number) => Promise<T>
+  ): Promise<T> {
+    const slot = await this.acquire(kind, image, missionId);
+    try {
+      return await fn(slot);
+    } finally {
+      this.release(kind, image, slot);
+    }
+  }
+}
+
+export function verifierSlotName(kind: VerifierKind, image: string, slot: number): string {
+  return `${kind}:${image}:slot-${slot}`;
+}
 
 /**
  * Resolve a mission's verifier configuration (`toolchain` and/or `image`) to the
@@ -429,14 +542,23 @@ export function applyVerdict(
 }
 
 /**
+ * Scale factor for hill-climb log-ratio scoring: floor(5000 * |ln(new / old)|).
+ * Additivity of log ratios guarantees that splitting an improvement into tiny
+ * steps can never earn more than landing it in one step, while giving tight open
+ * world records (e.g. 47 -> 46 on matrix-rank444-f2 = 107 base pts + 150 crown)
+ * research credit commensurate with Tier 1 DAG proofs (150-250 pts).
+ */
+export const HILLCLIMB_LOG_SCALE = 5000;
+
+/**
  * Points for an accepted submission.
  *
  * Demo missions (`mission.demo === true`) earn 0 leaderboard points.
  * DAG tasks pay a flat amount by tier and depth. Hill-climb records pay
- * floor(250 * |ln(new / previous)|): the log ratio is additive, so splitting one
- * improvement into many tiny records never earns more than making it at once
- * (and flooring makes it earn less). The first record on a task with no
- * baseline pays 100.
+ * floor(HILLCLIMB_LOG_SCALE * |ln(new / previous)|): the log ratio is additive,
+ * so splitting one improvement into many tiny records never earns more than
+ * making it at once (and flooring makes it earn less). The first record on a
+ * task with no baseline pays 100.
  */
 export function computePoints(
   mission: MissionManifest,
@@ -449,16 +571,60 @@ export function computePoints(
   if (mission.mode === "hillclimb") {
     if (previousBest === null || newScore === null) return 100;
     if (previousBest > 0 && newScore > 0) {
-      return Math.max(0, Math.floor(250 * Math.abs(Math.log(newScore / previousBest))));
+      return Math.max(0, Math.floor(HILLCLIMB_LOG_SCALE * Math.abs(Math.log(newScore / previousBest))));
     }
     // Non-positive scores: fall back to relative change against |previous|.
     const rel = Math.abs(newScore - previousBest) / Math.max(Math.abs(previousBest), 1);
-    return Math.max(0, Math.floor(250 * rel));
+    return Math.max(0, Math.floor(HILLCLIMB_LOG_SCALE * rel));
   }
   if (mission.tier === 1) {
     return hasDeps ? 250 : 150;
   }
   return hasDeps ? 150 : 100;
+}
+
+export interface SortableMissionSummary {
+  id: string;
+  tier: number;
+  mode: MissionMode;
+  demo?: boolean;
+  total_tasks: number;
+  verified_tasks: number;
+}
+
+/** A DAG mission with every task verified belongs in the Completed Showcase; hill-climb tracks stay open. */
+export function isMissionCompleted(m: Pick<SortableMissionSummary, "mode" | "total_tasks" | "verified_tasks">): boolean {
+  return m.mode === "dag" && m.total_tasks > 0 && m.verified_tasks >= m.total_tasks;
+}
+
+/**
+ * Canonical mission ordering for `/api/missions`, `/join.txt`, and the homepage:
+ * 1. Active (incomplete) non-demo missions first, with Tier 1 Blueprint DAGs ahead of Tier 2 optimization tracks.
+ * 2. Completed (100% verified) non-demo DAG showcase missions next.
+ * 3. Any `demo: true` sandbox missions last.
+ */
+export function sortMissionSummaries<T extends SortableMissionSummary>(missions: T[]): T[] {
+  return [...missions].sort((a, b) => {
+    const aDemo = a.demo ? 1 : 0;
+    const bDemo = b.demo ? 1 : 0;
+    if (aDemo !== bDemo) return aDemo - bDemo;
+
+    const aDone = isMissionCompleted(a) ? 1 : 0;
+    const bDone = isMissionCompleted(b) ? 1 : 0;
+    if (aDone !== bDone) return aDone - bDone;
+
+    // Positive tiers sort ascending (Tier 1 before Tier 2); Tier 0 goes after positive tiers.
+    const aTier = a.tier > 0 ? a.tier : Number.MAX_SAFE_INTEGER;
+    const bTier = b.tier > 0 ? b.tier : Number.MAX_SAFE_INTEGER;
+    if (aTier !== bTier) return aTier - bTier;
+
+    // Within the same tier, Blueprint DAGs come before hill-climb tracks.
+    const aMode = a.mode === "dag" ? 0 : 1;
+    const bMode = b.mode === "dag" ? 0 : 1;
+    if (aMode !== bMode) return aMode - bMode;
+
+    return a.id.localeCompare(b.id);
+  });
 }
 
 /**
@@ -555,7 +721,211 @@ export type AcceptedProofRow = {
   spec_sha256: string;
   created_at: number;
   verify_ms: number | null;
+  audit_json?: string | null;
 };
+
+export interface ProofAuditRecord {
+  status: "passed" | "failed";
+  audited_at: number;
+  auditor: string;
+  toolchain: string | null;
+  run_url: string | null;
+  commit_sha: string | null;
+  axioms: string[] | null;
+  summary: string | null;
+}
+
+const AUDIT_COMMIT_RE = /^[0-9a-f]{7,40}$/i;
+const AUDIT_AXIOM_RE = /^[A-Za-z0-9_.]+$/;
+
+/** Validate an incoming independent audit attestation from `audit-proofs.yml`. */
+export function parseAuditAttestation(
+  raw: unknown,
+  nowUnix = Math.floor(Date.now() / 1000)
+): ProofAuditRecord {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("audit attestation body must be a JSON object");
+  }
+  const obj = raw as Record<string, unknown>;
+  const status = obj.status;
+  if (status !== "passed" && status !== "failed") {
+    throw new Error("audit status must be 'passed' or 'failed'");
+  }
+  const auditorRaw = typeof obj.auditor === "string" ? obj.auditor.trim() : "";
+  const auditor = auditorRaw.replace(/[\r\n\t]+/g, " ").slice(0, 120);
+  if (!auditor) {
+    throw new Error("audit attestation requires a non-empty auditor");
+  }
+  let auditedAt = nowUnix;
+  if (obj.audited_at !== undefined && obj.audited_at !== null) {
+    const n = Number(obj.audited_at);
+    if (!Number.isInteger(n) || n <= 0) {
+      throw new Error("audited_at must be a positive unix timestamp");
+    }
+    auditedAt = n;
+  }
+  let runUrl: string | null = null;
+  if (obj.run_url !== undefined && obj.run_url !== null && obj.run_url !== "") {
+    if (typeof obj.run_url !== "string") throw new Error("run_url must be a string");
+    let parsed: URL;
+    try {
+      parsed = new URL(obj.run_url.trim());
+    } catch {
+      throw new Error("run_url must be a valid https URL");
+    }
+    if (parsed.protocol !== "https:") {
+      throw new Error("run_url must use https");
+    }
+    runUrl = parsed.href.slice(0, 300);
+  }
+  let toolchain: string | null = null;
+  if (obj.toolchain !== undefined && obj.toolchain !== null && obj.toolchain !== "") {
+    if (typeof obj.toolchain !== "string") throw new Error("toolchain must be a string");
+    toolchain = obj.toolchain.trim().replace(/[\r\n\t]+/g, " ").slice(0, 80) || null;
+  }
+  let commitSha: string | null = null;
+  if (obj.commit_sha !== undefined && obj.commit_sha !== null && obj.commit_sha !== "") {
+    if (typeof obj.commit_sha !== "string" || !AUDIT_COMMIT_RE.test(obj.commit_sha.trim())) {
+      throw new Error("commit_sha must be 7-40 hex characters");
+    }
+    commitSha = obj.commit_sha.trim().toLowerCase();
+  }
+  let axioms: string[] | null = null;
+  if (obj.axioms !== undefined && obj.axioms !== null) {
+    if (!Array.isArray(obj.axioms) || obj.axioms.length > 16) {
+      throw new Error("axioms must be an array of axiom names");
+    }
+    axioms = obj.axioms.map((a) => {
+      if (typeof a !== "string" || !AUDIT_AXIOM_RE.test(a.trim())) {
+        throw new Error(`invalid axiom name: ${String(a)}`);
+      }
+      return a.trim();
+    });
+  }
+  let summary: string | null = null;
+  if (obj.summary !== undefined && obj.summary !== null && obj.summary !== "") {
+    if (typeof obj.summary !== "string") throw new Error("summary must be a string");
+    summary = obj.summary.trim().replace(/[\r\n\t]+/g, " ").slice(0, 300) || null;
+  }
+  return {
+    status,
+    audited_at: auditedAt,
+    auditor,
+    toolchain,
+    run_url: runUrl,
+    commit_sha: commitSha,
+    axioms,
+    summary,
+  };
+}
+
+/** Parse persisted `accepted_patches.audit_json`, returning null if unset or malformed. */
+export function parseStoredAudit(auditJson: string | null | undefined): ProofAuditRecord | null {
+  if (!auditJson || typeof auditJson !== "string") return null;
+  try {
+    return parseAuditAttestation(JSON.parse(auditJson));
+  } catch {
+    return null;
+  }
+}
+
+/** Constant-time string comparison for bearer secrets. */
+export function constantTimeEqual(a: string, b: string): boolean {
+  const aBytes = new TextEncoder().encode(a);
+  const bBytes = new TextEncoder().encode(b);
+  let diff = aBytes.length ^ bBytes.length;
+  const maxLen = Math.max(aBytes.length, bBytes.length);
+  for (let i = 0; i < maxLen; i++) {
+    diff |= (aBytes[i] ?? 0) ^ (bBytes[i] ?? 0);
+  }
+  return diff === 0;
+}
+
+export type SubmissionStatus = "verifying" | "accepted" | "rejected" | "error";
+
+export type SubmissionStatusRow = {
+  id: string;
+  mission_id: string;
+  task_id: string;
+  contributor: string;
+  status: string;
+  accepted: number;
+  score: number | null;
+  points: number;
+  summary: string;
+  patch_sha256: string;
+  proof_id: string | null;
+  verify_ms: number;
+  stage: string | null;
+  diagnostics: string | null;
+  error: string | null;
+  unlocked_dependents_json: string | null;
+  created_at: number;
+  completed_at: number | null;
+};
+
+/** Determine whether a `POST .../submit` request opted into async (`202 Accepted`) mode. */
+export function shouldRunAsyncSubmit(
+  url: URL,
+  body: { async?: unknown },
+  headers: Headers
+): boolean {
+  const q = url.searchParams.get("async")?.toLowerCase();
+  if (q === "1" || q === "true") return true;
+  if (q === "0" || q === "false") return false;
+  if (body.async === true) return true;
+  if (body.async === false) return false;
+  const prefer = headers.get("Prefer") || "";
+  return /\brespond-async\b/i.test(prefer);
+}
+
+/** Public view of a single submission (`GET /api/submissions/:id`), supporting sync & async polling. */
+export function formatSubmissionStatusView(row: SubmissionStatusRow, hubOrigin: string) {
+  let status: SubmissionStatus;
+  if (row.status === "verifying" || row.status === "accepted" || row.status === "rejected" || row.status === "error") {
+    status = row.status;
+  } else {
+    status = row.accepted !== 0 ? "accepted" : "rejected";
+  }
+  const accepted = status === "accepted" ? true : status === "verifying" ? null : false;
+  const rawProofId =
+    row.proof_id ||
+    (status === "accepted" && row.patch_sha256 ? proofIdFromPatchSha(row.patch_sha256) : null);
+  const proofId = rawProofId && PROOF_HASH_RE.test(rawProofId) ? rawProofId : null;
+  let unlockedDependents: string[] = [];
+  if (row.unlocked_dependents_json) {
+    try {
+      const parsed = JSON.parse(row.unlocked_dependents_json);
+      if (Array.isArray(parsed)) {
+        unlockedDependents = parsed.filter((x): x is string => typeof x === "string");
+      }
+    } catch {
+      unlockedDependents = [];
+    }
+  }
+  const diag = sanitizeFailureDiagnostics(row.stage, row.diagnostics);
+  return {
+    submission_id: row.id,
+    status,
+    mission_id: row.mission_id,
+    task_id: row.task_id,
+    contributor: row.contributor,
+    accepted,
+    score: row.score,
+    points_awarded: row.points,
+    summary: row.summary,
+    patch_sha256: row.patch_sha256,
+    proof_id: proofId,
+    permalink: proofId ? `${hubOrigin}/proofs/${proofId}` : null,
+    unlocked_dependents: unlockedDependents,
+    verify_ms: row.verify_ms,
+    ...(diag.stage ? { stage: diag.stage } : {}),
+    ...(diag.diagnostics ? { diagnostics: diag.diagnostics } : {}),
+    ...(row.error ? { error: row.error } : {}),
+    created_at: row.created_at,
+    completed_at: row.completed_at,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Contributor social handles (strict handle-only validation + proof-gated display)
@@ -1118,9 +1488,7 @@ export function buildLedgerEntry(
     spec_sha256: row.spec_sha256,
     spec_is_current: mission !== null && row.spec_sha256 === mission.spec_sha256,
     files: extractPatchPaths(row.patch),
-    // Reserved for an independent re-check (e.g. a leanchecker audit workflow).
-    // null means no audit has run; nothing on the hub fills it in yet.
-    audit: null,
+    audit: parseStoredAudit(row.audit_json),
   };
 }
 

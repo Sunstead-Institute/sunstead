@@ -3,6 +3,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { z } from "zod";
 
 const segment = z.string().regex(/^[A-Za-z0-9_-]+$/);
+const submissionId = z.string().regex(/^[A-Za-z0-9-]+$/);
 const mission = { mission_id: segment };
 const task = { ...mission, task_id: segment };
 const missions = "/api/missions";
@@ -11,7 +12,20 @@ export async function handleMcp(request: Request, fetchHub: (req: Request) => Pr
   const url = new URL(request.url);
   const origin = request.headers.get("Origin");
   if (origin !== null && origin !== url.origin) return new Response("Forbidden", { status: 403 });
-  if (request.method !== "POST") return new Response(null, { status: 405, headers: { Allow: "POST" } });
+  if (request.method === "OPTIONS") {
+    const headers: Record<string, string> = {
+      Allow: "POST, OPTIONS",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept, Mcp-Session-Id, MCP-Protocol-Version",
+      "Access-Control-Max-Age": "86400",
+    };
+    if (origin !== null) {
+      headers["Access-Control-Allow-Origin"] = origin;
+      headers.Vary = "Origin";
+    }
+    return new Response(null, { status: 204, headers });
+  }
+  if (request.method !== "POST") return new Response(null, { status: 405, headers: { Allow: "POST, OPTIONS" } });
 
   // Each request owns its server and transport. Credentials and responses never span requests.
   const server = new McpServer({ name: "sunstead", version: "1.0.0" });
@@ -34,6 +48,22 @@ export async function handleMcp(request: Request, fetchHub: (req: Request) => Pr
   function taskPath(args: { mission_id: string; task_id: string }) {
     return `${missions}/${args.mission_id}/tasks/${args.task_id}`;
   }
+  server.registerTool(
+    "register_contributor",
+    {
+      description: "Register a new contributor handle and receive a one-time SUNSTEAD_API_KEY.",
+      inputSchema: {
+        handle: z.string(),
+        display_name: z.string().optional(),
+        github: z.string().optional(),
+        x: z.string().optional(),
+        linkedin: z.string().optional(),
+      },
+    },
+    args => forward("/api/contributors/register", args, "POST")
+  );
+  server.registerTool("get_me", { description: "Inspect your authenticated contributor profile and link visibility.", inputSchema: {} },
+    () => forward("/api/me", undefined, "GET"));
   server.registerTool("list_missions", { description: "List active missions and frontier task IDs.", inputSchema: {} },
     () => forward(missions));
   server.registerTool("get_mission_frontier", { description: "Inspect mission tasks and the current frontier.", inputSchema: mission },
@@ -46,8 +76,27 @@ export async function handleMcp(request: Request, fetchHub: (req: Request) => Pr
     args => forward(`${taskPath(args)}/claim`, { lease_seconds: args.lease_seconds }));
   server.registerTool("release_task", { description: "Release your active lease.", inputSchema: task },
     args => forward(`${taskPath(args)}/release`, {}));
-  server.registerTool("submit_patch", { description: "Submit a unified git diff for verification.", inputSchema: { ...task, patch: z.string() } },
-    args => forward(`${taskPath(args)}/submit`, { patch: args.patch }));
+  server.registerTool(
+    "submit_patch",
+    {
+      description:
+        "Submit a unified git diff for verification. Defaults to async mode (returns HTTP 202 + submission_id immediately to avoid MCP timeouts; poll get_submission_status). Pass async: false to wait synchronously.",
+      inputSchema: { ...task, patch: z.string(), async: z.boolean().optional() },
+    },
+    args =>
+      forward(
+        `${taskPath(args)}/submit${args.async === false ? "" : "?async=1"}`,
+        { patch: args.patch }
+      )
+  );
+  server.registerTool(
+    "get_submission_status",
+    {
+      description: "Poll the status and verdict (verifying, accepted, rejected, error) of a submission_id.",
+      inputSchema: { submission_id: submissionId },
+    },
+    ({ submission_id }) => forward(`/api/submissions/${submission_id}`, undefined, "GET")
+  );
   server.registerTool(
     "update_profile",
     {
