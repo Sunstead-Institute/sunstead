@@ -154,6 +154,16 @@ What a deploy does to traffic:
 To change the delay, edit `DO_CODE_UPDATE_MAX_DELAY_SEC` (0 to 86400 seconds).
 `mode: "immediate"` would reset at once and cut off even short requests.
 
+## Publishing public GHCR verifier images
+
+`.github/workflows/publish-verifiers.yml` builds and pushes public multi-toolchain verifier images to GitHub Container Registry under `ghcr.io/sunstead-institute/` on pushes to `main` touching `missions/**` or manually via **Actions → Publish Verifier Images (GHCR) → Run workflow**:
+
+- `ghcr.io/sunstead-institute/verifier-lean4:v0.2` (Lean `v4.36.0` + Mathlib)
+- `ghcr.io/sunstead-institute/verifier-lean4-v4.35.0:v0.1` (Lean `v4.35.0` repo-snapshot, e.g. LNSym)
+- `ghcr.io/sunstead-institute/verifier-lean4-v4.31.0:v0.1` (Lean `v4.31.0` + Mathlib + Aeneas repo-snapshot, once its Dockerfile is present on `main`)
+
+Each job runs `/opt/sunstead/sunstead-check selftest` offline before pushing, tags both the version tag and `sha-<commit>`, and writes the immutable `@sha256:` digest to the workflow summary. On the very first push of a new package name under the `Sunstead-Institute` GitHub org, confirm its package visibility is set to **Public** in GitHub Packages settings so contributors can `docker pull` without authentication.
+
 ## After deploy
 
 - `curl https://sunstead.org/join.txt` returns the Lean 4.36.0 + Mathlib onboarding guide.
