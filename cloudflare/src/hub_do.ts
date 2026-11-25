@@ -16,17 +16,15 @@ import {
 } from "./core";
 import { SEED_MISSIONS, type SeedMission } from "./generated/missions";
 import { renderJoinTxt } from "./join_txt";
-import type { Lean4Verifier, RustVerifier, VerusVerifier } from "./containers";
+import type { Lean4Verifier } from "./containers";
 
 export interface HubEnv {
   HUB: DurableObjectNamespace<SunsteadHub>;
   LEAN4_VERIFIER: DurableObjectNamespace<Lean4Verifier>;
-  RUST_VERIFIER: DurableObjectNamespace<RustVerifier>;
-  VERUS_VERIFIER: DurableObjectNamespace<VerusVerifier>;
 }
 
-function parseVerifierKind(kind: string): SeedMission["verifier_kind"] {
-  return kind === "rust" || kind === "verus" ? kind : "lean4";
+function parseVerifierKind(_kind: string): SeedMission["verifier_kind"] {
+  return "lean4";
 }
 
 interface HubEvent {
@@ -67,10 +65,13 @@ interface ContainerVerifyResponse {
   summary: string;
   spec_sha256: string;
   updated_files?: Record<string, string>;
+  normalized_patch?: string;
   verify_ms: number;
 }
 
 const MAX_BODY_BYTES = 512 * 1024;
+const MAX_SSE_CLIENTS = 200;
+const SSE_KEEPALIVE_MS = 25_000;
 const MAX_ACTIVE_LEASES_PER_IDENTITY = 2;
 const MAX_ACTIVE_LEASES_PER_IP = 3;
 const RATE_LIMITS = {
@@ -146,7 +147,8 @@ function jsonResp(data: unknown, status = 200, extraHeaders?: Record<string, str
 export class SunsteadHub extends DurableObject<HubEnv> {
   private sseClients = new Set<WritableStreamDefaultWriter<Uint8Array>>();
   private encoder = new TextEncoder();
-  private missionLocks = new Map<string, Promise<void>>();
+  private stateLocks = new Map<string, Promise<void>>();
+  private verifyLocks = new Map<string, Promise<void>>();
 
   constructor(ctx: DurableObjectState, env: HubEnv) {
     super(ctx, env);
@@ -268,6 +270,26 @@ export class SunsteadHub extends DurableObject<HubEnv> {
 
   private seedMissions(): void {
     const now = Math.floor(Date.now() / 1000);
+    const seedMissionIds = new Set(SEED_MISSIONS.map((s) => s.manifest.id));
+
+    // Prune retired missions from active tables while preserving historical
+    // submissions, contributors, claims_log, and accepted_patches.
+    const existingMissions = this.ctx.storage.sql
+      .exec<{ id: string }>("SELECT id FROM missions")
+      .toArray();
+    for (const row of existingMissions) {
+      if (!seedMissionIds.has(row.id)) {
+        this.ctx.storage.sql.exec("DELETE FROM tasks WHERE mission_id = ?", row.id);
+        this.ctx.storage.sql.exec("DELETE FROM mission_files WHERE mission_id = ?", row.id);
+        this.ctx.storage.sql.exec(
+          "DELETE FROM bundle_cache WHERE mission_id IN (?, ?)",
+          row.id,
+          `${row.id}#seed`
+        );
+        this.ctx.storage.sql.exec("DELETE FROM missions WHERE id = ?", row.id);
+      }
+    }
+
     for (const seed of SEED_MISSIONS) {
       const existing = this.ctx.storage.sql
         .exec<{ spec_sha256: string }>(
@@ -299,6 +321,23 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         );
       }
 
+      const seedTaskIds = new Set(seed.manifest.tasks.map((t) => t.id));
+      const existingTasks = this.ctx.storage.sql
+        .exec<{ task_id: string }>(
+          "SELECT task_id FROM tasks WHERE mission_id = ?",
+          seed.manifest.id
+        )
+        .toArray();
+      for (const t of existingTasks) {
+        if (!seedTaskIds.has(t.task_id)) {
+          this.ctx.storage.sql.exec(
+            "DELETE FROM tasks WHERE mission_id = ? AND task_id = ?",
+            seed.manifest.id,
+            t.task_id
+          );
+        }
+      }
+
       for (const task of seed.manifest.tasks) {
         this.ctx.storage.sql.exec(
           `INSERT INTO tasks (mission_id, task_id, def_json, status, best_score, attempts)
@@ -314,7 +353,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     }
   }
 
-  private checkAndRecordRateLimit(
+  private checkRateLimit(
     bucket: string,
     limit: number,
     windowSec: number,
@@ -333,12 +372,15 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       const retryAfterSec = Math.max(1, rows[0].created_at + windowSec - now);
       return { allowed: false, retryAfterSec };
     }
+    return { allowed: true, retryAfterSec: 0 };
+  }
+
+  private recordRateEvent(bucket: string, now: number): void {
     this.ctx.storage.sql.exec(
       "INSERT INTO rate_events (bucket, created_at) VALUES (?, ?)",
       bucket,
       now
     );
-    return { allowed: true, retryAfterSec: 0 };
   }
 
   private async resolveContributor(
@@ -580,44 +622,43 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     for (const writer of Array.from(this.sseClients)) {
       writer.write(frame).catch(() => {
         this.sseClients.delete(writer);
+        writer.close().catch(() => {});
       });
     }
   }
 
-  private async withMissionLock<T>(missionId: string, fn: () => Promise<T>): Promise<T> {
-    const prev = this.missionLocks.get(missionId) ?? Promise.resolve();
+  private async withLock<T>(
+    locks: Map<string, Promise<void>>,
+    key: string,
+    fn: () => Promise<T>
+  ): Promise<T> {
+    const prev = locks.get(key) ?? Promise.resolve();
     let release!: () => void;
     const gate = new Promise<void>((r) => {
       release = r;
     });
     const chained = prev.then(() => gate);
-    this.missionLocks.set(missionId, chained);
+    locks.set(key, chained);
     await prev;
     try {
       return await fn();
     } finally {
       release();
-      if (this.missionLocks.get(missionId) === chained) {
-        this.missionLocks.delete(missionId);
+      if (locks.get(key) === chained) {
+        locks.delete(key);
       }
     }
   }
 
   private getVerifierStub(mission: SeedMission) {
-    if (mission.verifier_kind === "rust") {
-      return this.env.RUST_VERIFIER.getByName(`rust:${mission.manifest.id}`);
-    }
-    if (mission.verifier_kind === "verus") {
-      return this.env.VERUS_VERIFIER.getByName(`verus:${mission.manifest.id}`);
-    }
     return this.env.LEAN4_VERIFIER.getByName(`lean4:${mission.manifest.id}`);
   }
 
   private computeLeaderboard(limit = 30) {
-    // Count active hill-climb crowns (+150 bonus per active hillclimb record held)
+    // Count active hill-climb crowns (+150 bonus per active non-demo hillclimb record held)
     const hillclimbCrowns = new Map<string, number>();
     for (const m of this.listMissionsRows()) {
-      if (m.manifest.mode !== "hillclimb") continue;
+      if (m.manifest.mode !== "hillclimb" || m.manifest.demo) continue;
       for (const t of this.getTasks(m.manifest.id)) {
         if (t.status === "verified" && t.verified_by) {
           hillclimbCrowns.set(t.verified_by, (hillclimbCrowns.get(t.verified_by) ?? 0) + 1);
@@ -738,6 +779,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
           description: m.manifest.description ?? "",
           tier: m.manifest.tier,
           mode: m.manifest.mode,
+          demo: Boolean(m.manifest.demo),
           score_direction: m.manifest.score_direction ?? "maximize",
           spec_sha256: m.spec_sha256,
           verifier_image: m.manifest.verifier.image,
@@ -762,16 +804,40 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     }
 
     if (method === "GET" && path === "/api/events") {
+      if (this.sseClients.size >= MAX_SSE_CLIENTS) {
+        return jsonResp(
+          { error: "too many concurrent event stream listeners" },
+          503,
+          { "Retry-After": "15" }
+        );
+      }
       const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
       const writer = writable.getWriter();
-      this.sseClients.add(writer);
-      writer.write(this.encoder.encode(": connected\n\n")).catch(() => {
+      let closed = false;
+      let pingTimer: ReturnType<typeof setInterval> | null = null;
+      const cleanup = () => {
+        if (closed) return;
+        closed = true;
+        if (pingTimer !== null) {
+          clearInterval(pingTimer);
+          pingTimer = null;
+        }
         this.sseClients.delete(writer);
-      });
+        writer.close().catch(() => {});
+      };
+      this.sseClients.add(writer);
+      request.signal.addEventListener("abort", cleanup, { once: true });
+      writer.closed.then(cleanup, cleanup);
+      writer.write(this.encoder.encode(": connected\n\n")).catch(cleanup);
+      pingTimer = setInterval(() => {
+        if (closed) return;
+        writer.write(this.encoder.encode(": ping\n\n")).catch(cleanup);
+      }, SSE_KEEPALIVE_MS);
       return new Response(readable, {
         headers: {
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
           "Access-Control-Allow-Origin": "*",
         },
       });
@@ -869,18 +935,21 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       return jsonResp({ error: `handle '${handle}' is already claimed` }, 409);
     }
 
-    const rl = this.checkAndRecordRateLimit(
-      `reg:ip:${ip}`,
-      RATE_LIMITS.register_ip.limit,
-      RATE_LIMITS.register_ip.windowSec,
-      now
-    );
-    if (!rl.allowed) {
-      return jsonResp(
-        { error: `registration rate limit reached; retry in ${rl.retryAfterSec}s` },
-        429,
-        { "Retry-After": String(rl.retryAfterSec) }
+    if (ip !== "unknown") {
+      const rl = this.checkRateLimit(
+        `reg:ip:${ip}`,
+        RATE_LIMITS.register_ip.limit,
+        RATE_LIMITS.register_ip.windowSec,
+        now
       );
+      if (!rl.allowed) {
+        return jsonResp(
+          { error: `registration rate limit reached; retry in ${rl.retryAfterSec}s` },
+          429,
+          { "Retry-After": String(rl.retryAfterSec) }
+        );
+      }
+      this.recordRateEvent(`reg:ip:${ip}`, now);
     }
 
     const displayName = sanitizeOptionalText(body.display_name, 64) || handle;
@@ -980,11 +1049,20 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       });
     }
 
+    const filesBefore = seed ? {} : this.getMissionFiles(missionId);
+    const stateShaBefore = await filesStateSha256(filesBefore);
+    const specBefore = mission.spec_sha256;
+
     const resp = await this.callVerifier(
       mission,
       "/bundle",
-      seed ? {} : this.getMissionFiles(missionId),
-      { mission_id: missionId, frozen_paths: mission.manifest.frozen_paths }
+      filesBefore,
+      {
+        mission_id: missionId,
+        frozen_paths: mission.manifest.frozen_paths,
+        cache_state: !seed,
+      },
+      stateShaBefore
     );
     if (!resp.ok) {
       const errText = await resp.text();
@@ -992,14 +1070,22 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     }
 
     const bytes = await resp.arrayBuffer();
-    this.ctx.storage.sql.exec(
-      `INSERT INTO bundle_cache (mission_id, tarball, updated_at)
-       VALUES (?, ?, ?)
-       ON CONFLICT(mission_id) DO UPDATE SET tarball = excluded.tarball, updated_at = excluded.updated_at`,
-      cacheKey,
-      new Uint8Array(bytes),
-      Math.floor(Date.now() / 1000)
-    );
+    const latestMission = this.getMissionRow(missionId);
+    const stateUnchanged =
+      latestMission !== null &&
+      latestMission.spec_sha256 === specBefore &&
+      (seed || (await filesStateSha256(this.getMissionFiles(missionId))) === stateShaBefore);
+
+    if (stateUnchanged) {
+      this.ctx.storage.sql.exec(
+        `INSERT INTO bundle_cache (mission_id, tarball, updated_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(mission_id) DO UPDATE SET tarball = excluded.tarball, updated_at = excluded.updated_at`,
+        cacheKey,
+        new Uint8Array(bytes),
+        Math.floor(Date.now() / 1000)
+      );
+    }
 
     return new Response(bytes, {
       headers: {
@@ -1020,10 +1106,11 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     mission: SeedMission,
     path: "/verify" | "/bundle",
     files: Record<string, string>,
-    body: Record<string, unknown>
+    body: Record<string, unknown>,
+    precomputedSha?: string
   ): Promise<Response> {
     const stub = this.getVerifierStub(mission);
-    const stateSha = await filesStateSha256(files);
+    const stateSha = precomputedSha ?? (await filesStateSha256(files));
     const send = (withFiles: boolean) =>
       stub.fetch(
         new Request(`http://verifier${path}`, {
@@ -1036,6 +1123,9 @@ export class SunsteadHub extends DurableObject<HubEnv> {
           }),
         })
       );
+    if (body.cache_state === false) {
+      return send(true);
+    }
     const first = await send(false);
     if (first.status !== 409) return first;
     const info = (await first.json().catch(() => ({}))) as { need_files?: boolean };
@@ -1081,7 +1171,6 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       mission_id: missionId,
       how_to_rebuild:
         `curl -sL <hub>/api/missions/${missionId}/bundle.tar.gz?base=seed | tar xz && ` +
-        `git init -q && git add -A && git commit -qm seed && ` +
         `curl -sL <hub>/api/missions/${missionId}/history.mbox | git am`,
       commits: rows.map((r) => ({
         seq: r.seq,
@@ -1140,45 +1229,38 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     if (!auth.ok) return jsonResp({ error: auth.error }, auth.status);
     const contributor = auth.handle;
 
-    const mission = this.getMissionRow(missionId);
-    if (!mission) return jsonResp({ error: `unknown mission: ${missionId}` }, 404);
-
     const ip = clientIp(request);
     const now = Math.floor(Date.now() / 1000);
 
-    // Rate-limit claims per identity & IP
-    const rlId = this.checkAndRecordRateLimit(
-      `claim:id:${contributor}`,
-      RATE_LIMITS.claim_id.limit,
-      RATE_LIMITS.claim_id.windowSec,
-      now
-    );
-    if (!rlId.allowed) {
-      return jsonResp(
-        { error: `claim rate limit reached for '${contributor}' (max 10/hr); retry in ${rlId.retryAfterSec}s` },
-        429,
-        { "Retry-After": String(rlId.retryAfterSec) }
-      );
-    }
-    const rlIp = this.checkAndRecordRateLimit(
-      `claim:ip:${ip}`,
-      RATE_LIMITS.claim_ip.limit,
-      RATE_LIMITS.claim_ip.windowSec,
-      now
-    );
-    if (!rlIp.allowed) {
-      return jsonResp(
-        { error: `claim rate limit reached for this IP; retry in ${rlIp.retryAfterSec}s` },
-        429,
-        { "Retry-After": String(rlIp.retryAfterSec) }
-      );
-    }
+    return this.withLock(this.stateLocks, missionId, async () => {
+      const mission = this.getMissionRow(missionId);
+      if (!mission) return jsonResp({ error: `unknown mission: ${missionId}` }, 404);
 
-    return this.withMissionLock(missionId, async () => {
       const tasks = this.getTasks(missionId);
       const targetTask = tasks.find((t) => t.def.id === taskId);
-      const isRenewal = targetTask?.active_lease?.contributor === contributor;
+      if (!targetTask) return jsonResp({ error: `unknown task: ${taskId}` }, 404);
 
+      const token = crypto.randomUUID();
+      const duration = Number.isFinite(body.lease_seconds) ? Number(body.lease_seconds) : 1800;
+
+      // Validate task state (unlocked, not already verified, not leased by someone else)
+      // BEFORE recording rate-limit events or checking active lease caps.
+      let outcome: ReturnType<typeof applyClaim>;
+      try {
+        outcome = applyClaim(
+          mission.manifest.mode,
+          tasks,
+          taskId,
+          contributor,
+          token,
+          now,
+          duration
+        );
+      } catch (e) {
+        return jsonResp({ error: e instanceof Error ? e.message : String(e) }, 409);
+      }
+
+      const isRenewal = targetTask.active_lease?.contributor === contributor;
       if (!isRenewal) {
         const active = this.countActiveLeases(contributor, ip, now);
         if (active.byId >= MAX_ACTIVE_LEASES_PER_IDENTITY) {
@@ -1199,56 +1281,75 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         }
       }
 
-      const token = crypto.randomUUID();
-      const duration = Number.isFinite(body.lease_seconds) ? Number(body.lease_seconds) : 1800;
-
-      try {
-        const outcome = applyClaim(
-          mission.manifest.mode,
-          tasks,
-          taskId,
-          contributor,
-          token,
-          now,
-          duration
+      // Rate-limit claims per identity & IP (exempting unknown IPs to match countActiveLeases).
+      const rlId = this.checkRateLimit(
+        `claim:id:${contributor}`,
+        RATE_LIMITS.claim_id.limit,
+        RATE_LIMITS.claim_id.windowSec,
+        now
+      );
+      if (!rlId.allowed) {
+        return jsonResp(
+          { error: `claim rate limit reached for '${contributor}' (max 10/hr); retry in ${rlId.retryAfterSec}s` },
+          429,
+          { "Retry-After": String(rlId.retryAfterSec) }
         );
-        this.ctx.storage.sql.exec(
-          `UPDATE tasks
-           SET status = ?, lease_contributor = ?, lease_token = ?, lease_expires_at = ?, lease_ip = ?
-           WHERE mission_id = ? AND task_id = ?`,
-          outcome.updated_status,
-          outcome.lease.contributor,
-          outcome.lease.lease_token,
-          outcome.lease.expires_at_unix,
-          ip,
-          missionId,
-          taskId
-        );
-        this.ctx.storage.sql.exec(
-          "INSERT INTO claims_log (mission_id, task_id, contributor, created_at) VALUES (?, ?, ?, ?)",
-          missionId,
-          taskId,
-          contributor,
+      }
+      if (ip !== "unknown") {
+        const rlIp = this.checkRateLimit(
+          `claim:ip:${ip}`,
+          RATE_LIMITS.claim_ip.limit,
+          RATE_LIMITS.claim_ip.windowSec,
           now
         );
-        this.emit({
-          kind: "lease_claimed",
-          mission_id: missionId,
-          task_id: taskId,
-          contributor,
-          accepted: null,
-          score: null,
-          summary: `${contributor} claimed ${taskId}`,
-          timestamp: now,
-        });
-        return jsonResp({
-          claimed: true,
-          lease: outcome.lease,
-          bundle_url: `/api/missions/${missionId}/bundle.tar.gz`,
-        });
-      } catch (e) {
-        return jsonResp({ error: e instanceof Error ? e.message : String(e) }, 409);
+        if (!rlIp.allowed) {
+          return jsonResp(
+            { error: `claim rate limit reached for this IP; retry in ${rlIp.retryAfterSec}s` },
+            429,
+            { "Retry-After": String(rlIp.retryAfterSec) }
+          );
+        }
       }
+
+      this.recordRateEvent(`claim:id:${contributor}`, now);
+      if (ip !== "unknown") {
+        this.recordRateEvent(`claim:ip:${ip}`, now);
+      }
+
+      this.ctx.storage.sql.exec(
+        `UPDATE tasks
+         SET status = ?, lease_contributor = ?, lease_token = ?, lease_expires_at = ?, lease_ip = ?
+         WHERE mission_id = ? AND task_id = ?`,
+        outcome.updated_status,
+        outcome.lease.contributor,
+        outcome.lease.lease_token,
+        outcome.lease.expires_at_unix,
+        ip,
+        missionId,
+        taskId
+      );
+      this.ctx.storage.sql.exec(
+        "INSERT INTO claims_log (mission_id, task_id, contributor, created_at) VALUES (?, ?, ?, ?)",
+        missionId,
+        taskId,
+        contributor,
+        now
+      );
+      this.emit({
+        kind: "lease_claimed",
+        mission_id: missionId,
+        task_id: taskId,
+        contributor,
+        accepted: null,
+        score: null,
+        summary: `${contributor} claimed ${taskId}`,
+        timestamp: now,
+      });
+      return jsonResp({
+        claimed: true,
+        lease: outcome.lease,
+        bundle_url: `/api/missions/${missionId}/bundle.tar.gz`,
+      });
     });
   }
 
@@ -1264,7 +1365,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     const mission = this.getMissionRow(missionId);
     if (!mission) return jsonResp({ error: `unknown mission: ${missionId}` }, 404);
 
-    return this.withMissionLock(missionId, async () => {
+    return this.withLock(this.stateLocks, missionId, async () => {
       const tasks = this.getTasks(missionId);
       const task = tasks.find((t) => t.def.id === taskId);
       if (!task) return jsonResp({ error: `unknown task: ${taskId}` }, 404);
@@ -1272,6 +1373,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         return jsonResp({ error: `you do not hold an active lease on '${taskId}'` }, 409);
       }
 
+      const now = Math.floor(Date.now() / 1000);
       const nextStatus: TaskStatus = task.status === "verified" ? "verified" : "open";
       this.ctx.storage.sql.exec(
         `UPDATE tasks
@@ -1281,6 +1383,16 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         missionId,
         taskId
       );
+      this.emit({
+        kind: "lease_released",
+        mission_id: missionId,
+        task_id: taskId,
+        contributor,
+        accepted: null,
+        score: null,
+        summary: `${contributor} released ${taskId}`,
+        timestamp: now,
+      });
       return jsonResp({ released: true, mission_id: missionId, task_id: taskId });
     });
   }
@@ -1314,10 +1426,18 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     const task = tasksPre.find((t) => t.def.id === taskId);
     if (!task) return jsonResp({ error: `unknown task: ${taskId}` }, 404);
 
+    // Check task readiness BEFORE recording rate limits or waking any verifier container.
+    if (!isTaskUnlocked(task, tasksPre)) {
+      return jsonResp({ error: `task '${taskId}' is blocked on unverified dependencies` }, 409);
+    }
+    if (mission.manifest.mode === "dag" && task.status === "verified") {
+      return jsonResp({ error: `task '${taskId}' is already verified` }, 409);
+    }
+
     const ip = clientIp(request);
     const now = Math.floor(Date.now() / 1000);
 
-    const rlId = this.checkAndRecordRateLimit(
+    const rlId = this.checkRateLimit(
       `submit:id:${contributor}`,
       RATE_LIMITS.submit_id.limit,
       RATE_LIMITS.submit_id.windowSec,
@@ -1330,18 +1450,24 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         { "Retry-After": String(rlId.retryAfterSec) }
       );
     }
-    const rlIp = this.checkAndRecordRateLimit(
-      `submit:ip:${ip}`,
-      RATE_LIMITS.submit_ip.limit,
-      RATE_LIMITS.submit_ip.windowSec,
-      now
-    );
-    if (!rlIp.allowed) {
-      return jsonResp(
-        { error: `submission rate limit reached for this IP; retry in ${rlIp.retryAfterSec}s` },
-        429,
-        { "Retry-After": String(rlIp.retryAfterSec) }
+    if (ip !== "unknown") {
+      const rlIp = this.checkRateLimit(
+        `submit:ip:${ip}`,
+        RATE_LIMITS.submit_ip.limit,
+        RATE_LIMITS.submit_ip.windowSec,
+        now
       );
+      if (!rlIp.allowed) {
+        return jsonResp(
+          { error: `submission rate limit reached for this IP; retry in ${rlIp.retryAfterSec}s` },
+          429,
+          { "Retry-After": String(rlIp.retryAfterSec) }
+        );
+      }
+    }
+    this.recordRateEvent(`submit:id:${contributor}`, now);
+    if (ip !== "unknown") {
+      this.recordRateEvent(`submit:ip:${ip}`, now);
     }
 
     const patchSha = await sha256Hex(patch);
@@ -1393,7 +1519,19 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       timestamp: now,
     });
 
-    return this.withMissionLock(missionId, async () => {
+    // Serialize slow container invocations per mission on `verifyLocks` so
+    // fast claims & releases on `stateLocks` never block behind a 120s verify.
+    return this.withLock(this.verifyLocks, missionId, async () => {
+      const preVerifyTasks = this.getTasks(missionId);
+      const preVerifyTask = preVerifyTasks.find((t) => t.def.id === taskId);
+      if (!preVerifyTask) return jsonResp({ error: `unknown task: ${taskId}` }, 404);
+      if (!isTaskUnlocked(preVerifyTask, preVerifyTasks)) {
+        return jsonResp({ error: `task '${taskId}' is blocked on unverified dependencies` }, 409);
+      }
+      if (mission.manifest.mode === "dag" && preVerifyTask.status === "verified") {
+        return jsonResp({ error: `task '${taskId}' is already verified` }, 409);
+      }
+
       let cRes: ContainerVerifyResponse;
       try {
         const resp = await this.callVerifier(mission, "/verify", this.getMissionFiles(missionId), {
@@ -1404,7 +1542,20 @@ export class SunsteadHub extends DurableObject<HubEnv> {
           target_files: task.def.target_files,
           timeout_sec: mission.manifest.verifier.timeout_sec ?? 90,
         });
-        cRes = (await resp.json()) as ContainerVerifyResponse;
+        if (!resp.ok) {
+          const errText = await resp.text().catch(() => "");
+          return jsonResp(
+            {
+              error: `verifier container returned HTTP ${resp.status}${errText ? `: ${errText.slice(0, 300)}` : ""}`,
+            },
+            502
+          );
+        }
+        const parsed = (await resp.json()) as Partial<ContainerVerifyResponse>;
+        if (!parsed || typeof parsed !== "object" || typeof parsed.ok !== "boolean") {
+          return jsonResp({ error: "verifier container returned malformed verdict JSON" }, 502);
+        }
+        cRes = parsed as ContainerVerifyResponse;
       } catch (e) {
         return jsonResp(
           { error: `verifier container invocation failed: ${e instanceof Error ? e.message : String(e)}` },
@@ -1412,155 +1563,159 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         );
       }
 
-      const latestTasks = this.getTasks(missionId);
-      const latestTask = latestTasks.find((t) => t.def.id === taskId) || task;
-      const finishedAt = Math.floor(Date.now() / 1000);
-      const verifyMs = cRes.verify_ms ?? 0;
+      return this.withLock(this.stateLocks, missionId, async () => {
+        const latestTasks = this.getTasks(missionId);
+        const latestTask = latestTasks.find((t) => t.def.id === taskId) || task;
+        const finishedAt = Math.floor(Date.now() / 1000);
+        const verifyMs = cRes.verify_ms ?? 0;
 
-      try {
-        const outcome = applyVerdict(
-          mission.manifest.mode,
-          mission.manifest.score_direction ?? "maximize",
-          mission.manifest.frozen_paths,
-          mission.spec_sha256,
-          latestTasks,
-          taskId,
-          patch,
-          {
-            ok: cRes.ok,
-            score: cRes.score ?? null,
-            summary: cRes.summary,
-            spec_sha256: cRes.spec_sha256,
+        try {
+          const outcome = applyVerdict(
+            mission.manifest.mode,
+            mission.manifest.score_direction ?? "maximize",
+            mission.manifest.frozen_paths,
+            mission.spec_sha256,
+            latestTasks,
+            taskId,
+            patch,
+            {
+              ok: cRes.ok,
+              score: cRes.score ?? null,
+              summary: cRes.summary,
+              spec_sha256: cRes.spec_sha256,
+            }
+          );
+
+          const awardedPoints = computePoints(
+            mission.manifest,
+            latestTask,
+            latestTask.best_score,
+            outcome.new_best_score
+          );
+
+          for (const [relPath, content] of Object.entries(cRes.updated_files || {})) {
+            this.ctx.storage.sql.exec(
+              `INSERT INTO mission_files (mission_id, rel_path, content)
+               VALUES (?, ?, ?)
+               ON CONFLICT(mission_id, rel_path) DO UPDATE SET content = excluded.content`,
+              missionId,
+              relPath,
+              content
+            );
           }
-        );
+          this.ctx.storage.sql.exec("DELETE FROM bundle_cache WHERE mission_id = ?", missionId);
 
-        const awardedPoints = computePoints(
-          mission.manifest,
-          latestTask,
-          latestTask.best_score,
-          outcome.new_best_score
-        );
-
-        for (const [relPath, content] of Object.entries(cRes.updated_files || {})) {
           this.ctx.storage.sql.exec(
-            `INSERT INTO mission_files (mission_id, rel_path, content)
-             VALUES (?, ?, ?)
-             ON CONFLICT(mission_id, rel_path) DO UPDATE SET content = excluded.content`,
+            `UPDATE tasks
+             SET status = 'verified',
+                 best_score = ?,
+                 verified_by = ?,
+                 lease_contributor = NULL,
+                 lease_token = NULL,
+                 lease_expires_at = NULL,
+                 lease_ip = NULL,
+                 attempts = attempts + 1
+             WHERE mission_id = ? AND task_id = ?`,
+            outcome.new_best_score,
+            contributor,
             missionId,
-            relPath,
-            content
+            taskId
+          );
+
+          const subId = crypto.randomUUID();
+          const storedPatch =
+            cRes.normalized_patch && cRes.normalized_patch.trim() ? cRes.normalized_patch : patch;
+          this.insertSubmission({
+            id: subId,
+            mission_id: missionId,
+            task_id: taskId,
+            contributor,
+            accepted: true,
+            score: outcome.new_best_score,
+            points: awardedPoints,
+            summary: cRes.summary,
+            patch_sha256: patchSha,
+            verify_ms: verifyMs,
+            created_at: finishedAt,
+          });
+          this.ctx.storage.sql.exec(
+            `INSERT INTO accepted_patches
+             (mission_id, task_id, submission_id, contributor, summary, patch, spec_sha256, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            missionId,
+            taskId,
+            subId,
+            contributor,
+            cRes.summary,
+            storedPatch,
+            mission.spec_sha256,
+            finishedAt
+          );
+
+          this.emit({
+            kind: "submission_accepted",
+            mission_id: missionId,
+            task_id: taskId,
+            contributor,
+            accepted: true,
+            score: outcome.new_best_score,
+            summary: `${cRes.summary} (+${awardedPoints} pts)`,
+            timestamp: finishedAt,
+          });
+
+          return jsonResp({
+            accepted: true,
+            submission_id: subId,
+            task_id: taskId,
+            contributor,
+            points_awarded: awardedPoints,
+            score: outcome.new_best_score,
+            unlocked_dependents: outcome.unlocked_dependents,
+            verify_ms: verifyMs,
+            summary: cRes.summary,
+          });
+        } catch (e) {
+          const reason = e instanceof Error ? e.message : String(e);
+          const subId = crypto.randomUUID();
+          this.ctx.storage.sql.exec(
+            "UPDATE tasks SET attempts = attempts + 1 WHERE mission_id = ? AND task_id = ?",
+            missionId,
+            taskId
+          );
+          this.insertSubmission({
+            id: subId,
+            mission_id: missionId,
+            task_id: taskId,
+            contributor,
+            accepted: false,
+            score: cRes.score ?? null,
+            points: 0,
+            summary: reason,
+            patch_sha256: patchSha,
+            verify_ms: verifyMs,
+            created_at: finishedAt,
+          });
+          this.emit({
+            kind: "submission_rejected",
+            mission_id: missionId,
+            task_id: taskId,
+            contributor,
+            accepted: false,
+            score: cRes.score ?? null,
+            summary: reason,
+            timestamp: finishedAt,
+          });
+          return jsonResp(
+            {
+              accepted: false,
+              submission_id: subId,
+              error: reason,
+              verify_ms: verifyMs,
+            },
+            422
           );
         }
-        this.ctx.storage.sql.exec("DELETE FROM bundle_cache WHERE mission_id = ?", missionId);
-
-        this.ctx.storage.sql.exec(
-          `UPDATE tasks
-           SET status = 'verified',
-               best_score = ?,
-               verified_by = ?,
-               lease_contributor = NULL,
-               lease_token = NULL,
-               lease_expires_at = NULL,
-               lease_ip = NULL,
-               attempts = attempts + 1
-           WHERE mission_id = ? AND task_id = ?`,
-          outcome.new_best_score,
-          contributor,
-          missionId,
-          taskId
-        );
-
-        const subId = crypto.randomUUID();
-        this.insertSubmission({
-          id: subId,
-          mission_id: missionId,
-          task_id: taskId,
-          contributor,
-          accepted: true,
-          score: outcome.new_best_score,
-          points: awardedPoints,
-          summary: cRes.summary,
-          patch_sha256: patchSha,
-          verify_ms: verifyMs,
-          created_at: finishedAt,
-        });
-        this.ctx.storage.sql.exec(
-          `INSERT INTO accepted_patches
-           (mission_id, task_id, submission_id, contributor, summary, patch, spec_sha256, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          missionId,
-          taskId,
-          subId,
-          contributor,
-          cRes.summary,
-          patch,
-          mission.spec_sha256,
-          finishedAt
-        );
-
-        this.emit({
-          kind: "submission_accepted",
-          mission_id: missionId,
-          task_id: taskId,
-          contributor,
-          accepted: true,
-          score: outcome.new_best_score,
-          summary: `${cRes.summary} (+${awardedPoints} pts)`,
-          timestamp: finishedAt,
-        });
-
-        return jsonResp({
-          accepted: true,
-          submission_id: subId,
-          task_id: taskId,
-          contributor,
-          points_awarded: awardedPoints,
-          score: outcome.new_best_score,
-          unlocked_dependents: outcome.unlocked_dependents,
-          verify_ms: verifyMs,
-          summary: cRes.summary,
-        });
-      } catch (e) {
-        const reason = e instanceof Error ? e.message : String(e);
-        const subId = crypto.randomUUID();
-        this.ctx.storage.sql.exec(
-          "UPDATE tasks SET attempts = attempts + 1 WHERE mission_id = ? AND task_id = ?",
-          missionId,
-          taskId
-        );
-        this.insertSubmission({
-          id: subId,
-          mission_id: missionId,
-          task_id: taskId,
-          contributor,
-          accepted: false,
-          score: cRes.score ?? null,
-          points: 0,
-          summary: reason,
-          patch_sha256: patchSha,
-          verify_ms: verifyMs,
-          created_at: finishedAt,
-        });
-        this.emit({
-          kind: "submission_rejected",
-          mission_id: missionId,
-          task_id: taskId,
-          contributor,
-          accepted: false,
-          score: cRes.score ?? null,
-          summary: reason,
-          timestamp: finishedAt,
-        });
-        return jsonResp(
-          {
-            accepted: false,
-            submission_id: subId,
-            error: reason,
-            verify_ms: verifyMs,
-          },
-          422
-        );
-      }
+      });
     });
   }
 }

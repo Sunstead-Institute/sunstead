@@ -8,21 +8,3 @@ export class Lean4Verifier extends Container {
   sleepAfter = "3m";
   enableInternet = false;
 }
-
-/**
- * Hermetic Rust ML-DSA verification container running with outbound internet disabled.
- */
-export class RustVerifier extends Container {
-  defaultPort = 8080;
-  sleepAfter = "3m";
-  enableInternet = false;
-}
-
-/**
- * Hermetic Verus verification container running with outbound internet disabled.
- */
-export class VerusVerifier extends Container {
-  defaultPort = 8080;
-  sleepAfter = "3m";
-  enableInternet = false;
-}

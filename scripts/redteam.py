@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Sunstead red-team suite: submissions that MUST be rejected, plus honest
-controls that MUST be accepted, run directly against the verifier images
-(the same way the hub runs them) so the checks don't depend on either hub.
+Sunstead Lean 4 red-team suite: submissions that MUST be rejected, plus honest
+controls that MUST be accepted, run directly against the verifier image
+(the same way the hub runs it) so the checks don't depend on the hub.
 
     ./scripts/build-verifiers.sh && python3 scripts/redteam.py            # Docker (default)
-    python3 scripts/redteam.py --mission tier3-mldsa-arith                # one mission
+    python3 scripts/redteam.py --mission tier1-metacomplexity-dag         # one mission
     sudo -E python3 scripts/redteam.py --local                            # no Docker: run ./verify
                                                                           # directly (needs root,
                                                                           # the sunstead-* users and
@@ -24,22 +24,11 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MISSIONS = os.path.join(ROOT, "missions")
 IMAGES = {
-    "tier3-mldsa-arith": "sunstead/verifier-rust:v0.1",
-    "tier3-chacha-x509": "sunstead/verifier-rust:v0.1",
     "tier1-metacomplexity-dag": "sunstead/verifier-lean4:v0.1",
     "tier1-crypto-algebra-dag": "sunstead/verifier-lean4:v0.1",
     "tier2-soundness-bound": "sunstead/verifier-lean4:v0.1",
     "tier2-coding-bounds": "sunstead/verifier-lean4:v0.1",
-    "tier3-base16ct-verus": "sunstead/verifier-verus:v0.1",
 }
-
-HONEST_CENTERED_MOD = """use crate::spec::{HALF_Q, Q};
-pub fn centered_mod(a: i32) -> i32 {
-    let diff = a - (HALF_Q + 1);
-    let mask = !(diff >> 31);
-    a - (Q & mask)
-}
-"""
 
 HONEST_DECODER = """import MetaComplexity.Spec
 
@@ -57,31 +46,6 @@ end MetaComplexity
 
 # Each case: (name, mission, task, {path: content}, expect_ok, expect_score_or_None, why)
 CASES = [
-    # ---------------- Rust ----------------
-    ("rust-honest-control", "tier3-mldsa-arith", "centered_mod",
-     {"src/centered_mod.rs": HONEST_CENTERED_MOD}, True, None,
-     "honest branchless solution must still pass"),
-    ("rust-delegate-to-spec", "tier3-mldsa-arith", "centered_mod",
-     {"src/centered_mod.rs": "use crate::spec::spec_centered_mod;\n"
-                             "pub fn centered_mod(a: i32) -> i32 { spec_centered_mod(a) }\n"},
-     False, None, "calling the reference implementation in spec.rs passed every old check"),
-    ("rust-delegate-via-path", "tier3-mldsa-arith", "centered_mod",
-     {"src/centered_mod.rs": "pub fn centered_mod(a: i32) -> i32 { crate::spec::spec_centered_mod(a) }\n"},
-     False, None, "same, through a full path"),
-    ("rust-early-exit", "tier3-mldsa-arith", "centered_mod",
-     {"src/centered_mod.rs": "pub fn centered_mod(a: i32) -> i32 { std::process::exit(0) }\n"},
-     False, None, "exiting the test process with status 0 made cargo test report success"),
-    ("rust-fake-test-output", "tier3-mldsa-arith", "centered_mod",
-     {"src/centered_mod.rs": "pub fn centered_mod(a: i32) -> i32 {\n"
-                             "    println!(\"test result: ok. 1 passed; 0 failed\");\n    a\n}\n"},
-     False, None, "printing fake libtest output"),
-    ("rust-background-process", "tier3-mldsa-arith", "centered_mod",
-     {"src/centered_mod.rs": "pub fn centered_mod(a: i32) -> i32 {\n"
-                             "    let _ = ::std::process::Command::new(\"sh\").arg(\"-c\").arg(\"sleep 600 &\").spawn();\n"
-                             "    a\n}\n"},
-     False, None, "spawning a process that outlives the verification"),
-
-    # ---------------- Lean ----------------
     ("lean-honest-control", "tier1-metacomplexity-dag", "decoder_injective",
      {"MetaComplexity/DecoderInjective.lean": HONEST_DECODER}, True, None,
      "honest proof must still pass"),
@@ -146,6 +110,26 @@ end MetaComplexity
   pure () : IO Unit)
 """},
      False, None, "build-time #eval starts a process that rewrites the audit file"),
+    ("lean-string-block-comment-hide", "tier1-metacomplexity-dag", "decoder_injective",
+     {"MetaComplexity/DecoderInjective.lean": HONEST_DECODER + """
+def s1 : String := "/-"
+#eval IO.println "escaped block comment lint"
+def s2 : String := "-/"
+"""},
+     False, None, "string literals containing `/-` and `-/` must not hide `#eval` from comment stripping"),
+    ("lean-string-line-comment-hide", "tier1-metacomplexity-dag", "decoder_injective",
+     {"MetaComplexity/DecoderInjective.lean": HONEST_DECODER + """
+def s : String := "--" ; #eval IO.println "escaped line comment lint"
+"""},
+     False, None, "string literal containing `--` must not hide `#eval` on the same line"),
+    ("lean-char-quote-comment-hide", "tier1-metacomplexity-dag", "decoder_injective",
+     {"MetaComplexity/DecoderInjective.lean": HONEST_DECODER + """
+def q : Char := '"'
+def s1 : String := "\\\"/-"
+#eval IO.println "escaped via char literal + escaped quote"
+def s2 : String := "-/"
+"""},
+     False, None, "char literal `\"` and escaped quotes must not desync string parsing"),
     ("lean-hillclimb-honest-control", "tier2-soundness-bound", "tighten_multi_user_bound",
      {}, True, 1000.0, "the seed's baseline proof must verify and score 1000 via the kernel"),
     # These slip past the source hygiene scan on purpose, so the kernel
@@ -182,100 +166,11 @@ end SoundnessBound
 ]
 
 
-# ---------------- Verus (base16ct) ----------------
-B16 = "tier3-base16ct-verus"
-B16_DIR = os.path.join(MISSIONS, B16)
-B16_FIXTURES = os.path.join(ROOT, "scripts", "redteam-fixtures", "base16ct")
-B16_TASKS = {
-    "lower_encode_nibble": "lower_encode", "lower_decode_nibble": "lower_decode",
-    "upper_encode_nibble": "upper_encode", "upper_decode_nibble": "upper_decode",
-    "mixed_decode_nibble": "mixed_decode", "decode_pair_flags": "decode_pair",
-    "mixed_pair_correct": "mixed_pair",
-}
-
-
-def _read(path):
-    with open(path, "r", encoding="utf-8") as f:
-        return f.read()
-
-
-def b16_honest(module):
-    return _read(os.path.join(B16_FIXTURES, module + ".rs"))
-
-
-def b16_statement(module):
-    return _read(os.path.join(B16_DIR, "statements", module + ".rs"))
-
-
-def _b16_cases():
-    cases = []
-    for task, module in B16_TASKS.items():
-        files = {f"src/{module}.rs": b16_honest(module)}
-        if task == "mixed_pair_correct":
-            # Opens only after decode_pair_flags is accepted; Verus re-verifies that proof too.
-            files["src/decode_pair.rs"] = b16_honest("decode_pair")
-        cases.append((f"verus-honest-{task}", B16, task, files,
-                      True, None, "honest proof over the verbatim upstream code must pass"))
-    dec = "lower_decode"
-    honest, stmt = b16_honest(dec), b16_statement(dec)
-    tail_ = "    ret as u16\n"
-    end = "} // verus!"
-    bad = [
-        ("verus-unproven-statement", {f"src/{dec}.rs": stmt},
-         "the statement alone (no proof) must not verify"),
-        ("verus-assert-false", {f"src/{dec}.rs": honest.replace(tail_, "    assert(false);\n" + tail_)},
-         "a false assertion must fail in Verus itself"),
-        ("verus-assume-false", {f"src/{dec}.rs": stmt.replace(tail_, "    proof { assume(false); }\n" + tail_)},
-         "assume(false) proves anything"),
-        ("verus-admit", {f"src/{dec}.rs": stmt.replace(tail_, "    proof { admit(); }\n" + tail_)},
-         "admit() proves anything"),
-        ("verus-external-body-lemma", {f"src/{dec}.rs": stmt.replace(
-            tail_, "    proof { lemma_cheat(); }\n" + tail_).replace(
-            end, "#[verifier::external_body]\nproof fn lemma_cheat() ensures false {}\n" + end)},
-         "an unproven lemma marked external_body"),
-        ("verus-external-body-exec", {f"src/{dec}.rs": stmt.replace(
-            "pub fn decode_nibble", "#[verifier::external_body]\npub fn decode_nibble")},
-         "trusting the function under test"),
-        ("verus-changed-exec", {f"src/{dec}.rs": stmt.replace(
-            stmt[stmt.index("    let byte = src as i16;"):stmt.index(tail_) + len(tail_)],
-            "    if src >= 0x30 && src <= 0x39 { (src - 0x30) as u16 }\n"
-            "    else if src >= 0x61 && src <= 0x66 { (src - 0x61 + 10) as u16 }\n"
-            "    else { 0xffff }\n")},
-         "proving a rewritten function instead of the upstream code"),
-        ("verus-weakened-ensures", {f"src/{dec}.rs": stmt.replace(
-            "        r == nibble_result(src, is_digit(src) || is_lower_af(src)),\n", "        true,\n")},
-         "dropping the specification"),
-        ("verus-cfg-hidden", {f"src/{dec}.rs": honest.replace(
-            tail_, "    proof { #[cfg(any())] assume(false); }\n" + tail_)},
-         "code hidden behind cfg"),
-        ("verus-macro-in-proof", {f"src/{dec}.rs": honest.replace(
-            tail_, "    proof { vstd::seq![1u8]; }\n" + tail_)},
-         "macros in proof code"),
-        ("verus-added-exec-fn", {f"src/{dec}.rs": honest.replace(end, "pub fn helper() -> u8 { 0 }\n" + end)},
-         "new executable code next to the upstream function"),
-        ("verus-statement-and-src-changed", {
-            f"statements/{dec}.rs": stmt.replace("ret as u16", "(ret as u16) & 0xff"),
-            f"src/{dec}.rs": stmt.replace("ret as u16", "(ret as u16) & 0xff")},
-         "statement edited to differ from upstream (the hub also rejects frozen-path edits)"),
-    ]
-    for name, files, why in bad:
-        cases.append((name, B16, "lower_decode_nibble", files, False, None, why))
-    cases.append(("verus-tampered-dependency", B16, "mixed_pair_correct", {
-        "src/mixed_pair.rs": b16_honest("mixed_pair"),
-        "src/decode_pair.rs": b16_statement("decode_pair").replace(
-            "{\n}\n", "{\n    assume(false);\n}\n")},
-        False, None, "a lemma this task relies on proved by assume(false) in another task file"))
-    return cases
-
-
-CASES += _b16_cases()
-
-
 def make_work_tree(mission, files):
     d = tempfile.mkdtemp(prefix="sunstead-redteam-")
     work = os.path.join(d, "work")
     shutil.copytree(os.path.join(MISSIONS, mission), work,
-                    ignore=shutil.ignore_patterns(".git", ".lake", "target"))
+                    ignore=shutil.ignore_patterns(".git", ".lake"))
     for rel, content in files.items():
         with open(os.path.join(work, rel), "w", encoding="utf-8") as f:
             f.write(content)

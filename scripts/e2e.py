@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-End-to-end test of the Sunstead hub (Cloudflare Worker + Durable Object +
-verifier containers), using only the public HTTP protocol from /join.txt.
+End-to-end test of the Sunstead Lean 4 hub (Cloudflare Worker + Durable Object +
+Lean 4 verifier container), using only the public HTTP protocol from /join.txt.
 
     cd cloudflare && npm run dev          # local dev server (needs Docker)
     SUNSTEAD_URL=http://localhost:5173 python3 scripts/e2e.py
@@ -16,6 +16,8 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
+import time
 import urllib.error
 import urllib.request
 
@@ -28,7 +30,7 @@ RUN = f"{random.randrange(16**6):06x}"
 
 def req(method, path, body=None, key=None, raw=False):
     data = None if body is None else json.dumps(body).encode("utf-8")
-    headers = {"User-Agent": "sunstead-e2e/0.2"}
+    headers = {"User-Agent": "sunstead-e2e/0.3"}
     if body is not None:
         headers["Content-Type"] = "application/json"
     if key:
@@ -53,7 +55,7 @@ def register(handle):
     code, res = req("POST", "/api/contributors/register",
                     {"handle": f"{handle}-{RUN}", "display_name": handle})
     assert code in (200, 201) and res.get("api_key", "").startswith("ss_live_"), (code, res)
-    return res["api_key"]
+    return res["handle"], res["api_key"]
 
 
 def extract(tf, dest):
@@ -75,8 +77,10 @@ def make_patch(mission_id, edits):
         return subprocess.check_output(["git", "diff"], cwd=tmp, text=True)
 
 
-def submit(mission, task, key, edits):
+def submit(mission, task, key, edits, expect_in_patch=None):
     patch = make_patch(mission, edits)
+    if expect_in_patch is not None:
+        assert expect_in_patch in patch, f"expected {expect_in_patch!r} in patch:\n{patch}"
     return req("POST", f"/api/missions/{mission}/tasks/{task}/submit", {"patch": patch}, key=key)
 
 
@@ -84,18 +88,68 @@ def ok(msg):
     print(f"  [PASS] {msg}")
 
 
-CENTERED_MOD = """use crate::spec::{HALF_Q, Q};
-pub fn centered_mod(a: i32) -> i32 {
-    let diff = a - (HALF_Q + 1);
-    let mask = !(diff >> 31);
-    a - (Q & mask)
-}
-"""
-MU_300 = """import SoundnessBound.Spec
+class SseCollector:
+    """Background reader for GET /api/events so we can assert SSE events like lease_released."""
+
+    def __init__(self):
+        self.events = []
+        self.ready = threading.Event()
+        self.stop_flag = threading.Event()
+        self._resp = None
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def start(self):
+        self._thread.start()
+        assert self.ready.wait(timeout=10), "SSE stream did not connect within 10s"
+
+    def _run(self):
+        r = urllib.request.Request(BASE + "/api/events", headers={"User-Agent": "sunstead-e2e/0.3"})
+        try:
+            with urllib.request.urlopen(r, timeout=60) as resp:
+                self._resp = resp
+                event_name = None
+                for raw_line in resp:
+                    if self.stop_flag.is_set():
+                        break
+                    line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+                    if line.startswith(": connected"):
+                        self.ready.set()
+                    elif line.startswith("event: "):
+                        event_name = line[len("event: "):]
+                    elif line.startswith("data: "):
+                        try:
+                            payload = json.loads(line[len("data: "):])
+                        except Exception:
+                            payload = {}
+                        self.events.append((event_name, payload))
+                        event_name = None
+        except Exception:
+            pass
+
+    def wait_for(self, kind, predicate, timeout=5.0):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            for ev_kind, payload in list(self.events):
+                if ev_kind == kind and predicate(payload):
+                    return payload
+            time.sleep(0.05)
+        raise AssertionError(f"did not observe SSE event {kind!r}; saw {self.events}")
+
+    def close(self):
+        self.stop_flag.set()
+        if self._resp is not None:
+            try:
+                self._resp.close()
+            except Exception:
+                pass
+
+
+MU_400_WITH_COMMENT = """import SoundnessBound.Spec
 
 namespace SoundnessBound
 
-def claimedMultiUserFactor : Nat := 300
+-- temporary note that will be deleted in the next tightening patch
+def claimedMultiUserFactor : Nat := 400
 
 theorem multi_user_bound :
     ∀ u q : Nat, u ≥ 1 → q ≥ 1 →
@@ -118,6 +172,11 @@ theorem multi_user_bound :
 
 end SoundnessBound
 """
+
+MU_300_NO_COMMENT = MU_400_WITH_COMMENT.replace(
+    "-- temporary note that will be deleted in the next tightening patch\n", ""
+).replace(":= 400", ":= 300")
+
 DECODER = """import MetaComplexity.Spec
 
 namespace MetaComplexity
@@ -131,57 +190,21 @@ theorem encode_injective_of_lossless {n k : Nat} (c : LosslessCompressor n k) :
 
 end MetaComplexity
 """
+
 PIGEONHOLE = """import MetaComplexity.Spec
 
 namespace MetaComplexity
 
 theorem no_inj_lt :
     ∀ {n m : Nat}, m < n → ∀ (f : Fin n → Fin m), ¬ Injective f := by
-  intro n m
-  induction m generalizing n with
-  | zero =>
-    intro hlt f _
-    exact Fin.elim0 (f ⟨0, hlt⟩)
-  | succ m ih =>
-    intro hlt f hinj
-    cases n with
-    | zero => omega
-    | succ n =>
-      let y : Fin (m + 1) := f ⟨n, Nat.lt_succ_self n⟩
-      have hne : ∀ (i : Fin n), (f ⟨i.val, Nat.lt_succ_of_lt i.isLt⟩).val ≠ y.val := by
-        intro i heq
-        have hfin : f ⟨i.val, Nat.lt_succ_of_lt i.isLt⟩ = y := Fin.ext heq
-        have hi := hinj ⟨i.val, Nat.lt_succ_of_lt i.isLt⟩ ⟨n, Nat.lt_succ_self n⟩ hfin
-        have hval : i.val = n := congrArg Fin.val hi
-        omega
-      let g : Fin n → Fin m := fun i =>
-        let v := f ⟨i.val, Nat.lt_succ_of_lt i.isLt⟩
-        if hltv : v.val < y.val then
-          ⟨v.val, by omega⟩
-        else
-          ⟨v.val - 1, by
-            have := hne i
-            omega⟩
-      have hginj : Injective g := by
-        intro a b hab
-        have hval : (g a).val = (g b).val := congrArg Fin.val hab
-        dsimp only [g] at hval
-        have hna := hne a
-        have hnb := hne b
-        have hfeq : f ⟨a.val, Nat.lt_succ_of_lt a.isLt⟩ = f ⟨b.val, Nat.lt_succ_of_lt b.isLt⟩ := by
-          apply Fin.ext
-          split at hval <;> split at hval <;> dsimp only at hval <;> omega
-        have hab' := hinj _ _ hfeq
-        have hval_ab : a.val = b.val := by injection hab'
-        exact Fin.ext hval_ab
-      exact ih (by omega) g hginj
+  sorry
 
 end MetaComplexity
 """
 
 
 def main():
-    print(f"==> Testing Sunstead hub at {BASE} (run {RUN})")
+    print(f"==> Testing Sunstead Lean 4 hub at {BASE} (run {RUN})")
 
     code, health = req("GET", "/api/health")
     assert code == 200 and health.get("ok") is True, health
@@ -189,114 +212,157 @@ def main():
 
     code, missions = req("GET", "/api/missions")
     assert code == 200
-    ids = {m["id"] for m in missions["missions"]}
-    assert {"tier3-mldsa-arith", "tier2-soundness-bound", "tier1-metacomplexity-dag"} <= ids, ids
-    ok(f"/api/missions lists {len(ids)} missions")
+    by_id = {m["id"]: m for m in missions["missions"]}
+    expected_ids = {
+        "tier1-metacomplexity-dag",
+        "tier1-crypto-algebra-dag",
+        "tier2-soundness-bound",
+        "tier2-coding-bounds",
+    }
+    assert set(by_id.keys()) == expected_ids, by_id.keys()
+    assert by_id["tier2-soundness-bound"]["demo"] is True, by_id["tier2-soundness-bound"]
+    assert by_id["tier1-metacomplexity-dag"]["demo"] is False, by_id["tier1-metacomplexity-dag"]
+    ok(f"/api/missions lists {len(by_id)} Lean 4 missions with demo flags")
 
     code, join_txt = req("GET", "/join.txt")
-    assert code == 200 and "contributors/register" in join_txt
-    ok("/join.txt")
+    assert code == 200 and "contributors/register" in join_txt and "lake build" in join_txt
+    assert "Verus" not in join_txt and "Rust target files" not in join_txt
+    ok("/join.txt (Lean-only, documents native Lean and Docker)")
 
     # Identity is required for claims and submissions.
-    code, res = req("POST", "/api/missions/tier3-mldsa-arith/tasks/centered_mod/claim", {})
+    code, res = req("POST", "/api/missions/tier1-metacomplexity-dag/tasks/decoder_injective/claim", {})
     assert code == 401, (code, res)
     ok("anonymous claim rejected (401)")
 
-    alice = register("alice-rust")
-    bob = register("bob-lean")
-    mallory = register("mallory")
+    alice_handle, alice = register("alice-lean")
+    bob_handle, bob = register("bob-lean")
+    _, mallory = register("mallory")
     ok("registered 3 contributors")
 
     # Policy gate: frozen spec edits are rejected before any container runs.
-    code, res = submit("tier3-mldsa-arith", "centered_mod", mallory,
-                       {"src/spec.rs": "pub const Q: i32 = 1;\n"})
+    code, res = submit("tier1-metacomplexity-dag", "decoder_injective", mallory,
+                       {"MetaComplexity/Spec.lean": "-- tampered\n"})
     assert code == 422 and "frozen" in json.dumps(res), (code, res)
     ok("frozen-path tampering rejected (422)")
 
-    # Hygiene: delegating to the reference implementation is rejected by the verifier.
-    code, res = submit("tier3-mldsa-arith", "centered_mod", mallory,
-                       {"src/centered_mod.rs": "use crate::spec::spec_centered_mod;\n"
-                                               "pub fn centered_mod(a: i32) -> i32 { spec_centered_mod(a) }\n"})
-    assert code == 422 and "spec.rs" in json.dumps(res), (code, res)
-    ok("spec delegation rejected by the verifier")
+    # Claim -> contention -> release -> SSE `lease_released` -> re-claim.
+    sse = SseCollector()
+    sse.start()
+    try:
+        code, res = req("POST", "/api/missions/tier1-metacomplexity-dag/tasks/decoder_injective/claim", {}, key=alice)
+        assert code == 200 and res.get("claimed") is True, (code, res)
+        code, res = req("POST", "/api/missions/tier1-metacomplexity-dag/tasks/decoder_injective/claim", {}, key=bob)
+        assert code == 409, (code, res)
+        code, res = req("POST", "/api/missions/tier1-metacomplexity-dag/tasks/decoder_injective/release", {}, key=alice)
+        assert code == 200 and res.get("released") is True, (code, res)
+        sse.wait_for(
+            "lease_released",
+            lambda ev: ev.get("mission_id") == "tier1-metacomplexity-dag"
+            and ev.get("task_id") == "decoder_injective"
+            and ev.get("contributor") == alice_handle,
+        )
+        code, res = req("POST", "/api/missions/tier1-metacomplexity-dag/tasks/decoder_injective/claim", {}, key=bob)
+        assert code == 200 and res.get("claimed") is True, (code, res)
+        ok("lease claimed, second claimant blocked, released with SSE lease_released, re-claimed")
+    finally:
+        sse.close()
 
-    # Claim, then an honest Tier 3 solution.
-    code, res = req("POST", "/api/missions/tier3-mldsa-arith/tasks/centered_mod/claim", {}, key=alice)
-    assert code == 200 and res.get("claimed") is True, (code, res)
-    code, res = req("POST", "/api/missions/tier3-mldsa-arith/tasks/centered_mod/claim", {}, key=bob)
-    assert code in (409, 422), (code, res)
-    ok("lease claimed; second claimant blocked")
-    code, res = submit("tier3-mldsa-arith", "centered_mod", alice, {"src/centered_mod.rs": CENTERED_MOD})
-    assert code == 200 and res.get("accepted") is True, (code, res)
-    ok(f"Tier 3 centered_mod accepted ({res.get('verify_ms')} ms)")
-
-    # Tier 1: honest proof accepted; sorryAx proof rejected by the kernel axiom check.
+    # Tier 1: sorryAx proof rejected by the kernel axiom check; string-comment hiding rejected by lint.
     code, res = submit("tier1-metacomplexity-dag", "pigeonhole_fin", mallory,
-                       {"MetaComplexity/Pigeonhole.lean": PIGEONHOLE.replace(
-                           PIGEONHOLE[PIGEONHOLE.index(":= by"):PIGEONHOLE.index("end MetaComplexity")],
-                           ":=\n  sorryAx _ false\n\n")})
+                       {"MetaComplexity/Pigeonhole.lean": PIGEONHOLE.replace(":= by\n  sorry", ":=\n  sorryAx _ false")})
     assert code == 422 and "sorryAx" in json.dumps(res), (code, res)
     ok("sorryAx proof rejected by the kernel axiom check")
+
+    code, res = submit("tier1-metacomplexity-dag", "decoder_injective", mallory,
+                       {"MetaComplexity/DecoderInjective.lean": DECODER + '\ndef s := "--" ; #eval IO.println "pwn"\n'})
+    assert code == 422, (code, res)
+    ok("string-literal comment hiding rejected")
+
+    # Honest Tier 1 proof accepted with 150 points.
     code, res = submit("tier1-metacomplexity-dag", "decoder_injective", bob,
                        {"MetaComplexity/DecoderInjective.lean": DECODER})
-    assert code == 200 and res.get("accepted") is True, (code, res)
-    ok(f"Tier 1 decoder_injective accepted ({res.get('verify_ms')} ms)")
+    assert code == 200 and res.get("accepted") is True and res.get("points_awarded") == 150, (code, res)
+    ok(f"Tier 1 decoder_injective accepted ({res.get('verify_ms')} ms, 150 pts)")
 
-    # Tier 2 hill-climb: 1000 -> 300 accepted with log-ratio points; regression rejected.
+    # Re-submitting an already-verified DAG task is rejected fast (409) before waking a container.
+    code, res = submit("tier1-metacomplexity-dag", "decoder_injective", alice,
+                       {"MetaComplexity/DecoderInjective.lean": DECODER + "\n-- extra\n"})
+    assert code == 409, (code, res)
+    ok("already-verified DAG task rejected before container wakeup (409)")
+
+    # Tier 2 demo hill-climb: 1000 -> 400 (adds `-- ` comment) -> 300 (DELETES `-- ` comment,
+    # producing `--- ` in the unified diff hunk!). Both earn 0 points because demo=true.
     code, res = submit("tier2-soundness-bound", "tighten_multi_user_bound", bob,
-                       {"SoundnessBound/MultiUserBound.lean": MU_300})
+                       {"SoundnessBound/MultiUserBound.lean": MU_400_WITH_COMMENT})
+    assert code == 200 and res.get("accepted") is True and res.get("score") == 400.0, (code, res)
+    assert res.get("points_awarded") == 0, res
+    ok("Tier 2 demo 1000 -> 400 accepted (0 demo points)")
+
+    code, res = submit(
+        "tier2-soundness-bound",
+        "tighten_multi_user_bound",
+        bob,
+        {"SoundnessBound/MultiUserBound.lean": MU_300_NO_COMMENT},
+        expect_in_patch="--- temporary note that will be deleted in the next tightening patch",
+    )
     assert code == 200 and res.get("accepted") is True and res.get("score") == 300.0, (code, res)
-    assert res.get("points_awarded") == 300, res  # floor(250 * ln(1000/300)) = 300
-    ok("Tier 2 1000 -> 300 accepted, 300 points")
+    assert res.get("points_awarded") == 0, res
+    ok("Tier 2 demo 400 -> 300 deleting a `-- ` Lean comment accepted (0 demo points)")
+
     code, res = submit("tier2-soundness-bound", "tighten_multi_user_bound", alice,
-                       {"SoundnessBound/MultiUserBound.lean": MU_300.replace(":= 300", ":= 500")})
+                       {"SoundnessBound/MultiUserBound.lean": MU_300_NO_COMMENT.replace(":= 300", ":= 500")})
     assert code == 422 and "strictly improve" in json.dumps(res), (code, res)
     ok("Tier 2 regression rejected")
 
+    # Leaderboard: bob has 150 pts from Tier 1 and 0 hill-climb crowns from demo Tier 2.
     code, board = req("GET", "/api/leaderboard")
     assert code == 200
-    ok("leaderboard reachable")
+    bob_row = next((e for e in board["leaderboard"] if e["contributor"] == bob_handle), None)
+    assert bob_row is not None and bob_row["points"] == 150 and bob_row["active_records"] == 0, bob_row
+    ok(f"leaderboard verified (demo mission awarded 0 points and 0 crowns: {bob_row})")
 
-    # Tier 3 Verus: a proof over the verbatim upstream base16ct code.
-    fixture = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                           "redteam-fixtures", "base16ct", "decode_pair.rs")
-    with open(fixture, encoding="utf-8") as f:
-        code, res = submit("tier3-base16ct-verus", "decode_pair_flags", alice,
-                           {"src/decode_pair.rs": f.read()})
-    assert code == 200 and res.get("accepted") is True, (code, res)
-    ok(f"Verus decode_pair_flags accepted ({res.get('verify_ms')} ms)")
+    # Exact `how_to_rebuild` command rebuilds the live mission with attributed commits!
+    for mission, expect_subj in (
+        ("tier1-metacomplexity-dag", "verify decoder_injective"),
+        ("tier2-soundness-bound", "verify tighten_multi_user_bound"),
+    ):
+        code, hist = req("GET", f"/api/missions/{mission}/history")
+        assert code == 200 and len(hist["commits"]) >= 1, (code, hist)
+        cmd = hist["how_to_rebuild"]
+        assert "git init" not in cmd, f"how_to_rebuild must not re-init git: {cmd}"
+        assert "bundle.tar.gz?base=seed" in cmd and "history.mbox | git am" in cmd, cmd
 
-    # Phase 4: accepted work is published as git history that rebuilds the live state.
-    mission = "tier3-mldsa-arith"
-    code, hist = req("GET", f"/api/missions/{mission}/history")
-    assert code == 200 and any(c["task_id"] == "centered_mod" for c in hist["commits"]), (code, hist)
-    code, mbox = req("GET", f"/api/missions/{mission}/history.mbox", raw=True)
-    assert code == 200
-    code, seed = req("GET", f"/api/missions/{mission}/bundle.tar.gz?base=seed", raw=True)
-    assert code == 200
-    code, live = req("GET", f"/api/missions/{mission}/bundle.tar.gz", raw=True)
-    assert code == 200
-    with tempfile.TemporaryDirectory() as tmp:
-        for name, data in (("seed", seed), ("live", live)):
-            os.makedirs(os.path.join(tmp, name))
-            with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
-                extract(tf, os.path.join(tmp, name))
-        with open(os.path.join(tmp, "history.mbox"), "wb") as f:
-            f.write(mbox)
-        subprocess.run(["git", "-c", "user.name=e2e", "-c", "user.email=e2e@localhost",
-                        "am", "-q", os.path.join(tmp, "history.mbox")],
-                       cwd=os.path.join(tmp, "seed"), check=True)
-        log = subprocess.check_output(["git", "log", "--format=%an|%s"],
-                                      cwd=os.path.join(tmp, "seed"), text=True)
-        assert "alice-rust|" in log and "verify centered_mod" in log, log
-        diff = subprocess.run(["diff", "-r", "-x", ".git", os.path.join(tmp, "seed"),
-                               os.path.join(tmp, "live")], capture_output=True, text=True)
-        assert diff.returncode == 0, diff.stdout[-2000:]
-    ok("seed bundle + history.mbox (git am) rebuilds the live mission, with authors")
+        code, live = req("GET", f"/api/missions/{mission}/bundle.tar.gz", raw=True)
+        assert code == 200
+        with tempfile.TemporaryDirectory() as tmp:
+            rebuilt_dir = os.path.join(tmp, "rebuilt")
+            live_dir = os.path.join(tmp, "live")
+            os.makedirs(rebuilt_dir)
+            os.makedirs(live_dir)
+            with tarfile.open(fileobj=io.BytesIO(live), mode="r:gz") as tf:
+                extract(tf, live_dir)
+            env = os.environ.copy()
+            env.setdefault("GIT_COMMITTER_NAME", "e2e")
+            env.setdefault("GIT_COMMITTER_EMAIL", "e2e@localhost")
+            subprocess.run(
+                ["bash", "-euo", "pipefail", "-c", cmd.replace("<hub>", BASE)],
+                cwd=rebuilt_dir,
+                env=env,
+                check=True,
+            )
+            log = subprocess.check_output(["git", "log", "--format=%an|%s"], cwd=rebuilt_dir, text=True)
+            assert f"bob-lean|" in log and expect_subj in log, log
+            diff = subprocess.run(
+                ["diff", "-r", "-x", ".git", rebuilt_dir, live_dir],
+                capture_output=True,
+                text=True,
+            )
+            assert diff.returncode == 0, diff.stdout[-2000:]
+    ok("exact `how_to_rebuild` command rebuilds live Lean missions with authors")
 
     code, stats = req("GET", "/api/stats")
     assert code == 200 and stats["all_time"]["registered"] >= 3, (code, stats)
-    assert stats["all_time"]["claimed"] >= 1 and stats["all_time"]["verified"] >= 2, stats
+    assert stats["all_time"]["claimed"] >= 1 and stats["all_time"]["verified"] >= 1, stats
     ok(f"funnel stats: {stats['all_time']}")
     print("\nAll end-to-end checks passed.")
 

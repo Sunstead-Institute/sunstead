@@ -131,8 +131,11 @@ const missions = missionDirs.map((dirName) => {
   const fullDir = path.join(missionsDir, dirName);
   const manifest = JSON.parse(fs.readFileSync(path.join(fullDir, "sunstead.json"), "utf8"));
   const spec_sha256 = computeSpecSha256(fullDir, manifest.frozen_paths);
-  const image = manifest.verifier.image;
-  const verifier_kind = image.includes("verus") ? "verus" : image.includes("rust") ? "rust" : "lean4";
+  const image = manifest.verifier?.image || "";
+  if (!image.includes("lean4")) {
+    throw new Error(`unsupported verifier image in ${dirName}: ${image} (v1 hub is Lean 4 only)`);
+  }
+  const verifier_kind = "lean4";
   return { manifest, spec_sha256, verifier_kind };
 });
 
@@ -143,7 +146,7 @@ fs.writeFileSync(
     `export interface SeedMission {\n` +
     `  manifest: MissionManifest;\n` +
     `  spec_sha256: string;\n` +
-    `  verifier_kind: "lean4" | "rust" | "verus";\n` +
+    `  verifier_kind: "lean4";\n` +
     `}\n\n` +
     `export const SEED_MISSIONS: SeedMission[] = ${JSON.stringify(missions, null, 2)};\n`
 );

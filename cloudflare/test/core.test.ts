@@ -19,7 +19,7 @@ import {
 
 function task(id: string, over: Partial<TaskState> = {}, deps: string[] = []): TaskState {
   return {
-    def: { id, title: id, target_files: [`src/${id}.rs`], depends_on: deps },
+    def: { id, title: id, target_files: [`MetaComplexity/${id}.lean`], depends_on: deps },
     status: "open",
     best_score: null,
     verified_by: null,
@@ -35,30 +35,35 @@ function patchFor(...paths: string[]): string {
     .join("");
 }
 
-const FROZEN = ["src/spec.rs", "tests/**", "verify", "sunstead.json"];
+const FROZEN = ["MetaComplexity/Spec.lean", "lakefile.toml", "lean-toolchain", "verify", "sunstead.json"];
 const SPEC = "sha256:abc";
 
-function mission(mode: "dag" | "hillclimb", tier = 3): MissionManifest {
+function mission(
+  mode: "dag" | "hillclimb",
+  tier = 1,
+  extra: Partial<MissionManifest> = {}
+): MissionManifest {
   return {
     id: "m",
     title: "m",
     tier,
     mode,
     frozen_paths: FROZEN,
-    verifier: { image: "x", command: ["./verify"] },
+    verifier: { image: "sunstead/verifier-lean4:v0.1", command: ["./verify"] },
     score_direction: "minimize",
     tasks: [],
+    ...extra,
   };
 }
 
-// ---------------------------------------------------------------- paths
+// ---------------------------------------------------------------- paths & diffs
 
 test("normalizeRelPath rejects traversal, absolute and backslash paths", () => {
-  for (const bad of ["../etc/passwd", "a/../../x", "/etc/passwd", "src\\x.rs", "", "a/b/.."]) {
+  for (const bad of ["../etc/passwd", "a/../../x", "/etc/passwd", "src\\x.lean", "", "a/b/.."]) {
     assert.throws(() => normalizeRelPath(bad), /unsafe/, bad);
   }
-  assert.equal(normalizeRelPath("a/src/./x.rs"), "src/x.rs");
-  assert.equal(normalizeRelPath("b/src/x.rs"), "src/x.rs");
+  assert.equal(normalizeRelPath("a/MetaComplexity/./Pigeonhole.lean"), "MetaComplexity/Pigeonhole.lean");
+  assert.equal(normalizeRelPath("b/MetaComplexity/Pigeonhole.lean"), "MetaComplexity/Pigeonhole.lean");
 });
 
 test("extractPatchPaths rejects binary and symlink patches", () => {
@@ -68,28 +73,141 @@ test("extractPatchPaths rejects binary and symlink patches", () => {
     () => extractPatchPaths("diff --git a/x b/x\nnew file mode 120000\n"),
     /symlink/
   );
+  assert.throws(
+    () => extractPatchPaths("diff --git a/x b/x\ndeleted file mode 120000\n"),
+    /symlink/
+  );
   assert.throws(() => extractPatchPaths(""), /empty/);
 });
 
 test("extractPatchPaths sees rename and copy targets", () => {
-  const p = "diff --git a/src/a.rs b/src/b.rs\nrename from src/a.rs\nrename to verify\n";
-  assert.deepEqual(extractPatchPaths(p), ["src/a.rs", "src/b.rs", "verify"]);
+  const p = "diff --git a/MetaComplexity/A.lean b/MetaComplexity/B.lean\nrename from MetaComplexity/A.lean\nrename to verify\n";
+  assert.deepEqual(extractPatchPaths(p), ["MetaComplexity/A.lean", "MetaComplexity/B.lean", "verify"]);
+});
+
+test("extractPatchPaths allows deleting Lean `-- ` comments and adding `++ ` lines inside hunks", () => {
+  const leanDiff = [
+    "diff --git a/MetaComplexity/Pigeonhole.lean b/MetaComplexity/Pigeonhole.lean",
+    "index 1111111..2222222 100644",
+    "--- a/MetaComplexity/Pigeonhole.lean",
+    "+++ b/MetaComplexity/Pigeonhole.lean",
+    "@@ -1,5 +1,5 @@",
+    " import MetaComplexity.Spec",
+    "--- TODO: prove pigeonhole",
+    "--- another comment with /dev/null and ../etc/passwd",
+    "+++ a + b",
+    "+++ c ++ d",
+    " end MetaComplexity",
+    "",
+  ].join("\n");
+  assert.deepEqual(
+    validatePatch(leanDiff, FROZEN, ["MetaComplexity/Pigeonhole.lean"]),
+    ["MetaComplexity/Pigeonhole.lean"]
+  );
+});
+
+test("extractPatchPaths handles single-line hunks (omitted counts) and multi-hunk diffs", () => {
+  const multiHunk = [
+    "diff --git a/MetaComplexity/Pigeonhole.lean b/MetaComplexity/Pigeonhole.lean",
+    "--- a/MetaComplexity/Pigeonhole.lean",
+    "+++ b/MetaComplexity/Pigeonhole.lean",
+    "@@ -1 +1 @@",
+    "--- single-line comment removed",
+    "+++ single-line addition",
+    "@@ -10,3 +10,3 @@ theorem foo",
+    " context line",
+    "--- second hunk lean comment",
+    "+++ second hunk ++ line",
+    "\\ No newline at end of file",
+    " tail context",
+    "",
+  ].join("\n");
+  assert.deepEqual(
+    validatePatch(multiHunk, FROZEN, ["MetaComplexity/Pigeonhole.lean"]),
+    ["MetaComplexity/Pigeonhole.lean"]
+  );
+});
+
+test("extractPatchPaths distinguishes adversarial `--- a/verify` inside hunk vs outside hunk", () => {
+  // Inside a hunk: literally deleting the line `-- a/verify` from the allowed target file.
+  const insideHunk = [
+    "diff --git a/MetaComplexity/Pigeonhole.lean b/MetaComplexity/Pigeonhole.lean",
+    "--- a/MetaComplexity/Pigeonhole.lean",
+    "+++ b/MetaComplexity/Pigeonhole.lean",
+    "@@ -1,2 +1,2 @@",
+    "--- a/verify",
+    "+++ b/verify",
+    " end MetaComplexity",
+    "",
+  ].join("\n");
+  assert.deepEqual(
+    validatePatch(insideHunk, FROZEN, ["MetaComplexity/Pigeonhole.lean"]),
+    ["MetaComplexity/Pigeonhole.lean"]
+  );
+
+  // Outside a hunk (second file in plain unified diff without `diff --git` header): MUST reject!
+  const outsideHunk = [
+    "--- a/MetaComplexity/Pigeonhole.lean",
+    "+++ b/MetaComplexity/Pigeonhole.lean",
+    "@@ -1 +1 @@",
+    "-old",
+    "+new",
+    "--- a/verify",
+    "+++ b/verify",
+    "@@ -1 +1 @@",
+    "-x",
+    "+y",
+    "",
+  ].join("\n");
+  assert.deepEqual(extractPatchPaths(outsideHunk), ["MetaComplexity/Pigeonhole.lean", "verify"]);
+  assert.throws(
+    () => validatePatch(outsideHunk, FROZEN, ["MetaComplexity/Pigeonhole.lean"]),
+    /frozen/
+  );
+
+  // Truncated hunk where oldRem already hit 0 (new-file hunk @@ -0,0 +1,2 @@):
+  // a `--- a/verify` line cannot be a `-` hunk line and must be parsed as a header!
+  const sneakyAfterNewFileHunk = [
+    "--- /dev/null",
+    "+++ b/MetaComplexity/Pigeonhole.lean",
+    "@@ -0,0 +1,2 @@",
+    "+line1",
+    "--- a/verify",
+    "+++ b/verify",
+    "@@ -1 +1 @@",
+    "-a",
+    "+b",
+    "",
+  ].join("\n");
+  assert.throws(
+    () => validatePatch(sneakyAfterNewFileHunk, FROZEN, ["MetaComplexity/Pigeonhole.lean"]),
+    /frozen/
+  );
 });
 
 test("globMatches handles *, ** and exact paths", () => {
-  assert.ok(globMatches("tests/**", "tests/a/b.rs"));
-  assert.ok(globMatches("tests/**", "tests/x.rs"));
-  assert.ok(globMatches("src/*.rs", "src/x.rs"));
-  assert.ok(!globMatches("src/*.rs", "src/a/x.rs"));
+  assert.ok(globMatches("MetaComplexity/**", "MetaComplexity/a/b.lean"));
+  assert.ok(globMatches("MetaComplexity/**", "MetaComplexity/Spec.lean"));
+  assert.ok(globMatches("MetaComplexity/*.lean", "MetaComplexity/Spec.lean"));
+  assert.ok(!globMatches("MetaComplexity/*.lean", "MetaComplexity/a/Spec.lean"));
   assert.ok(globMatches("verify", "verify"));
   assert.ok(!globMatches("verify", "verify2"));
 });
 
 test("validatePatch blocks frozen paths and files outside target_files", () => {
-  assert.throws(() => validatePatch(patchFor("src/spec.rs"), FROZEN, ["src/x.rs"]), /frozen/);
-  assert.throws(() => validatePatch(patchFor("tests/t.rs"), FROZEN, []), /frozen/);
-  assert.throws(() => validatePatch(patchFor("src/y.rs"), FROZEN, ["src/x.rs"]), /outside/);
-  assert.deepEqual(validatePatch(patchFor("src/x.rs"), FROZEN, ["src/x.rs"]), ["src/x.rs"]);
+  assert.throws(
+    () => validatePatch(patchFor("MetaComplexity/Spec.lean"), FROZEN, ["MetaComplexity/X.lean"]),
+    /frozen/
+  );
+  assert.throws(() => validatePatch(patchFor("verify"), FROZEN, []), /frozen/);
+  assert.throws(
+    () => validatePatch(patchFor("MetaComplexity/Y.lean"), FROZEN, ["MetaComplexity/X.lean"]),
+    /outside/
+  );
+  assert.deepEqual(
+    validatePatch(patchFor("MetaComplexity/X.lean"), FROZEN, ["MetaComplexity/X.lean"]),
+    ["MetaComplexity/X.lean"]
+  );
 });
 
 // ---------------------------------------------------------------- DAG
@@ -113,14 +231,14 @@ test("an active lease blocks other claimants but not after expiry", () => {
 test("applyVerdict requires a passing verdict on the pinned spec", () => {
   const tasks = [task("x")];
   const ok = { ok: true, score: 1, summary: "", spec_sha256: SPEC };
-  const p = patchFor("src/x.rs");
+  const p = patchFor("MetaComplexity/x.lean");
   assert.throws(
     () => applyVerdict("dag", "maximize", FROZEN, SPEC, tasks, "x", p, { ...ok, spec_sha256: "sha256:other" }),
     /spec hash mismatch/
   );
   assert.throws(
-    () => applyVerdict("dag", "maximize", FROZEN, SPEC, tasks, "x", p, { ...ok, ok: false }),
-    /verification failed/
+    () => applyVerdict("dag", "maximize", FROZEN, SPEC, tasks, "x", p, { ...ok, ok: false, summary: "git apply failed", spec_sha256: "" }),
+    /verification failed: git apply failed/
   );
   assert.throws(
     () => applyVerdict("dag", "maximize", FROZEN, SPEC, tasks, "x", patchFor("verify"), ok),
@@ -134,22 +252,22 @@ test("applyVerdict refuses blocked and already-verified DAG tasks, and reports u
   const ok = { ok: true, score: 1, summary: "", spec_sha256: SPEC };
   const tasks = [task("a"), task("b", {}, ["a"])];
   assert.throws(
-    () => applyVerdict("dag", "maximize", FROZEN, SPEC, tasks, "b", patchFor("src/b.rs"), ok),
+    () => applyVerdict("dag", "maximize", FROZEN, SPEC, tasks, "b", patchFor("MetaComplexity/b.lean"), ok),
     /blocked/
   );
-  const r = applyVerdict("dag", "maximize", FROZEN, SPEC, tasks, "a", patchFor("src/a.rs"), ok);
+  const r = applyVerdict("dag", "maximize", FROZEN, SPEC, tasks, "a", patchFor("MetaComplexity/a.lean"), ok);
   assert.deepEqual(r.unlocked_dependents, ["b"]);
   const done = [task("a", { status: "verified" })];
   assert.throws(
-    () => applyVerdict("dag", "maximize", FROZEN, SPEC, done, "a", patchFor("src/a.rs"), ok),
+    () => applyVerdict("dag", "maximize", FROZEN, SPEC, done, "a", patchFor("MetaComplexity/a.lean"), ok),
     /already verified/
   );
 });
 
-// ---------------------------------------------------------------- hill-climb
+// ---------------------------------------------------------------- hill-climb & demo
 
 test("hill-climb accepts only strict improvements in the score direction", () => {
-  const p = patchFor("src/x.rs");
+  const p = patchFor("MetaComplexity/x.lean");
   const tasks = [task("x", { best_score: 1000, status: "verified" })];
   const v = (score: number | null) => ({ ok: true, score, summary: "", spec_sha256: SPEC });
   assert.throws(() => applyVerdict("hillclimb", "minimize", FROZEN, SPEC, tasks, "x", p, v(1000)), /strictly/);
@@ -172,11 +290,20 @@ test("hill-climb points follow the log ratio, so farming tiny steps never pays",
   assert.ok(farmed <= computePoints(m, t, 1000, 150), `step-by-step farming earned ${farmed}`);
 });
 
+test("demo missions award 0 points in both hillclimb and dag modes", () => {
+  const demoHill = mission("hillclimb", 2, { demo: true });
+  const demoDag = mission("dag", 1, { demo: true });
+  assert.equal(computePoints(demoHill, task("x"), 1000, 150), 0);
+  assert.equal(computePoints(demoHill, task("x"), null, 150), 0);
+  assert.equal(computePoints(demoDag, task("a"), null, 1), 0);
+  assert.equal(computePoints(demoDag, task("b", {}, ["a"]), null, 1), 0);
+});
+
 test("DAG points depend on tier and dependencies", () => {
   assert.equal(computePoints(mission("dag", 1), task("a"), null, 1), 150);
   assert.equal(computePoints(mission("dag", 1), task("b", {}, ["a"]), null, 1), 250);
-  assert.equal(computePoints(mission("dag", 3), task("a"), null, 1), 100);
-  assert.equal(computePoints(mission("dag", 3), task("b", {}, ["a"]), null, 1), 150);
+  assert.equal(computePoints(mission("dag", 2), task("a"), null, 1), 100);
+  assert.equal(computePoints(mission("dag", 2), task("b", {}, ["a"]), null, 1), 150);
 });
 
 test("filesStateSha256 matches the verifier server's files_sha256", async () => {
@@ -191,16 +318,26 @@ test("filesStateSha256 matches the verifier server's files_sha256", async () => 
   );
 });
 
-test("renderMbox produces one git-am message per accepted patch", () => {
+test("renderMbox escapes From lines in body and diff and prevents bare --- separator in summary", () => {
   const mbox = renderMbox([
     {
-      seq: 1, mission_id: "m", task_id: "t", contributor: "alice", display_name: "Alice <x>",
-      summary: "ok\nFrom here", patch: "diff --git a/f b/f\n", created_at: 0,
+      seq: 1,
+      mission_id: "m",
+      task_id: "t",
+      contributor: "alice",
+      display_name: "Alice <x>",
+      summary: "ok\nFrom here\n---\n---   \nafter",
+      patch: "From preamble\ndiff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1 +1 @@\n-x\n+y\n",
+      created_at: 0,
     },
   ]);
   assert.match(mbox, /^From 0{39}1 Mon Sep 17 00:00:00 2001\n/);
   assert.match(mbox, /\nFrom: Alice x <alice@contributors\.sunstead\.org>\n/);
   assert.match(mbox, /\nSubject: \[PATCH\] m: verify t\n/);
   assert.match(mbox, /\n>From here\n/);
-  assert.match(mbox, /\n---\ndiff --git a\/f b\/f\n--\n/);
+  assert.match(mbox, /\n ---\n ---   \nafter\n/);
+  assert.match(mbox, /\n---\n>From preamble\ndiff --git a\/f b\/f\n/);
+  // Exactly one bare `---` separator line before the diff (plus `--- a/f` in the diff itself).
+  const bareDashes = mbox.split("\n").filter((l) => /^---[ \t]*$/.test(l));
+  assert.equal(bareDashes.length, 1);
 });

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Internal HTTP verifier server running inside each Cloudflare Container (`enableInternet = false`).
-Never exposed publicly; only reachable from SunsteadHub Durable Object via Container.fetch().
+Internal HTTP verifier server running inside the Cloudflare Lean 4 Container
+(`enableInternet = false`). Never exposed publicly; only reachable from
+SunsteadHub Durable Object via Container.fetch().
 
 Security properties:
 - The server itself never executes contributor code. It runs as root so that the
@@ -15,7 +16,8 @@ Security properties:
   a submission starts survives into the next one in this warm container.
 - Seed mission repos live under read-only `/missions` (owned by root, mode 0555/0444).
 - Every request stages into a freshly wiped `/work`, runs `git apply`, checks frozen_paths &
-  target_files, computes `spec_sha256`, and runs the frozen mission `./verify <task_id>`.
+  target_files, computes `spec_sha256`, captures a canonical `git diff`, and runs the
+  frozen mission `./verify <task_id>`.
 """
 import hashlib
 import http.server
@@ -35,6 +37,7 @@ from sunstead_sandbox import CHECKER_USER, RUNNER_USER, kill_all_processes  # no
 
 MISSIONS_ROOT = "/missions"
 WORK_DIR = "/work"
+MAX_PAYLOAD_BYTES = 16 * 1024 * 1024
 
 
 def segment_matches(pat: str, seg: str) -> bool:
@@ -111,6 +114,7 @@ def resolve_current_files(req: dict) -> dict:
     """Accepted files for this request: sent in full, or taken from the cache by hash."""
     mission_id = req["mission_id"]
     want = req.get("current_files_sha256")
+    cache_state = bool(req.get("cache_state", True))
     if "current_files" in req:
         files = req.get("current_files") or {}
         if not isinstance(files, dict) or not all(
@@ -120,12 +124,39 @@ def resolve_current_files(req: dict) -> dict:
         sha = files_sha256(files)
         if want and want != sha:
             raise ValueError("current_files_sha256 does not match current_files")
-        _STATE_CACHE[mission_id] = (sha, dict(files))
+        if cache_state:
+            _STATE_CACHE[mission_id] = (sha, dict(files))
         return files
     cached = _STATE_CACHE.get(mission_id)
     if want and cached and cached[0] == want:
         return dict(cached[1])
     raise NeedFiles()
+
+
+def parse_porcelain_z(raw: str) -> list:
+    """Parse `git status --porcelain -uall -z` output, returning all touched paths.
+
+    Handles untracked files inside new directories (`-uall`), unquoted paths
+    with spaces/special characters (`-z`), and renames/copies (where porcelain
+    v1 `-z` emits `XY DEST\\0SRC\\0`).
+    """
+    touched = []
+    entries = raw.split("\0")
+    i = 0
+    while i < len(entries):
+        entry = entries[i]
+        i += 1
+        if len(entry) < 4:
+            continue
+        xy = entry[:2]
+        path = entry[3:]
+        if path:
+            touched.append(path)
+        if "R" in xy or "C" in xy:
+            if i < len(entries) and entries[i]:
+                touched.append(entries[i])
+            i += 1
+    return list(dict.fromkeys(touched))
 
 
 def kill_sandbox_processes():
@@ -214,8 +245,15 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
             self.send_json(404, {"error": "not found"})
 
     def do_POST(self):
-        length = int(self.headers.get("Content-Length", "0"))
-        if length > 2 * 1024 * 1024:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            self.send_json(400, {"ok": False, "summary": "invalid Content-Length"})
+            return
+        if length < 0:
+            self.send_json(400, {"ok": False, "summary": "invalid Content-Length"})
+            return
+        if length > MAX_PAYLOAD_BYTES:
             self.send_json(413, {"ok": False, "summary": "payload too large"})
             return
         raw = self.rfile.read(length)
@@ -292,22 +330,19 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
                     "summary": f"git apply failed: {ap.stderr.strip()}",
                     "spec_sha256": "",
                     "updated_files": {},
+                    "normalized_patch": "",
                     "verify_ms": ms,
                 })
                 return
 
             st = subprocess.run(
-                ["git", "status", "--porcelain"],
+                ["git", "status", "--porcelain", "-uall", "-z"],
                 cwd=WORK_DIR,
                 capture_output=True,
                 text=True,
                 check=True,
             )
-            touched = [
-                line[3:].strip()
-                for line in st.stdout.splitlines()
-                if len(line) > 3 and line[3:].strip()
-            ]
+            touched = parse_porcelain_z(st.stdout)
             if not touched:
                 ms = int((time.monotonic() - started) * 1000)
                 self.send_json(200, {
@@ -316,6 +351,7 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
                     "summary": "patch modified no files",
                     "spec_sha256": "",
                     "updated_files": {},
+                    "normalized_patch": "",
                     "verify_ms": ms,
                 })
                 return
@@ -330,6 +366,7 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
                             "summary": f"post-apply frozen path violation: {rel}",
                             "spec_sha256": "",
                             "updated_files": {},
+                            "normalized_patch": "",
                             "verify_ms": ms,
                         })
                         return
@@ -341,11 +378,24 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
                         "summary": f"post-apply outside target_files: {rel}",
                         "spec_sha256": "",
                         "updated_files": {},
+                        "normalized_patch": "",
                         "verify_ms": ms,
                     })
                     return
 
             post_spec_sha256 = compute_spec_sha256(WORK_DIR, frozen_paths)
+
+            # Capture a canonical `git diff` (including newly created files) before
+            # stripping `.git` so `accepted_patches` always stores clean diffs for `git am`.
+            subprocess.run(["git", "add", "-A"], cwd=WORK_DIR, check=True, capture_output=True)
+            diff_proc = subprocess.run(
+                ["git", "diff", "--cached"],
+                cwd=WORK_DIR,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            normalized_patch = diff_proc.stdout
 
             # Remove .git before invoking mission verifier so ./verify operates on a clean tree.
             shutil.rmtree(os.path.join(WORK_DIR, ".git"), ignore_errors=True)
@@ -367,6 +417,7 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
                     "summary": f"verification timed out after {timeout_sec}s",
                     "spec_sha256": post_spec_sha256,
                     "updated_files": {},
+                    "normalized_patch": "",
                     "verify_ms": ms,
                 })
                 return
@@ -382,6 +433,7 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
                     "summary": f"verifier did not emit JSON verdict: {tail}",
                     "spec_sha256": post_spec_sha256,
                     "updated_files": {},
+                    "normalized_patch": "",
                     "verify_ms": ms,
                 })
                 return
@@ -401,20 +453,13 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
                 "summary": str(verdict.get("summary", "")),
                 "spec_sha256": post_spec_sha256,
                 "updated_files": updated_files,
+                "normalized_patch": normalized_patch if ok else "",
                 "verify_ms": ms,
             })
         except NeedFiles:
             self.send_json(409, {"need_files": True})
         except Exception as e:
-            ms = int((time.monotonic() - started) * 1000)
-            self.send_json(200, {
-                "ok": False,
-                "score": None,
-                "summary": f"verifier container error: {e}",
-                "spec_sha256": "",
-                "updated_files": {},
-                "verify_ms": ms,
-            })
+            self.send_json(500, {"error": f"verifier container error: {e}"})
 
 
 if __name__ == "__main__":

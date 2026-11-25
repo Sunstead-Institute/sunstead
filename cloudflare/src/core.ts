@@ -91,22 +91,63 @@ export function normalizeRelPath(raw: string): string {
   return parts.join("/");
 }
 
+const HUNK_HEADER_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
+
 export function extractPatchPaths(patch: string): string[] {
   const paths = new Set<string>();
+  let oldRem = 0;
+  let newRem = 0;
+
   for (const line of patch.split(/\r?\n/)) {
+    if (oldRem > 0 || newRem > 0) {
+      if (line.startsWith("\\ ")) {
+        continue;
+      }
+      if (line.startsWith(" ") && oldRem > 0 && newRem > 0) {
+        oldRem -= 1;
+        newRem -= 1;
+        continue;
+      }
+      if (line.startsWith("-") && oldRem > 0) {
+        oldRem -= 1;
+        continue;
+      }
+      if (line.startsWith("+") && newRem > 0) {
+        newRem -= 1;
+        continue;
+      }
+      if (line === "" && oldRem > 0 && newRem > 0) {
+        oldRem -= 1;
+        newRem -= 1;
+        continue;
+      }
+      // Line does not belong to the active hunk; return to header state and parse it below.
+      oldRem = 0;
+      newRem = 0;
+    }
+
     if (line.startsWith("GIT binary patch") || line.startsWith("Binary files ")) {
       throw new Error("binary patches are forbidden");
     }
     if (
       line.startsWith("new file mode 120") ||
+      line.startsWith("deleted file mode 120") ||
       line.startsWith("old mode 120") ||
       line.startsWith("new mode 120")
     ) {
       throw new Error("symlink mode changes (120000) are forbidden");
     }
 
+    const hunk = HUNK_HEADER_RE.exec(line);
+    if (hunk) {
+      oldRem = hunk[2] !== undefined ? Number(hunk[2]) : 1;
+      newRem = hunk[4] !== undefined ? Number(hunk[4]) : 1;
+      continue;
+    }
+
     if (line.startsWith("diff --git ")) {
-      const tokens = line.slice("diff --git ".length).trim().split(/\s+/);
+      const rest = line.slice("diff --git ".length).trim();
+      const tokens = rest.split(/\s+/);
       if (tokens.length >= 2) {
         paths.add(normalizeRelPath(tokens[0]));
         paths.add(normalizeRelPath(tokens[1]));
@@ -279,13 +320,13 @@ export function applyVerdict(
 
   validatePatch(patch, frozenPaths, task.def.target_files);
 
+  if (!verdict.ok) {
+    throw new Error(`verification failed: ${verdict.summary}`);
+  }
   if (verdict.spec_sha256 !== expectedSpecSha256) {
     throw new Error(
       `spec hash mismatch: expected '${expectedSpecSha256}', got '${verdict.spec_sha256}'`
     );
-  }
-  if (!verdict.ok) {
-    throw new Error(`verification failed: ${verdict.summary}`);
   }
 
   let newBestScore: number | null;
@@ -330,6 +371,7 @@ export function applyVerdict(
 /**
  * Points for an accepted submission.
  *
+ * Demo missions (`mission.demo === true`) earn 0 leaderboard points.
  * DAG tasks pay a flat amount by tier and depth. Hill-climb records pay
  * floor(250 * |ln(new / previous)|): the log ratio is additive, so splitting one
  * improvement into many tiny records never earns more than making it at once
@@ -342,6 +384,7 @@ export function computePoints(
   previousBest: number | null,
   newScore: number | null
 ): number {
+  if (mission.demo) return 0;
   const hasDeps = (task.def.depends_on?.length ?? 0) > 0;
   if (mission.mode === "hillclimb") {
     if (previousBest === null || newScore === null) return 100;
@@ -398,6 +441,10 @@ export interface AcceptedPatch {
   created_at: number;
 }
 
+function escapeMboxFromLine(line: string): string {
+  return /^From /.test(line) ? ">" + line : line;
+}
+
 export function renderMbox(patches: AcceptedPatch[]): string {
   const out: string[] = [];
   for (const p of patches) {
@@ -406,9 +453,18 @@ export function renderMbox(patches: AcceptedPatch[]): string {
     const summary = p.summary.replace(/\r/g, "");
     const body = summary
       .split("\n")
-      .map((l) => (/^From /.test(l) ? ">" + l : l))
+      .map((l) => {
+        const escaped = escapeMboxFromLine(l);
+        // Prevent summary lines from injecting a bare `---` patch separator for `git mailinfo`.
+        return /^---[ \t]*$/.test(escaped) ? " " + escaped : escaped;
+      })
       .join("\n");
-    const diff = p.patch.endsWith("\n") ? p.patch : p.patch + "\n";
+    const normalizedDiff = p.patch
+      .replace(/\r\n/g, "\n")
+      .split("\n")
+      .map(escapeMboxFromLine)
+      .join("\n");
+    const diff = normalizedDiff.endsWith("\n") ? normalizedDiff : normalizedDiff + "\n";
     out.push(
       `From ${String(p.seq).padStart(40, "0")} Mon Sep 17 00:00:00 2001\n` +
         `From: ${name} <${p.contributor}@contributors.sunstead.org>\n` +

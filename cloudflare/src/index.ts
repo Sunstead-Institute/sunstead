@@ -1,8 +1,8 @@
-import { Lean4Verifier, RustVerifier, VerusVerifier } from "./containers";
+import { Lean4Verifier } from "./containers";
 import { STATIC_ASSETS } from "./generated/static";
 import { SunsteadHub, type HubEnv } from "./hub_do";
 
-export { SunsteadHub, Lean4Verifier, RustVerifier, VerusVerifier };
+export { SunsteadHub, Lean4Verifier };
 
 const SECURITY_HEADERS: Record<string, string> = {
   "X-Content-Type-Options": "nosniff",

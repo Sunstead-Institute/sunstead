@@ -11,26 +11,6 @@ const lean4Container = defineContainer({
   maxInstances: 4,
 });
 
-const rustContainer = defineContainer({
-  name: "sunstead-verifier-rust",
-  image: {
-    dockerfile: "./containers/rust/Dockerfile",
-    buildContext: "..",
-  },
-  instanceType: "standard-1", // 1/2 vCPU, 4 GiB RAM, 8 GB disk
-  maxInstances: 4,
-});
-
-const verusContainer = defineContainer({
-  name: "sunstead-verifier-verus",
-  image: {
-    dockerfile: "./containers/verus/Dockerfile",
-    buildContext: "..",
-  },
-  instanceType: "standard-1", // 1/2 vCPU, 4 GiB RAM, 8 GB disk
-  maxInstances: 2,
-});
-
 const worker = defineWorker({
   name: "sunstead",
   compatibilityDate: "2026-11-24",
@@ -41,18 +21,19 @@ const worker = defineWorker({
   exports: {
     SunsteadHub: exports.durableObject({ storage: "sqlite" }),
     Lean4Verifier: exports.durableObject({ storage: "sqlite", container: lean4Container }),
-    RustVerifier: exports.durableObject({ storage: "sqlite", container: rustContainer }),
-    VerusVerifier: exports.durableObject({ storage: "sqlite", container: verusContainer }),
+    // Tombstones retiring the v0.2 Rust/Verus verifier DO namespaces on the
+    // first Lean-only v1 deploy. Safe to delete once `cf deploy` reports them
+    // as stale_tombstone (see docs/DEPLOYMENT.md).
+    RustVerifier: exports.durableObject({ state: "deleted" }),
+    VerusVerifier: exports.durableObject({ state: "deleted" }),
   },
   env: {
     HUB: bindings.durableObject({ worker: "sunstead", exportName: "SunsteadHub" }),
     LEAN4_VERIFIER: bindings.durableObject({ worker: "sunstead", exportName: "Lean4Verifier" }),
-    RUST_VERIFIER: bindings.durableObject({ worker: "sunstead", exportName: "RustVerifier" }),
-    VERUS_VERIFIER: bindings.durableObject({ worker: "sunstead", exportName: "VerusVerifier" }),
   },
 });
 
 export default defineConfig({
   worker,
-  containers: [lean4Container, rustContainer, verusContainer],
+  containers: [lean4Container],
 });

@@ -129,8 +129,12 @@ async function loadMissions() {
   $("stat-frontier").textContent = `${openFrontier}`;
   $("stat-missions").textContent = `${state.missions.length}`;
 
-  if (!state.activeMissionId && state.missions.length > 0) {
+  if (
+    state.missions.length > 0 &&
+    (!state.activeMissionId || !state.missions.some((m) => m.id === state.activeMissionId))
+  ) {
     state.activeMissionId = state.missions[0].id;
+    state.selectedTaskId = null;
   }
   renderMissionTabs();
   if (state.activeMissionId) {
@@ -145,10 +149,13 @@ function renderMissionTabs() {
       const pct = m.total_tasks > 0 ? Math.round((m.verified_tasks / m.total_tasks) * 100) : 0;
       const active = m.id === state.activeMissionId ? "active" : "";
       const modeLabel = m.mode === "hillclimb" ? "HILL-CLIMB" : "BLUEPRINT DAG";
+      const demoBadge = m.demo
+        ? `<span class="badge-demo" title="Demo track: awards 0 leaderboard points">DEMO</span>`
+        : "";
       return `
         <button class="mission-tab ${active}" data-id="${escapeHtml(m.id)}">
           <div class="tab-top">
-            <span class="badge-gold">Tier ${m.tier}</span>
+            <span style="display:inline-flex;align-items:center;gap:6px"><span class="badge-gold">Tier ${m.tier}</span>${demoBadge}</span>
             <span class="badge-teal">${modeLabel} · ${m.verified_tasks}/${m.total_tasks}</span>
           </div>
           <div class="tab-title">${escapeHtml(m.title)}</div>
@@ -179,6 +186,7 @@ async function loadMissionDetail(missionId) {
     manifest.mode === "hillclimb"
       ? `HILL-CLIMB (${manifest.score_direction})`
       : "COMPLETION DAG";
+  $("active-demo").classList.toggle("hidden", !manifest.demo);
   $("active-spec-hash").textContent = detail.mission.spec_sha256.slice(0, 23) + "…";
   $("active-spec-hash").title = `Frozen spec hash: ${detail.mission.spec_sha256}`;
   $("active-title").textContent = manifest.title;
@@ -493,15 +501,42 @@ function connectSse() {
     ind.textContent = "RECONNECTING";
   };
 
-  const handle = async (e) => {
+  let refreshTimer = null;
+  let refreshInFlight = false;
+  let refreshQueued = false;
+
+  const scheduleRefresh = () => {
+    if (refreshTimer) clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(async () => {
+      refreshTimer = null;
+      if (refreshInFlight) {
+        refreshQueued = true;
+        return;
+      }
+      refreshInFlight = true;
+      try {
+        await loadMissions();
+        const lb = await fetchJson("/api/leaderboard");
+        renderLeaderboard(lb.leaderboard || []);
+      } catch (err) {
+        console.error("SSE refresh error", err);
+      } finally {
+        refreshInFlight = false;
+        if (refreshQueued) {
+          refreshQueued = false;
+          scheduleRefresh();
+        }
+      }
+    }, 750);
+  };
+
+  const handle = (e) => {
     try {
       const ev = JSON.parse(e.data);
       state.events.unshift(ev);
       state.events = state.events.slice(0, 40);
       renderEvents();
-      await loadMissions();
-      const lb = await fetchJson("/api/leaderboard");
-      renderLeaderboard(lb.leaderboard || []);
+      scheduleRefresh();
     } catch (err) {
       console.error("SSE parse error", err);
     }

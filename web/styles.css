@@ -512,6 +512,21 @@ code, pre { font-family: var(--mono); }
   border: 1px solid rgba(42, 125, 127, 0.32);
 }
 
+.badge-demo {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 3px;
+  background: var(--crimson-soft);
+  color: var(--crimson);
+  border: 1px solid rgba(180, 67, 67, 0.35);
+}
+
+.hidden { display: none !important; }
+
 .hash-chip {
   font-size: 11px;
   color: var(--ink-muted);
