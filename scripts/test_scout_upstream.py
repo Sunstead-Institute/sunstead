@@ -83,6 +83,12 @@ class ScoutTests(unittest.TestCase):
         self.assertEqual(status, "excluded")
         self.assertTrue(any("upstreamed" in r.lower() for r in reasons), reasons)
 
+    def test_externally_verified_attribute_is_excluded(self):
+        src = "@[step, externally_verified]\ntheorem spec (n : Nat) : n = n := by\n  sorry\n"
+        rows = scout.analyze_file("Specs/Mul.lean", src)
+        self.assertEqual(rows[0][2], "excluded")
+        self.assertTrue(any("externally_verified" in r for r in rows[0][3]), rows[0][3])
+
     def test_test_paths_are_excluded(self):
         rows = scout.analyze_file("test/Foo.lean", "theorem t : True := by\n  sorry\n")
         self.assertEqual(rows[0][2], "excluded")
