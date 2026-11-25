@@ -68,9 +68,8 @@ Object namespaces once their classes and bindings have been removed from code.
 
 ## After deploy
 
-- `curl https://sunstead.org/join.txt` returns the Lean 4 onboarding guide.
-- `curl https://sunstead.org/api/missions` lists the 4 Lean 4 missions with the
-  expected spec hashes and `demo` flags.
+- `curl https://sunstead.org/join.txt` returns the Lean 4.36.0 + Mathlib onboarding guide.
+- `curl https://sunstead.org/api/missions` lists the 3 Lean 4 missions (`arklib-near-capacity-primes`, `pnt-analytic-foundations`, `onboarding-sandbox`) with pinned upstream provenance, spec hashes, and `demo` flags.
 - `curl https://sunstead.org/api/stats` returns the contributor funnel.
 - Watch the first real submission in the live feed.
 

@@ -1,0 +1,62 @@
+{
+  "repo": "AlexKontorovich/PrimeNumberTheoremAnd",
+  "commit": "e9906138410f8f76ca66b9bc252d0993f3ee348c",
+  "license": "Apache-2.0",
+  "checks": [
+    {
+      "local_file": "PntFoundations/Spec.lean",
+      "upstream_file": "PrimeNumberTheoremAnd/IwaniecKowalskiCh1.lean",
+      "verbatim_snippet": "abbrev tau : ArithmeticFunction ℕ := σ 0"
+    },
+    {
+      "local_file": "PntFoundations/Spec.lean",
+      "upstream_file": "PrimeNumberTheoremAnd/IwaniecKowalskiCh1.lean",
+      "verbatim_snippet": "noncomputable def sigmaR {R : Type*} [Semiring R] [HPow R R R] (s : R) : ArithmeticFunction R where\n  toFun := fun n ↦ ∑ d ∈ n.divisors, (d : R) ^ s\n  map_zero' := by simp"
+    },
+    {
+      "local_file": "PntFoundations/Spec.lean",
+      "upstream_file": "PrimeNumberTheoremAnd/IwaniecKowalskiCh1.lean",
+      "verbatim_snippet": "def liouville : ArithmeticFunction ℤ :=\n  toArithmeticFunction (fun n => (-1 : ℤ) ^ Ω n)"
+    },
+    {
+      "local_file": "PntFoundations/Spec.lean",
+      "upstream_file": "PrimeNumberTheoremAnd/IwaniecKowalskiCh1.lean",
+      "verbatim_snippet": "def IsCompletelyMultiplicative (f : ArithmeticFunction ℝ) : Prop :=\n  f 1 = 1 ∧ ∀ a b, f (a * b) = f a * f b"
+    },
+    {
+      "local_file": "PntFoundations/Spec.lean",
+      "upstream_file": "PrimeNumberTheoremAnd/Wiener.lean",
+      "verbatim_snippet": "noncomputable def AbsolutelyContinuous (f : ℝ → ℂ) : Prop := (∀ᵐ x, DifferentiableAt ℝ f x) ∧\n  ∀ a b : ℝ, f b - f a = ∫ t in a..b, deriv f t"
+    },
+    {
+      "local_file": "PntFoundations/LiouvilleMult.lean",
+      "upstream_file": "PrimeNumberTheoremAnd/IwaniecKowalskiCh1.lean",
+      "verbatim_snippet": "IsCompletelyMultiplicative (liouville : ArithmeticFunction ℝ)"
+    },
+    {
+      "local_file": "PntFoundations/LiouvilleLSeries.lean",
+      "upstream_file": "PrimeNumberTheoremAnd/IwaniecKowalskiCh1.lean",
+      "verbatim_snippet": "lemma LSeries_liouville_eq {s : ℂ} (hs : 1 < s.re) :\n    LSeries ↗liouville s = riemannZeta (2 * s) / riemannZeta s :="
+    },
+    {
+      "local_file": "PntFoundations/RamanujanIdentity.lean",
+      "upstream_file": "PrimeNumberTheoremAnd/IwaniecKowalskiCh1.lean",
+      "verbatim_snippet": "theorem zeta_mul_zeta_mul_zeta_mul_zeta_eq (α β s : ℂ) (h1 : 1 < s.re) (h2 : 1 < (s - α).re)\n    (h3 : 1 < (s - β).re) (h4 : 1 < (s - α - β).re) :\n    riemannZeta s * riemannZeta (s - α) * riemannZeta (s - β) * riemannZeta (s - α - β) =\n      riemannZeta (2 * s - α - β) *\n      LSeries (fun n ↦ σᴿ α n * σᴿ β n) s :="
+    },
+    {
+      "local_file": "PntFoundations/ZetaCubeAlt.lean",
+      "upstream_file": "PrimeNumberTheoremAnd/IwaniecKowalskiCh1.lean",
+      "verbatim_snippet": "lemma zeta_pow_three_eq_alt (s : ℂ) (hs : 1 < s.re) :\n    riemannZeta s ^ 3 =\n    LSeries (fun n ↦\n      ∑ dm ∈ n.divisors ×ˢ n.divisors with dm.1 ^ 2 * dm.2 = n, τ (dm.2 ^ 2)) s :="
+    },
+    {
+      "local_file": "PntFoundations/WienerDecay2.lean",
+      "upstream_file": "PrimeNumberTheoremAnd/Wiener.lean",
+      "verbatim_snippet": "theorem prelim_decay_2 (ψ : ℝ → ℂ) (hψ : Integrable ψ) (hvar : BoundedVariationOn ψ Set.univ)\n    (u : ℝ) (hu : u ≠ 0) :\n    ‖𝓕 (ψ : ℝ → ℂ) u‖ ≤ (eVariationOn ψ Set.univ).toReal / (2 * π * ‖u‖) :="
+    },
+    {
+      "local_file": "PntFoundations/WienerDecay3.lean",
+      "upstream_file": "PrimeNumberTheoremAnd/Wiener.lean",
+      "verbatim_snippet": "theorem prelim_decay_3 (ψ : ℝ → ℂ) (hψ : Integrable ψ)\n    (habscont : AbsolutelyContinuous ψ)\n    (hvar : BoundedVariationOn (deriv ψ) Set.univ) (u : ℝ) (hu : u ≠ 0) :\n    ‖𝓕 (ψ : ℝ → ℂ) u‖ ≤ (eVariationOn (deriv ψ) Set.univ).toReal / (2 * π * ‖u‖) ^ 2 :="
+    }
+  ]
+}

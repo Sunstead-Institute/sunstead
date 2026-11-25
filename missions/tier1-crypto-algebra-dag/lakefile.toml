@@ -1,5 +1,0 @@
-name = "crypto_algebra"
-version = "0.1.0"
-
-[[lean_lib]]
-name = "CryptoAlgebra"

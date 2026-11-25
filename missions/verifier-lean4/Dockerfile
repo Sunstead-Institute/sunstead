@@ -1,5 +1,5 @@
-# Local Sunstead Lean 4 verifier image. Build context: the `missions/` directory
-# (see scripts/build-verifiers.sh).
+# Local Sunstead Lean 4.36.0 + Mathlib verifier image.
+# Build context: the `missions/` directory (see scripts/build-verifiers.sh).
 FROM debian:bookworm-slim@sha256:e67eeead736ff7bbe258ef088bff683635c561b1fcfefad0806c1df4ab49ce0e
 
 RUN apt-get update \
@@ -9,13 +9,26 @@ RUN apt-get update \
 ENV ELAN_HOME=/opt/elan
 ENV PATH="/opt/elan/bin:${PATH}"
 
-# elan installer pinned to a release tag; the Lean toolchain is pinned by version.
+# elan installer pinned to a release tag; Lean toolchain pinned to v4.36.0.
 RUN curl -sSf https://raw.githubusercontent.com/leanprover/elan/v4.0.0/elan-init.sh \
-    | sh -s -- -y --default-toolchain leanprover/lean4:v4.14.0 --no-modify-path \
-    && elan toolchain install leanprover/lean4:v4.14.0 \
+    | sh -s -- -y --default-toolchain leanprover/lean4:v4.36.0 --no-modify-path \
+    && elan toolchain install leanprover/lean4:v4.36.0 \
     && lean --version \
     && lake --version \
     && chmod -R a-w,a+rX /opt/elan
+
+# Pre-fetch Mathlib v4.36.0 oleans read-only at /opt/mathlib for offline verification.
+RUN mkdir -p /opt/mathlib \
+    && cd /opt/mathlib \
+    && printf 'leanprover/lean4:v4.36.0\n' > lean-toolchain \
+    && printf 'name = "SunsteadMathlib"\nversion = "0.1.0"\n\n[[require]]\nname = "mathlib"\ngit = "https://github.com/leanprover-community/mathlib4.git"\nrev = "v4.36.0"\n' > lakefile.toml \
+    && lake update mathlib \
+    && rm -rf /root/.cache /opt/mathlib/.lake/packages/*/.git \
+    && find /opt/mathlib/.lake/packages -type f \( \
+         -name "*.c" -o -name "*.c.o" -o -name "*.c.o.export" -o -name "*.c.o.noexport" \
+         -o -name "*.ilean" -o -name "*.ilean.hash" \
+       \) -delete \
+    && chmod -R a-w,a+rX /opt/mathlib
 
 # Trusted harness + kernel-replay checker, read-only to everyone but root.
 COPY verifier-common/sunstead_sandbox.py verifier-common/SunsteadCheck.lean /opt/sunstead/

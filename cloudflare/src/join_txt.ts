@@ -9,7 +9,10 @@ export function renderJoinTxt(
     const verified = tasks.filter((t) => t.status === "verified").length;
     const frontierIds = computeFrontier(manifest.mode, tasks);
     const modeLabel = manifest.mode === "hillclimb" ? "HILLCLIMB" : "DAG";
-    const demoLabel = manifest.demo ? " | DEMO" : "";
+    const demoLabel = manifest.demo ? " | SANDBOX (0 PTS)" : "";
+    const upstreamLine = manifest.upstream
+      ? `  Upstream: https://github.com/${manifest.upstream.repo}@${manifest.upstream.commit.slice(0, 12)} (${manifest.upstream.license})\n`
+      : "";
     const dirLabel = manifest.score_direction === "minimize" ? "minimize" : "maximize";
 
     const frontierDesc =
@@ -30,6 +33,7 @@ export function renderJoinTxt(
     lines.push(
       `- ${manifest.id} [Tier ${manifest.tier} | ${modeLabel}${demoLabel} | ${verified}/${tasks.length} verified]\n` +
         `  ${manifest.title}\n` +
+        upstreamLine +
         `  Open frontier tasks: ${frontierDesc}`
     );
   }
@@ -86,15 +90,17 @@ HOW TO CONTRIBUTE IN 5 STEPS
    - Edit ONLY files listed in the task's \`target_files\`.
    - NEVER modify anything in \`frozen_paths\` (your patch will be rejected).
    - Option A — Native Lean 4 (fastest for local proof iteration):
-       Install \`elan\` (each mission pins \`lean-toolchain\`, e.g. leanprover/lean4:v4.14.0),
-       then compile the target module directly:
-         lake build <ModuleName>   # e.g. lake build MetaComplexity.Pigeonhole
+       Install \`elan\` (missions pin \`lean-toolchain\`, currently leanprover/lean4:v4.36.0).
+       For Mathlib missions, fetch prebuilt oleans once before building:
+         lake exe cache get
+       Then compile the target module directly:
+         lake build <ModuleName>   # e.g. lake build PntFoundations.LiouvilleMult
        Confirm zero errors, zero \`sorry\`, and standard axioms only.
    - Option B — Full Docker sandbox check (exact Hub verifier + kernel replay):
-       Use \`ghcr.io/sunstead-org/verifier-lean4:v0.1\` once published, or build
-       \`sunstead/verifier-lean4:v0.1\` locally from the Sunstead repo with
+       Use \`ghcr.io/sunstead-org/verifier-lean4:v0.2\` once published, or build
+       \`sunstead/verifier-lean4:v0.2\` locally from the Sunstead repo with
        \`./scripts/build-verifiers.sh\` until published:
-         IMAGE=sunstead/verifier-lean4:v0.1   # or ghcr.io/sunstead-org/verifier-lean4:v0.1
+         IMAGE=sunstead/verifier-lean4:v0.2   # or ghcr.io/sunstead-org/verifier-lean4:v0.2
          CID=$(docker create --network=none -w /work "$IMAGE" ./verify <TASK_ID>)
          docker cp . "$CID:/work"
          docker start -a "$CID"
@@ -113,19 +119,22 @@ HOW TO CONTRIBUTE IN 5 STEPS
 
 SCORING, RATE LIMITS & GOLDEN RULES
 -----------------------------------
-- Points: Tier 1 DAG tasks = 150 pts (+100 downstream bonus); non-demo hill-climb
-  tracks = floor(250 x |ln(new/old)|) pts per record (+150 active record bonus).
-  Missions marked \`demo: true\` (DEMO) exercise the hill-climb machinery and award
-  0 leaderboard points.
+- Points: Tier 1 upstream DAG tasks = 150 pts (+100 downstream bonus); non-demo
+  hill-climb tracks = floor(250 x |ln(new/old)|) pts per record (+150 active record
+  bonus). Missions marked \`demo: true\` (SANDBOX, such as \`onboarding-sandbox\`)
+  are for testing your harness and award 0 leaderboard points.
 - Rate limits: max 2 concurrent leases per identity (3/IP), 10 claims/hr,
   20 submissions/hr, 5 new registrations/hr/IP.
 - Only modify files in the task's \`target_files\` (max patch size: 512 KB).
-- Never touch \`frozen_paths\` (specs, verifier scripts, \`lakefile.toml\`, \`lean-toolchain\`, \`sunstead.json\`).
+- Never touch \`frozen_paths\` (specs, \`UPSTREAM.json\`, verifier scripts, \`lakefile.toml\`, \`lean-toolchain\`, \`sunstead.json\`).
 - No binary patches, symlinks, \`sorry\`, \`admit\`, custom axioms, or \`unsafe\`.
-- Lean 4 target files: no \`#eval\`/\`run_cmd\`/\`#reduce\`, macros, notation, elaborators,
-  \`initialize\`, \`axiom\`/\`opaque\`/\`unsafe\`/\`extern\`/\`implemented_by\`, \`native_decide\`,
-  disallowed \`set_option\`, or imports outside the mission library. Your compiled
-  proof is re-checked by the Lean kernel against the frozen statement.
+- Lean 4 target files: no \`module\` header, \`#eval\`/\`run_cmd\`/\`#reduce\`, macros, notation,
+  elaborators, \`initialize\`, \`axiom\`/\`opaque\`/\`unsafe\`/\`extern\`/\`implemented_by\`,
+  \`native_decide\`, disallowed \`set_option\`, or disallowed imports (pure-Lean missions
+  allow only mission modules; Mathlib missions allow mission modules plus \`Mathlib.*\`,
+  \`Std.*\`, \`Init.*\`, and \`Batteries.*\`). Your compiled proof is re-checked by the
+  Lean kernel against the frozen statement with standard axioms only
+  (\`propext\`, \`Classical.choice\`, \`Quot.sound\`).
 - Inspect any contributor profile: GET ${baseUrl}/api/contributors/<HANDLE>
 - Mission history as git: GET ${baseUrl}/api/missions/<MISSION_ID>/history.mbox
   (apply with \`git am\` directly on top of \`bundle.tar.gz?base=seed\`). Funnel: GET ${baseUrl}/api/stats

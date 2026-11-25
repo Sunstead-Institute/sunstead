@@ -1,14 +1,18 @@
 /-
-Sunstead trusted Lean checker. Installed read-only at /opt/sunstead/ and run with
-`lean --run` as the `sunstead-checker` user, after every contributor process is dead.
+Sunstead trusted Lean checker (Lean 4.36.0 + optional Mathlib). Installed read-only
+at /opt/sunstead/ and run with `lean --run` as the `sunstead-checker` user, after
+every contributor process is dead.
 
 It never elaborates contributor source. It:
 1. Loads the frozen modules (`<Lib>.Spec`, `<Lib>.SunsteadStatements`) from a
-   trusted build directory, plus core (`Init`, ...) from the toolchain.
+   trusted build directory, plus core (`Init`, ...) from the toolchain and any
+   read-only prebuilt libraries (e.g. Mathlib at /opt/mathlib) listed in
+   `trusted-lib=p1:p2:...`.
 2. Reads the contributor's compiled `.olean` files for the target module and
-   every non-frozen `<Lib>.*` module it imports, and re-checks every constant in
-   them with the Lean kernel (`Environment.replay`). Nothing in those files runs:
-   no `initialize`, no elaborators, no `#eval`.
+   every non-frozen `<Lib>.*` module it imports, rejects Lean 4.36 `module`
+   outputs (`.olean.private` / `mod.isModule`), and re-checks every constant in
+   them with the Lean kernel (`Kernel.Environment.replay`). Nothing in those
+   files runs: no `initialize`, no elaborators, no `#eval`.
 3. Asks the kernel to accept `theorem _sunstead_check : <frozen statement> := <target>`,
    so the target must prove exactly the frozen statement (definitional equality).
 4. Collects the axioms `_sunstead_check` depends on, and (for hill-climb tasks)
@@ -24,7 +28,7 @@ import Std.Data.HashSet
 open Lean
 
 structure Cfg where
-  trustedLib : System.FilePath := ""
+  trustedLibs : List System.FilePath := []
   untrustedLib : System.FilePath := ""
   libRoot : Name := .anonymous
   frozen : List Name := []
@@ -43,7 +47,9 @@ partial def parseArgs : List String → Cfg → Except String Cfg
     | k :: vs =>
       let v := "=".intercalate vs
       match k with
-      | "trusted-lib" => parseArgs rest { c with trustedLib := v }
+      | "trusted-lib" =>
+        let paths := (v.splitOn ":").filter (!·.isEmpty) |>.map System.FilePath.mk
+        parseArgs rest { c with trustedLibs := c.trustedLibs ++ paths }
       | "untrusted-lib" => parseArgs rest { c with untrustedLib := v }
       | "lib-root" =>
         parseArgs rest { c with libRoot := v.toName, statementsModule := (v ++ ".SunsteadStatements").toName }
@@ -71,7 +77,12 @@ partial def visit (c : Cfg) (acc : IO.Ref VisitAcc) (m : Name) : IO Unit := do
     let path := modToFilePath c.untrustedLib m "olean"
     unless (← path.pathExists) do
       throw <| IO.userError s!"missing build output for {m}"
+    let privPath : System.FilePath := path.toString ++ ".private"
+    if (← privPath.pathExists) then
+      throw <| IO.userError s!"module-system `.olean.private` output is not allowed for {m}"
     let (mod, _region) ← readModuleData path
+    if mod.isModule then
+      throw <| IO.userError s!"Lean 4 `module` files are not allowed for {m}"
     for imp in mod.imports do
       visit c acc imp.module
     let a ← acc.get
@@ -84,17 +95,20 @@ partial def visit (c : Cfg) (acc : IO.Ref VisitAcc) (m : Name) : IO Unit := do
   else
     acc.modify fun a => { a with trusted := a.trusted.push { module := m } }
 
-def allowedAxioms : List Name := [``propext, ``Classical.choice, ``Quot.sound]
-
 def checkM (c : Cfg) : CoreM Json := do
   let env ← getEnv
   let some tci := env.find? c.targetConst
     | throwError "target constant {c.targetConst} not found"
-  unless tci.levelParams.isEmpty do
-    throwError "target constant must not be universe polymorphic"
-  let mut stmt := mkConst c.statement
+  let some sci := env.find? c.statement
+    | throwError "frozen statement {c.statement} not found"
+  unless tci.levelParams.length == sci.levelParams.length do
+    throwError "universe parameter count mismatch: got {tci.levelParams.length}, expected {sci.levelParams.length}"
+  let lvls := sci.levelParams.map Level.param
+  let mut stmt := mkConst c.statement lvls
   let mut fields : List (String × Json) := []
   if let some k := c.scoreConst then
+    unless sci.levelParams.isEmpty do
+      throwError "hill-climb statement must not be universe polymorphic"
     let some kci := env.find? k | throwError "score constant {k} not found"
     unless kci.type == mkConst ``Nat do
       throwError "score constant {k} must have type Nat"
@@ -110,7 +124,7 @@ def checkM (c : Cfg) : CoreM Json := do
     fields := fields ++ [("score", toJson n)]
   let checkName := `_sunstead_check
   addDecl <| Declaration.thmDecl
-    { name := checkName, levelParams := [], type := stmt, value := mkConst c.targetConst, all := [checkName] }
+    { name := checkName, levelParams := sci.levelParams, type := stmt, value := mkConst c.targetConst lvls, all := [checkName] }
   let axs ← collectAxioms checkName
   return Json.mkObj ([("ok", Json.bool true), ("axioms", toJson (axs.map toString))] ++ fields)
 
@@ -118,7 +132,7 @@ def run (args : List String) : IO Json := do
   let c ← match parseArgs args {} with
     | .ok c => pure c
     | .error e => throw <| IO.userError e
-  initSearchPath (← findSysroot) [c.trustedLib]
+  initSearchPath (← findSysroot) c.trustedLibs
   let acc ← IO.mkRef ({} : VisitAcc)
   visit c acc c.targetModule
   let a ← acc.get
@@ -130,7 +144,8 @@ def run (args : List String) : IO Json := do
   for (n, _) in a.consts do
     if env.contains n then
       throw <| IO.userError s!"contributor module redefines trusted constant {n}"
-  let env ← env.replay a.consts
+  let kenv ← Kernel.Environment.replay a.consts env.toKernelEnv
+  let env := Environment.ofKernelEnv kenv
   let ctx : Core.Context := { fileName := "<sunstead-check>", fileMap := default }
   let (j, _) ← (checkM c).toIO ctx { env := env }
   return j

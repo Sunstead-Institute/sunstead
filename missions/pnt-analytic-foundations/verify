@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""Frozen verifier for `pnt-analytic-foundations`.
+
+Uses the shared trusted harness baked into `/opt/sunstead/sunstead_sandbox.py`
+with Lean 4.36.0 + read-only Mathlib v4.36.0.
+"""
+import sys
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify  # noqa: E402
+
+LIB_ROOT = "PntFoundations"
+FROZEN_FILES = [
+    "PntFoundations/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+]
+
+STATEMENT_PREAMBLE = """
+open ArithmeticFunction hiding log
+open Finset Nat Real MeasureTheory FourierTransform PntFoundations
+open scoped zeta sigma ArithmeticFunction.Omega LSeries.notation PntFoundations
+"""
+
+TASKS = {
+    "is_completely_multiplicative_liouville": {
+        "module": "PntFoundations.LiouvilleMult",
+        "theorem": "PntFoundations.isCompletelyMultiplicative_liouville",
+        "statement": """
+def is_completely_multiplicative_liouville : Prop :=
+    PntFoundations.IsCompletelyMultiplicative (PntFoundations.liouville : ArithmeticFunction ℝ)
+""",
+    },
+    "lseries_liouville_eq": {
+        "module": "PntFoundations.LiouvilleLSeries",
+        "theorem": "PntFoundations.LSeries_liouville_eq",
+        "statement": """
+def lseries_liouville_eq : Prop :=
+    ∀ {s : ℂ}, 1 < s.re →
+      LSeries ↗PntFoundations.liouville s = riemannZeta (2 * s) / riemannZeta s
+""",
+    },
+    "ramanujan_four_zeta_identity": {
+        "module": "PntFoundations.RamanujanIdentity",
+        "theorem": "PntFoundations.zeta_mul_zeta_mul_zeta_mul_zeta_eq",
+        "statement": """
+def ramanujan_four_zeta_identity : Prop :=
+    ∀ (α β s : ℂ), 1 < s.re → 1 < (s - α).re → 1 < (s - β).re → 1 < (s - α - β).re →
+      riemannZeta s * riemannZeta (s - α) * riemannZeta (s - β) * riemannZeta (s - α - β) =
+        riemannZeta (2 * s - α - β) * LSeries (fun n ↦ σᴿ α n * σᴿ β n) s
+""",
+    },
+    "zeta_pow_three_alt": {
+        "module": "PntFoundations.ZetaCubeAlt",
+        "theorem": "PntFoundations.zeta_pow_three_eq_alt",
+        "statement": """
+def zeta_pow_three_alt : Prop :=
+    ∀ (s : ℂ), 1 < s.re →
+      riemannZeta s ^ 3 =
+        LSeries (fun n ↦
+          ∑ dm ∈ n.divisors ×ˢ n.divisors with dm.1 ^ 2 * dm.2 = n, τ (dm.2 ^ 2)) s
+""",
+    },
+    "wiener_prelim_decay_2": {
+        "module": "PntFoundations.WienerDecay2",
+        "theorem": "PntFoundations.prelim_decay_2",
+        "statement": """
+def wiener_prelim_decay_2 : Prop :=
+    ∀ (ψ : ℝ → ℂ), Integrable ψ → BoundedVariationOn ψ Set.univ → ∀ (u : ℝ), u ≠ 0 →
+      ‖𝓕 (ψ : ℝ → ℂ) u‖ ≤ (eVariationOn ψ Set.univ).toReal / (2 * π * ‖u‖)
+""",
+    },
+    "wiener_prelim_decay_3": {
+        "module": "PntFoundations.WienerDecay3",
+        "theorem": "PntFoundations.prelim_decay_3",
+        "statement": """
+def wiener_prelim_decay_3 : Prop :=
+    ∀ (ψ : ℝ → ℂ), Integrable ψ → PntFoundations.AbsolutelyContinuous ψ →
+      BoundedVariationOn (deriv ψ) Set.univ → ∀ (u : ℝ), u ≠ 0 →
+      ‖𝓕 (ψ : ℝ → ℂ) u‖ ≤ (eVariationOn (deriv ψ) Set.univ).toReal / (2 * π * ‖u‖) ^ 2
+""",
+    },
+}
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>")
+    lean_verify(
+        sys.argv[1],
+        lib_root=LIB_ROOT,
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        uses_mathlib=True,
+        statement_preamble=STATEMENT_PREAMBLE,
+        timeout_sec=170,
+    )

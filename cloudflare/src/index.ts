@@ -32,7 +32,9 @@ export default {
       return new Response(request.method === "HEAD" ? null : asset.body, {
         headers: {
           "Content-Type": asset.contentType,
-          "Cache-Control": path === "/" ? "public, max-age=60" : "public, max-age=300",
+          "Cache-Control": asset.contentType.startsWith("text/html")
+            ? "public, max-age=60"
+            : "public, max-age=300",
           ...SECURITY_HEADERS,
         },
       });

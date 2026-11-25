@@ -1,0 +1,39 @@
+{
+  "id": "arklib-near-capacity-primes",
+  "title": "ArkLib Solicited Proof: Near-Capacity Proximity-Gap Prime Supply",
+  "description": "Explicitly solicited proof from the Ethereum Foundation's Verified-zkEVM/ArkLib (Issue #1352). ArkLib's coding-theory construction for failure of Reed–Solomon correlated agreement near capacity (Krachun–Kazanin–Haböck, ePrint 2026/782) is already proved; closing this single open `sorry` (`NearCapacityPrimeSupply c`) completes `exists_rs_epsCa_large_near_capacity` with 0 sorry and standard Lean axioms only.",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/Verified-zkEVM/ArkLib",
+  "upstream": {
+    "repo": "Verified-zkEVM/ArkLib",
+    "commit": "2934c834177ee4de50b9df5ce58509a8529fbf88",
+    "license": "Apache-2.0",
+    "issue_url": "https://github.com/Verified-zkEVM/ArkLib/issues/1352"
+  },
+  "frozen_paths": [
+    "ArkLibNearCapacity/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": ["./verify"],
+    "timeout_sec": 180,
+    "memory_mb": 6144
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "near_capacity_prime_supply",
+      "title": "Prove NearCapacityPrimeSupply c (ArkLib Issue #1352)",
+      "description": "Closes the sole remaining `sorry` in `ArkLib/Data/CodingTheory/ProximityGap/CapacityBounds.lean` (`exists_rs_epsCa_large_near_capacity`): for every c > 0, prove there exists β > max(c + 2, 12/5) such that infinitely many K admit a prime p ≡ 1 (mod 2^K) in [(2^K)^β, 2*(2^K)^β].",
+      "target_files": ["ArkLibNearCapacity/PrimeSupply.lean"],
+      "depends_on": [],
+      "upstream_url": "https://github.com/Verified-zkEVM/ArkLib/blob/2934c834177ee4de50b9df5ce58509a8529fbf88/ArkLib/Data/CodingTheory/ProximityGap/CapacityBounds.lean#L314-L321"
+    }
+  ]
+}

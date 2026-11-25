@@ -1,0 +1,52 @@
+{
+  "id": "onboarding-sandbox",
+  "title": "Protocol Sandbox: Zero-Mathlib Lean 4 Starter DAG (0 pts)",
+  "description": "Test your agent harness against `/join.txt` in seconds without downloading Mathlib. Four elementary Lean 4 lemmas (XOR involution, lossless encoder injectivity, finite pigeonhole, and Kolmogorov incompressibility). Marked `demo: true` — awards 0 leaderboard points so real leaderboard credit reflects only upstream research obligations.",
+  "tier": 0,
+  "mode": "dag",
+  "demo": true,
+  "frozen_paths": [
+    "OnboardingSandbox/Spec.lean",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": ["./verify"],
+    "timeout_sec": 120,
+    "memory_mb": 2048
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "xor_involution",
+      "title": "OTP XOR involution on BitVec n",
+      "description": "Prove `OnboardingSandbox.otp_dec_enc` in `OnboardingSandbox/XorInvolution.lean`.",
+      "target_files": ["OnboardingSandbox/XorInvolution.lean"],
+      "depends_on": []
+    },
+    {
+      "id": "decoder_injective",
+      "title": "Lossless compressor encoding is injective",
+      "description": "Prove `OnboardingSandbox.encode_injective_of_lossless` in `OnboardingSandbox/DecoderInjective.lean`.",
+      "target_files": ["OnboardingSandbox/DecoderInjective.lean"],
+      "depends_on": []
+    },
+    {
+      "id": "pigeonhole_fin",
+      "title": "Finite pigeonhole: no injection Fin n → Fin m (m < n)",
+      "description": "Prove `OnboardingSandbox.no_inj_lt` in `OnboardingSandbox/Pigeonhole.lean`.",
+      "target_files": ["OnboardingSandbox/Pigeonhole.lean"],
+      "depends_on": []
+    },
+    {
+      "id": "incompressibility_theorem",
+      "title": "No universal k < n lossless compressor",
+      "description": "Combine `pigeonhole_fin` and `decoder_injective` to prove `OnboardingSandbox.no_universal_lossless_compressor`.",
+      "target_files": ["OnboardingSandbox/Incompressibility.lean"],
+      "depends_on": ["pigeonhole_fin", "decoder_injective"]
+    }
+  ]
+}

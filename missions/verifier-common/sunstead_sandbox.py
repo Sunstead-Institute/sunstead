@@ -9,17 +9,18 @@ Trust model
 * The orchestrating `verify` process runs as root inside the container (with
   only CAP_SETUID/CAP_SETGID in the local Docker runner). It never executes
   contributor code itself.
-* Contributor-controlled code (``lake build`` of a target file) only ever runs
-  as the unprivileged ``sunstead-runner`` user, in a scratch directory that
-  user owns, with rlimits and a minimal environment. Every ``sunstead-runner``
-  process is killed before and after each untrusted step, so nothing it starts
-  can outlive its step.
-* Trusted checks (building frozen spec modules, kernel-replaying the
-  contributor's Lean output, collecting axioms, reading the score) run as a
-  third user, ``sunstead-checker``, only after every runner process is dead.
-  The verdict is computed from the checker's output, never from text the
-  contributor's code printed.
+* Contributor-controlled code (compiling a target `.lean` file and its internal
+  mission dependencies via `lean`) only ever runs as the unprivileged
+  ``sunstead-runner`` user, in a scratch directory that user owns, with rlimits
+  and a minimal environment. Every ``sunstead-runner`` process is killed before
+  and after each untrusted step, so nothing it starts can outlive its step.
+* Trusted checks (building frozen spec + frozen statements modules, kernel-
+  replaying the contributor's Lean `.olean` output, collecting axioms, reading
+  the score) run as a third user, ``sunstead-checker``, only after every runner
+  process is dead. The verdict is computed from the checker's output, never
+  from text the contributor's code printed.
 """
+import glob
 import json
 import os
 import pwd
@@ -35,6 +36,7 @@ RUNNER_USER = "sunstead-runner"
 CHECKER_USER = "sunstead-checker"
 SUNSTEAD_HOME = os.path.dirname(os.path.abspath(__file__))
 LEAN_CHECKER = os.path.join(SUNSTEAD_HOME, "SunsteadCheck.lean")
+MATHLIB_CACHE_DIR = os.environ.get("SUNSTEAD_MATHLIB_DIR", "/opt/mathlib")
 ALLOWED_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
 
 # Lean toolchain location baked into the image.
@@ -106,14 +108,15 @@ def run_as(user, argv, cwd, timeout, env_extra=None, input_text=None,
     output; callers must still call kill_all_processes(user) afterwards.
     """
     uid, gid = _ids(user)
-    home = env_extra.pop("HOME") if env_extra and "HOME" in env_extra else cwd
+    env_copy = dict(env_extra) if env_extra else None
+    home = env_copy.pop("HOME") if env_copy and "HOME" in env_copy else cwd
     # Output goes to root-owned temp files, not pipes: a background process
     # left behind by contributor code must not be able to hold the step open.
     with tempfile.TemporaryFile("w+") as out, tempfile.TemporaryFile("w+") as err:
         proc = subprocess.Popen(
             argv,
             cwd=cwd,
-            env=_clean_env(home, env_extra),
+            env=_clean_env(home, env_copy),
             user=uid,
             group=gid,
             extra_groups=[],
@@ -280,6 +283,7 @@ def require_root():
 
 _LEAN_CHAR_RE = re.compile(r"'(?:\\(?:x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|.)|[^'\\\n])'")
 _LEAN_RAW_STR_RE = re.compile(r'r(#+)"')
+_MOD_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def _is_lean_id_char(ch):
@@ -367,6 +371,10 @@ def _strip_lean_comments(src):
 
 
 LEAN_FORBIDDEN = [
+    (r"(?m)^\s*module\b",
+     "Lean 4 `module` files are not allowed in target files"),
+    (r"(?<![\w.])(?:public|private|meta|all)\s+import\b",
+     "module-system import modifiers are not allowed"),
     (r"(?<![\w.])(elab|elab_rules|macro|macro_rules|syntax|declare_syntax_cat|notation|infix|infixl|infixr|prefix|postfix)\b",
      "custom syntax, macros and elaborators are not allowed in target files"),
     (r"(?<![\w.])(initialize|builtin_initialize)\b", "`initialize` blocks are not allowed"),
@@ -380,7 +388,25 @@ LEAN_FORBIDDEN = [
 LEAN_ALLOWED_OPTIONS = {"maxHeartbeats", "maxRecDepth", "linter.unusedVariables"}
 
 
-def lint_lean_file(path, rel, lib_root):
+def _import_allowed(mod, allowed_prefixes):
+    return any(mod == p or mod.startswith(p + ".") for p in allowed_prefixes)
+
+
+def _extract_imports(code):
+    mods = []
+    for line in code.splitlines():
+        m = re.match(r"\s*import\s+(.+)$", line)
+        if m:
+            for tok in m.group(1).split():
+                mods.append(tok)
+    for mod in re.findall(r"(?<![\w.])import\s+([\w.]+)", code):
+        if mod not in mods:
+            mods.append(mod)
+    return mods
+
+
+def lint_lean_file(path, rel, lib_root, allowed_import_prefixes=None):
+    allowed = tuple(allowed_import_prefixes) if allowed_import_prefixes else (lib_root,)
     with open(path, "r", encoding="utf-8") as f:
         code = _strip_lean_comments(f.read())
     for pat, reason in LEAN_FORBIDDEN:
@@ -389,24 +415,108 @@ def lint_lean_file(path, rel, lib_root):
     for opt in re.findall(r"\bset_option\s+([\w.]+)", code):
         if opt not in LEAN_ALLOWED_OPTIONS:
             return f"{rel}: `set_option {opt}` is not allowed"
-    for line in code.splitlines():
-        m = re.match(r"\s*import\s+(.+)$", line)
-        if m:
-            for mod in m.group(1).split():
-                if not (mod == lib_root or mod.startswith(lib_root + ".")):
-                    return f"{rel}: import of `{mod}` is not allowed (only {lib_root}.* modules)"
-    for mod in re.findall(r"(?<![\w.])import\s+([\w.]+)", code):
-        if not (mod == lib_root or mod.startswith(lib_root + ".")):
-            return f"{rel}: import of `{mod}` is not allowed (only {lib_root}.* modules)"
+    allowed_desc = ", ".join(f"{p}.*" for p in allowed)
+    for mod in _extract_imports(code):
+        if not _import_allowed(mod, allowed):
+            return f"{rel}: import of `{mod}` is not allowed (only {allowed_desc})"
     return None
 
 
 # ---------------------------------------------------------------------------
-# Lean missions
+# Lean missions (direct offline `lean` build + trusted kernel replay)
 # ---------------------------------------------------------------------------
 
-def _statements_module_source(lib_root, statements):
-    lines = [f"import {lib_root}.Spec", "", "namespace SunsteadStatements", ""]
+def _mathlib_lib_paths():
+    pkgs_dir = os.path.join(MATHLIB_CACHE_DIR, ".lake", "packages")
+    if not os.path.isdir(pkgs_dir):
+        emit(False, f"sandbox error: Mathlib cache not found at {pkgs_dir}")
+    libs = []
+    for pkg in sorted(os.listdir(pkgs_dir)):
+        lean_lib = os.path.join(pkgs_dir, pkg, ".lake", "build", "lib", "lean")
+        if os.path.isdir(lean_lib):
+            libs.append(lean_lib)
+            continue
+        legacy_lib = os.path.join(pkgs_dir, pkg, ".lake", "build", "lib")
+        if os.path.isdir(legacy_lib) and glob.glob(os.path.join(legacy_lib, "*.olean")):
+            libs.append(legacy_lib)
+    if not libs:
+        emit(False, f"sandbox error: no compiled Mathlib .olean directories found under {pkgs_dir}")
+    return libs
+
+
+def _validate_mod_name(mod):
+    segs = mod.split(".")
+    if not segs or not all(_MOD_IDENT_RE.match(s) for s in segs):
+        emit(False, f"invalid Lean module name: {mod}")
+    return segs
+
+
+def _resolve_local_build_order(project_dir, lib_root, root_modules):
+    """Topologically order `<lib_root>.*` modules needed to compile `root_modules`."""
+    order = []
+    state = {}  # mod -> 1 (visiting) | 2 (done)
+
+    def dfs(mod):
+        st = state.get(mod, 0)
+        if st == 2:
+            return
+        if st == 1:
+            emit(False, f"cyclic Lean import involving `{mod}`")
+        segs = _validate_mod_name(mod)
+        src_path = os.path.join(project_dir, *segs) + ".lean"
+        if not os.path.isfile(src_path):
+            emit(False, f"missing Lean module file for `{mod}`")
+        state[mod] = 1
+        with open(src_path, "r", encoding="utf-8") as f:
+            code = _strip_lean_comments(f.read())
+        for imp in _extract_imports(code):
+            if imp == lib_root or imp.startswith(lib_root + "."):
+                dfs(imp)
+        state[mod] = 2
+        order.append(mod)
+
+    for m in root_modules:
+        dfs(m)
+    return order
+
+
+def _compile_lean_graph(user, project_dir, lib_root, root_modules, extra_lib_paths,
+                        deadline_fn, home_dir, cpu_sec=None, fsize_mb=512):
+    """Compile `root_modules` and their `<lib_root>.*` dependencies directly with `lean`.
+
+    Direct invocation with an explicit `LEAN_PATH` avoids `lake` touching `.git`,
+    network, or read-only `/opt/mathlib`, and compiles single Mathlib files in ~1-2s.
+    """
+    out_lib = os.path.join(project_dir, ".lake", "build", "lib", "lean")
+    order = _resolve_local_build_order(project_dir, lib_root, root_modules)
+    lean_path = ":".join([out_lib] + list(extra_lib_paths))
+    for mod in order:
+        segs = _validate_mod_name(mod)
+        rel_src = os.path.join(*segs) + ".lean"
+        out_olean = os.path.join(out_lib, *segs) + ".olean"
+        p_mk = run_as(user, ["mkdir", "-p", os.path.dirname(out_olean)], cwd="/", timeout=30)
+        if p_mk.returncode != 0:
+            emit(False, f"sandbox error: mkdir for {mod} failed: {tail(p_mk.stderr)}")
+        p = run_as(
+            user,
+            ["lean", f"--root={project_dir}", "-o", out_olean, rel_src],
+            cwd=project_dir,
+            timeout=deadline_fn(),
+            env_extra={"HOME": home_dir, "LEAN_PATH": lean_path},
+            fsize_mb=fsize_mb,
+            cpu_sec=cpu_sec,
+        )
+        if p.returncode != 0:
+            return mod, p
+    return None, None
+
+
+def _statements_module_source(lib_root, statements, preamble=""):
+    lines = [f"import {lib_root}.Spec", ""]
+    if preamble and preamble.strip():
+        lines.append(preamble.strip())
+        lines.append("")
+    lines.extend(["namespace SunsteadStatements", ""])
     for task_id, src in statements.items():
         lines.append(f"/-- Frozen statement for task `{task_id}`. -/")
         lines.append(src.strip())
@@ -415,13 +525,37 @@ def _statements_module_source(lib_root, statements):
     return "\n".join(lines) + "\n"
 
 
-def lean_verify(task_id, *, lib_root, frozen_files, tasks, timeout_sec=110):
-    """Verify a Lean 4 task.
+def lean_verify(task_id, *, lib_root, frozen_files, tasks,
+                uses_mathlib=False, statement_preamble="", timeout_sec=110):
+    """Verify a Lean 4 task (the only entry point mission `verify` scripts use)."""
+    _lean_check(task_id, lib_root=lib_root, frozen_files=frozen_files, tasks=tasks,
+                uses_mathlib=uses_mathlib, statement_preamble=statement_preamble,
+                timeout_sec=timeout_sec, allow_sorry=False)
+
+
+def check_seed_statement(task_id, *, lib_root, frozen_files, tasks,
+                         uses_mathlib=False, statement_preamble="", timeout_sec=110):
+    """CI only (scripts/check-statements.py): check that an unmodified seed's
+    theorem has exactly the type of the task's frozen `statement`.
+
+    Same pipeline and kernel comparison as `lean_verify`, but `sorry` in the
+    seed and the `sorryAx` axiom are accepted, because seeds are unsolved.
+    Nothing a contributor submits reaches this function: mission `verify`
+    scripts and the verifier server only call `lean_verify`.
+    """
+    _lean_check(task_id, lib_root=lib_root, frozen_files=frozen_files, tasks=tasks,
+                uses_mathlib=uses_mathlib, statement_preamble=statement_preamble,
+                timeout_sec=timeout_sec, allow_sorry=True)
+
+
+def _lean_check(task_id, *, lib_root, frozen_files, tasks,
+                uses_mathlib, statement_preamble, timeout_sec, allow_sorry):
+    """Shared Lean 4 pipeline for `lean_verify` and `check_seed_statement`.
 
     tasks[task_id] = {
-        "module":    "MetaComplexity.Pigeonhole",           # module to build
-        "theorem":   "MetaComplexity.no_inj_lt",            # constant that must prove the statement
-        "statement": "def pigeonhole_fin : Prop := ...",    # frozen statement, in SunsteadStatements
+        "module":    "PntFoundations.LiouvilleMult",        # module to build
+        "theorem":   "PntFoundations.isCompletelyMultiplicative_liouville",
+        "statement": "def is_completely_multiplicative_liouville : Prop := ...",
         "score_const": "SoundnessBound.claimedX" (optional) # hill-climb: statement takes it as (C : Nat)
         "label": "..." (optional, hill-climb summary; may use {score})
     }
@@ -436,6 +570,12 @@ def lean_verify(task_id, *, lib_root, frozen_files, tasks, timeout_sec=110):
     work = os.getcwd()
     lib_dir = os.path.join(work, lib_root)
     frozen_set = set(frozen_files)
+    allowed_imports = (
+        (lib_root, "Mathlib", "Std", "Init", "Batteries")
+        if uses_mathlib else (lib_root,)
+    )
+    extra_lib_paths = _mathlib_lib_paths() if uses_mathlib else []
+    fsize_mb = 1024 if uses_mathlib else 512
 
     # 0. Lint every contributor-owned Lean file in the library.
     for dirpath, _, files in os.walk(lib_dir):
@@ -450,12 +590,12 @@ def lean_verify(task_id, *, lib_root, frozen_files, tasks, timeout_sec=110):
             # Unsolved stubs still contain `sorry`; only the files the target
             # depends on must be sorry-free, which the checker enforces. Lint
             # the remaining rules for every file.
-            problem = lint_lean_file(os.path.join(dirpath, fn), rel, lib_root)
+            problem = lint_lean_file(os.path.join(dirpath, fn), rel, lib_root, allowed_imports)
             if problem and "`sorry`" not in problem:
                 emit(False, f"hygiene check failed: {problem}")
     target_rel = task["module"].replace(".", "/") + ".lean"
-    problem = lint_lean_file(os.path.join(work, target_rel), target_rel, lib_root)
-    if problem:
+    problem = lint_lean_file(os.path.join(work, target_rel), target_rel, lib_root, allowed_imports)
+    if problem and not (allow_sorry and "`sorry`" in problem):
         emit(False, f"hygiene check failed: {problem}")
 
     job = Job()
@@ -473,29 +613,42 @@ def lean_verify(task_id, *, lib_root, frozen_files, tasks, timeout_sec=110):
             run_as(CHECKER_USER, ["mkdir", "-p", os.path.dirname(dst)], cwd="/", timeout=30)
             job.write_as(CHECKER_USER, dst, content)
         stmts = {tid: t["statement"] for tid, t in tasks.items()}
-        job.write_as(CHECKER_USER, os.path.join(trusted, lib_root, "SunsteadStatements.lean"),
-                     _statements_module_source(lib_root, stmts))
-        p = run_as(CHECKER_USER, ["lake", "build", f"{lib_root}.Spec", f"{lib_root}.SunsteadStatements"],
-                   cwd=trusted, timeout=deadline(), env_extra={"HOME": job.checker_dir})
-        if p.returncode != 0:
-            emit(False, f"trusted spec build failed: {tail(p.stdout + p.stderr)}")
+        job.write_as(
+            CHECKER_USER,
+            os.path.join(trusted, lib_root, "SunsteadStatements.lean"),
+            _statements_module_source(lib_root, stmts, preamble=statement_preamble),
+        )
+        failed_mod, p = _compile_lean_graph(
+            CHECKER_USER, trusted, lib_root,
+            [f"{lib_root}.Spec", f"{lib_root}.SunsteadStatements"],
+            extra_lib_paths, deadline, job.checker_dir, fsize_mb=fsize_mb,
+        )
         ensure_no_processes(CHECKER_USER)
+        if failed_mod is not None:
+            emit(False, f"trusted spec build failed ({failed_mod}): {tail(p.stdout + p.stderr)}")
 
         # 2. Untrusted build of the contributor's module (runner user).
         src_dir = os.path.join(job.runner_dir, "src")
         job.copy_tree_as(RUNNER_USER, work, src_dir)
-        p = run_as(RUNNER_USER, ["lake", "build", task["module"]], cwd=src_dir,
-                   timeout=deadline(), env_extra={"HOME": job.runner_dir}, cpu_sec=timeout_sec)
+        # Allow multi-threaded Lean CPU time above wall-clock timeout; wall-clock timeout enforces deadline.
+        runner_cpu = max(timeout_sec * 4, 240)
+        failed_mod, p = _compile_lean_graph(
+            RUNNER_USER, src_dir, lib_root,
+            [task["module"]],
+            extra_lib_paths, deadline, job.runner_dir,
+            cpu_sec=runner_cpu, fsize_mb=fsize_mb,
+        )
         ensure_no_processes(RUNNER_USER)
-        if p.returncode != 0:
-            emit(False, f"lake build {task['module']} failed: {tail(p.stdout + p.stderr)}")
+        if failed_mod is not None:
+            emit(False, f"lean build {failed_mod} failed: {tail(p.stdout + p.stderr)}")
 
         # 3. Trusted kernel replay + statement + axiom check (checker user).
         # key=value tokens: `lean --run` parses any `--flag` as its own option.
+        trusted_lib_paths = [os.path.join(trusted, ".lake", "build", "lib", "lean")] + extra_lib_paths
         argv = [
             "lean", "--run", LEAN_CHECKER,
-            "trusted-lib=" + os.path.join(trusted, ".lake", "build", "lib"),
-            "untrusted-lib=" + os.path.join(src_dir, ".lake", "build", "lib"),
+            "trusted-lib=" + ":".join(trusted_lib_paths),
+            "untrusted-lib=" + os.path.join(src_dir, ".lake", "build", "lib", "lean"),
             "lib-root=" + lib_root,
             "frozen=" + ",".join([f"{lib_root}.Spec", f"{lib_root}.SunsteadStatements"]),
             "target-module=" + task["module"],
@@ -505,7 +658,7 @@ def lean_verify(task_id, *, lib_root, frozen_files, tasks, timeout_sec=110):
         if task.get("score_const"):
             argv.append("score-const=" + task["score_const"])
         p = run_as(CHECKER_USER, argv, cwd=trusted, timeout=deadline(),
-                   env_extra={"HOME": job.checker_dir})
+                   env_extra={"HOME": job.checker_dir}, fsize_mb=fsize_mb)
         ensure_no_processes(CHECKER_USER)
         result = None
         for line in reversed(p.stdout.splitlines()):
@@ -520,10 +673,14 @@ def lean_verify(task_id, *, lib_root, frozen_files, tasks, timeout_sec=110):
             emit(False, f"trusted checker produced no result: {tail(p.stdout + p.stderr)}")
         if not result.get("ok"):
             emit(False, f"kernel check failed: {str(result.get('error', 'unknown error'))[:400]}")
-        bad = [a for a in result.get("axioms", []) if a not in ALLOWED_AXIOMS]
+        allowed_axioms = set(ALLOWED_AXIOMS) | ({"sorryAx"} if allow_sorry else set())
+        bad = [a for a in result.get("axioms", []) if a not in allowed_axioms]
         if bad:
             emit(False, f"forbidden axioms: {', '.join(bad)}")
         elapsed = int((time.monotonic() - started) * 1000)
+        if allow_sorry:
+            emit(True, f"seed `{task['theorem']}` has exactly the frozen statement of `{task_id}` "
+                       f"(axioms: {', '.join(result.get('axioms', [])) or 'none'}, {elapsed} ms)")
         if task.get("score_const"):
             score = result.get("score")
             if not isinstance(score, int):

@@ -780,6 +780,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
           tier: m.manifest.tier,
           mode: m.manifest.mode,
           demo: Boolean(m.manifest.demo),
+          upstream: m.manifest.upstream ?? null,
           score_direction: m.manifest.score_direction ?? "maximize",
           spec_sha256: m.spec_sha256,
           verifier_image: m.manifest.verifier.image,

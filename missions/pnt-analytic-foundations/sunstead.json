@@ -1,0 +1,78 @@
+{
+  "id": "pnt-analytic-foundations",
+  "title": "PrimeNumberTheoremAnd Blueprint: Open Analytic & L-Series Obligations",
+  "description": "Six genuine, non-upstreamed open `sorry` theorems copied verbatim from Terence Tao & Alex Kontorovich's PrimeNumberTheoremAnd Blueprint (commit e990613, Apache-2.0): Liouville complete multiplicativity & Dirichlet series, Ramanujan's four-zeta identity (IK 1.28), the alternative ζ(s)^3 divisor identity, and Wiener Fourier decay bounds II & III. Every frozen definition and theorem statement is CI-checked verbatim against upstream.",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/AlexKontorovich/PrimeNumberTheoremAnd",
+  "upstream": {
+    "repo": "AlexKontorovich/PrimeNumberTheoremAnd",
+    "commit": "e9906138410f8f76ca66b9bc252d0993f3ee348c",
+    "license": "Apache-2.0"
+  },
+  "frozen_paths": [
+    "PntFoundations/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": ["./verify"],
+    "timeout_sec": 180,
+    "memory_mb": 6144
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "is_completely_multiplicative_liouville",
+      "title": "Liouville function λ(n) = (-1)^Ω(n) is completely multiplicative",
+      "description": "Closes `sorry` at `IwaniecKowalskiCh1.lean:1787`: prove `IsCompletelyMultiplicative (liouville : ArithmeticFunction ℝ)`.",
+      "target_files": ["PntFoundations/LiouvilleMult.lean"],
+      "depends_on": [],
+      "upstream_url": "https://github.com/AlexKontorovich/PrimeNumberTheoremAnd/blob/e9906138410f8f76ca66b9bc252d0993f3ee348c/PrimeNumberTheoremAnd/IwaniecKowalskiCh1.lean#L1787-L1788"
+    },
+    {
+      "id": "lseries_liouville_eq",
+      "title": "Dirichlet series of Liouville function equals ζ(2s)/ζ(s)",
+      "description": "Closes `sorry` at `IwaniecKowalskiCh1.lean:1802`: prove `LSeries ↗liouville s = riemannZeta (2 * s) / riemannZeta s` for `Re(s) > 1`.",
+      "target_files": ["PntFoundations/LiouvilleLSeries.lean"],
+      "depends_on": ["is_completely_multiplicative_liouville"],
+      "upstream_url": "https://github.com/AlexKontorovich/PrimeNumberTheoremAnd/blob/e9906138410f8f76ca66b9bc252d0993f3ee348c/PrimeNumberTheoremAnd/IwaniecKowalskiCh1.lean#L1802-L1804"
+    },
+    {
+      "id": "ramanujan_four_zeta_identity",
+      "title": "Ramanujan / IK (1.28) four-zeta Dirichlet series identity",
+      "description": "Closes `sorry` at `IwaniecKowalskiCh1.lean:647`: prove `ζ(s) ζ(s-α) ζ(s-β) ζ(s-α-β) = ζ(2s-α-β) L(σ_α · σ_β, s)`.",
+      "target_files": ["PntFoundations/RamanujanIdentity.lean"],
+      "depends_on": [],
+      "upstream_url": "https://github.com/AlexKontorovich/PrimeNumberTheoremAnd/blob/e9906138410f8f76ca66b9bc252d0993f3ee348c/PrimeNumberTheoremAnd/IwaniecKowalskiCh1.lean#L647-L652"
+    },
+    {
+      "id": "zeta_pow_three_alt",
+      "title": "Alternative Dirichlet series for ζ(s)^3 via τ(m^2)",
+      "description": "Closes `sorry` at `IwaniecKowalskiCh1.lean:869`: prove `ζ(s)^3 = L(n ↦ ∑_{d^2 m = n} τ(m^2), s)` for `Re(s) > 1`.",
+      "target_files": ["PntFoundations/ZetaCubeAlt.lean"],
+      "depends_on": [],
+      "upstream_url": "https://github.com/AlexKontorovich/PrimeNumberTheoremAnd/blob/e9906138410f8f76ca66b9bc252d0993f3ee348c/PrimeNumberTheoremAnd/IwaniecKowalskiCh1.lean#L869-L873"
+    },
+    {
+      "id": "wiener_prelim_decay_2",
+      "title": "Fourier decay bound II for L¹ ∩ BV functions",
+      "description": "Closes `sorry` at `Wiener.lean:331` (PNT+ Discussion #562): prove `‖𝓕 ψ u‖ ≤ ‖ψ‖_TV / (2 π ‖u‖)` for integrable `ψ` of bounded variation.",
+      "target_files": ["PntFoundations/WienerDecay2.lean"],
+      "depends_on": [],
+      "upstream_url": "https://github.com/AlexKontorovich/PrimeNumberTheoremAnd/blob/e9906138410f8f76ca66b9bc252d0993f3ee348c/PrimeNumberTheoremAnd/Wiener.lean#L331-L333"
+    },
+    {
+      "id": "wiener_prelim_decay_3",
+      "title": "Fourier decay bound III for AC functions with ψ' ∈ BV",
+      "description": "Closes `sorry` at `Wiener.lean:350` (PNT+ Discussion #563): use `prelim_decay_2` to prove `‖𝓕 ψ u‖ ≤ ‖ψ'‖_TV / (2 π ‖u‖)^2`.",
+      "target_files": ["PntFoundations/WienerDecay3.lean"],
+      "depends_on": ["wiener_prelim_decay_2"],
+      "upstream_url": "https://github.com/AlexKontorovich/PrimeNumberTheoremAnd/blob/e9906138410f8f76ca66b9bc252d0993f3ee348c/PrimeNumberTheoremAnd/Wiener.lean#L350-L353"
+    }
+  ]
+}

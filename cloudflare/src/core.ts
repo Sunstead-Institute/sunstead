@@ -14,6 +14,13 @@ export interface VerifierConfig {
   memory_mb?: number;
 }
 
+export interface UpstreamProvenance {
+  repo: string;
+  commit: string;
+  license: string;
+  issue_url?: string;
+}
+
 export interface TaskDefinition {
   id: string;
   title: string;
@@ -21,6 +28,7 @@ export interface TaskDefinition {
   target_files: string[];
   depends_on?: string[];
   baseline_score?: number | null;
+  upstream_url?: string;
 }
 
 export interface MissionManifest {
@@ -30,10 +38,11 @@ export interface MissionManifest {
   tier: number;
   mode: MissionMode;
   repo?: string;
+  upstream?: UpstreamProvenance;
   frozen_paths: string[];
   verifier: VerifierConfig;
   score_direction?: ScoreDirection;
-  /** Demo missions exercise the machinery; their results are not real research. */
+  /** Demo/sandbox missions exercise the machinery and award 0 leaderboard points. */
   demo?: boolean;
   tasks: TaskDefinition[];
 }

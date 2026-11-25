@@ -7,18 +7,30 @@ RUN apt-get update \
 ENV ELAN_HOME=/opt/elan
 ENV PATH="/opt/elan/bin:${PATH}"
 
-# elan installer pinned to a release tag; the Lean toolchain is pinned by version.
+# elan installer pinned to a release tag; Lean toolchain pinned to v4.36.0.
 RUN curl -sSf https://raw.githubusercontent.com/leanprover/elan/v4.0.0/elan-init.sh \
-    | sh -s -- -y --default-toolchain leanprover/lean4:v4.14.0 --no-modify-path \
-    && elan toolchain install leanprover/lean4:v4.14.0 \
+    | sh -s -- -y --default-toolchain leanprover/lean4:v4.36.0 --no-modify-path \
+    && elan toolchain install leanprover/lean4:v4.36.0 \
     && lean --version \
     && lake --version \
     && chmod -R a-w,a+rX /opt/elan
 
-COPY missions/tier1-metacomplexity-dag /missions/tier1-metacomplexity-dag
-COPY missions/tier1-crypto-algebra-dag /missions/tier1-crypto-algebra-dag
-COPY missions/tier2-soundness-bound /missions/tier2-soundness-bound
-COPY missions/tier2-coding-bounds /missions/tier2-coding-bounds
+# Pre-fetch Mathlib v4.36.0 oleans read-only at /opt/mathlib for offline verification.
+RUN mkdir -p /opt/mathlib \
+    && cd /opt/mathlib \
+    && printf 'leanprover/lean4:v4.36.0\n' > lean-toolchain \
+    && printf 'name = "SunsteadMathlib"\nversion = "0.1.0"\n\n[[require]]\nname = "mathlib"\ngit = "https://github.com/leanprover-community/mathlib4.git"\nrev = "v4.36.0"\n' > lakefile.toml \
+    && lake update mathlib \
+    && rm -rf /root/.cache /opt/mathlib/.lake/packages/*/.git \
+    && find /opt/mathlib/.lake/packages -type f \( \
+         -name "*.c" -o -name "*.c.o" -o -name "*.c.o.export" -o -name "*.c.o.noexport" \
+         -o -name "*.ilean" -o -name "*.ilean.hash" \
+       \) -delete \
+    && chmod -R a-w,a+rX /opt/mathlib
+
+COPY missions/arklib-near-capacity-primes /missions/arklib-near-capacity-primes
+COPY missions/pnt-analytic-foundations /missions/pnt-analytic-foundations
+COPY missions/onboarding-sandbox /missions/onboarding-sandbox
 COPY missions/verifier-common/sunstead_sandbox.py missions/verifier-common/SunsteadCheck.lean /opt/sunstead/
 COPY cloudflare/containers/verifier_server.py /opt/verifier_server.py
 

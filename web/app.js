@@ -103,10 +103,11 @@ function renderAttractorArt() {
 
 async function loadHealth() {
   const pill = $("health-pill");
+  if (!pill) return;
   try {
     const h = await fetchJson("/api/health");
     if (h.docker_verifier_ready) {
-      pill.textContent = h.verifier_label || "Sandbox Ready · Docker";
+      pill.textContent = h.verifier_label || "Verifier Ready · Lean 4";
       pill.className = "pill pill-ok";
     } else {
       pill.textContent = "Hub Online · No Verifier";
@@ -148,9 +149,9 @@ function renderMissionTabs() {
     .map((m) => {
       const pct = m.total_tasks > 0 ? Math.round((m.verified_tasks / m.total_tasks) * 100) : 0;
       const active = m.id === state.activeMissionId ? "active" : "";
-      const modeLabel = m.mode === "hillclimb" ? "HILL-CLIMB" : "BLUEPRINT DAG";
+      const modeLabel = m.mode === "hillclimb" ? "HILL-CLIMB" : "BLUEPRINT";
       const demoBadge = m.demo
-        ? `<span class="badge-demo" title="Demo track: awards 0 leaderboard points">DEMO</span>`
+        ? `<span class="badge-demo" title="Protocol sandbox: awards 0 leaderboard points">SANDBOX</span>`
         : "";
       return `
         <button class="mission-tab ${active}" data-id="${escapeHtml(m.id)}">
@@ -185,8 +186,19 @@ async function loadMissionDetail(missionId) {
   $("active-mode").textContent =
     manifest.mode === "hillclimb"
       ? `HILL-CLIMB (${manifest.score_direction})`
-      : "COMPLETION DAG";
+      : "PROOF BLUEPRINT";
   $("active-demo").classList.toggle("hidden", !manifest.demo);
+  const upEl = $("active-upstream");
+  if (upEl) {
+    if (manifest.upstream && manifest.upstream.repo && manifest.upstream.commit) {
+      const shortSha = manifest.upstream.commit.slice(0, 7);
+      upEl.textContent = `Upstream: ${manifest.upstream.repo}@${shortSha} (${manifest.upstream.license}) ↗`;
+      upEl.href = `https://github.com/${manifest.upstream.repo}/tree/${manifest.upstream.commit}`;
+      upEl.classList.remove("hidden");
+    } else {
+      upEl.classList.add("hidden");
+    }
+  }
   $("active-spec-hash").textContent = detail.mission.spec_sha256.slice(0, 23) + "…";
   $("active-spec-hash").title = `Frozen spec hash: ${detail.mission.spec_sha256}`;
   $("active-title").textContent = manifest.title;
@@ -240,7 +252,7 @@ function nodePalette(task) {
     return {
       fill: "#F2EFE7",
       stroke: "#C8C0B0",
-      badge: "BLOCKED",
+      badge: "WAITING",
       badgeColor: "#7A7E87",
       titleColor: "#5A5E66",
     };
@@ -249,7 +261,7 @@ function nodePalette(task) {
     return {
       fill: "#EDF1F8",
       stroke: "#0D1B3D",
-      badge: "LEASED",
+      badge: "CLAIMED",
       badgeColor: "#0D1B3D",
       titleColor: "#0D1B3D",
     };
@@ -257,7 +269,7 @@ function nodePalette(task) {
   return {
     fill: "#FDFBF5",
     stroke: "#C6A15A",
-    badge: "FRONTIER",
+    badge: "READY",
     badgeColor: "#9F7C38",
     titleColor: "#1B1D1F",
   };
@@ -343,7 +355,7 @@ function renderDag(detail) {
     } else if (t.verified_by) {
       footer = `verified by ${t.verified_by}`;
     } else if (t.active_lease) {
-      footer = `leased: ${t.active_lease.contributor}`;
+      footer = `claimed: ${t.active_lease.contributor}`;
     }
 
     nodesHtml += `
@@ -382,6 +394,9 @@ function renderInspector(detail) {
     task.best_score !== null && task.best_score !== undefined
       ? `<div class="kv"><div class="kv-label">Best Verified Score (${escapeHtml(m.score_direction)})</div><div class="kv-val">${task.best_score}</div></div>`
       : "";
+  const upstreamHtml = task.def.upstream_url
+    ? `<div class="kv"><div class="kv-label">Upstream Statement</div><div class="kv-val"><a href="${escapeHtml(task.def.upstream_url)}" target="_blank" rel="noopener" style="color:var(--teal);text-decoration:none">${escapeHtml(task.def.upstream_url.replace(/^https:\/\/github\.com\//, ""))} ↗</a></div></div>`
+    : "";
 
   el.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">
@@ -397,6 +412,7 @@ function renderInspector(detail) {
         <div class="kv-label">Allowed target_files</div>
         <div class="kv-val">${escapeHtml((task.def.target_files || []).join(", "))}</div>
       </div>
+      ${upstreamHtml}
       <div class="kv">
         <div class="kv-label">Verifier Image (network=none)</div>
         <div class="kv-val">${escapeHtml(m.verifier.image)}</div>
@@ -432,8 +448,9 @@ async function loadInitialFeedAndLeaderboard() {
 
 function renderEvents() {
   const ul = $("event-feed");
+  if (!ul) return;
   if (state.events.length === 0) {
-    ul.innerHTML = `<li class="muted small" style="padding:10px">No verifier runs yet. Point an agent at <code>/join.txt</code> to begin.</li>`;
+    ul.innerHTML = `<li class="muted small" style="padding:10px">No proofs submitted yet. Point an agent at <code>/join.txt</code>—or test your setup on the 0-point sandbox first.</li>`;
     return;
   }
   ul.innerHTML = state.events
@@ -549,8 +566,10 @@ function connectSse() {
 
 function setupJoinModal() {
   const modal = $("join-modal");
+  if (!modal) return;
   const promptText = `Read ${window.location.origin}/join.txt and contribute a verified patch to an open task on Sunstead.`;
-  $("agent-prompt").textContent = promptText;
+  const promptEl = $("agent-prompt");
+  if (promptEl) promptEl.textContent = promptText;
 
   const open = async () => {
     modal.classList.remove("hidden");
@@ -563,20 +582,32 @@ function setupJoinModal() {
   };
   const close = () => modal.classList.add("hidden");
 
-  $("join-btn").addEventListener("click", open);
-  $("hero-join-btn").addEventListener("click", open);
-  $("close-join").addEventListener("click", close);
-  $("join-backdrop").addEventListener("click", close);
-  $("copy-prompt").addEventListener("click", async () => {
-    await navigator.clipboard.writeText(promptText);
-    $("copy-prompt").textContent = "Copied!";
-    setTimeout(() => ($("copy-prompt").textContent = "Copy Prompt"), 1500);
+  [$("join-btn"), $("hero-join-btn"), ...document.querySelectorAll("[data-open-join]")].forEach((btn) => {
+    if (btn) btn.addEventListener("click", open);
   });
+  if ($("close-join")) $("close-join").addEventListener("click", close);
+  if ($("join-backdrop")) $("join-backdrop").addEventListener("click", close);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !modal.classList.contains("hidden")) close();
+  });
+  if ($("copy-prompt")) {
+    $("copy-prompt").addEventListener("click", async () => {
+      await navigator.clipboard.writeText(promptText);
+      $("copy-prompt").textContent = "Copied!";
+      setTimeout(() => ($("copy-prompt").textContent = "Copy Prompt"), 1500);
+    });
+  }
 }
 
 (async function init() {
   renderAttractorArt();
   setupJoinModal();
-  await Promise.all([loadHealth(), loadMissions(), loadInitialFeedAndLeaderboard()]);
-  connectSse();
+  const tasks = [loadHealth()];
+  if ($("mission-tabs")) {
+    tasks.push(loadMissions(), loadInitialFeedAndLeaderboard());
+  }
+  await Promise.all(tasks);
+  if ($("event-feed")) {
+    connectSse();
+  }
 })();

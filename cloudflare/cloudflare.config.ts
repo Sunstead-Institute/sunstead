@@ -7,7 +7,7 @@ const lean4Container = defineContainer({
     dockerfile: "./containers/lean4/Dockerfile",
     buildContext: "..",
   },
-  instanceType: "standard-1", // 1/2 vCPU, 4 GiB RAM, 8 GB disk
+  instanceType: "standard-3", // 2 vCPU, 8 GiB RAM, 16 GB disk (Lean 4.36.0 + Mathlib v4.36.0)
   maxInstances: 4,
 });
 

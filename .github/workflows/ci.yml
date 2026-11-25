@@ -39,8 +39,10 @@ jobs:
           python3 -m py_compile \
             missions/verifier-common/sunstead_sandbox.py \
             cloudflare/containers/verifier_server.py \
-            scripts/redteam.py scripts/e2e.py
+            scripts/check-upstream.py scripts/check-statements.py scripts/redteam.py scripts/e2e.py
           for f in missions/*/verify; do python3 -m py_compile "$f"; done
+      - name: Verify verbatim upstream provenance against pinned commits
+        run: python3 scripts/check-upstream.py
 
   verifiers:
     name: Lean 4 verifier image + red-team suite
@@ -53,6 +55,8 @@ jobs:
         run: ./scripts/build-verifiers.sh
       - name: Red-team suite (every attack rejected, every honest control accepted)
         run: python3 scripts/redteam.py
+      - name: Frozen task statements match the seed theorems (every mission, demos included)
+        run: python3 scripts/check-statements.py
 
   hub-images:
     name: Cloudflare container image build

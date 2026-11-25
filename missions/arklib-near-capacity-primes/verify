@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+"""Frozen verifier for `arklib-near-capacity-primes`.
+
+Uses the shared trusted harness baked into `/opt/sunstead/sunstead_sandbox.py`
+with Lean 4.36.0 + read-only Mathlib v4.36.0.
+"""
+import sys
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify  # noqa: E402
+
+LIB_ROOT = "ArkLibNearCapacity"
+FROZEN_FILES = [
+    "ArkLibNearCapacity/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+]
+
+TASKS = {
+    "near_capacity_prime_supply": {
+        "module": "ArkLibNearCapacity.PrimeSupply",
+        "theorem": "ArkLibNearCapacity.near_capacity_prime_supply",
+        "statement": """
+def near_capacity_prime_supply : Prop :=
+    ∀ (c : NNReal), 0 < c → ArkLibNearCapacity.NearCapacityPrimeSupply c
+""",
+    },
+}
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>")
+    lean_verify(
+        sys.argv[1],
+        lib_root=LIB_ROOT,
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        uses_mathlib=True,
+        timeout_sec=170,
+    )

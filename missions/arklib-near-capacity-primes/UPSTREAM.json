@@ -1,0 +1,18 @@
+{
+  "repo": "Verified-zkEVM/ArkLib",
+  "commit": "2934c834177ee4de50b9df5ce58509a8529fbf88",
+  "license": "Apache-2.0",
+  "issue_url": "https://github.com/Verified-zkEVM/ArkLib/issues/1352",
+  "checks": [
+    {
+      "local_file": "ArkLibNearCapacity/Spec.lean",
+      "upstream_file": "ArkLib/Data/CodingTheory/ProximityGap/CapacityBounds/NearCapacity.lean",
+      "verbatim_snippet": "def NearCapacityPrimeSupply (c : ℝ≥0) : Prop :=\n  ∃ β : ℝ, max ((c : ℝ) + 2) (12 / 5) < β ∧ ∀ K₀ : ℕ, ∃ K ≥ K₀, ∃ p : ℕ,\n    p.Prime ∧ 2 ^ K ∣ p - 1 ∧ ((2 : ℝ) ^ K) ^ β ≤ p ∧ (p : ℝ) ≤ 2 * ((2 : ℝ) ^ K) ^ β"
+    },
+    {
+      "local_file": "ArkLibNearCapacity/PrimeSupply.lean",
+      "upstream_file": "ArkLib/Data/CodingTheory/ProximityGap/CapacityBounds.lean",
+      "upstream_anchor": "have hprimes : NearCapacityPrimeSupply c := by"
+    }
+  ]
+}

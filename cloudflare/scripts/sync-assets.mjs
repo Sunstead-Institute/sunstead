@@ -17,14 +17,32 @@ fs.mkdirSync(GEN_DIR, { recursive: true });
 
 // 1. Static UI assets from ../web
 const webDir = path.join(REPO_ROOT, "web");
+const indexHtml = fs.readFileSync(path.join(webDir, "index.html"), "utf8");
+const whatIsThisHtml = fs.readFileSync(path.join(webDir, "what-is-this.html"), "utf8");
 const staticAssets = {
   "/": {
     contentType: "text/html; charset=utf-8",
-    body: fs.readFileSync(path.join(webDir, "index.html"), "utf8"),
+    body: indexHtml,
   },
   "/index.html": {
     contentType: "text/html; charset=utf-8",
-    body: fs.readFileSync(path.join(webDir, "index.html"), "utf8"),
+    body: indexHtml,
+  },
+  "/what-is-this": {
+    contentType: "text/html; charset=utf-8",
+    body: whatIsThisHtml,
+  },
+  "/what-is-this/": {
+    contentType: "text/html; charset=utf-8",
+    body: whatIsThisHtml,
+  },
+  "/what-is-this.html": {
+    contentType: "text/html; charset=utf-8",
+    body: whatIsThisHtml,
+  },
+  "/about": {
+    contentType: "text/html; charset=utf-8",
+    body: whatIsThisHtml,
   },
   "/styles.css": {
     contentType: "text/css; charset=utf-8",

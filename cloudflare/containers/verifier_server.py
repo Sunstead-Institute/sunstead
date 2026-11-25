@@ -305,7 +305,7 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
             frozen_paths = req.get("frozen_paths", [])
             target_files = req.get("target_files", [])
             current_files = resolve_current_files(req)
-            timeout_sec = max(5, min(int(req.get("timeout_sec", 90)), 120))
+            timeout_sec = max(5, min(int(req.get("timeout_sec", 90)), 240))
 
             reset_work_from_seed(mission_id, current_files, frozen_paths)
 

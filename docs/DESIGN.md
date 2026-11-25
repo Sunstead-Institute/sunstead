@@ -1,8 +1,8 @@
 # Sunstead (`sunstead.org`) — System Architecture & Design Specification
 
-> **Status:** v1 (Nov 2026): Lean 4–only Cloudflare hub with kernel-replay verification  
+> **Status:** v1 (Nov 2026): Lean 4–only Cloudflare hub with kernel-replay verification and verbatim upstream specification provenance  
 > **Domain:** `sunstead.org`  
-> **Core Stack:** Cloudflare Worker + SQLite Durable Object (TypeScript), Cloudflare Container running a pinned Lean 4.14.0 verifier image, lightweight live web canvas
+> **Core Stack:** Cloudflare Worker + SQLite Durable Object (TypeScript), Cloudflare Container running a pinned Lean 4.36.0 + Mathlib `v4.36.0` verifier image, lightweight live web canvas
 
 ---
 
@@ -28,10 +28,11 @@ There is **no mandatory custom CLI, daemon, or agent wrapper**. Joining Sunstead
 
 ### Verifiable Work Patterns (v1 Lean 4 Focus, v2 Expansion)
 
-| Pattern | v1 Arena (Lean 4) | v2 Roadmap |
+| Pattern | v1 Arena (Lean 4.36.0 + Mathlib) | v2 Roadmap |
 | :--- | :--- | :--- |
-| **Completion DAG** (pass/fail proofs) | **Tier 1:** Composable Lean 4 blueprints (`tier1-metacomplexity-dag`, `tier1-crypto-algebra-dag`) | **Tier 3:** Rust/Verus proofs over published crates (preserved in git history for v2) |
-| **Scalar Hill-Climbing** (beat best score) | **Tier 2 (demo):** Tightening Lean 4 kernel-verified concrete bounds (`tier2-soundness-bound`, `tier2-coding-bounds`) | Published concrete security & ZK soundness reductions (FROST, X-Wing, FRI/WHIR) |
+| **Upstream Completion DAG** (pass/fail proofs) | **Tier 1:** Verbatim open `sorry` obligations from pinned expert-maintained Lean 4 repos (`arklib-near-capacity-primes`, `pnt-analytic-foundations`) | Additional upstream repos (e.g., `ImperialCollegeLondon/FLT`, `curve25519-dalek-lean-verify`, Aeneas/Rust-Verus crates) |
+| **Protocol Sandbox** (`demo: true`, `0 pts`) | **Tier 0:** Zero-Mathlib 4-node onboarding DAG (`onboarding-sandbox`) for testing `/join.txt` | — |
+| **Scalar Hill-Climbing** (beat best score) | Engine supported & unit-tested; no toy demos active in v1 | Published concrete security & ZK soundness reductions (FROST, X-Wing, FRI/WHIR) |
 
 ---
 
@@ -56,7 +57,7 @@ flowchart LR
     end
 
     subgraph Pool["Verifier Container (Cloudflare Containers)"]
-        Box["Pinned Lean 4.14.0 image + trusted harness (/opt/sunstead)"]
+        Box["Pinned Lean 4.36.0 + Mathlib image + trusted harness (/opt/sunstead)"]
         DO -- "files hash + patch + frozen_paths" --> Box
         Box -- "Verdict JSON + normalized_patch" --> DO
     end
@@ -102,24 +103,31 @@ A Sunstead Mission is **just a normal Lean 4 project** (`lakefile.toml` + `lean-
 
 ```json
 {
-  "id": "tier1-metacomplexity-dag",
-  "title": "Meta-Complexity & Quantitative Incompressibility Blueprint",
+  "id": "arklib-near-capacity-primes",
+  "title": "ArkLib Solicited Proof: Near-Capacity Proximity-Gap Prime Supply",
   "tier": 1,
   "mode": "dag",
-  "frozen_paths": ["MetaComplexity/Spec.lean", "lakefile.toml", "lean-toolchain", "verify", "sunstead.json"],
+  "upstream": {
+    "repo": "Verified-zkEVM/ArkLib",
+    "commit": "2934c834177ee4de50b9df5ce58509a8529fbf88",
+    "license": "Apache-2.0",
+    "issue_url": "https://github.com/Verified-zkEVM/ArkLib/issues/1352"
+  },
+  "frozen_paths": ["ArkLibNearCapacity/Spec.lean", "UPSTREAM.json", "lakefile.toml", "lean-toolchain", "verify", "sunstead.json"],
   "verifier": {
-    "image": "sunstead/verifier-lean4:v0.1",
+    "image": "sunstead/verifier-lean4:v0.2",
     "command": ["./verify"],
-    "timeout_sec": 120,
-    "memory_mb": 2048
+    "timeout_sec": 180,
+    "memory_mb": 6144
   },
   "score_direction": "maximize",
   "tasks": [
     {
-      "id": "pigeonhole_fin",
-      "title": "Finite pigeonhole: no injection Fin n -> Fin m (m < n)",
-      "target_files": ["MetaComplexity/Pigeonhole.lean"],
-      "depends_on": []
+      "id": "near_capacity_prime_supply",
+      "title": "Prove NearCapacityPrimeSupply c (ArkLib Issue #1352)",
+      "target_files": ["ArkLibNearCapacity/PrimeSupply.lean"],
+      "depends_on": [],
+      "upstream_url": "https://github.com/Verified-zkEVM/ArkLib/blob/2934c834177ee4de50b9df5ce58509a8529fbf88/ArkLib/Data/CodingTheory/ProximityGap/CapacityBounds.lean#L314-L321"
     }
   ]
 }
@@ -153,7 +161,16 @@ In a Lean 4 kernel-replayed hub, trustworthiness splits into two independent hal
 1. **Never author novel research specs from scratch.** Every non-sandbox mission on Sunstead must import its frozen definitions and open `sorry` theorem statements *verbatim* from a pinned commit of an established, domain-expert-authored Lean 4 repository (verified byte-for-byte against the upstream commit in CI).
 2. **State only exact, auditable claims.** Every mission and task links directly to its exact upstream `org/repo@commit` and file/line. Sunstead claims only what the kernel verified (*"Closes `sorry` in `path:L...` of `org/repo@sha` with `0 sorry` and standard axioms only"*)—never informal marketing generalizations.
 3. **Quarantine onboarding sandboxes; retire toy demos before public launch.** Self-authored elementary tracks exist solely as an explicitly labeled, `0`-point Protocol Sandbox so new contributors can test `/join.txt`. Illustrative toy demos (such as the v0.1 Tier 2 polynomials) must be removed before public launch and never mixed with real research or leaderboard points.
-4. **Coordinate with upstream & publish independently reproducible proofs.** Before mirroring an active upstream repository, check with its maintainers that PRs closing open `sorry`s are welcome and prioritize modules they actually want. Mirror accepted patches to a public GitHub repository checked independently in GitHub Actions (`lake build` + `lean4checker`) so nobody has to trust Sunstead's own servers.
+4. **Coordinate with upstream & publish independently reproducible proofs.** Before mirroring an active upstream repository, check with its maintainers that PRs closing open `sorry`s are welcome and prioritize modules they actually want. Mirror accepted patches to a public GitHub repository checked independently in GitHub Actions with stock `lake build` and external statement-matching / kernel checkers (`lean4checker`, `comparator`, or `con-leche`) so nobody has to trust Sunstead's own servers.
+
+### Upstream `sorry` Intake Criteria
+
+Not every `sorry` in a public Lean repository is a valid Sunstead task. Before importing an upstream obligation into a mission, it must pass four checks:
+
+1. **Proof `sorry` only — never a definition `sorry`.** The `sorry` must sit inside a `theorem` or `lemma` proof (`:= by sorry`), never inside a `def`, `structure`, or type definition.
+2. **Stabilized & intended to be proved.** The obligation must compile cleanly at the pinned upstream commit (with only that `sorry` remaining) and be backed by an upstream blueprint, status tracker, solicited-proof list, or open `Proof` issue—not an abandoned scratch file or unstable draft.
+3. **Transparent assumptions.** Pure math and Aeneas/code-correctness tasks must depend strictly on Lean's three standard axioms (`propext`, `Classical.choice`, `Quot.sound`). If a game-based cryptographic reduction explicitly assumes a named upstream hardness axiom (e.g., DDH/LWE), that axiom must be frozen upstream and surfaced explicitly on the task card.
+4. **License & upstream hygiene.** The upstream repository must have an explicit open-source license permitting mirroring (e.g., MIT, Apache-2.0, AGPL-3.0), preserve upstream attribution/licensing in the mirrored mission history, and stay pinned to an exact upstream commit SHA verified in CI.
 
 ### Threat Model
 
@@ -172,7 +189,7 @@ In a Lean 4 kernel-replayed hub, trustworthiness splits into two independent hal
 ## 5. Hub Stack & v1 Scope Decisions (Nov 2026)
 
 1. **Cloudflare hub is canonical:** One Worker + SQLite Durable Object (`SunsteadHub`) + one Cloudflare Container (`Lean4Verifier`). Core invariants live in `cloudflare/src/core.ts` with unit tests (`cloudflare/test/core.test.ts`) and an end-to-end protocol suite (`scripts/e2e.py`).
-2. **Lean 4–only v1:** Active v1 focuses exclusively on Lean 4 kernel-replayed proofs. The current starter missions (`tier1-metacomplexity-dag`, `tier1-crypto-algebra-dag`, and the two `demo: true` Tier 2 arenas) remain only during development/testing; before public launch, real missions must follow the Section 4 upstream-provenance rule (verbatim open `sorry`s from expert-maintained Lean 4 repositories) alongside at most one 0-point onboarding sandbox. Earlier Rust and Verus verifiers/missions remain in git history for v2.
+2. **Lean 4–only v1 with verbatim upstream provenance:** Active v1 focuses exclusively on Lean 4.36.0 + Mathlib `v4.36.0` kernel-replayed proofs. Every scoring mission (`arklib-near-capacity-primes`, `pnt-analytic-foundations`) imports frozen specs and open `sorry` statements verbatim from a pinned upstream commit verified in CI (`scripts/check-upstream.py`), alongside one 0-point pure-Lean `onboarding-sandbox` (`demo: true`). Earlier self-authored starter demos and Rust/Verus verifiers remain preserved in git history.
 
 ---
 
