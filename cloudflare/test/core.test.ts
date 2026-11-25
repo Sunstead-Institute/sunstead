@@ -463,12 +463,12 @@ test("buildProofView flags proofs accepted under an older spec and falls back on
 });
 
 test("howToRebuild quotes URLs so shells do not glob ?base=seed", () => {
-  const cmd = howToRebuild("https://sunstead.org", "onboarding-sandbox");
+  const cmd = howToRebuild("https://sunstead.org", "pnt-analytic-foundations");
   assert.equal(
     cmd,
-    "mkdir 'onboarding-sandbox' && cd 'onboarding-sandbox' && " +
-      "curl -sL 'https://sunstead.org/api/missions/onboarding-sandbox/bundle.tar.gz?base=seed' | tar xz && " +
-      "curl -sL 'https://sunstead.org/api/missions/onboarding-sandbox/history.mbox' | git am"
+    "mkdir 'pnt-analytic-foundations' && cd 'pnt-analytic-foundations' && " +
+      "curl -sL 'https://sunstead.org/api/missions/pnt-analytic-foundations/bundle.tar.gz?base=seed' | tar xz && " +
+      "curl -sL 'https://sunstead.org/api/missions/pnt-analytic-foundations/history.mbox' | git am"
   );
   assert.match(howToRebuild("https://h", "it's"), /mkdir 'it'\\''s'/);
 });
@@ -530,9 +530,39 @@ test("ledger entries carry provenance, attribution, spec status and a permalink"
 test("ledger keeps proofs from retired missions and flags demo and stale-spec proofs", () => {
   const retired = buildLedgerEntry({ ...proofRow(), patch_sha256: `sha256:${LEDGER_SHA}` }, null, "https://h");
   assert.equal(retired.mission_retired, true);
+  assert.equal(retired.mission_demo, false);
   assert.equal(retired.mission_title, null);
   assert.equal(retired.upstream, null);
   assert.equal(retired.spec_is_current, false);
+
+  const retiredDemo = buildLedgerEntry(
+    {
+      ...proofRow({ mission_id: "onboarding-sandbox", task_id: "decoder_injective", is_demo: 1 }),
+      patch_sha256: `sha256:${LEDGER_SHA}`,
+    },
+    null,
+    "https://h"
+  );
+  assert.equal(retiredDemo.mission_retired, true);
+  assert.equal(retiredDemo.mission_demo, true);
+  assert.equal(retiredDemo.mission_title, null);
+  assert.equal(retiredDemo.upstream, null);
+  assert.equal(retiredDemo.spec_is_current, false);
+  assert.equal(retiredDemo.github, null, "retired demo proofs must not unlock public social links on their own");
+  assert.deepEqual(retiredDemo.social_links, []);
+
+  const retiredDemoWithResearchProof = buildLedgerEntry(
+    {
+      ...proofRow({ mission_id: "onboarding-sandbox", task_id: "decoder_injective", is_demo: 1 }),
+      patch_sha256: `sha256:${LEDGER_SHA}`,
+    },
+    null,
+    "https://h",
+    1
+  );
+  assert.equal(retiredDemoWithResearchProof.mission_retired, true);
+  assert.equal(retiredDemoWithResearchProof.mission_demo, true);
+  assert.equal(retiredDemoWithResearchProof.github, "codex-dirichlet");
 
   const demo = buildLedgerEntry(
     { ...proofRow({ spec_sha256: "sha256:old" }), patch_sha256: `sha256:${LEDGER_SHA}` },

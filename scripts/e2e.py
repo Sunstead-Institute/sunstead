@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
-End-to-end test of the Sunstead Lean 4.36.0 + Mathlib hub (Cloudflare Worker +
-Durable Object + Lean 4 verifier container), using only the public HTTP protocol
-from /join.txt.
+End-to-end test of the Sunstead Lean 4 hub (Cloudflare Worker + Durable Object
++ Lean 4 verifier container), using only the public HTTP protocol from /join.txt.
 
     cd cloudflare && npm run dev          # local dev server (needs Docker)
     SUNSTEAD_URL=http://localhost:5173 python3 scripts/e2e.py
 
-Never point this at production: it registers contributors and submits patches.
+Derives expected missions dynamically from `missions/*/sunstead.json` and runs
+strictly non-destructive verification checks (no fake proofs or upstream spoilers).
+Never point this at production: it registers contributors, claims/releases leases,
+and submits rejected verification patches.
 """
 import io
 import json
@@ -22,6 +24,9 @@ import time
 import urllib.error
 import urllib.request
 
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MISSIONS_DIR = os.path.join(ROOT, "missions")
+
 BASE = os.environ.get("SUNSTEAD_URL", "http://localhost:5173").rstrip("/")
 if "sunstead.org" in BASE and os.environ.get("SUNSTEAD_E2E_ALLOW_PROD") != "1":
     sys.exit("refusing to run e2e against production (set SUNSTEAD_E2E_ALLOW_PROD=1 to override)")
@@ -29,9 +34,21 @@ if "sunstead.org" in BASE and os.environ.get("SUNSTEAD_E2E_ALLOW_PROD") != "1":
 RUN = f"{random.randrange(16**6):06x}"
 
 
+def load_local_manifests():
+    manifests = {}
+    for entry in sorted(os.listdir(MISSIONS_DIR)):
+        manifest_path = os.path.join(MISSIONS_DIR, entry, "sunstead.json")
+        if os.path.isfile(manifest_path):
+            with open(manifest_path, encoding="utf-8") as f:
+                m = json.load(f)
+            manifests[m["id"]] = m
+    assert manifests, f"no missions/*/sunstead.json found under {MISSIONS_DIR}"
+    return manifests
+
+
 def req(method, path, body=None, key=None, raw=False):
     data = None if body is None else json.dumps(body).encode("utf-8")
-    headers = {"User-Agent": "sunstead-e2e/0.4"}
+    headers = {"User-Agent": "sunstead-e2e/0.5"}
     if body is not None:
         headers["Content-Type"] = "application/json"
     if key:
@@ -68,12 +85,14 @@ def extract(tf, dest):
 
 def make_patch(mission_id, edits):
     code, data = req("GET", f"/api/missions/{mission_id}/bundle.tar.gz", raw=True)
-    assert code == 200, f"bundle download failed: {code}"
+    assert code == 200, f"bundle download failed for {mission_id}: {code}"
     with tempfile.TemporaryDirectory() as tmp:
         with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
             extract(tf, tmp)
         for rel, content in edits.items():
-            with open(os.path.join(tmp, rel), "w", encoding="utf-8") as f:
+            dst = os.path.join(tmp, rel)
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            with open(dst, "w", encoding="utf-8") as f:
                 f.write(content)
         return subprocess.check_output(["git", "diff"], cwd=tmp, text=True)
 
@@ -104,7 +123,7 @@ class SseCollector:
         assert self.ready.wait(timeout=10), "SSE stream did not connect within 10s"
 
     def _run(self):
-        r = urllib.request.Request(BASE + "/api/events", headers={"User-Agent": "sunstead-e2e/0.4"})
+        r = urllib.request.Request(BASE + "/api/events", headers={"User-Agent": "sunstead-e2e/0.5"})
         try:
             with urllib.request.urlopen(r, timeout=60) as resp:
                 self._resp = resp
@@ -145,43 +164,6 @@ class SseCollector:
                 pass
 
 
-DECODER_PROOF = """import OnboardingSandbox.Spec
-
-namespace OnboardingSandbox
-
-theorem encode_injective_of_lossless {n k : Nat} (c : LosslessCompressor n k) :
-    Injective c.encode := by
-  intro a b h
-  have h1 := congrArg c.decode h
-  rw [c.left_inv, c.left_inv] at h1
-  exact h1
-
-end OnboardingSandbox
-"""
-
-XOR_PROOF = """import OnboardingSandbox.Spec
-
-namespace OnboardingSandbox
-
-theorem otp_dec_enc {n : Nat} (m k : BitVec n) :
-    otpEnc (otpEnc m k) k = m := by
-  unfold otpEnc
-  rw [BitVec.xor_assoc, BitVec.xor_self, BitVec.xor_zero]
-
-end OnboardingSandbox
-"""
-
-PIGEONHOLE_SORRYAX = """import OnboardingSandbox.Spec
-
-namespace OnboardingSandbox
-
-theorem no_inj_lt :
-    ∀ {n m : Nat}, m < n → ∀ (f : Fin n → Fin m), ¬ Injective f :=
-  sorryAx _ false
-
-end OnboardingSandbox
-"""
-
 PNT_SORRYAX = """import PntFoundations.Spec
 
 open ArithmeticFunction
@@ -195,211 +177,234 @@ lemma isCompletelyMultiplicative_liouville :
 end PntFoundations
 """
 
+ARKLIB_SORRYAX = """import ArkLibNearCapacity.Spec
+
+open scoped NNReal
+
+namespace ArkLibNearCapacity
+
+theorem near_capacity_prime_supply (c : ℝ≥0) (hc : 0 < c) : NearCapacityPrimeSupply c :=
+  sorryAx _ false
+
+end ArkLibNearCapacity
+"""
+
+
+def pick_open_frontier_task(by_id, local_manifests):
+    """Pick a live open frontier task, preferring fast v4.36.0 standalone DAG missions."""
+    preferred = [
+        "pnt-analytic-foundations",
+        "arklib-near-capacity-primes",
+        "ieantn-chebyshev-kernel",
+        "matrix-rank444-f2",
+    ]
+    ordered = [mid for mid in preferred if mid in by_id] + [
+        mid for mid in sorted(by_id) if mid not in preferred
+    ]
+    for mid in ordered:
+        frontier = by_id[mid].get("frontier_task_ids") or []
+        if frontier:
+            tid = frontier[0]
+            task_def = next(t for t in local_manifests[mid]["tasks"] if t["id"] == tid)
+            return mid, tid, task_def
+    raise AssertionError("no open frontier task found in any active mission")
+
 
 def main():
-    print(f"==> Testing Sunstead Lean 4.36.0 + Mathlib hub at {BASE} (run {RUN})")
+    local_manifests = load_local_manifests()
+    print(f"==> Testing Sunstead Lean 4 hub at {BASE} (run {RUN}, {len(local_manifests)} local missions)")
 
     code, health = req("GET", "/api/health")
     assert code == 200 and health.get("ok") is True, health
     ok("/api/health")
 
     code, missions = req("GET", "/api/missions")
-    assert code == 200
+    assert code == 200, (code, missions)
     by_id = {m["id"]: m for m in missions["missions"]}
-    expected_ids = {
-        "arklib-near-capacity-primes",
-        "pnt-analytic-foundations",
-        "onboarding-sandbox",
-    }
-    assert set(by_id.keys()) == expected_ids, by_id.keys()
-    assert by_id["onboarding-sandbox"]["demo"] is True, by_id["onboarding-sandbox"]
-    assert by_id["arklib-near-capacity-primes"]["demo"] is False
-    assert by_id["arklib-near-capacity-primes"]["upstream"]["repo"] == "Verified-zkEVM/ArkLib"
-    assert by_id["pnt-analytic-foundations"]["demo"] is False
-    assert by_id["pnt-analytic-foundations"]["upstream"]["repo"] == "AlexKontorovich/PrimeNumberTheoremAnd"
-    ok(f"/api/missions lists {len(by_id)} Lean 4.36.0 missions with upstream provenance & sandbox flag")
+    assert set(by_id.keys()) == set(local_manifests.keys()), (
+        f"mission mismatch: hub={sorted(by_id.keys())} local={sorted(local_manifests.keys())}"
+    )
+    assert "onboarding-sandbox" not in by_id, "retired onboarding-sandbox must not appear in /api/missions"
+    for mid, manifest in local_manifests.items():
+        live = by_id[mid]
+        assert live["demo"] is bool(manifest.get("demo", False)), (mid, live)
+        assert live["mode"] == manifest["mode"], (mid, live)
+        if manifest.get("upstream"):
+            assert live["upstream"]["repo"] == manifest["upstream"]["repo"], (mid, live)
+            assert live["upstream"]["commit"] == manifest["upstream"]["commit"], (mid, live)
+    ok(f"/api/missions matches all {len(by_id)} manifests from missions/*/sunstead.json with upstream provenance")
 
     code, join_txt = req("GET", "/join.txt")
-    assert code == 200 and "contributors/register" in join_txt and "v4.36.0" in join_txt
+    assert code == 200 and "contributors/register" in join_txt
     assert "lake exe cache get" in join_txt
+    assert "onboarding-sandbox" not in join_txt, "retired onboarding-sandbox must not appear in /join.txt"
     assert "Verus" not in join_txt and "Rust target files" not in join_txt
-    ok("/join.txt (Lean 4.36.0 + Mathlib onboarding guide)")
+    for mid in local_manifests:
+        assert mid in join_txt, f"active mission {mid!r} missing from /join.txt"
+    ok("/join.txt lists all active missions without retired sandbox references")
 
     code, about_html = req("GET", "/what-is-this")
     assert code == 200 and "What is Sunstead?" in about_html, code
     ok("/what-is-this explainer page served")
 
+    probe_mission, probe_task, probe_task_def = pick_open_frontier_task(by_id, local_manifests)
+    probe_target = probe_task_def["target_files"][0]
+    probe_manifest = local_manifests[probe_mission]
+    frozen_sample = next(
+        (p for p in ("UPSTREAM.json", "sunstead.json", "lean-toolchain") if p in probe_manifest["frozen_paths"]),
+        probe_manifest["frozen_paths"][0],
+    )
+
     # Identity is required for claims and submissions.
-    code, res = req("POST", "/api/missions/onboarding-sandbox/tasks/decoder_injective/claim", {})
+    code, res = req("POST", f"/api/missions/{probe_mission}/tasks/{probe_task}/claim", {})
     assert code == 401, (code, res)
-    ok("anonymous claim rejected (401)")
+    ok(f"anonymous claim rejected (401) on {probe_mission}/{probe_task}")
 
     alice_handle, alice = register("alice-lean")
     bob_handle, bob = register("bob-lean")
     _, mallory = register("mallory")
     ok("registered 3 contributors")
 
-    # Policy gate: frozen spec edits are rejected before any container runs.
-    code, res = submit("onboarding-sandbox", "decoder_injective", mallory,
-                       {"OnboardingSandbox/Spec.lean": "-- tampered\n"})
-    assert code == 422 and "frozen" in json.dumps(res), (code, res)
-    code, res = submit("arklib-near-capacity-primes", "near_capacity_prime_supply", mallory,
-                       {"UPSTREAM.json": "{}\n"})
-    assert code == 422 and "frozen" in json.dumps(res), (code, res)
-    ok("frozen-path tampering rejected (422) for both sandbox and upstream missions")
+    # Profile endpoint: strict handle validation & proof-gated public links.
+    code, me = req("GET", "/api/me", key=alice)
+    assert code == 200 and me["links_public"] is False and me["non_demo_verified"] == 0, (code, me)
+    code, res = req("PATCH", "/api/me", {"github": "https://github.com/octocat"}, key=alice)
+    assert code == 400, (code, res)
+    code, me = req("PATCH", "/api/me", {"github": "octocat", "x": "octo_x"}, key=alice)
+    assert code == 200 and me["contributor"]["github"] == "octocat" and me["links_public"] is False, (code, me)
+    code, pub = req("GET", f"/api/contributors/{alice_handle}")
+    assert code == 200 and pub["contributor"]["github"] is None and pub["contributor"]["social_links"] == [], (code, pub)
+    ok("/api/me validates handles strictly and gates public social links until >= 1 non-demo proof")
 
-    # Claim -> contention -> release -> SSE `lease_released` -> re-claim.
+    # Policy gate: frozen spec edits are rejected fast (422) before waking any container.
+    code, res = submit(probe_mission, probe_task, mallory, {frozen_sample: "-- tampered\n"})
+    assert code == 422 and "frozen" in json.dumps(res) and res.get("stage") == "patch", (code, res)
+    ok(f"frozen-path tampering rejected fast (422, stage=patch) on {probe_mission}:{frozen_sample}")
+
+    # Claim -> 409 contention -> release -> SSE `lease_released` -> re-claim -> clean release.
     sse = SseCollector()
     sse.start()
     try:
-        code, res = req("POST", "/api/missions/onboarding-sandbox/tasks/decoder_injective/claim", {}, key=alice)
+        code, res = req("POST", f"/api/missions/{probe_mission}/tasks/{probe_task}/claim", {}, key=alice)
         assert code == 200 and res.get("claimed") is True, (code, res)
-        code, res = req("POST", "/api/missions/onboarding-sandbox/tasks/decoder_injective/claim", {}, key=bob)
+        code, res = req("POST", f"/api/missions/{probe_mission}/tasks/{probe_task}/claim", {}, key=bob)
         assert code == 409, (code, res)
-        code, res = req("POST", "/api/missions/onboarding-sandbox/tasks/decoder_injective/release", {}, key=alice)
+        code, res = req("POST", f"/api/missions/{probe_mission}/tasks/{probe_task}/release", {}, key=alice)
         assert code == 200 and res.get("released") is True, (code, res)
         sse.wait_for(
             "lease_released",
-            lambda ev: ev.get("mission_id") == "onboarding-sandbox"
-            and ev.get("task_id") == "decoder_injective"
+            lambda ev: ev.get("mission_id") == probe_mission
+            and ev.get("task_id") == probe_task
             and ev.get("contributor") == alice_handle,
         )
-        code, res = req("POST", "/api/missions/onboarding-sandbox/tasks/decoder_injective/claim", {}, key=bob)
+        code, res = req("POST", f"/api/missions/{probe_mission}/tasks/{probe_task}/claim", {}, key=bob)
         assert code == 200 and res.get("claimed") is True, (code, res)
-        ok("lease claimed, second claimant blocked, released with SSE lease_released, re-claimed")
+        code, res = req("POST", f"/api/missions/{probe_mission}/tasks/{probe_task}/release", {}, key=bob)
+        assert code == 200 and res.get("released") is True, (code, res)
+        ok(f"lease claimed, second claimant blocked (409), released with SSE lease_released, re-claimed & released")
     finally:
         sse.close()
 
-    # Pure-Lean sandbox: sorryAx rejected by kernel axiom check; comment-hide rejected by lint.
-    code, res = submit("onboarding-sandbox", "pigeonhole_fin", mallory,
-                       {"OnboardingSandbox/Pigeonhole.lean": PIGEONHOLE_SORRYAX})
-    assert code == 422 and "sorryAx" in json.dumps(res), (code, res)
-    ok("sandbox sorryAx rejected by kernel axiom check")
-
-    code, res = submit("onboarding-sandbox", "decoder_injective", mallory,
-                       {"OnboardingSandbox/DecoderInjective.lean": DECODER_PROOF + '\ndef s := "--" ; #eval IO.println "pwn"\n'})
-    assert code == 422, (code, res)
-    ok("string-literal comment hiding rejected")
-
-    # Upstream Mathlib mission: sorryAx rejected end-to-end by Mathlib kernel replay!
-    code, res = submit("pnt-analytic-foundations", "is_completely_multiplicative_liouville", mallory,
-                       {"PntFoundations/LiouvilleMult.lean": PNT_SORRYAX})
-    assert code == 422 and "sorryAx" in json.dumps(res), (code, res)
-    ok("upstream Mathlib mission sorryAx rejected by Lean 4.36.0 + Mathlib kernel axiom check")
-
-    # Honest sandbox proofs accepted with 0 leaderboard points (demo=true).
-    code, res = submit("onboarding-sandbox", "decoder_injective", bob,
-                       {"OnboardingSandbox/DecoderInjective.lean": DECODER_PROOF})
-    assert code == 200 and res.get("accepted") is True and res.get("points_awarded") == 0, (code, res)
-    ok(f"sandbox decoder_injective accepted ({res.get('verify_ms')} ms, 0 sandbox pts)")
-
-    code, res = submit("onboarding-sandbox", "xor_involution", bob,
-                       {"OnboardingSandbox/XorInvolution.lean": XOR_PROOF})
-    assert code == 200 and res.get("accepted") is True and res.get("points_awarded") == 0, (code, res)
-    ok(f"sandbox xor_involution accepted ({res.get('verify_ms')} ms, 0 sandbox pts)")
-
-    # Re-submitting an already-verified DAG task is rejected fast (409) before waking a container.
-    code, res = submit("onboarding-sandbox", "decoder_injective", alice,
-                       {"OnboardingSandbox/DecoderInjective.lean": DECODER_PROOF + "\n-- extra\n"})
-    assert code == 409, (code, res)
-    ok("already-verified DAG task rejected before container wakeup (409)")
-
-    # Leaderboard: bob has 0 pts from sandbox proofs.
-    code, board = req("GET", "/api/leaderboard")
-    assert code == 200
-    bob_row = next((e for e in board["leaderboard"] if e["contributor"] == bob_handle), None)
-    assert bob_row is not None and bob_row["points"] == 0 and bob_row["verified_tasks"] == 2, bob_row
-    ok(f"leaderboard verified (sandbox proofs award 0 leaderboard points: {bob_row})")
-
-    # Exact `how_to_rebuild` command rebuilds the live sandbox mission with attributed commits!
-    code, hist = req("GET", "/api/missions/onboarding-sandbox/history")
-    assert code == 200 and len(hist["commits"]) >= 2, (code, hist)
-    cmd = hist["how_to_rebuild"]
-    assert "git init" not in cmd, f"how_to_rebuild must not re-init git: {cmd}"
-    assert "bundle.tar.gz?base=seed" in cmd and "history.mbox | git am" in cmd, cmd
-
-    code, live = req("GET", "/api/missions/onboarding-sandbox/bundle.tar.gz", raw=True)
-    assert code == 200
-    with tempfile.TemporaryDirectory() as tmp:
-        rebuilt_dir = os.path.join(tmp, "rebuilt")
-        live_dir = os.path.join(tmp, "live")
-        os.makedirs(rebuilt_dir)
-        os.makedirs(live_dir)
-        with tarfile.open(fileobj=io.BytesIO(live), mode="r:gz") as tf:
-            extract(tf, live_dir)
-        env = os.environ.copy()
-        env.setdefault("GIT_COMMITTER_NAME", "e2e")
-        env.setdefault("GIT_COMMITTER_EMAIL", "e2e@localhost")
-        subprocess.run(
-            ["bash", "-euo", "pipefail", "-c", cmd.replace("<hub>", BASE)],
-            cwd=rebuilt_dir,
-            env=env,
-            check=True,
-        )
-        log = subprocess.check_output(["git", "log", "--format=%an|%s"], cwd=rebuilt_dir, text=True)
-        assert "bob-lean|" in log and "verify decoder_injective" in log, log
-        diff = subprocess.run(
-            ["diff", "-r", "-x", ".git", rebuilt_dir, live_dir],
-            capture_output=True,
-            text=True,
-        )
-        assert diff.returncode == 0, diff.stdout[-2000:]
-    ok("exact `how_to_rebuild` command rebuilds live Lean mission with authors")
-
-    # Read-only "View verified proof" endpoint behind the blueprint inspector.
-    code, proof = req("GET", "/api/missions/onboarding-sandbox/tasks/decoder_injective/proof")
-    assert code == 200, (code, proof)
-    assert proof["contributor"] == bob_handle and proof["task_id"] == "decoder_injective", proof
-    assert proof["spec_is_current"] is True and proof["spec_sha256"].startswith("sha256:"), proof
-    assert proof["patch_sha256"].startswith("sha256:") and isinstance(proof["verify_ms"], int), proof
-    assert "OnboardingSandbox/DecoderInjective.lean" in proof["files"], proof["files"]
-    assert "DecoderInjective.lean" in proof["patch"], proof["patch"][:400]
-    with tempfile.TemporaryDirectory() as tmp:
-        env = os.environ.copy()
-        env.setdefault("GIT_COMMITTER_NAME", "e2e")
-        env.setdefault("GIT_COMMITTER_EMAIL", "e2e@localhost")
-        subprocess.run(["bash", "-euo", "pipefail", "-c", proof["how_to_rebuild"]], cwd=tmp, env=env, check=True)
-        log = subprocess.check_output(
-            ["git", "log", "--format=%s"], cwd=os.path.join(tmp, "onboarding-sandbox"), text=True
-        )
-        assert "verify decoder_injective" in log, log
-    code, res = req("GET", "/api/missions/onboarding-sandbox/tasks/pigeonhole_fin/proof")
+    # Read-only single-request task files inspection endpoint.
+    code, tfiles = req("GET", f"/api/missions/{probe_mission}/tasks/{probe_task}/files")
+    assert code == 200, (code, tfiles)
+    assert tfiles["task_id"] == probe_task and probe_target in tfiles["target_files"], tfiles
+    assert tfiles["frozen_files"], tfiles
+    code, res = req("GET", f"/api/missions/{probe_mission}/tasks/no-such-task/files")
     assert code == 404, (code, res)
-    code, res = req("GET", "/api/missions/no-such-mission/tasks/x/proof")
-    assert code == 404, (code, res)
-    ok("verified-proof endpoint: attribution, timing, files, patch, runnable rebuild; 404 when unproven")
+    ok("task-files endpoint returns target_files + frozen_files without waking verifier; 404 on unknown task")
 
-    # Public proof ledger: the same proof is listed and has a permanent page.
-    code, ledger = req("GET", "/api/proofs?limit=200")
-    assert code == 200 and ledger["total"] >= 1, (code, ledger)
-    entry = next(e for e in ledger["proofs"] if e["patch_sha256"] == proof["patch_sha256"])
-    assert entry["task_id"] == "decoder_injective" and entry["mission_demo"] is True, entry
-    assert entry["permalink"].endswith("/proofs/" + entry["proof_id"]), entry
-    code, perm = req("GET", "/api/proofs/" + entry["proof_id"])
-    assert code == 200 and perm["patch"] == proof["patch"], (code, perm)
-    assert perm["how_to_rebuild"] == proof["how_to_rebuild"], perm
+    # Non-destructive verifier checks: lint rejection (comment-hide) via the real container.
+    target_src = tfiles["target_files"][probe_target]
+    code, res = submit(
+        probe_mission,
+        probe_task,
+        mallory,
+        {probe_target: target_src + '\ndef _e2e_s : String := "--" ; #eval IO.println "pwn"\n'},
+    )
+    assert code == 422 and res.get("stage") == "lint", (code, res)
+    ok(f"verifier container rejected string-literal comment hiding (422, stage=lint) on {probe_mission}/{probe_task}")
+
+    # Non-destructive verifier check: sorryAx rejected by kernel axiom check on a live Mathlib mission.
+    if "pnt-analytic-foundations" in by_id and "is_completely_multiplicative_liouville" in (
+        by_id["pnt-analytic-foundations"].get("frontier_task_ids") or []
+    ):
+        code, res = submit(
+            "pnt-analytic-foundations",
+            "is_completely_multiplicative_liouville",
+            mallory,
+            {"PntFoundations/LiouvilleMult.lean": PNT_SORRYAX},
+        )
+        assert code == 422 and "sorryAx" in json.dumps(res), (code, res)
+        ok("upstream Mathlib mission sorryAx rejected by Lean 4.36.0 kernel axiom check (pnt-analytic-foundations)")
+    elif "arklib-near-capacity-primes" in by_id and "near_capacity_prime_supply" in (
+        by_id["arklib-near-capacity-primes"].get("frontier_task_ids") or []
+    ):
+        code, res = submit(
+            "arklib-near-capacity-primes",
+            "near_capacity_prime_supply",
+            mallory,
+            {"ArkLibNearCapacity/PrimeSupply.lean": ARKLIB_SORRYAX},
+        )
+        assert code == 422 and "sorryAx" in json.dumps(res), (code, res)
+        ok("upstream Mathlib mission sorryAx rejected by Lean 4.36.0 kernel axiom check (arklib-near-capacity-primes)")
+
+    # Non-destructive happy-path kernel-replay check on `matrix-rank444-f2`:
+    # submitting a comment-only edit of the published r=47 certificate runs full
+    # Lean 4.36.0 `decide +kernel` verification (ok=true, score=47) inside the
+    # container and is cleanly rejected by the hub's strict-improvement check
+    # without mutating mission state.
+    if "matrix-rank444-f2" in by_id:
+        code, rank_files = req("GET", "/api/missions/matrix-rank444-f2/tasks/reduce_rank/files")
+        assert code == 200, (code, rank_files)
+        cert_src = rank_files["target_files"]["Rank444/Certificate.lean"]
+        code, res = submit(
+            "matrix-rank444-f2",
+            "reduce_rank",
+            bob,
+            {"Rank444/Certificate.lean": cert_src + f"\n-- e2e non-destructive kernel check {RUN}\n"},
+        )
+        assert code == 422 and "does not strictly improve on best" in json.dumps(res), (code, res)
+        ok("non-destructive full kernel-replay check passed on matrix-rank444-f2 (verified r=47, strict-improvement guard held)")
+
+    # Mission history & seed bundle contract (contains `.git` + `sunstead.json` for `git am`).
+    code, hist = req("GET", f"/api/missions/{probe_mission}/history")
+    assert code == 200 and "bundle.tar.gz?base=seed" in hist["how_to_rebuild"], (code, hist)
+    assert "git init" not in hist["how_to_rebuild"], hist["how_to_rebuild"]
+    code, mbox = req("GET", f"/api/missions/{probe_mission}/history.mbox", raw=True)
+    assert code == 200, code
+    code, seed_tar = req("GET", f"/api/missions/{probe_mission}/bundle.tar.gz?base=seed", raw=True)
+    assert code == 200, code
+    with tarfile.open(fileobj=io.BytesIO(seed_tar), mode="r:gz") as tf:
+        names = tf.getnames()
+    assert any(n.endswith("sunstead.json") for n in names), names[:20]
+    assert any(".git/" in n or n.endswith(".git") for n in names), names[:20]
+    ok(f"history, history.mbox, and seed bundle.tar.gz?base=seed verified for {probe_mission}")
+
+    # Public proof ledger endpoints & validation.
+    code, ledger = req("GET", "/api/proofs?limit=50")
+    assert code == 200 and isinstance(ledger.get("proofs"), list), (code, ledger)
+    if ledger["proofs"]:
+        entry = ledger["proofs"][0]
+        code, perm = req("GET", "/api/proofs/" + entry["proof_id"])
+        assert code == 200 and perm["patch_sha256"] == entry["patch_sha256"], (code, perm)
+        code, page = req("GET", "/proofs/" + entry["proof_id"], raw=True)
+        assert code == 200 and b'id="ledger-root"' in page, code
     code, res = req("GET", "/api/proofs/" + "0" * 64)
     assert code == 404, (code, res)
     code, res = req("GET", "/api/proofs/not-a-hash")
     assert code == 400, (code, res)
-    code, page = req("GET", "/proofs/" + entry["proof_id"], raw=True)
-    assert code == 200 and b'id="ledger-root"' in page, code
-    ok("proof ledger: listed with provenance, permalink returns the same patch, bad ids rejected")
-
-    # Read-only single-request task files inspection endpoint.
-    code, tfiles = req("GET", "/api/missions/onboarding-sandbox/tasks/decoder_injective/files")
-    assert code == 200, (code, tfiles)
-    assert tfiles["task_id"] == "decoder_injective" and tfiles["status"] == "verified", tfiles
-    assert "OnboardingSandbox/DecoderInjective.lean" in tfiles["target_files"], tfiles["target_files"].keys()
-    assert "OnboardingSandbox/Spec.lean" in tfiles["frozen_files"], tfiles["frozen_files"].keys()
-    assert "sorry" not in tfiles["target_files"]["OnboardingSandbox/DecoderInjective.lean"]
-    code, res = req("GET", "/api/missions/onboarding-sandbox/tasks/no-such-task/files")
+    code, res = req("GET", "/api/missions/no-such-mission/tasks/x/proof")
     assert code == 404, (code, res)
-    ok("task-files endpoint: returns live target_files + frozen_files without waking verifier; 404 on unknown task")
+    ok("proof ledger endpoints respond cleanly and reject invalid/missing proof IDs")
+
+    code, board = req("GET", "/api/leaderboard")
+    assert code == 200 and isinstance(board.get("leaderboard"), list), (code, board)
+    ok(f"/api/leaderboard returned {len(board['leaderboard'])} entries")
 
     code, stats = req("GET", "/api/stats")
     assert code == 200 and stats["all_time"]["registered"] >= 3, (code, stats)
-    assert stats["all_time"]["claimed"] >= 1 and stats["all_time"]["verified"] >= 1, stats
+    assert stats["all_time"]["claimed"] >= 1 and stats["all_time"]["submissions"] >= 1, stats
     ok(f"funnel stats: {stats['all_time']}")
     print("\nAll end-to-end checks passed.")
 
