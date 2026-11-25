@@ -172,11 +172,13 @@ jobs:
         run: |
           docker run --rm --network=none sunstead-verifier-lean4:ci sh -c '
             test -d /missions/arklib-near-capacity-primes &&
+            test -d /missions/ieantn-chebyshev-kernel &&
             test -d /missions/pnt-analytic-foundations &&
-            test -d /missions/onboarding-sandbox &&
+            test -d /missions/matrix-rank444-f2 &&
+            test ! -d /missions/onboarding-sandbox &&
             test -x /opt/sunstead/sunstead-check &&
             /opt/sunstead/sunstead-check selftest | grep -q "\"selftest\":\"ok\"" &&
-            test "$(ls -1 /opt/sunstead/mission-cache | wc -l)" -ge 3 &&
+            test "$(ls -1 /opt/sunstead/mission-cache | wc -l)" -ge 4 &&
             python3 -m py_compile /opt/verifier_server.py
           '
           docker run --rm --network=none sunstead-verifier-lean4-v435:ci sh -c '

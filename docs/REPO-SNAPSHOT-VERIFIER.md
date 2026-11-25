@@ -134,7 +134,7 @@ Each Lean toolchain runs in its own digest-pinned, networkless (`enableInternet 
 
 | `verifier_kind` | `verifier.toolchain` | Local / Hub Image | Cloudflare DO Binding | Target Upstream Repos |
 | :--- | :--- | :--- | :--- | :--- |
-| `lean4` (default) | `leanprover/lean4:v4.36.0` | `sunstead/verifier-lean4:v0.2` (`cloudflare/containers/lean4/Dockerfile`) | `LEAN4_VERIFIER` (`Lean4Verifier`) | `PrimeNumberTheoremAnd`, `ArkLib` (standalone), `onboarding-sandbox`, `v4.36.0` Mathlib snapshots |
+| `lean4` (default) | `leanprover/lean4:v4.36.0` | `sunstead/verifier-lean4:v0.2` (`cloudflare/containers/lean4/Dockerfile`) | `LEAN4_VERIFIER` (`Lean4Verifier`) | `PrimeNumberTheoremAnd`, `ArkLib` (standalone), `IEANTN`, `rank444-f2`, `v4.36.0` Mathlib snapshots |
 | `lean4-v4.35.0` | `leanprover/lean4:v4.35.0` | `sunstead/verifier-lean4-v4.35.0:v0.1` (`cloudflare/containers/lean4-v4.35.0/Dockerfile`) | `LEAN4_V435_VERIFIER` (`Lean4V435Verifier`) | `leanprover/LNSym` (pure Lean, zero Mathlib), plus `v4.35.0` snapshots (`Clean`, `FLT` once Mathlib `v4.35.0` layer is added) |
 | `lean4-v4.31.0` | `leanprover/lean4:v4.31.0` | `sunstead/verifier-lean4-v4.31.0:v0.1` (`cloudflare/containers/lean4-v4.31.0/Dockerfile`) | `LEAN4_V431_VERIFIER` (`Lean4V431Verifier`) | `Beneficial-AI-Foundation/curve25519-dalek-lean-verify` (`aeneas` + `PrimeCert` + Mathlib `v4.31.0`) |
 

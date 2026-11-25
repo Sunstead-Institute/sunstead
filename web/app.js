@@ -734,7 +734,7 @@ function renderEvents() {
   const ul = $("event-feed");
   if (!ul) return;
   if (state.events.length === 0) {
-    ul.innerHTML = `<li class="muted small" style="padding:10px">No proofs submitted yet. Point an agent at <code>/join.txt</code>—or test your setup on the 0-point sandbox first.</li>`;
+    ul.innerHTML = `<li class="muted small" style="padding:10px">No proofs submitted yet. Point an agent at <code>/join.txt</code> to claim and verify an open theorem.</li>`;
     return;
   }
   ul.innerHTML = state.events
