@@ -1,0 +1,97 @@
+name: Nominate an Upstream Repo / Open sorry
+description: Propose genuine, maintainer-requested open Lean 4 sorry obligations for Sunstead (gated Section-4 intake).
+title: "[Mission Nomination]: "
+labels: ["mission-nomination"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### Sunstead Mission Intake (Gated · Verbatim Upstream Provenance)
+        Sunstead never invents research specifications from scratch. Every scoring mission copies frozen definitions and open `sorry` statements **verbatim** from a pinned 40-character upstream commit SHA and verifies them in CI (`scripts/check-upstream.py` and `scripts/check-statements.py`).
+
+        All nominations are reviewed by Sunstead maintainers before packaging. We never automatically open PRs against upstream repositories without respecting the project's contribution and AI-disclosure policy.
+
+  - type: dropdown
+    id: relationship
+    attributes:
+      label: Relationship to the upstream project
+      options:
+        - Maintainer / project author
+        - Active contributor to the upstream repository
+        - Community member nominating a publicly solicited open issue / blueprint gap
+    validations:
+      required: true
+
+  - type: input
+    id: repo
+    attributes:
+      label: Upstream GitHub repository
+      description: Public GitHub repository in `owner/repo` format (or full URL).
+      placeholder: "e.g. AlexKontorovich/PrimeNumberTheoremAnd"
+    validations:
+      required: true
+
+  - type: input
+    id: commit
+    attributes:
+      label: Pinned 40-character commit SHA
+      description: Exact commit hash where the frozen definitions and target `sorry` statements live.
+      placeholder: "e.g. e9906138410f8f76ca66b9bc252d0993f3ee348c"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: license
+    attributes:
+      label: Open-source SPDX license
+      description: Permissive licenses can be mirrored directly; copyleft licenses require explicit license review before mirroring.
+      options:
+        - Apache-2.0
+        - MIT
+        - BSD-3-Clause
+        - BSD-2-Clause
+        - ISC
+        - Other / Copyleft (specify in notes below)
+    validations:
+      required: true
+
+  - type: input
+    id: toolchain
+    attributes:
+      label: Lean toolchain (`lean-toolchain`)
+      description: Sunstead's live verifier currently runs `leanprover/lean4:v4.36.0` with Mathlib `v4.36.0`.
+      placeholder: "leanprover/lean4:v4.36.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: targets
+    attributes:
+      label: Target open `sorry` declaration(s) and line links
+      description: List each target `theorem` or `lemma` with its pinned GitHub file/line permalink and any dependencies between them (for DAG missions). Proof-only `sorry`s only — no `def`/`structure`/`instance` `sorry`s.
+      placeholder: |
+        - `MyLib.theorem_name` — https://github.com/owner/repo/blob/<40-char-sha>/Path/File.lean#L42-L50
+        - `MyLib.downstream_lemma` (depends on `theorem_name`) — https://github.com/owner/repo/blob/<40-char-sha>/Path/File.lean#L80-L92
+    validations:
+      required: true
+
+  - type: textarea
+    id: etiquette
+    attributes:
+      label: Preferred upstream PR, style & attribution etiquette
+      description: Tell us how you want verified proofs handled (e.g. Zulip check-in first, required linters, AI-assistance disclosure policy, maintainer handle to ping, or whether to stage diffs privately for review first).
+      placeholder: "e.g. Please post verified diffs in #zulip-channel or tag @maintainer before opening a PR; include axiom output and AI-assistance note."
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: intake_checks
+    attributes:
+      label: Section-4 intake & availability confirmation
+      options:
+        - label: Target `sorry`s are proof-only (`theorem`/`lemma`), not incomplete definitions or WIP placeholders.
+          required: true
+        - label: Checked upstream `main`, open PRs, and issue comments — these obligations are not already solved or actively claimed upstream.
+          required: true
+        - label: Target statements rely only on standard Lean axioms (`propext`, `Classical.choice`, `Quot.sound`) with no hidden `sorry` in their definitions.
+          required: true

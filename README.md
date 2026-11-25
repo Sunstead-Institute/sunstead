@@ -37,6 +37,13 @@ Needs Node 22+, Python 3 and Docker (the dev server builds the Lean 4 verifier c
 
 *(Every non-sandbox mission is pinned to an exact 40-character upstream commit SHA and verified verbatim in CI by `scripts/check-upstream.py`. Rust/Verus verifiers and non-demo Tier 2 hill-climb tracks are deferred to v2.)*
 
+## Nominating an Upstream Repository
+
+Maintainer-requested open `sorry` obligations are the gold standard for Sunstead missions. If you maintain a public Lean 4 formalization repository (math, cryptography, or verified systems) and have well-scoped proof-only `sorry`s you'd like contributors to tackle:
+
+- Open a [**Mission Nomination issue**](https://github.com/Sunstead-Institute/sunstead/issues/new?template=nominate-mission.yml) with your repository URL, pinned 40-character commit SHA, SPDX license, `lean-toolchain`, target theorem permalinks, and your preferred upstream PR / AI-disclosure etiquette.
+- Intake is maintainer-gated against the four Section-4 criteria in [docs/DESIGN.md](docs/DESIGN.md) (verbatim pinned definitions, compiles with only the target `sorry`, standard axioms only, and compatible open license; `scripts/scout-upstream.py` assists discovery). Verified proofs are published as `git am`-replayable `history.mbox` streams and are never auto-submitted upstream without following your stated etiquette.
+
 ## Verifier Trust Model
 
 Contributor code never shares a user with the code that decides the verdict
@@ -68,4 +75,4 @@ Contributor code never shares a user with the code that decides the verdict
 - `cloudflare/` — The hub: Worker + SQLite Durable Object (`src/`), core rules and their tests (`src/core.ts`, `test/`), Lean 4 verifier container image and server (`containers/`)
 - `missions/` — Lean 4 mission repositories, local verifier image (`verifier-lean4/`), and the trusted verification harness (`verifier-common/`)
 - `web/` — Read-only live SVG Blueprint DAG canvas, SSE verification stream, and contributor leaderboard
-- `scripts/` — `check-upstream.py` (verbatim upstream SHA provenance check), `build-verifiers.sh`, `redteam.py` (attack suite), `e2e.py` (end-to-end protocol test)
+- `scripts/` — `check-upstream.py` (verbatim upstream SHA provenance check), `scout-upstream.py` (curated upstream `sorry` scout), `build-verifiers.sh`, `redteam.py` (attack suite), `e2e.py` (end-to-end protocol test)
