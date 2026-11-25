@@ -44,12 +44,33 @@ jobs:
             missions/verifier-common/sunstead_sandbox.py \
             cloudflare/containers/verifier_server.py \
             scripts/check-upstream.py scripts/check-statements.py scripts/redteam.py scripts/e2e.py \
-            scripts/scout-upstream.py scripts/test_scout_upstream.py
+            scripts/scout-upstream.py scripts/test_scout_upstream.py \
+            scripts/export-upstream.py scripts/test_export_upstream.py
           for f in missions/*/verify; do python3 -m py_compile "$f"; done
       - name: Upstream scout unit tests (offline)
         run: python3 scripts/test_scout_upstream.py
+      - name: Upstream export unit tests (offline, no Lean)
+        run: python3 scripts/test_export_upstream.py
       - name: Verify verbatim upstream provenance against pinned commits
         run: python3 scripts/check-upstream.py
+
+  export-upstream:
+    name: Upstream export (core Lean build)
+    runs-on: ubuntu-latest
+    needs: python
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install elan and the pinned Lean toolchain (core Lean only, no Mathlib)
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+            | sh -s -- -y --no-modify-path --default-toolchain "$(cat missions/pnt-analytic-foundations/lean-toolchain)"
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Export tests with lake build, sorry and axiom checks
+        run: python3 scripts/test_export_upstream.py -v
 
   verifiers:
     name: Lean 4 verifier image + red-team suite
