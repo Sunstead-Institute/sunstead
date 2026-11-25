@@ -51,6 +51,16 @@ import {
   constantTimeEqual,
   shouldRunAsyncSubmit,
   formatSubmissionStatusView,
+  computeDecompPointSplit,
+  computeRefutationBounty,
+  checkDecompositionEligibility,
+  parseDecomposeRequest,
+  parseRefuteRequest,
+  buildSubgoalStubSource,
+  assembleDecomposedLeanFile,
+  generateUnifiedDiff,
+  extractPropStatementExpr,
+  MAX_SUBGOAL_STATEMENT_BYTES,
   type AcceptedProofRow,
   type MissionManifest,
   type SubmissionStatusRow,
@@ -1208,4 +1218,318 @@ test("web/app.js hill-climb nodePalette preserves CLAIMED/OPEN status and SSE in
     nodePalette({ unlocked: true, status: "verified", active_lease: null }, "dag").badge,
     "VERIFIED"
   );
+  assert.equal(
+    nodePalette(
+      {
+        unlocked: true,
+        status: "open",
+        active_lease: null,
+        disputed_counterexample: { refuter: "bob", proof_id: "a".repeat(64) },
+      },
+      "dag"
+    ).badge,
+    "DISPUTED ¬T"
+  );
+  assert.match(appJs, /decomp-cluster/);
+  assert.match(appJs, /decomp-edge/);
+  assert.match(appJs, /ledger-badge-refute/);
+  assert.match(appJs, /task_decomposed/);
+  assert.match(appJs, /decomposition_refuted/);
+});
+
+// ---------------------------------------------------------------- v2 decompose & refute core rules
+
+test("v2 zero-inflation point splitting and refutation bounties", () => {
+  const s2 = computeDecompPointSplit(150, 2);
+  assert.equal(s2.architect_points, 30);
+  assert.equal(s2.solver_points_per_subgoal, 60);
+  assert.equal(s2.max_total_points, 150);
+  assert.ok(s2.max_total_points <= 150);
+
+  const s3 = computeDecompPointSplit(250, 3);
+  assert.equal(s3.architect_points, 50);
+  assert.equal(s3.solver_points_per_subgoal, 66);
+  assert.equal(s3.max_total_points, 248);
+  assert.ok(s3.max_total_points <= 250, "total must never exceed parent points");
+
+  // Depth-2 split of a 60-pt subgoal also preserves zero-inflation.
+  const nested = computeDecompPointSplit(s2.solver_points_per_subgoal, 2);
+  assert.equal(nested.architect_points, 12);
+  assert.equal(nested.solver_points_per_subgoal, 24);
+  assert.equal(nested.max_total_points, 60);
+
+  // Demo missions always yield 0 points / 0 bounty.
+  assert.equal(computeDecompPointSplit(0, 2).max_total_points, 0);
+  assert.equal(computeRefutationBounty({ tier: 1, demo: false }), 75);
+  assert.equal(computeRefutationBounty({ tier: 2, demo: false }), 50);
+  assert.equal(computeRefutationBounty({ tier: 1, demo: true }), 0);
+});
+
+test("v2 checkDecompositionEligibility enforces allowlist, pilot flag, depth <= 2, and active caps", () => {
+  const pilot = mission("dag", 1, {
+    decomposition: { enabled: true, require_allowlist: true, allow_direct_bypass: true, max_depth: 2 },
+  });
+  const t = task("root_t");
+
+  assert.throws(
+    () =>
+      checkDecompositionEligibility({
+        manifest: mission("dag", 1),
+        task: t,
+        allTasks: [t],
+        contributor: "alice",
+        isAllowlisted: true,
+        activeDecompsOnTarget: 0,
+        activeDecompsByContributor: 0,
+      }),
+    /not enabled/
+  );
+  assert.throws(
+    () =>
+      checkDecompositionEligibility({
+        manifest: pilot,
+        task: t,
+        allTasks: [t],
+        contributor: "bob",
+        isAllowlisted: false,
+        activeDecompsOnTarget: 0,
+        activeDecompsByContributor: 0,
+      }),
+    /allowlist/
+  );
+  assert.throws(
+    () =>
+      checkDecompositionEligibility({
+        manifest: pilot,
+        task: t,
+        allTasks: [t],
+        contributor: "alice",
+        isAllowlisted: true,
+        activeDecompsOnTarget: 1,
+        activeDecompsByContributor: 0,
+      }),
+    /already has an active decomposition/
+  );
+  assert.throws(
+    () =>
+      checkDecompositionEligibility({
+        manifest: pilot,
+        task: t,
+        allTasks: [t],
+        contributor: "alice",
+        isAllowlisted: true,
+        activeDecompsOnTarget: 0,
+        activeDecompsByContributor: 3,
+      }),
+    /cap reached/
+  );
+  const depth2Task = task("root_t__d1__sub1__d2__sub2", {
+    def: { id: "root_t__d1__sub1__d2__sub2", title: "d2", target_files: ["M/S.lean"], decomp_depth: 2 },
+  });
+  assert.throws(
+    () =>
+      checkDecompositionEligibility({
+        manifest: pilot,
+        task: depth2Task,
+        allTasks: [depth2Task],
+        contributor: "alice",
+        isAllowlisted: true,
+        activeDecompsOnTarget: 0,
+        activeDecompsByContributor: 0,
+      }),
+    /depth limit/
+  );
+
+  const ok1 = checkDecompositionEligibility({
+    manifest: pilot,
+    task: t,
+    allTasks: [t],
+    contributor: "alice",
+    isAllowlisted: true,
+    activeDecompsOnTarget: 0,
+    activeDecompsByContributor: 2,
+  });
+  assert.equal(ok1.depth, 1);
+});
+
+test("v2 parseDecomposeRequest and parseRefuteRequest enforce subgoal bounds, statement size, and path scoping", () => {
+  const redFile = "ArkLibNearCapacity/Decomp_near_capacity_prime_supply_d1.lean";
+  const goodPatch = generateUnifiedDiff(redFile, null, "import ArkLibNearCapacity.Spec\n");
+
+  // 1 subgoal rejected (< 2)
+  assert.throws(
+    () =>
+      parseDecomposeRequest(
+        {
+          subgoals: [{ id: "only_one", title: "One", statement: "True" }],
+          reduction_file: redFile,
+          reduction_theorem: "ArkLibNearCapacity.red",
+          patch: goodPatch,
+        },
+        { libRoot: "ArkLibNearCapacity", frozenPaths: ["ArkLibNearCapacity/Spec.lean"], defaultDecompId: "d1" }
+      ),
+    /between 2 and 6/
+  );
+
+  // Oversized statement (> 4 KB) rejected
+  assert.throws(
+    () =>
+      parseDecomposeRequest(
+        {
+          subgoals: [
+            { id: "sub_a", title: "A", statement: "x".repeat(MAX_SUBGOAL_STATEMENT_BYTES + 1) },
+            { id: "sub_b", title: "B", statement: "1 = 1" },
+          ],
+          reduction_file: redFile,
+          reduction_theorem: "ArkLibNearCapacity.red",
+          patch: goodPatch,
+        },
+        { libRoot: "ArkLibNearCapacity", frozenPaths: ["ArkLibNearCapacity/Spec.lean"], defaultDecompId: "d1" }
+      ),
+    /4096 bytes/
+  );
+
+  // Reserved DecompStatements_* module path rejected
+  assert.throws(
+    () =>
+      parseDecomposeRequest(
+        {
+          subgoals: [
+            { id: "sub_a", title: "A", statement: "1 = 1" },
+            { id: "sub_b", title: "B", statement: "2 = 2" },
+          ],
+          reduction_file: "ArkLibNearCapacity/DecompStatements_t_d1.lean",
+          reduction_theorem: "ArkLibNearCapacity.red",
+          patch: generateUnifiedDiff("ArkLibNearCapacity/DecompStatements_t_d1.lean", null, "-- hi\n"),
+        },
+        { libRoot: "ArkLibNearCapacity", frozenPaths: ["ArkLibNearCapacity/Spec.lean"], defaultDecompId: "d1" }
+      ),
+    /reserved/
+  );
+
+  const parsed = parseDecomposeRequest(
+    {
+      subgoals: [
+        { id: "sub_a", title: "Subgoal A", statement: "def sub_a : Prop := ∀ n : Nat, n = n" },
+        { id: "sub_b", title: "Subgoal B", statement: "def sub_b : Prop := ∀ m : Nat, m + 0 = m" },
+      ],
+      reduction_file: redFile,
+      reduction_theorem: "ArkLibNearCapacity.reduce_main",
+      patch: goodPatch,
+    },
+    { libRoot: "ArkLibNearCapacity", frozenPaths: ["ArkLibNearCapacity/Spec.lean"], defaultDecompId: "d1" }
+  );
+  assert.equal(parsed.decomp_id, "d1");
+  assert.equal(parsed.reduction_module, "ArkLibNearCapacity.Decomp_near_capacity_prime_supply_d1");
+
+  const refPatch = generateUnifiedDiff("ArkLibNearCapacity/RefuteSub.lean", null, "import ArkLibNearCapacity.Spec\n");
+  const parsedRef = parseRefuteRequest(
+    { refute_theorem: "ArkLibNearCapacity.refute_sub", patch: refPatch },
+    { libRoot: "ArkLibNearCapacity", frozenPaths: ["ArkLibNearCapacity/Spec.lean"] }
+  );
+  assert.equal(parsedRef.refute_file, "ArkLibNearCapacity/RefuteSub.lean");
+  assert.equal(parsedRef.refute_module, "ArkLibNearCapacity.RefuteSub");
+});
+
+test("v2 assembleDecomposedLeanFile strips DecompStatements imports and renderMbox emits Co-authored-by trailers", () => {
+  const assembled = assembleDecomposedLeanFile({
+    baseImports: ["ArkLibNearCapacity.Spec"],
+    statementPreamble: "open scoped NNReal",
+    targetTheorem: "ArkLibNearCapacity.near_capacity_prime_supply",
+    targetTypeExpr: extractPropStatementExpr(
+      "def near_capacity_prime_supply : Prop := ∀ (c : NNReal), 0 < c → ArkLibNearCapacity.NearCapacityPrimeSupply c"
+    ),
+    root: {
+      kind: "decomp",
+      decomp_id: "d1",
+      decomp_statements_module: "ArkLibNearCapacity.DecompStatements_t_d1",
+      decomp_statements_source:
+        "import ArkLibNearCapacity.Spec\nnamespace SunsteadDecomp_t_d1\ndef l1 : Prop := True\ndef l2 : Prop := True\nend SunsteadDecomp_t_d1\n",
+      reduction_theorem: "ArkLibNearCapacity.red",
+      reduction_source:
+        "import ArkLibNearCapacity.Spec\nimport ArkLibNearCapacity.DecompStatements_t_d1\nnamespace ArkLibNearCapacity\ntheorem red (h1 : SunsteadDecomp_t_d1.l1) (h2 : SunsteadDecomp_t_d1.l2) : True := trivial\nend ArkLibNearCapacity\n",
+      children: [
+        {
+          kind: "leaf",
+          label: "l1",
+          theorem: "ArkLibNearCapacity.p1",
+          source:
+            "import ArkLibNearCapacity.Spec\nimport ArkLibNearCapacity.DecompStatements_t_d1\nnamespace ArkLibNearCapacity\ntheorem p1 : SunsteadDecomp_t_d1.l1 := trivial\nend ArkLibNearCapacity\n",
+        },
+        {
+          kind: "leaf",
+          label: "l2",
+          theorem: "ArkLibNearCapacity.p2",
+          source:
+            "import ArkLibNearCapacity.Spec\nimport ArkLibNearCapacity.DecompStatements_t_d1\nnamespace ArkLibNearCapacity\ntheorem p2 : SunsteadDecomp_t_d1.l2 := trivial\nend ArkLibNearCapacity\n",
+        },
+      ],
+    },
+  });
+
+  assert.ok(!assembled.includes("import ArkLibNearCapacity.DecompStatements_t_d1"));
+  assert.match(assembled, /^import ArkLibNearCapacity\.Spec/m);
+  assert.match(assembled, /namespace SunsteadDecomp_t_d1/);
+  assert.match(assembled, /theorem near_capacity_prime_supply :/);
+  assert.match(assembled, /SunsteadAssembled_3\.ArkLibNearCapacity\.red SunsteadAssembled_1\.ArkLibNearCapacity\.p1 SunsteadAssembled_2\.ArkLibNearCapacity\.p2/);
+
+  const stub = buildSubgoalStubSource({
+    libRoot: "ArkLibNearCapacity",
+    decompStatementsModule: "ArkLibNearCapacity.DecompStatements_t_d1",
+    decompStatementsNamespace: "SunsteadDecomp_t_d1",
+    subgoalId: "l1",
+    subgoalTitle: "First Lemma",
+    subgoalTheorem: "ArkLibNearCapacity.decomp_d1_l1",
+  });
+  assert.match(stub, /theorem decomp_d1_l1 : SunsteadDecomp_t_d1\.l1 := by\n  sorry/);
+
+  const mbox = renderMbox([
+    {
+      seq: 7,
+      mission_id: "arklib-near-capacity-primes",
+      task_id: "near_capacity_prime_supply",
+      contributor: "carol",
+      display_name: "Carol",
+      summary: "Assembled proof via decomposition d1",
+      patch: generateUnifiedDiff("ArkLibNearCapacity/PrimeSupply.lean", "-- old\n", assembled),
+      created_at: 1700000100,
+      co_authors: [
+        { handle: "alice", display_name: "Alice Architect", role: "proposer" },
+        { handle: "bob", display_name: "Bob Solver", role: "solver" },
+        { handle: "carol", display_name: "Carol", role: "solver" }, // primary author deduped
+      ],
+    },
+  ]);
+  assert.match(mbox, /Co-authored-by: Alice Architect <alice@contributors\.sunstead\.org>/);
+  assert.match(mbox, /Co-authored-by: Bob Solver <bob@contributors\.sunstead\.org>/);
+  assert.ok(!mbox.includes("Co-authored-by: Carol <carol@contributors.sunstead.org>"));
+  assert.match(mbox, /Sunstead-Submission: 7/);
+
+  // ArkLib #1352 pilot manifest opt-in verification
+  const arkManifest = JSON.parse(
+    readFileSync(new URL("../../missions/arklib-near-capacity-primes/sunstead.json", import.meta.url), "utf8")
+  ) as MissionManifest;
+  assert.equal(arkManifest.decomposition?.enabled, true);
+  assert.equal(arkManifest.decomposition?.require_allowlist, true);
+  assert.equal(arkManifest.decomposition?.allow_direct_bypass, true);
+  assert.equal(arkManifest.decomposition?.max_depth, 2);
+
+  // /join.txt documents decompose & refute
+  const joinTxt = renderJoinTxt("https://sunstead.org", [
+    {
+      manifest: arkManifest,
+      tasks: arkManifest.tasks.map((def) => ({
+        def,
+        status: "open",
+        best_score: null,
+        verified_by: null,
+        active_lease: null,
+        attempts: 0,
+      })),
+    },
+  ]);
+  assert.match(joinTxt, /decompose_task/);
+  assert.match(joinTxt, /refute_task/);
+  assert.match(joinTxt, /\/decompose/);
+  assert.match(joinTxt, /\/refute/);
 });

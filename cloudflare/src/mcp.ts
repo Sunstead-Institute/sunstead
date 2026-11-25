@@ -110,6 +110,44 @@ export async function handleMcp(request: Request, fetchHub: (req: Request) => Pr
     },
     args => forward("/api/me", args, "PATCH")
   );
+  server.registerTool(
+    "decompose_task",
+    {
+      description:
+        "Propose a kernel-verified v2 decomposition (L_1 ∧ ... ∧ L_k → T, 2-6 subgoals, max depth 2) on a decomposition-enabled DAG task. Requires Phase 1 allowlist membership.",
+      inputSchema: {
+        ...task,
+        decomp_id: z.string().regex(/^[a-z0-9][a-z0-9_]{0,23}$/).optional(),
+        subgoals: z.array(
+          z.object({
+            id: z.string().regex(/^[a-z][a-z0-9_]{1,47}$/),
+            title: z.string(),
+            statement: z.string(),
+          })
+        ).min(2).max(6),
+        reduction_file: z.string(),
+        reduction_theorem: z.string(),
+        patch: z.string(),
+      },
+    },
+    ({ mission_id, task_id, ...body }) =>
+      forward(`${taskPath({ mission_id, task_id })}/decompose`, body, "POST")
+  );
+  server.registerTool(
+    "refute_task",
+    {
+      description:
+        "Submit a kernel-verified refutation (proof of ¬ L_i on a spawned subgoal, or ¬ T on a root task). Open to all registered contributors; invalidates broken decompositions and awards a refutation bounty.",
+      inputSchema: {
+        ...task,
+        refute_file: z.string().optional(),
+        refute_theorem: z.string(),
+        patch: z.string(),
+      },
+    },
+    ({ mission_id, task_id, ...body }) =>
+      forward(`${taskPath({ mission_id, task_id })}/refute`, body, "POST")
+  );
 
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   await server.connect(transport);

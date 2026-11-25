@@ -1337,7 +1337,49 @@ code, pre { font-family: var(--mono); }
   letter-spacing: 0.04em;
 }
 .ledger-badge-muted { background: var(--teal-soft); color: var(--teal); }
+.ledger-badge-ok { background: rgba(42, 125, 127, 0.16); color: var(--teal); font-weight: 600; }
 .ledger-badge-warn { background: var(--gold-soft); color: var(--gold-deep); }
+.ledger-badge-decomp { background: rgba(198, 161, 90, 0.18); color: #7C5C1E; border: 1px solid rgba(198, 161, 90, 0.45); font-weight: 600; }
+.ledger-badge-refute { background: rgba(180, 67, 67, 0.14); color: #9B2C2C; border: 1px solid rgba(180, 67, 67, 0.35); font-weight: 600; }
+.decomp-banner {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 5px;
+  background: rgba(198, 161, 90, 0.08);
+  border: 1px dashed rgba(198, 161, 90, 0.65);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.decomp-banner-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.decomp-stmt {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 4px;
+  background: var(--indigo-deep);
+  color: var(--bone);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-x: auto;
+}
+.dispute-banner {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 5px;
+  background: #FDF3F3;
+  border: 1px solid rgba(180, 67, 67, 0.45);
+  color: #7A1E1E;
+  font-size: 13px;
+}
+.decomp-prov { margin-top: 2px; }
+.dag-node-subgoal .node-box { transition: stroke-width 0.15s ease; }
+.decomp-toggle:hover rect { stroke-width: 1.5; }
 .ledger-more { margin-top: 12px; text-align: center; }
 .ledger-proof-title { margin: 4px 0 2px; overflow-wrap: anywhere; }
 .ledger-upstream { margin-top: 10px; }

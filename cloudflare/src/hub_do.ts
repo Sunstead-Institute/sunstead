@@ -45,9 +45,27 @@ import {
   constantTimeEqual,
   shouldRunAsyncSubmit,
   formatSubmissionStatusView,
+  parseStoredCoAuthors,
   type SubmissionStatus,
   type SubmissionStatusRow,
 } from "./core";
+import {
+  deactivateAllowlistEntry,
+  enrichTaskFilesWithDecomp,
+  executeDecompose,
+  executeRefute,
+  executeSubgoalSubmit,
+  getDisputedRootMap,
+  handleDirectParentBypass,
+  initDecomposeSchema,
+  isAllowlisted,
+  listAllowlist,
+  listMissionDecompositions,
+  listMissionRefutations,
+  upsertAllowlistEntry,
+  type DecomposeHubContext,
+  type VerifierActionResponse,
+} from "./decompose";
 import { SEED_MISSIONS, type SeedMission } from "./generated/missions";
 import { renderJoinTxt } from "./join_txt";
 import type { Lean4Verifier, Lean4V435Verifier, Lean4V431Verifier } from "./containers";
@@ -59,6 +77,7 @@ export interface HubEnv {
   LEAN4_V431_VERIFIER: DurableObjectNamespace<Lean4V431Verifier>;
   GITHUB_API_TOKEN?: string;
   AUDIT_API_TOKEN?: string;
+  ADMIN_API_TOKEN?: string;
 }
 
 function parseVerifierKind(kind: string): SeedMission["verifier_kind"] {
@@ -390,6 +409,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         demoId
       );
     }
+
+    initDecomposeSchema(this.ctx.storage.sql, (t, c, d) => this.ensureColumn(t, c, d));
   }
 
   private ensureColumn(table: string, col: string, colDef: string): void {
@@ -457,14 +478,14 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       const seedTaskIds = new Set(seed.manifest.tasks.map((t) => t.id));
       const existingTasks = this.ctx.storage.sql
         .exec<{ task_id: string }>(
-          "SELECT task_id FROM tasks WHERE mission_id = ?",
+          "SELECT task_id FROM tasks WHERE mission_id = ? AND COALESCE(is_dynamic, 0) = 0",
           seed.manifest.id
         )
         .toArray();
       for (const t of existingTasks) {
         if (!seedTaskIds.has(t.task_id)) {
           this.ctx.storage.sql.exec(
-            "DELETE FROM tasks WHERE mission_id = ? AND task_id = ?",
+            "DELETE FROM tasks WHERE mission_id = ? AND task_id = ? AND COALESCE(is_dynamic, 0) = 0",
             seed.manifest.id,
             t.task_id
           );
@@ -618,15 +639,19 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       )
       .toArray();
     if (rows.length === 0) return null;
+    const seed = SEED_MISSIONS.find((s) => s.manifest.id === missionId);
     return {
       manifest: JSON.parse(rows[0].manifest_json) as MissionManifest,
       spec_sha256: rows[0].spec_sha256,
       verifier_kind: parseVerifierKind(rows[0].verifier_kind),
+      ...(seed?.seed_files ? { seed_files: seed.seed_files } : {}),
+      ...(seed?.verify_contract ? { verify_contract: seed.verify_contract } : {}),
     };
   }
 
   private getTasks(missionId: string): TaskState[] {
     const now = Math.floor(Date.now() / 1000);
+    const disputed = getDisputedRootMap(this.ctx.storage.sql, missionId);
     const rows = this.ctx.storage.sql
       .exec<{
         def_json: string;
@@ -640,7 +665,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       }>(
         `SELECT def_json, status, best_score, verified_by,
                 lease_contributor, lease_token, lease_expires_at, attempts
-         FROM tasks WHERE mission_id = ? ORDER BY rowid ASC`,
+         FROM tasks WHERE mission_id = ? AND COALESCE(retired, 0) = 0 ORDER BY rowid ASC`,
         missionId
       )
       .toArray();
@@ -666,6 +691,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       if (status === "leased" && !active_lease) {
         status = "open";
       }
+      const dispute = disputed.get(def.id) ?? null;
       return {
         def,
         status,
@@ -673,6 +699,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         verified_by: r.verified_by,
         active_lease,
         attempts: r.attempts,
+        ...(dispute ? { disputed_counterexample: dispute } : {}),
       };
     });
   }
@@ -901,6 +928,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         `SELECT contributor, mission_id, COUNT(*) AS c
          FROM submissions
          WHERE accepted = 1 AND is_demo = 0
+           AND COALESCE(kind, 'submit') NOT IN ('decompose', 'architect_vest', 'assembled')
          GROUP BY contributor, mission_id`
       )
       .toArray();
@@ -919,6 +947,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         `SELECT mission_id, COUNT(*) AS c
          FROM submissions
          WHERE contributor = ? AND accepted = 1 AND is_demo = 0
+           AND COALESCE(kind, 'submit') NOT IN ('decompose', 'architect_vest', 'assembled')
          GROUP BY mission_id`,
         handle
       )
@@ -962,9 +991,9 @@ export class SunsteadHub extends DurableObject<HubEnv> {
            c.github AS github, c.github_verified_handle AS github_verified_handle,
            c.x_handle AS x_handle,
            c.linkedin_handle AS linkedin_handle,
-           COUNT(DISTINCT CASE WHEN s.accepted = 1 AND s.is_demo = 0 THEN s.mission_id || ':' || s.task_id END) AS verified_tasks,
-           SUM(CASE WHEN s.accepted = 1 AND s.is_demo = 0 THEN 1 ELSE 0 END) AS accepted_submissions,
-           SUM(CASE WHEN s.status != 'verifying' AND s.is_demo = 0 THEN 1 ELSE 0 END) AS total_submissions,
+           COUNT(DISTINCT CASE WHEN s.accepted = 1 AND s.is_demo = 0 AND COALESCE(s.kind, 'submit') NOT IN ('decompose', 'architect_vest', 'assembled') THEN s.mission_id || ':' || s.task_id END) AS verified_tasks,
+           SUM(CASE WHEN s.accepted = 1 AND s.is_demo = 0 AND COALESCE(s.kind, 'submit') NOT IN ('decompose', 'architect_vest', 'assembled') THEN 1 ELSE 0 END) AS accepted_submissions,
+           SUM(CASE WHEN s.status != 'verifying' AND s.is_demo = 0 AND COALESCE(s.kind, 'submit') NOT IN ('architect_vest', 'assembled') THEN 1 ELSE 0 END) AS total_submissions,
            SUM(CASE WHEN s.accepted = 1 AND s.is_demo = 0 THEN s.points ELSE 0 END) AS base_points
          FROM submissions s
          LEFT JOIN contributors c ON c.handle = s.contributor
@@ -1017,7 +1046,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         status: 204,
         headers: {
           "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
+          "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
           "Access-Control-Allow-Headers": "Content-Type, Authorization",
         },
       });
@@ -1027,13 +1056,14 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       const missions = sortMissionSummaries(
         this.listMissionsRows().map((m) => {
           const tasks = this.getTasks(m.manifest.id);
+          const rootTasks = tasks.filter((t) => !t.def.decomp_id);
           return {
             id: m.manifest.id,
             tier: m.manifest.tier,
             mode: m.manifest.mode,
             demo: Boolean(m.manifest.demo),
-            total_tasks: tasks.length,
-            verified_tasks: tasks.filter((t) => t.status === "verified").length,
+            total_tasks: rootTasks.length,
+            verified_tasks: rootTasks.filter((t) => t.status === "verified").length,
             manifest: m.manifest,
             tasks,
           };
@@ -1108,6 +1138,13 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     if (method === "GET" && path === "/api/missions") {
       const summaries = this.listMissionsRows().map((m) => {
         const tasks = this.getTasks(m.manifest.id);
+        const rootTasks = tasks.filter((t) => !t.def.decomp_id);
+        const activeDecomps = this.ctx.storage.sql
+          .exec<{ c: number }>(
+            "SELECT COUNT(*) AS c FROM decompositions WHERE mission_id = ? AND status = 'active'",
+            m.manifest.id
+          )
+          .one().c;
         return {
           id: m.manifest.id,
           title: m.manifest.title,
@@ -1122,9 +1159,11 @@ export class SunsteadHub extends DurableObject<HubEnv> {
           verifier_public_image: publicVerifierImage(m.manifest.verifier.image),
           verifier_toolchain: m.manifest.verifier.toolchain ?? "leanprover/lean4:v4.36.0",
           snapshot: m.manifest.snapshot ?? null,
+          decomposition: m.manifest.decomposition ?? null,
+          active_decompositions: activeDecomps,
           frozen_paths: m.manifest.frozen_paths,
-          total_tasks: tasks.length,
-          verified_tasks: tasks.filter((t) => t.status === "verified").length,
+          total_tasks: rootTasks.length,
+          verified_tasks: rootTasks.filter((t) => t.status === "verified").length,
           leased_tasks: tasks.filter((t) => t.active_lease !== null).length,
           frontier_task_ids: computeFrontier(m.manifest.mode, tasks),
         };
@@ -1272,8 +1311,40 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         local_setup: buildMissionLocalSetup(mission.manifest, url.origin),
         frontier,
         tasks: tasks.map((t) => ({ ...t, unlocked: isTaskUnlocked(t, tasks) })),
+        decompositions: listMissionDecompositions(this.ctx.storage.sql, missionId),
+        refutations: listMissionRefutations(this.ctx.storage.sql, missionId, url.origin),
         recent_submissions: this.getRecentSubmissions(missionId, 25),
       });
+    }
+
+    if (
+      (method === "GET" || method === "POST") &&
+      path === "/api/admin/decomposition-allowlist"
+    ) {
+      return this.handleAdminAllowlist(request, null);
+    }
+
+    const adminAllowDelMatch = path.match(/^\/api\/admin\/decomposition-allowlist\/([^/]+)$/);
+    if (method === "DELETE" && adminAllowDelMatch) {
+      return this.handleAdminAllowlist(request, sanitizeHandle(decodeURIComponent(adminAllowDelMatch[1])));
+    }
+
+    const decomposeMatch = path.match(/^\/api\/missions\/([^/]+)\/tasks\/([^/]+)\/decompose$/);
+    if (method === "POST" && decomposeMatch) {
+      return this.handleDecompose(
+        decodeURIComponent(decomposeMatch[1]),
+        decodeURIComponent(decomposeMatch[2]),
+        request
+      );
+    }
+
+    const refuteMatch = path.match(/^\/api\/missions\/([^/]+)\/tasks\/([^/]+)\/refute$/);
+    if (method === "POST" && refuteMatch) {
+      return this.handleRefute(
+        decodeURIComponent(refuteMatch[1]),
+        decodeURIComponent(refuteMatch[2]),
+        request
+      );
     }
 
     const claimMatch = path.match(/^\/api\/missions\/([^/]+)\/tasks\/([^/]+)\/claim$/);
@@ -1427,6 +1498,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       github_verified_at: row.github_verified_at,
       links_public: nonDemoVerified >= 1,
       non_demo_verified_proofs: nonDemoVerified,
+      decomposition_allowlisted: isAllowlisted(this.ctx.storage.sql, handle),
       created_at: row.created_at,
     });
   }
@@ -1646,7 +1718,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
    */
   private async callVerifier(
     mission: SeedMission,
-    path: "/verify" | "/bundle",
+    path: "/verify" | "/bundle" | "/decompose" | "/subgoal" | "/refute",
     files: Record<string, string>,
     body: Record<string, unknown>,
     precomputedSha?: string
@@ -1707,17 +1779,30 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         patch: string;
         spec_sha256: string;
         created_at: number;
+        co_authors_json: string | null;
       }>(
         `SELECT a.seq, a.mission_id, a.task_id, a.contributor,
                 COALESCE(c.display_name, a.contributor) AS display_name,
-                a.summary, a.patch, a.spec_sha256, a.created_at
+                a.summary, a.patch, a.spec_sha256, a.created_at, a.co_authors_json
          FROM accepted_patches a LEFT JOIN contributors c ON c.handle = a.contributor
-         WHERE a.mission_id = ? ORDER BY a.seq ASC`,
+         WHERE a.mission_id = ? AND COALESCE(a.in_history, 1) = 1
+         ORDER BY a.seq ASC`,
         missionId
       )
       .toArray();
     if (mbox) {
-      return new Response(renderMbox(rows as AcceptedPatch[]), {
+      const mboxRows: AcceptedPatch[] = rows.map((r) => ({
+        seq: r.seq,
+        mission_id: r.mission_id,
+        task_id: r.task_id,
+        contributor: r.contributor,
+        display_name: r.display_name,
+        summary: r.summary,
+        patch: r.patch,
+        created_at: r.created_at,
+        co_authors: parseStoredCoAuthors(r.co_authors_json),
+      }));
+      return new Response(renderMbox(mboxRows), {
         headers: {
           "Content-Type": "application/mbox; charset=utf-8",
           "Content-Disposition": `attachment; filename="${missionId}-history.mbox"`,
@@ -1738,6 +1823,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         summary: r.summary,
         spec_sha256: r.spec_sha256,
         created_at: r.created_at,
+        co_authors: parseStoredCoAuthors(r.co_authors_json),
       })),
     });
   }
@@ -1798,7 +1884,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     SELECT a.seq, a.mission_id, a.task_id, a.submission_id, a.contributor,
            COALESCE(c.display_name, a.contributor) AS display_name,
            c.github AS github, c.github_verified_handle AS github_verified_handle, c.x_handle AS x, c.linkedin_handle AS linkedin,
-           a.summary, a.patch, a.patch_sha256, a.spec_sha256, a.created_at, s.verify_ms AS verify_ms, a.audit_json AS audit_json, a.is_demo AS is_demo
+           a.summary, a.patch, a.patch_sha256, a.spec_sha256, a.created_at, s.verify_ms AS verify_ms, a.audit_json AS audit_json, a.is_demo AS is_demo,
+           a.entry_kind AS entry_kind, a.co_authors_json AS co_authors_json, a.decomp_meta_json AS decomp_meta_json
     FROM accepted_patches a
     LEFT JOIN contributors c ON c.handle = a.contributor
     LEFT JOIN submissions s ON s.id = a.submission_id`;
@@ -1962,14 +2049,20 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     const task = tasks.find((t) => t.def.id === taskId);
     if (!task) return jsonResp({ error: `unknown task: ${taskId}` }, 404);
     const seed = SEED_MISSIONS.find((s) => s.manifest.id === missionId);
+    const baseView = buildTaskFilesView({
+      mission: mission.manifest,
+      specSha256: mission.spec_sha256,
+      task,
+      unlocked: isTaskUnlocked(task, tasks),
+      seedFiles: seed?.seed_files ?? {},
+      liveOverlay: this.getMissionFiles(missionId),
+    });
     return jsonResp(
-      buildTaskFilesView({
-        mission: mission.manifest,
-        specSha256: mission.spec_sha256,
+      enrichTaskFilesWithDecomp(this.ctx.storage.sql, {
+        missionId,
         task,
-        unlocked: isTaskUnlocked(task, tasks),
-        seedFiles: seed?.seed_files ?? {},
-        liveOverlay: this.getMissionFiles(missionId),
+        baseView,
+        verifyContract: mission.verify_contract,
       })
     );
   }
@@ -2224,6 +2317,21 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     if (mission.manifest.mode === "dag" && task.status === "verified") {
       return jsonResp({ error: `task '${taskId}' is already verified` }, 409);
     }
+    if (!task.def.decomp_id && mission.manifest.decomposition?.allow_direct_bypass === false) {
+      const hasActiveDecomp = this.ctx.storage.sql
+        .exec<{ c: number }>(
+          "SELECT COUNT(*) AS c FROM decompositions WHERE mission_id = ? AND parent_task_id = ? AND status = 'active'",
+          missionId,
+          taskId
+        )
+        .one().c;
+      if (hasActiveDecomp > 0) {
+        return jsonResp(
+          { error: `task '${taskId}' has an active decomposition and direct parent bypass is disabled on this mission` },
+          409
+        );
+      }
+    }
 
     const ip = clientIp(request);
     const now = Math.floor(Date.now() / 1000);
@@ -2264,8 +2372,11 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     const patchSha = await sha256Hex(patch);
 
     // Fast policy pre-check BEFORE waking any Cloudflare Container!
+    const effectiveFrozen = task.def.reduction_file
+      ? [...mission.manifest.frozen_paths, task.def.reduction_file]
+      : mission.manifest.frozen_paths;
     try {
-      validatePatch(patch, mission.manifest.frozen_paths, task.def.target_files);
+      validatePatch(patch, effectiveFrozen, task.def.target_files);
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
       const summary = `policy rejected: ${detail}`;
@@ -2448,6 +2559,17 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       return { status: 409, body: { accepted: false, status: "rejected", submission_id: subId, error: reason } };
     }
 
+    // Dynamic v2 decomposition subgoals route through `POST /subgoal` + automatic assembly.
+    if (preVerifyTask.def.decomp_id && preVerifyTask.def.subgoal_id) {
+      return executeSubgoalSubmit(this.makeDecomposeContext(mission, hubOrigin), {
+        subId,
+        task: preVerifyTask,
+        contributor,
+        patch,
+        patchSha,
+      });
+    }
+
     let cRes: ContainerVerifyResponse;
     try {
       const resp = await this.callVerifier(mission, "/verify", this.getMissionFiles(missionId), {
@@ -2624,6 +2746,9 @@ export class SunsteadHub extends DurableObject<HubEnv> {
           taskId
         );
 
+        // Direct bypass of a decomposed parent T immediately closes T, forfeits unvested architect share, and retires open children.
+        const bypassedDecomps = handleDirectParentBypass(this.ctx.storage.sql, missionId, taskId, finishedAt);
+
         this.updateSubmissionOutcome({
           id: subId,
           status: "accepted",
@@ -2681,6 +2806,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
             permalink,
             verify_ms: verifyMs,
             summary: cRes.summary,
+            ...(bypassedDecomps.length > 0 ? { bypassed_decompositions: bypassedDecomps } : {}),
           },
         };
       } catch (e) {
@@ -2729,5 +2855,197 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         };
       }
     });
+  }
+
+  private makeDecomposeContext(mission: SeedMission, hubOrigin: string): DecomposeHubContext {
+    return {
+      sql: this.ctx.storage.sql,
+      mission,
+      hubOrigin,
+      now: () => Math.floor(Date.now() / 1000),
+      sha256Hex,
+      randomUUID: () => crypto.randomUUID(),
+      getTasks: (mid) => this.getTasks(mid),
+      getMissionFiles: (mid) => this.getMissionFiles(mid),
+      withMissionLock: (mid, fn) => this.withLock(this.stateLocks, mid, fn),
+      callVerifierAction: async (path, files, body) => {
+        try {
+          const resp = await this.callVerifier(mission, path, files, body);
+          if (!resp.ok) {
+            const errText = await resp.text().catch(() => "");
+            return {
+              ok: false,
+              status: 502,
+              error: `verifier container returned HTTP ${resp.status}${errText ? `: ${errText.slice(0, 300)}` : ""}`,
+            };
+          }
+          const parsed = (await resp.json()) as Partial<VerifierActionResponse>;
+          if (!parsed || typeof parsed !== "object" || typeof parsed.ok !== "boolean") {
+            return { ok: false, status: 502, error: "verifier container returned malformed verdict JSON" };
+          }
+          return { ok: true, res: parsed as VerifierActionResponse };
+        } catch (e) {
+          return {
+            ok: false,
+            status: 502,
+            error: `verifier container invocation failed: ${e instanceof Error ? e.message : String(e)}`,
+          };
+        }
+      },
+      emit: (ev) => this.emit(ev),
+    };
+  }
+
+  private async handleAdminAllowlist(request: Request, deleteHandle: string | null): Promise<Response> {
+    const expectedToken = this.env.ADMIN_API_TOKEN?.trim();
+    if (!expectedToken) {
+      return jsonResp({ error: "admin allowlist endpoint is not configured" }, 503);
+    }
+    const provided = extractBearerToken(request);
+    if (!provided || !constantTimeEqual(provided, expectedToken)) {
+      return jsonResp({ error: "unauthorized admin token" }, 401);
+    }
+    const now = Math.floor(Date.now() / 1000);
+    if (request.method === "GET") {
+      return jsonResp({ allowlist: listAllowlist(this.ctx.storage.sql) });
+    }
+    if (request.method === "DELETE" && deleteHandle) {
+      const removed = deactivateAllowlistEntry(this.ctx.storage.sql, deleteHandle, now);
+      if (!removed) return jsonResp({ error: `handle '${deleteHandle}' is not on the allowlist` }, 404);
+      return jsonResp({ ok: true, handle: deleteHandle, active: false });
+    }
+    let body: { handle?: unknown; active?: unknown; note?: unknown; reset_strikes?: unknown };
+    try {
+      body = (await request.json()) as { handle?: unknown; active?: unknown; note?: unknown; reset_strikes?: unknown };
+    } catch {
+      return jsonResp({ error: "invalid JSON body" }, 400);
+    }
+    const handle = sanitizeHandle(typeof body.handle === "string" ? body.handle : "");
+    if (handle.length < 3) {
+      return jsonResp({ error: "handle must be at least 3 characters" }, 400);
+    }
+    const active = body.active === undefined ? true : Boolean(body.active);
+    const note = typeof body.note === "string" ? sanitizeOptionalText(body.note, 200) || null : null;
+    const entry = upsertAllowlistEntry(this.ctx.storage.sql, {
+      handle,
+      active,
+      added_by: "admin",
+      note,
+      reset_strikes: Boolean(body.reset_strikes),
+      now,
+    });
+    return jsonResp({ ok: true, entry });
+  }
+
+  private async handleDecompose(
+    missionId: string,
+    taskId: string,
+    request: Request
+  ): Promise<Response> {
+    const url = new URL(request.url);
+    const rawText = await request.text();
+    if (new TextEncoder().encode(rawText).byteLength > MAX_BODY_BYTES) {
+      return jsonResp({ error: "payload exceeds 512 KB limit" }, 413);
+    }
+    let body: Record<string, unknown>;
+    try {
+      const parsed = JSON.parse(rawText);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return jsonResp({ error: "request body must be a JSON object" }, 400);
+      }
+      body = parsed as Record<string, unknown>;
+    } catch {
+      return jsonResp({ error: "invalid JSON body" }, 400);
+    }
+
+    const auth = await this.resolveContributor(
+      request,
+      typeof body.contributor === "string" ? body.contributor : undefined
+    );
+    if (!auth.ok) return jsonResp({ error: auth.error }, auth.status);
+
+    const mission = this.getMissionRow(missionId);
+    if (!mission) return jsonResp({ error: `unknown mission: ${missionId}` }, 404);
+
+    const ip = clientIp(request);
+    const now = Math.floor(Date.now() / 1000);
+    const rlId = this.checkRateLimit(
+      `submit:id:${auth.handle}`,
+      RATE_LIMITS.submit_id.limit,
+      RATE_LIMITS.submit_id.windowSec,
+      now
+    );
+    if (!rlId.allowed) {
+      return jsonResp(
+        { error: `rate limit reached for '${auth.handle}'; retry in ${rlId.retryAfterSec}s` },
+        429,
+        { "Retry-After": String(rlId.retryAfterSec) }
+      );
+    }
+    this.recordRateEvent(`submit:id:${auth.handle}`, now);
+    if (ip !== "unknown") this.recordRateEvent(`submit:ip:${ip}`, now);
+
+    const res = await executeDecompose(this.makeDecomposeContext(mission, url.origin), {
+      taskId,
+      contributor: auth.handle,
+      rawBody: body,
+    });
+    return jsonResp(res.body, res.status);
+  }
+
+  private async handleRefute(
+    missionId: string,
+    taskId: string,
+    request: Request
+  ): Promise<Response> {
+    const url = new URL(request.url);
+    const rawText = await request.text();
+    if (new TextEncoder().encode(rawText).byteLength > MAX_BODY_BYTES) {
+      return jsonResp({ error: "payload exceeds 512 KB limit" }, 413);
+    }
+    let body: Record<string, unknown>;
+    try {
+      const parsed = JSON.parse(rawText);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return jsonResp({ error: "request body must be a JSON object" }, 400);
+      }
+      body = parsed as Record<string, unknown>;
+    } catch {
+      return jsonResp({ error: "invalid JSON body" }, 400);
+    }
+
+    const auth = await this.resolveContributor(
+      request,
+      typeof body.contributor === "string" ? body.contributor : undefined
+    );
+    if (!auth.ok) return jsonResp({ error: auth.error }, auth.status);
+
+    const mission = this.getMissionRow(missionId);
+    if (!mission) return jsonResp({ error: `unknown mission: ${missionId}` }, 404);
+
+    const ip = clientIp(request);
+    const now = Math.floor(Date.now() / 1000);
+    const rlId = this.checkRateLimit(
+      `submit:id:${auth.handle}`,
+      RATE_LIMITS.submit_id.limit,
+      RATE_LIMITS.submit_id.windowSec,
+      now
+    );
+    if (!rlId.allowed) {
+      return jsonResp(
+        { error: `rate limit reached for '${auth.handle}'; retry in ${rlId.retryAfterSec}s` },
+        429,
+        { "Retry-After": String(rlId.retryAfterSec) }
+      );
+    }
+    this.recordRateEvent(`submit:id:${auth.handle}`, now);
+    if (ip !== "unknown") this.recordRateEvent(`submit:ip:${ip}`, now);
+
+    const res = await executeRefute(this.makeDecomposeContext(mission, url.origin), {
+      taskId,
+      contributor: auth.handle,
+      rawBody: body,
+    });
+    return jsonResp(res.body, res.status);
   }
 }

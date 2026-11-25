@@ -184,6 +184,37 @@ export interface UpstreamProvenance {
   issue_url?: string;
 }
 
+export interface DecompositionPolicy {
+  enabled: boolean;
+  /** Phase 1 default: require explicit maintainer allowlist (`true`). */
+  require_allowlist?: boolean;
+  /** Default true: direct proof of parent T immediately closes T and retires open children. */
+  allow_direct_bypass?: boolean;
+  /** Max nesting depth (default 2, capped at MAX_DECOMPOSE_DEPTH). */
+  max_depth?: number;
+}
+
+export interface VerifyTaskContract {
+  module: string;
+  theorem: string;
+  statement: string;
+}
+
+export interface MissionVerifyContract {
+  lib_root: string;
+  statement_preamble: string;
+  frozen_lean_modules: string[];
+  tasks: Record<string, VerifyTaskContract>;
+}
+
+export interface DisputedCounterexample {
+  refutation_id: string;
+  refuter: string;
+  proof_id: string | null;
+  summary: string;
+  created_at: number;
+}
+
 export interface TaskDefinition {
   id: string;
   title: string;
@@ -192,6 +223,19 @@ export interface TaskDefinition {
   depends_on?: string[];
   baseline_score?: number | null;
   upstream_url?: string;
+  /** Dynamic decomposition subgoal fields (v2). */
+  parent_task_id?: string | null;
+  root_task_id?: string | null;
+  decomp_id?: string | null;
+  subgoal_id?: string | null;
+  decomp_depth?: number;
+  subgoal_spec_sha256?: string | null;
+  subgoal_statement?: string | null;
+  subgoal_module?: string | null;
+  subgoal_theorem?: string | null;
+  decomp_statements_module?: string | null;
+  decomp_statements_namespace?: string | null;
+  reduction_file?: string | null;
 }
 
 export interface MissionManifest {
@@ -203,6 +247,7 @@ export interface MissionManifest {
   repo?: string;
   upstream?: UpstreamProvenance;
   snapshot?: RepoSnapshotConfig;
+  decomposition?: DecompositionPolicy;
   frozen_paths: string[];
   verifier: VerifierConfig;
   score_direction?: ScoreDirection;
@@ -225,6 +270,7 @@ export interface TaskState {
   verified_by: string | null;
   active_lease: Lease | null;
   attempts: number;
+  disputed_counterexample?: DisputedCounterexample | null;
 }
 
 export interface Verdict {
@@ -655,6 +701,14 @@ export async function filesStateSha256(files: Record<string, string>): Promise<s
   return "sha256:" + Array.from(digest, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+export interface CoAuthor {
+  handle: string;
+  display_name?: string;
+  role?: "proposer" | "solver" | "assembler";
+}
+
+export type LedgerEntryKind = "proof" | "subgoal" | "assembled" | "refutation";
+
 /** One accepted patch, rendered as an mbox message `git am` can apply. */
 export interface AcceptedPatch {
   seq: number;
@@ -665,6 +719,7 @@ export interface AcceptedPatch {
   summary: string;
   patch: string;
   created_at: number;
+  co_authors?: CoAuthor[];
 }
 
 function escapeMboxFromLine(line: string): string {
@@ -685,6 +740,16 @@ export function renderMbox(patches: AcceptedPatch[]): string {
         return /^---[ \t]*$/.test(escaped) ? " " + escaped : escaped;
       })
       .join("\n");
+    const trailers: string[] = [];
+    const seenCo = new Set<string>([p.contributor]);
+    for (const ca of p.co_authors || []) {
+      const handle = String(ca.handle || "").trim().toLowerCase().replace(/[^a-z0-9._-]/g, "");
+      if (!handle || seenCo.has(handle)) continue;
+      seenCo.add(handle);
+      const caName = (ca.display_name || handle).replace(/[<>"\r\n]/g, "").trim() || handle;
+      trailers.push(`Co-authored-by: ${caName} <${handle}@contributors.sunstead.org>`);
+    }
+    trailers.push(`Sunstead-Submission: ${p.seq}`);
     const normalizedDiff = p.patch
       .replace(/\r\n/g, "\n")
       .split("\n")
@@ -696,7 +761,7 @@ export function renderMbox(patches: AcceptedPatch[]): string {
         `From: ${name} <${p.contributor}@contributors.sunstead.org>\n` +
         `Date: ${date}\n` +
         `Subject: [PATCH] ${p.mission_id}: verify ${p.task_id}\n\n` +
-        `${body}\n\nSunstead-Submission: ${p.seq}\n---\n` +
+        `${body}\n\n${trailers.join("\n")}\n---\n` +
         diff +
         `--\nsunstead\n\n`
     );
@@ -723,6 +788,9 @@ export type AcceptedProofRow = {
   verify_ms: number | null;
   audit_json?: string | null;
   is_demo?: number;
+  entry_kind?: string | null;
+  co_authors_json?: string | null;
+  decomp_meta_json?: string | null;
 };
 
 export interface ProofAuditRecord {
@@ -1440,6 +1508,40 @@ export function parseLedgerQuery(params: URLSearchParams): {
   return { limit, before, missionId };
 }
 
+export function parseStoredCoAuthors(raw: string | null | undefined): CoAuthor[] {
+  if (!raw || typeof raw !== "string") return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((x): x is Record<string, unknown> => Boolean(x) && typeof x === "object" && typeof (x as Record<string, unknown>).handle === "string")
+      .map((x) => ({
+        handle: String(x.handle),
+        ...(typeof x.display_name === "string" ? { display_name: x.display_name } : {}),
+        ...(x.role === "proposer" || x.role === "solver" || x.role === "assembler" ? { role: x.role } : {}),
+      }));
+  } catch {
+    return [];
+  }
+}
+
+export function parseStoredDecompMeta(raw: string | null | undefined): Record<string, unknown> | null {
+  if (!raw || typeof raw !== "string") return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeEntryKind(raw: string | null | undefined): LedgerEntryKind {
+  if (raw === "subgoal" || raw === "assembled" || raw === "refutation") return raw;
+  return "proof";
+}
+
 /**
  * One ledger entry. Mission and task titles and upstream provenance come from the
  * live manifest; a proof from a retired mission keeps its record but has none.
@@ -1451,7 +1553,13 @@ export function buildLedgerEntry(
   nonDemoVerifiedCount?: number
 ) {
   const manifest = mission?.manifest ?? null;
-  const taskDef = manifest?.tasks.find((t) => t.id === row.task_id) ?? null;
+  const decompMeta = parseStoredDecompMeta(row.decomp_meta_json);
+  const rootTaskId =
+    typeof decompMeta?.root_task_id === "string" ? decompMeta.root_task_id : row.task_id;
+  const taskDef =
+    manifest?.tasks.find((t) => t.id === row.task_id) ??
+    manifest?.tasks.find((t) => t.id === rootTaskId) ??
+    null;
   const upstream = manifest?.upstream ?? null;
   const isDemo = Boolean(manifest?.demo || row.is_demo);
   const effectiveNonDemo = nonDemoVerifiedCount ?? (isDemo ? 0 : 1);
@@ -1459,17 +1567,28 @@ export function buildLedgerEntry(
     { github: row.github, x: row.x ?? null, linkedin: row.linkedin ?? null },
     effectiveNonDemo
   );
+  const entryKind = normalizeEntryKind(row.entry_kind);
+  const coAuthors = parseStoredCoAuthors(row.co_authors_json);
+  const taskTitle =
+    typeof decompMeta?.subgoal_title === "string" && entryKind !== "assembled"
+      ? entryKind === "refutation"
+        ? `Refutation: ¬ (${decompMeta.subgoal_title})`
+        : decompMeta.subgoal_title
+      : entryKind === "refutation" && taskDef?.title
+        ? `Refutation: ¬ (${taskDef.title})`
+        : taskDef?.title ?? null;
   return {
     proof_id: proofIdFromPatchSha(row.patch_sha256),
     patch_sha256: row.patch_sha256,
     permalink: `${hubOrigin}/proofs/${proofIdFromPatchSha(row.patch_sha256)}`,
     seq: row.seq,
+    entry_kind: entryKind,
     mission_id: row.mission_id,
     mission_title: manifest?.title ?? null,
     mission_retired: manifest === null,
     mission_demo: isDemo,
     task_id: row.task_id,
-    task_title: taskDef?.title ?? null,
+    task_title: taskTitle,
     upstream: upstream
       ? {
           repo: upstream.repo,
@@ -1491,6 +1610,8 @@ export function buildLedgerEntry(
     spec_is_current: mission !== null && row.spec_sha256 === mission.spec_sha256,
     files: extractPatchPaths(row.patch),
     audit: parseStoredAudit(row.audit_json),
+    ...(coAuthors.length > 0 ? { co_authors: coAuthors } : {}),
+    ...(decompMeta ? { decomposition: decompMeta } : {}),
   };
 }
 
@@ -1603,4 +1724,581 @@ export function buildTaskFilesView(opts: {
     target_files: targetFiles,
     frozen_files: frozenFiles,
   };
+}
+
+// ---------------------------------------------------------------------------
+// v2 Theorem Decomposition & Kernel-Verified Refutations (docs/RFC-DECOMPOSE.md)
+
+export const MIN_DECOMPOSE_SUBGOALS = 2;
+export const MAX_DECOMPOSE_SUBGOALS = 6;
+export const MAX_DECOMPOSE_DEPTH = 2;
+export const MAX_ACTIVE_DECOMPOSITIONS_PER_TARGET = 1;
+export const MAX_ACTIVE_DECOMPOSITIONS_PER_CONTRIBUTOR = 3;
+export const MAX_SUBGOAL_STATEMENT_BYTES = 4096;
+export const ARCHITECT_SHARE_RATIO = 0.2;
+export const REFUTATION_BOUNTY_TIER1 = 75;
+export const REFUTATION_BOUNTY_OTHER = 50;
+
+export const DECOMP_ID_RE = /^[a-z0-9][a-z0-9_]{0,23}$/;
+export const SUBGOAL_ID_RE = /^[a-z][a-z0-9_]{1,47}$/;
+export const LEAN_QUALIFIED_IDENT_RE = /^[A-Za-z_][A-Za-z0-9_']*(?:\.[A-Za-z_][A-Za-z0-9_']*)*$/;
+const RESERVED_DECOMP_FILE_RE = /^[^/]+\/(?:SunsteadStatements|DecompStatements_[A-Za-z0-9_]+)\.lean$/;
+
+export type DecompositionStatus = "active" | "completed" | "refuted" | "bypassed" | "cancelled";
+
+export interface IncomingSubgoalInput {
+  id: string;
+  title: string;
+  statement: string;
+}
+
+export interface ParsedDecomposeRequest {
+  decomp_id: string;
+  subgoals: IncomingSubgoalInput[];
+  reduction_file: string;
+  reduction_module: string;
+  reduction_theorem: string;
+  patch: string;
+}
+
+export interface ParsedRefuteRequest {
+  refute_file: string;
+  refute_module: string;
+  refute_theorem: string;
+  patch: string;
+}
+
+export interface SubgoalSpec {
+  id: string;
+  title: string;
+  statement: string;
+  task_id: string;
+  subgoal_module: string;
+  subgoal_theorem: string;
+  target_file: string;
+  subgoal_spec_sha256: string;
+}
+
+/** Zero-inflation point split (RFC §5.2): architect gets floor(20%), each subgoal gets floor(80% / k). */
+export function computeDecompPointSplit(
+  parentPoints: number,
+  subgoalCount: number
+): {
+  solver_points_per_subgoal: number;
+  architect_points: number;
+  max_total_points: number;
+} {
+  if (!Number.isFinite(parentPoints) || parentPoints <= 0 || subgoalCount < MIN_DECOMPOSE_SUBGOALS) {
+    return { solver_points_per_subgoal: 0, architect_points: 0, max_total_points: 0 };
+  }
+  const base = Math.floor(parentPoints);
+  const architect = Math.floor(base * ARCHITECT_SHARE_RATIO);
+  const solverPool = base - architect;
+  const perSubgoal = Math.floor(solverPool / subgoalCount);
+  return {
+    solver_points_per_subgoal: perSubgoal,
+    architect_points: architect,
+    max_total_points: architect + perSubgoal * subgoalCount,
+  };
+}
+
+/** Bounty awarded for a kernel-verified refutation (`¬ L_i` or `¬ T`); 0 on demo missions. */
+export function computeRefutationBounty(mission: Pick<MissionManifest, "tier" | "demo">): number {
+  if (mission.demo) return 0;
+  return mission.tier === 1 ? REFUTATION_BOUNTY_TIER1 : REFUTATION_BOUNTY_OTHER;
+}
+
+export function buildSubgoalTaskId(parentTaskId: string, decompId: string, subgoalId: string): string {
+  return `${parentTaskId}__${decompId}__${subgoalId}`;
+}
+
+export function leanPathToModule(relPath: string): string {
+  const norm = normalizeRelPath(relPath);
+  if (!norm.endsWith(".lean")) {
+    throw new Error(`expected a .lean file path, got '${relPath}'`);
+  }
+  const mod = norm.slice(0, -5).replace(/\//g, ".");
+  if (!LEAN_QUALIFIED_IDENT_RE.test(mod)) {
+    throw new Error(`invalid Lean module path: '${relPath}'`);
+  }
+  return mod;
+}
+
+export function checkDecompositionEligibility(opts: {
+  manifest: MissionManifest;
+  task: TaskState;
+  allTasks: TaskState[];
+  contributor: string;
+  isAllowlisted: boolean;
+  activeDecompsOnTarget: number;
+  activeDecompsByContributor: number;
+}): { depth: number; max_depth: number } {
+  const { manifest, task, allTasks, isAllowlisted, activeDecompsOnTarget, activeDecompsByContributor } = opts;
+  if (manifest.mode !== "dag") {
+    throw new Error("only DAG missions support theorem decomposition");
+  }
+  if (manifest.snapshot?.mode === "repo-snapshot") {
+    throw new Error("repo-snapshot missions do not support Phase 1 decomposition yet");
+  }
+  const policy = manifest.decomposition;
+  if (!policy || !policy.enabled) {
+    throw new Error(`decomposition is not enabled on mission '${manifest.id}'`);
+  }
+  if (policy.require_allowlist !== false && !isAllowlisted) {
+    throw new Error(
+      `contributor '${opts.contributor}' is not on the Phase 1 decomposition allowlist for '${manifest.id}'`
+    );
+  }
+  if (!isTaskUnlocked(task, allTasks)) {
+    throw new Error(`task '${task.def.id}' is blocked on unverified dependencies`);
+  }
+  if (task.status === "verified") {
+    throw new Error(`task '${task.def.id}' is already verified`);
+  }
+  const parentDepth = task.def.decomp_depth ?? 0;
+  const maxDepth = Math.min(MAX_DECOMPOSE_DEPTH, Math.max(1, policy.max_depth ?? MAX_DECOMPOSE_DEPTH));
+  const nextDepth = parentDepth + 1;
+  if (nextDepth > maxDepth) {
+    throw new Error(
+      `decomposition depth limit reached: max depth is ${maxDepth} (task '${task.def.id}' is already at depth ${parentDepth})`
+    );
+  }
+  if (activeDecompsOnTarget >= MAX_ACTIVE_DECOMPOSITIONS_PER_TARGET) {
+    throw new Error(
+      `task '${task.def.id}' already has an active decomposition (max ${MAX_ACTIVE_DECOMPOSITIONS_PER_TARGET} active per target)`
+    );
+  }
+  if (activeDecompsByContributor >= MAX_ACTIVE_DECOMPOSITIONS_PER_CONTRIBUTOR) {
+    throw new Error(
+      `active decomposition cap reached for '${opts.contributor}' (max ${MAX_ACTIVE_DECOMPOSITIONS_PER_CONTRIBUTOR} active decompositions per contributor)`
+    );
+  }
+  return { depth: nextDepth, max_depth: maxDepth };
+}
+
+export function parseDecomposeRequest(
+  rawBody: unknown,
+  opts: {
+    libRoot: string;
+    frozenPaths: string[];
+    defaultDecompId: string;
+  }
+): ParsedDecomposeRequest {
+  if (!rawBody || typeof rawBody !== "object" || Array.isArray(rawBody)) {
+    throw new Error("request body must be a JSON object");
+  }
+  const body = rawBody as Record<string, unknown>;
+  const decompId =
+    typeof body.decomp_id === "string" && body.decomp_id.trim()
+      ? body.decomp_id.trim()
+      : opts.defaultDecompId;
+  if (!DECOMP_ID_RE.test(decompId)) {
+    throw new Error(`invalid decomp_id '${decompId}': use lowercase letters, digits, or underscores (max 24 chars)`);
+  }
+  if (!Array.isArray(body.subgoals)) {
+    throw new Error("subgoals must be a JSON array");
+  }
+  if (body.subgoals.length < MIN_DECOMPOSE_SUBGOALS || body.subgoals.length > MAX_DECOMPOSE_SUBGOALS) {
+    throw new Error(
+      `decomposition requires between ${MIN_DECOMPOSE_SUBGOALS} and ${MAX_DECOMPOSE_SUBGOALS} subgoals (got ${body.subgoals.length})`
+    );
+  }
+  const enc = new TextEncoder();
+  const seenIds = new Set<string>();
+  const subgoals: IncomingSubgoalInput[] = [];
+  for (const item of body.subgoals) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new Error("each subgoal must be an object with id, title, and statement");
+    }
+    const obj = item as Record<string, unknown>;
+    const id = typeof obj.id === "string" ? obj.id.trim() : "";
+    if (!SUBGOAL_ID_RE.test(id)) {
+      throw new Error(`invalid subgoal id '${id}': use 2-48 lowercase letters, digits, or underscores starting with a-z`);
+    }
+    if (seenIds.has(id)) {
+      throw new Error(`duplicate subgoal id '${id}'`);
+    }
+    seenIds.add(id);
+    const title = typeof obj.title === "string" ? obj.title.trim().replace(/[\r\n\t]+/g, " ").slice(0, 140) : "";
+    if (!title) {
+      throw new Error(`subgoal '${id}' requires a non-empty title`);
+    }
+    const statement = typeof obj.statement === "string" ? obj.statement.trim() : "";
+    if (!statement) {
+      throw new Error(`subgoal '${id}' requires a non-empty Lean Prop statement`);
+    }
+    if (enc.encode(statement).byteLength > MAX_SUBGOAL_STATEMENT_BYTES) {
+      throw new Error(`subgoal '${id}' statement exceeds ${MAX_SUBGOAL_STATEMENT_BYTES} bytes`);
+    }
+    subgoals.push({ id, title, statement });
+  }
+
+  const rawRedFile = typeof body.reduction_file === "string" ? body.reduction_file.trim() : "";
+  if (!rawRedFile) {
+    throw new Error("reduction_file is required");
+  }
+  const reductionFile = normalizeRelPath(rawRedFile);
+  if (!reductionFile.startsWith(`${opts.libRoot}/`) || !reductionFile.endsWith(".lean")) {
+    throw new Error(`reduction_file must live under '${opts.libRoot}/' and end with '.lean'`);
+  }
+  if (RESERVED_DECOMP_FILE_RE.test(reductionFile)) {
+    throw new Error(`reduction_file '${reductionFile}' uses a reserved Sunstead statements module name`);
+  }
+  const reductionModule = leanPathToModule(reductionFile);
+
+  const reductionTheorem =
+    typeof body.reduction_theorem === "string" ? body.reduction_theorem.trim() : "";
+  if (!LEAN_QUALIFIED_IDENT_RE.test(reductionTheorem)) {
+    throw new Error("reduction_theorem must be a valid qualified Lean theorem name");
+  }
+
+  const patch = typeof body.patch === "string" ? body.patch : "";
+  if (!patch.trim()) {
+    throw new Error("patch is required");
+  }
+  validatePatch(patch, opts.frozenPaths, [reductionFile]);
+
+  return {
+    decomp_id: decompId,
+    subgoals,
+    reduction_file: reductionFile,
+    reduction_module: reductionModule,
+    reduction_theorem: reductionTheorem,
+    patch,
+  };
+}
+
+export function parseRefuteRequest(
+  rawBody: unknown,
+  opts: {
+    libRoot: string | null;
+    frozenPaths: string[];
+  }
+): ParsedRefuteRequest {
+  if (!rawBody || typeof rawBody !== "object" || Array.isArray(rawBody)) {
+    throw new Error("request body must be a JSON object");
+  }
+  const body = rawBody as Record<string, unknown>;
+  const patch = typeof body.patch === "string" ? body.patch : "";
+  if (!patch.trim()) {
+    throw new Error("patch is required");
+  }
+  const touched = extractPatchPaths(patch);
+  let refuteFile: string;
+  if (typeof body.refute_file === "string" && body.refute_file.trim()) {
+    refuteFile = normalizeRelPath(body.refute_file.trim());
+  } else if (touched.length === 1) {
+    refuteFile = touched[0];
+  } else {
+    throw new Error("refute_file is required when patch touches multiple files");
+  }
+  if (!refuteFile.endsWith(".lean")) {
+    throw new Error("refute_file must end with '.lean'");
+  }
+  if (opts.libRoot && !refuteFile.startsWith(`${opts.libRoot}/`)) {
+    throw new Error(`refute_file must live under '${opts.libRoot}/'`);
+  }
+  if (RESERVED_DECOMP_FILE_RE.test(refuteFile)) {
+    throw new Error(`refute_file '${refuteFile}' uses a reserved Sunstead statements module name`);
+  }
+  validatePatch(patch, opts.frozenPaths, [refuteFile]);
+
+  const refuteModule = leanPathToModule(refuteFile);
+  const refuteTheorem =
+    typeof body.refute_theorem === "string" ? body.refute_theorem.trim() : "";
+  if (!LEAN_QUALIFIED_IDENT_RE.test(refuteTheorem)) {
+    throw new Error("refute_theorem must be a valid qualified Lean theorem name");
+  }
+  return {
+    refute_file: refuteFile,
+    refute_module: refuteModule,
+    refute_theorem: refuteTheorem,
+    patch,
+  };
+}
+
+/** Generate a clean sorry stub for a spawned decomposition subgoal task. */
+export function buildSubgoalStubSource(opts: {
+  libRoot: string;
+  decompStatementsModule: string;
+  decompStatementsNamespace: string;
+  subgoalId: string;
+  subgoalTitle: string;
+  subgoalTheorem: string;
+  statementPreamble?: string;
+}): string {
+  const { libRoot, decompStatementsModule, decompStatementsNamespace, subgoalId, subgoalTitle, subgoalTheorem } = opts;
+  const parts = subgoalTheorem.split(".");
+  const shortName = parts[parts.length - 1];
+  const nsPrefix = parts.length > 1 ? parts.slice(0, -1).join(".") : "";
+  const preamble = (opts.statementPreamble || "").trim();
+  const lines = [
+    `import ${libRoot}.Spec`,
+    `import ${decompStatementsModule}`,
+    "",
+  ];
+  if (preamble) {
+    lines.push(preamble, "");
+  }
+  if (nsPrefix) {
+    lines.push(`namespace ${nsPrefix}`, "");
+  }
+  lines.push(
+    `/-- Spawned v2 decomposition subgoal: ${subgoalTitle.replace(/\*\//g, "* /").replace(/-\//g, "- /")} -/`,
+    `theorem ${shortName} : ${decompStatementsNamespace}.${subgoalId} := by`,
+    `  sorry`,
+    ""
+  );
+  if (nsPrefix) {
+    lines.push(`end ${nsPrefix}`, "");
+  }
+  return lines.join("\n");
+}
+
+/** Extract leading `import ...` lines from a Lean 4 file, returning deduplicated module names and remaining body. */
+export function splitLeanImports(source: string): { imports: string[]; body: string } {
+  const lines = source.replace(/\r\n/g, "\n").split("\n");
+  const imports: string[] = [];
+  const bodyLines: string[] = [];
+  let inHeader = true;
+  let blockDepth = 0;
+
+  for (const line of lines) {
+    if (!inHeader) {
+      bodyLines.push(line);
+      continue;
+    }
+    const trimmed = line.trim();
+    if (blockDepth > 0) {
+      bodyLines.push(line);
+      for (let i = 0; i < line.length - 1; i++) {
+        if (line[i] === "/" && line[i + 1] === "-") {
+          blockDepth++;
+          i++;
+        } else if (line[i] === "-" && line[i + 1] === "/") {
+          blockDepth = Math.max(0, blockDepth - 1);
+          i++;
+        }
+      }
+      continue;
+    }
+    if (trimmed === "" || trimmed.startsWith("--")) {
+      bodyLines.push(line);
+      continue;
+    }
+    if (trimmed.startsWith("/-")) {
+      bodyLines.push(line);
+      for (let i = 0; i < line.length - 1; i++) {
+        if (line[i] === "/" && line[i + 1] === "-") {
+          blockDepth++;
+          i++;
+        } else if (line[i] === "-" && line[i + 1] === "/") {
+          blockDepth = Math.max(0, blockDepth - 1);
+          i++;
+        }
+      }
+      continue;
+    }
+    const impMatch = trimmed.match(/^import\s+([A-Za-z0-9_.'«»]+)(?:\s*--.*)?$/);
+    if (impMatch) {
+      imports.push(impMatch[1]);
+      continue;
+    }
+    inHeader = false;
+    bodyLines.push(line);
+  }
+  return { imports, body: bodyLines.join("\n").trim() };
+}
+
+/** Extract the Prop body from a frozen `def <name> : Prop := <expr>` statement. */
+export function extractPropStatementExpr(statementDef: string): string {
+  const trimmed = statementDef.trim();
+  const m = trimmed.match(/^(?:noncomputable\s+)?def\s+[A-Za-z_][A-Za-z0-9_']*\s*:\s*Prop\s*:=\s*([\s\S]+)$/);
+  return m ? m[1].trim() : trimmed;
+}
+
+export type AssembledProofNode =
+  | {
+      kind: "leaf";
+      label: string;
+      theorem: string;
+      source: string;
+    }
+  | {
+      kind: "decomp";
+      decomp_id: string;
+      decomp_statements_module: string;
+      decomp_statements_source: string;
+      reduction_theorem: string;
+      reduction_source: string;
+      children: AssembledProofNode[];
+    };
+
+/** Extract top-level `namespace Foo` names declared in Lean source text. */
+function extractLeanNamespaces(source: string): string[] {
+  const out: string[] = [];
+  for (const line of source.replace(/\r\n/g, "\n").split("\n")) {
+    const m = line.match(/^\s*namespace\s+([A-Za-z_][A-Za-z0-9_']*(?:\.[A-Za-z_][A-Za-z0-9_']*)*)\s*(?:--.*)?$/);
+    if (m) out.push(m[1]);
+  }
+  return out;
+}
+
+/**
+ * Assemble a complete, self-contained, sorry-free Lean 4 file proving `targetTheorem : targetTypeExpr`
+ * from a verified decomposition tree (depth 1 or depth 2).
+ *
+ * The output has zero imports of reserved `DecompStatements_*` modules (unless explicitly listed in
+ * `keepImports`, e.g. when assembling a depth-2 child into a depth-1 subgoal file) and compiles
+ * cleanly under the original untouched `./verify <T>` and stock `lake build` + `leanchecker`.
+ */
+export function assembleDecomposedLeanFile(opts: {
+  baseImports: string[];
+  keepImports?: string[];
+  knownRootNamespaces?: string[];
+  statementPreamble?: string;
+  targetTheorem: string;
+  targetTypeExpr: string;
+  root: AssembledProofNode;
+}): string {
+  const importOrder: string[] = [];
+  const seenImports = new Set<string>();
+  const keepSet = new Set(opts.keepImports || []);
+  const inlineModules = new Set<string>();
+  const knownRootNs = new Set<string>(opts.knownRootNamespaces || []);
+  const thmPartsForRoot = opts.targetTheorem.split(".");
+  if (thmPartsForRoot.length > 1) {
+    knownRootNs.add(thmPartsForRoot.slice(0, -1).join("."));
+    knownRootNs.add(thmPartsForRoot[0]);
+  }
+
+  const collectInlineMods = (node: AssembledProofNode) => {
+    if (node.kind === "decomp") {
+      inlineModules.add(node.decomp_statements_module);
+      for (const ch of node.children) collectInlineMods(ch);
+    }
+  };
+  collectInlineMods(opts.root);
+
+  const addImport = (mod: string) => {
+    if (!mod || seenImports.has(mod)) return;
+    if (inlineModules.has(mod) && !keepSet.has(mod)) return;
+    if (/\.DecompStatements_[A-Za-z0-9_]+$/.test(mod) && !keepSet.has(mod)) return;
+    seenImports.add(mod);
+    importOrder.push(mod);
+  };
+
+  for (const imp of opts.baseImports) addImport(imp);
+  for (const imp of opts.keepImports || []) addImport(imp);
+
+  const emittedDecompStmts = new Set<string>();
+  const stmtBlocks: string[] = [];
+  const proofBlocks: string[] = [];
+  let nsCounter = 0;
+
+  const wrapInIsolatedNamespace = (body: string): string => {
+    const ns = `SunsteadAssembled_${++nsCounter}`;
+    // When a contributor file writes `namespace Foo`, at top level it brings root
+    // declarations in `Foo` into scope. Wrapping inside `SunsteadAssembled_k`
+    // creates `SunsteadAssembled_k.Foo`, so pre-opening any known root namespace
+    // `Foo` in an enclosing `section` preserves unqualified references while still
+    // isolating all newly defined contributor symbols under `SunsteadAssembled_k`.
+    const opens = Array.from(
+      new Set(extractLeanNamespaces(body).filter((n) => knownRootNs.has(n)))
+    );
+    const openPrefix = opens.length > 0 ? `open ${opens.join(" ")}\n` : "";
+    proofBlocks.push(`section\n${openPrefix}namespace ${ns}\n${body}\nend ${ns}\nend`);
+    return ns;
+  };
+
+  const emitNode = (node: AssembledProofNode): string => {
+    if (node.kind === "leaf") {
+      const split = splitLeanImports(node.source);
+      for (const imp of split.imports) addImport(imp);
+      const ns = wrapInIsolatedNamespace(split.body);
+      return `${ns}.${node.theorem}`;
+    }
+    // Emit this decomposition's frozen subgoal definitions once.
+    if (!emittedDecompStmts.has(node.decomp_statements_module)) {
+      emittedDecompStmts.add(node.decomp_statements_module);
+      const stSplit = splitLeanImports(node.decomp_statements_source);
+      for (const imp of stSplit.imports) addImport(imp);
+      stmtBlocks.push(`section\n${stSplit.body}\nend`);
+    }
+    const childTerms = node.children.map((ch) => emitNode(ch));
+    const redSplit = splitLeanImports(node.reduction_source);
+    for (const imp of redSplit.imports) addImport(imp);
+    const redNs = wrapInIsolatedNamespace(redSplit.body);
+    return `(${redNs}.${node.reduction_theorem} ${childTerms.join(" ")})`;
+  };
+
+  const finalProofTerm = emitNode(opts.root);
+
+  const thmParts = opts.targetTheorem.split(".");
+  const shortThm = thmParts[thmParts.length - 1];
+  const thmNs = thmParts.length > 1 ? thmParts.slice(0, -1).join(".") : "";
+  const preamble = (opts.statementPreamble || "").trim();
+
+  const sections: string[] = [];
+  sections.push(importOrder.map((m) => `import ${m}`).join("\n"));
+  if (stmtBlocks.length > 0) {
+    sections.push(stmtBlocks.join("\n\n"));
+  }
+  if (proofBlocks.length > 0) {
+    sections.push(proofBlocks.join("\n\n"));
+  }
+  const finalLines: string[] = ["section"];
+  if (preamble) {
+    finalLines.push(preamble);
+  }
+  if (thmNs) {
+    finalLines.push(`namespace ${thmNs}`);
+  }
+  finalLines.push(
+    `theorem ${shortThm} :`,
+    `    (${opts.targetTypeExpr}) :=`,
+    `  ${finalProofTerm}`
+  );
+  if (thmNs) {
+    finalLines.push(`end ${thmNs}`);
+  }
+  finalLines.push("end");
+  sections.push(finalLines.join("\n"));
+
+  return sections.filter(Boolean).join("\n\n") + "\n";
+}
+
+/** Generate a standard unified git diff replacing `oldContent` (or creating a new file when null) with `newContent`. */
+export function generateUnifiedDiff(
+  relPath: string,
+  oldContent: string | null,
+  newContent: string
+): string {
+  const norm = normalizeRelPath(relPath);
+  const splitLines = (text: string): { lines: string[]; hasTrailingNl: boolean } => {
+    const clean = text.replace(/\r\n/g, "\n");
+    if (clean === "") return { lines: [], hasTrailingNl: true };
+    const hasTrailingNl = clean.endsWith("\n");
+    const body = hasTrailingNl ? clean.slice(0, -1) : clean;
+    return { lines: body.split("\n"), hasTrailingNl };
+  };
+
+  const dst = splitLines(newContent);
+  const out: string[] = [`diff --git a/${norm} b/${norm}`];
+  if (oldContent === null) {
+    out.push("new file mode 100644", "--- /dev/null", `+++ b/${norm}`);
+    out.push(`@@ -0,0 +1,${dst.lines.length} @@`);
+    for (const l of dst.lines) out.push(`+${l}`);
+    if (!dst.hasTrailingNl) out.push("\\ No newline at end of file");
+    return out.join("\n") + "\n";
+  }
+
+  const src = splitLines(oldContent);
+  out.push(`--- a/${norm}`, `+++ b/${norm}`);
+  out.push(`@@ -1,${src.lines.length} +1,${dst.lines.length} @@`);
+  for (const l of src.lines) out.push(`-${l}`);
+  if (!src.hasTrailingNl && src.lines.length > 0) out.push("\\ No newline at end of file");
+  for (const l of dst.lines) out.push(`+${l}`);
+  if (!dst.hasTrailingNl && dst.lines.length > 0) out.push("\\ No newline at end of file");
+  return out.join("\n") + "\n";
 }

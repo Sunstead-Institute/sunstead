@@ -25,6 +25,12 @@
     "timeout_sec": 180,
     "memory_mb": 6144
   },
+  "decomposition": {
+    "enabled": true,
+    "require_allowlist": true,
+    "allow_direct_bypass": true,
+    "max_depth": 2
+  },
   "score_direction": "maximize",
   "tasks": [
     {

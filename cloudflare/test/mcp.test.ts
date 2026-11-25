@@ -29,6 +29,50 @@ const tools = [
     "PATCH",
     { display_name: "Ada", github: "ada-gh", x: null, linkedin: "ada-lovelace" },
   ],
+  [
+    "decompose_task",
+    {
+      ...task,
+      decomp_id: "d1",
+      subgoals: [
+        { id: "lemma_a", title: "Lemma A", statement: "def lemma_a : Prop := 1 = 1" },
+        { id: "lemma_b", title: "Lemma B", statement: "def lemma_b : Prop := 2 = 2" },
+      ],
+      reduction_file: "Pkg/Decomp_task_1_d1.lean",
+      reduction_theorem: "Pkg.reduce_task_1",
+      patch: "diff --git a/Pkg/Decomp_task_1_d1.lean b/Pkg/Decomp_task_1_d1.lean\n",
+    },
+    "/api/missions/example/tasks/task_1/decompose",
+    "",
+    "POST",
+    {
+      decomp_id: "d1",
+      subgoals: [
+        { id: "lemma_a", title: "Lemma A", statement: "def lemma_a : Prop := 1 = 1" },
+        { id: "lemma_b", title: "Lemma B", statement: "def lemma_b : Prop := 2 = 2" },
+      ],
+      reduction_file: "Pkg/Decomp_task_1_d1.lean",
+      reduction_theorem: "Pkg.reduce_task_1",
+      patch: "diff --git a/Pkg/Decomp_task_1_d1.lean b/Pkg/Decomp_task_1_d1.lean\n",
+    },
+  ],
+  [
+    "refute_task",
+    {
+      ...task,
+      refute_file: "Pkg/Refute_task_1.lean",
+      refute_theorem: "Pkg.refute_task_1",
+      patch: "diff --git a/Pkg/Refute_task_1.lean b/Pkg/Refute_task_1.lean\n",
+    },
+    "/api/missions/example/tasks/task_1/refute",
+    "",
+    "POST",
+    {
+      refute_file: "Pkg/Refute_task_1.lean",
+      refute_theorem: "Pkg.refute_task_1",
+      patch: "diff --git a/Pkg/Refute_task_1.lean b/Pkg/Refute_task_1.lean\n",
+    },
+  ],
 ] as const;
 
 function rpc(method: string, params: object, extra: Record<string,string> = {}) {
