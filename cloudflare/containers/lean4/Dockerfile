@@ -31,17 +31,25 @@ RUN mkdir -p /opt/mathlib \
 COPY missions/arklib-near-capacity-primes /missions/arklib-near-capacity-primes
 COPY missions/pnt-analytic-foundations /missions/pnt-analytic-foundations
 COPY missions/onboarding-sandbox /missions/onboarding-sandbox
-COPY missions/verifier-common/sunstead_sandbox.py missions/verifier-common/SunsteadCheck.lean /opt/sunstead/
+COPY missions/verifier-common/sunstead_sandbox.py missions/verifier-common/SunsteadCheck.lean missions/verifier-common/prebuild_cache.py /opt/sunstead/
 COPY cloudflare/containers/verifier_server.py /opt/verifier_server.py
 
-# Seeds, harness and server are read-only. The server runs as root and never
-# executes contributor code itself: `verify` drops to `sunstead-runner` for
-# that, and the trusted kernel replay runs as `sunstead-checker`.
-RUN chmod -R a-w,a+rX /missions /opt/sunstead /opt/verifier_server.py \
+# Seeds, harness, native checker, prebuilt frozen `.olean` cache, and server
+# are read-only. The server runs as root and never executes contributor code
+# itself: `verify` drops to `sunstead-runner` for that, and the trusted kernel
+# replay runs as `sunstead-checker`.
+RUN SYSROOT="$(lean --print-prefix)" \
+    && mkdir -p /tmp/scbuild \
+    && lean -c /tmp/scbuild/SunsteadCheck.c /opt/sunstead/SunsteadCheck.lean \
+    && leanc -O2 -o /opt/sunstead/sunstead-check /tmp/scbuild/SunsteadCheck.c \
+       -lleanshared -Wl,-rpath,"${SYSROOT}/lib/lean" \
+    && rm -rf /tmp/scbuild \
+    && /opt/sunstead/sunstead-check selftest | grep -q '"selftest":"ok"' \
+    && python3 /opt/sunstead/prebuild_cache.py /missions/* \
+    && chmod -R a-w,a+rX /missions /opt/sunstead /opt/verifier_server.py \
     && useradd -M -d /nonexistent -s /usr/sbin/nologin -u 10002 sunstead-runner \
     && useradd -M -d /nonexistent -s /usr/sbin/nologin -u 10003 sunstead-checker \
-    && mkdir -p /work && chmod 0755 /work \
-    && cd /tmp && lean --run /opt/sunstead/SunsteadCheck.lean selftest | grep -q '"selftest":"ok"'
+    && mkdir -p /work && chmod 0755 /work
 
 WORKDIR /work
 EXPOSE 8080

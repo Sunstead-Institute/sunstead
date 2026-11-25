@@ -21,6 +21,7 @@ Trust model
   from text the contributor's code printed.
 """
 import glob
+import hashlib
 import json
 import os
 import pwd
@@ -36,6 +37,8 @@ RUNNER_USER = "sunstead-runner"
 CHECKER_USER = "sunstead-checker"
 SUNSTEAD_HOME = os.path.dirname(os.path.abspath(__file__))
 LEAN_CHECKER = os.path.join(SUNSTEAD_HOME, "SunsteadCheck.lean")
+LEAN_CHECKER_BIN = os.path.join(SUNSTEAD_HOME, "sunstead-check")
+MISSION_CACHE_DIR = os.environ.get("SUNSTEAD_MISSION_CACHE", "/opt/sunstead/mission-cache")
 MATHLIB_CACHE_DIR = os.environ.get("SUNSTEAD_MATHLIB_DIR", "/opt/mathlib")
 ALLOWED_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
 
@@ -451,12 +454,19 @@ def _validate_mod_name(mod):
     return segs
 
 
-def _resolve_local_build_order(project_dir, lib_root, root_modules):
-    """Topologically order `<lib_root>.*` modules needed to compile `root_modules`."""
+def _resolve_local_build_order(project_dir, lib_root, root_modules, skip_modules=None):
+    """Topologically order `<lib_root>.*` modules needed to compile `root_modules`.
+
+    Modules in `skip_modules` (excluding `root_modules` themselves) are assumed
+    to be prebuilt in a read-only directory on `LEAN_PATH` and are not rebuilt.
+    """
+    skip = set(skip_modules or ()) - set(root_modules)
     order = []
     state = {}  # mod -> 1 (visiting) | 2 (done)
 
     def dfs(mod):
+        if mod in skip:
+            return
         st = state.get(mod, 0)
         if st == 2:
             return
@@ -481,14 +491,30 @@ def _resolve_local_build_order(project_dir, lib_root, root_modules):
 
 
 def _compile_lean_graph(user, project_dir, lib_root, root_modules, extra_lib_paths,
-                        deadline_fn, home_dir, cpu_sec=None, fsize_mb=512):
+                        deadline_fn, home_dir, cpu_sec=None, fsize_mb=512,
+                        prebuilt_dir=None, prebuilt_modules=None):
     """Compile `root_modules` and their `<lib_root>.*` dependencies directly with `lean`.
 
     Direct invocation with an explicit `LEAN_PATH` avoids `lake` touching `.git`,
     network, or read-only `/opt/mathlib`, and compiles single Mathlib files in ~1-2s.
+    When `prebuilt_dir` and `prebuilt_modules` are given, those read-only `.olean`
+    files are symlinked into `out_lib` so Lean's single-root package lookup finds
+    them without recompiling frozen specs.
     """
     out_lib = os.path.join(project_dir, ".lake", "build", "lib", "lean")
-    order = _resolve_local_build_order(project_dir, lib_root, root_modules)
+    skip = set(prebuilt_modules or ()) - set(root_modules)
+    if prebuilt_dir and skip:
+        for mod in sorted(skip):
+            segs = _validate_mod_name(mod)
+            src_olean = os.path.join(prebuilt_dir, *segs) + ".olean"
+            dst_olean = os.path.join(out_lib, *segs) + ".olean"
+            p_mk = run_as(user, ["mkdir", "-p", os.path.dirname(dst_olean)], cwd="/", timeout=30)
+            if p_mk.returncode != 0:
+                emit(False, f"sandbox error: mkdir for cached {mod} failed: {tail(p_mk.stderr)}")
+            p_ln = run_as(user, ["ln", "-sf", src_olean, dst_olean], cwd="/", timeout=30)
+            if p_ln.returncode != 0:
+                emit(False, f"sandbox error: symlink for cached {mod} failed: {tail(p_ln.stderr)}")
+    order = _resolve_local_build_order(project_dir, lib_root, root_modules, skip_modules=skip)
     lean_path = ":".join([out_lib] + list(extra_lib_paths))
     for mod in order:
         segs = _validate_mod_name(mod)
@@ -509,6 +535,48 @@ def _compile_lean_graph(user, project_dir, lib_root, root_modules, extra_lib_pat
         if p.returncode != 0:
             return mod, p
     return None, None
+
+
+def _frozen_lean_modules(lib_root, frozen_paths):
+    """Return Lean module names for frozen `.lean` files under `<lib_root>/`."""
+    prefix = lib_root + "/"
+    mods = []
+    for rel in sorted(frozen_paths):
+        norm = rel.replace("\\", "/")
+        if norm.startswith(prefix) and norm.endswith(".lean"):
+            mod = norm[:-5].replace("/", ".")
+            _validate_mod_name(mod)
+            mods.append(mod)
+    return mods
+
+
+def trusted_cache_key(lib_root, uses_mathlib, frozen_contents, statements_src):
+    """Cryptographic SHA-256 key over every trusted input for a mission's prebuilt `.olean`s."""
+    h = hashlib.sha256()
+    h.update(f"sunstead-trusted-v1\0{lib_root}\0{int(bool(uses_mathlib))}\0".encode("utf-8"))
+    for rel in sorted(frozen_contents.keys()):
+        h.update(rel.encode("utf-8") + b"\0" + frozen_contents[rel].encode("utf-8") + b"\0")
+    h.update(b"__SunsteadStatements__\0" + statements_src.encode("utf-8") + b"\0")
+    return h.hexdigest()
+
+
+def _lookup_prebuilt_cache(cache_key, lib_root, frozen_mods):
+    """Return `(cache_spec_dir, cache_trusted_dir)` if all prebuilt `.olean`s exist, else None."""
+    cache_root = os.path.join(MISSION_CACHE_DIR, cache_key)
+    spec_dir = os.path.join(cache_root, "spec")
+    trusted_dir = os.path.join(cache_root, "trusted")
+    if not (os.path.isdir(spec_dir) and os.path.isdir(trusted_dir)):
+        return None
+    for mod in frozen_mods:
+        segs = _validate_mod_name(mod)
+        if not os.path.isfile(os.path.join(spec_dir, *segs) + ".olean"):
+            return None
+        if not os.path.isfile(os.path.join(trusted_dir, *segs) + ".olean"):
+            return None
+    stmts_segs = _validate_mod_name(f"{lib_root}.SunsteadStatements")
+    if not os.path.isfile(os.path.join(trusted_dir, *stmts_segs) + ".olean"):
+        return None
+    return spec_dir, trusted_dir
 
 
 def _statements_module_source(lib_root, statements, preamble=""):
@@ -600,32 +668,52 @@ def _lean_check(task_id, *, lib_root, frozen_files, tasks,
 
     job = Job()
     try:
-        # 1. Trusted build of the frozen spec + frozen statements (checker user).
-        trusted = os.path.join(job.checker_dir, "trusted")
-        run_as(CHECKER_USER, ["mkdir", "-p", os.path.join(trusted, lib_root)], cwd="/", timeout=30)
+        # 1. Trusted frozen spec + frozen statements (cache hit or live checker build).
+        frozen_contents = {}
         for rel in frozen_files:
             src = os.path.join(work, rel)
             if not os.path.isfile(src):
                 continue
             with open(src, "r", encoding="utf-8") as f:
-                content = f.read()
-            dst = os.path.join(trusted, rel)
-            run_as(CHECKER_USER, ["mkdir", "-p", os.path.dirname(dst)], cwd="/", timeout=30)
-            job.write_as(CHECKER_USER, dst, content)
+                frozen_contents[rel] = f.read()
         stmts = {tid: t["statement"] for tid, t in tasks.items()}
-        job.write_as(
-            CHECKER_USER,
-            os.path.join(trusted, lib_root, "SunsteadStatements.lean"),
-            _statements_module_source(lib_root, stmts, preamble=statement_preamble),
-        )
-        failed_mod, p = _compile_lean_graph(
-            CHECKER_USER, trusted, lib_root,
-            [f"{lib_root}.Spec", f"{lib_root}.SunsteadStatements"],
-            extra_lib_paths, deadline, job.checker_dir, fsize_mb=fsize_mb,
-        )
-        ensure_no_processes(CHECKER_USER)
-        if failed_mod is not None:
-            emit(False, f"trusted spec build failed ({failed_mod}): {tail(p.stdout + p.stderr)}")
+        statements_src = _statements_module_source(lib_root, stmts, preamble=statement_preamble)
+        frozen_mods = _frozen_lean_modules(lib_root, frozen_contents.keys())
+        if f"{lib_root}.Spec" not in frozen_mods:
+            frozen_mods.insert(0, f"{lib_root}.Spec")
+        cache_key = trusted_cache_key(lib_root, uses_mathlib, frozen_contents, statements_src)
+        cached = _lookup_prebuilt_cache(cache_key, lib_root, frozen_mods)
+
+        if cached is not None:
+            cache_spec_dir, cache_trusted_dir = cached
+            trusted_lib_paths = [cache_trusted_dir] + extra_lib_paths
+            runner_prebuilt_dir = cache_spec_dir
+            runner_prebuilt_modules = set(frozen_mods)
+            checker_cwd = job.checker_dir
+        else:
+            trusted = os.path.join(job.checker_dir, "trusted")
+            run_as(CHECKER_USER, ["mkdir", "-p", os.path.join(trusted, lib_root)], cwd="/", timeout=30)
+            for rel, content in frozen_contents.items():
+                dst = os.path.join(trusted, rel)
+                run_as(CHECKER_USER, ["mkdir", "-p", os.path.dirname(dst)], cwd="/", timeout=30)
+                job.write_as(CHECKER_USER, dst, content)
+            job.write_as(
+                CHECKER_USER,
+                os.path.join(trusted, lib_root, "SunsteadStatements.lean"),
+                statements_src,
+            )
+            failed_mod, p = _compile_lean_graph(
+                CHECKER_USER, trusted, lib_root,
+                frozen_mods + [f"{lib_root}.SunsteadStatements"],
+                extra_lib_paths, deadline, job.checker_dir, fsize_mb=fsize_mb,
+            )
+            ensure_no_processes(CHECKER_USER)
+            if failed_mod is not None:
+                emit(False, f"trusted spec build failed ({failed_mod}): {tail(p.stdout + p.stderr)}")
+            trusted_lib_paths = [os.path.join(trusted, ".lake", "build", "lib", "lean")] + extra_lib_paths
+            runner_prebuilt_dir = None
+            runner_prebuilt_modules = set()
+            checker_cwd = trusted
 
         # 2. Untrusted build of the contributor's module (runner user).
         src_dir = os.path.join(job.runner_dir, "src")
@@ -637,27 +725,33 @@ def _lean_check(task_id, *, lib_root, frozen_files, tasks,
             [task["module"]],
             extra_lib_paths, deadline, job.runner_dir,
             cpu_sec=runner_cpu, fsize_mb=fsize_mb,
+            prebuilt_dir=runner_prebuilt_dir,
+            prebuilt_modules=runner_prebuilt_modules,
         )
         ensure_no_processes(RUNNER_USER)
         if failed_mod is not None:
             emit(False, f"lean build {failed_mod} failed: {tail(p.stdout + p.stderr)}")
 
         # 3. Trusted kernel replay + statement + axiom check (checker user).
-        # key=value tokens: `lean --run` parses any `--flag` as its own option.
-        trusted_lib_paths = [os.path.join(trusted, ".lake", "build", "lib", "lean")] + extra_lib_paths
-        argv = [
-            "lean", "--run", LEAN_CHECKER,
+        # Prefer the precompiled native binary `/opt/sunstead/sunstead-check` when present.
+        # key=value tokens: `lean --run` fallback parses any `--flag` as its own option.
+        if os.path.isfile(LEAN_CHECKER_BIN) and os.access(LEAN_CHECKER_BIN, os.X_OK):
+            checker_cmd = [LEAN_CHECKER_BIN]
+        else:
+            checker_cmd = ["lean", "--run", LEAN_CHECKER]
+        frozen_list = list(dict.fromkeys(frozen_mods + [f"{lib_root}.SunsteadStatements"]))
+        argv = checker_cmd + [
             "trusted-lib=" + ":".join(trusted_lib_paths),
             "untrusted-lib=" + os.path.join(src_dir, ".lake", "build", "lib", "lean"),
             "lib-root=" + lib_root,
-            "frozen=" + ",".join([f"{lib_root}.Spec", f"{lib_root}.SunsteadStatements"]),
+            "frozen=" + ",".join(frozen_list),
             "target-module=" + task["module"],
             "target-const=" + task["theorem"],
             "statement=" + f"SunsteadStatements.{task_id}",
         ]
         if task.get("score_const"):
             argv.append("score-const=" + task["score_const"])
-        p = run_as(CHECKER_USER, argv, cwd=trusted, timeout=deadline(),
+        p = run_as(CHECKER_USER, argv, cwd=checker_cwd, timeout=deadline(),
                    env_extra={"HOME": job.checker_dir}, fsize_mb=fsize_mb)
         ensure_no_processes(CHECKER_USER)
         result = None
