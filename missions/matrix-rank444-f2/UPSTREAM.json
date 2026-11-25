@@ -1,0 +1,14 @@
+{
+  "repo": "tejasvi/rank444-f2",
+  "commit": "22f87dd705718246e3256f4cb5b5bc47311eb53d",
+  "license": "Apache-2.0",
+  "specialization": "Sunstead specializes the upstream tensor-rank predicate to upper bounds for 4×4 matrix multiplication over F₂. This hill-climb is a Sunstead challenge.",
+  "public_baseline": "https://github.com/gsidebottom/mat_mul/tree/d6cdc88585e1cdbaaba46a8752f99140d7c14b25/schemes/4x4x4_47_mod_2_166",
+  "checks": [
+    {
+      "local_file": "Rank444/Spec.lean",
+      "upstream_file": "lean/B334/Statement.lean",
+      "verbatim_snippet": "namespace B334\n\nopen Finset\n\nsection Tensors\n\nvariable {R : Type*} [CommSemiring R] {n₀ n₁ n₂ : ℕ}\n\n/-- The rank-one tensor `a ⊗ b ⊗ c`: its entry `(i, j, k)` is `a i * b j * c k`. -/\ndef outer3 (a : Fin n₀ → R) (b : Fin n₁ → R) (c : Fin n₂ → R) : Fin n₀ → Fin n₁ → Fin n₂ → R :=\n  fun i j k => a i * b j * c k\n\n/-- `RankLE T r`: `T` is a sum of `r` rank-one tensors. -/\ndef RankLE (T : Fin n₀ → Fin n₁ → Fin n₂ → R) (r : ℕ) : Prop :=\n  ∃ (a : Fin r → Fin n₀ → R) (b : Fin r → Fin n₁ → R) (c : Fin r → Fin n₂ → R),\n    T = ∑ s, outer3 (a s) (b s) (c s)\n\nend Tensors\n\n/-- The matrix multiplication tensor ⟨n,m,p⟩ over F₂. Entry `(x, y, z)` is 1 iff `x = m i + j`, `y = p j + k`,\n`z = n k + i` for some `i < n`, `j < m`, `k < p`. -/\ndef mmT (n m p : ℕ) : Fin (n * m) → Fin (m * p) → Fin (p * n) → ZMod 2 :=\n  fun x y z => if x.val % m = y.val / p ∧ y.val % p = z.val / n ∧ z.val % n = x.val / m then 1 else 0"
+    }
+  ]
+}

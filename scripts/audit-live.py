@@ -106,7 +106,9 @@ def replay(root, mission, manifest, history, mbox, seed, live, current_hash):
         task_id = row["task_id"]
         require(isinstance(row["seq"], int) and row["seq"] > previous_seq, "invalid history order")
         require(row["spec_sha256"] == current_hash, "history refers to a different frozen spec")
-        require(task_id in tasks and task_id not in accepted, "unknown or duplicate verified task")
+        require(task_id in tasks, "unknown verified task")
+        if manifest.get("mode") != "hillclimb":
+            require(task_id not in accepted, "duplicate verified task")
         require(set(tasks[task_id].get("depends_on", [])) <= set(accepted), "verified task precedes its dependency")
         accepted.append(task_id)
         previous_seq = row["seq"]
@@ -292,6 +294,48 @@ def check_lean(image, data, frozen, modules, checks):
         print(f"  PASS {theorem}: stock Lean + leanchecker + loadExts:=false kernel check; axioms: {', '.join(actual) or 'none'}")
 
 
+def check_rank_table(source):
+    """Read only the literal masks. Compare ordinary elementary-matrix products over F2."""
+    header = "def certificate : List (Nat × Nat × Nat) :="
+    score_line, _, table = source.partition("\n")
+    score_match = re.fullmatch(r"def B334.score : Nat := ([1-9][0-9]?)", score_line)
+    require(score_match and len(source.encode("utf-8")) <= 8192, "unexpected rank certificate")
+    source = table.strip()
+    require(source.startswith(header), "unexpected certificate header")
+    literal = source[len(header):].strip()
+    require(re.fullmatch(r"[0-9\s(),\[\]]+", literal), "invalid mask table")
+    terms = ast.literal_eval(literal)
+    require(type(terms) is list and 1 <= len(terms) <= 47 and len(terms) == int(score_match[1]), "invalid term count")
+    for term in terms:
+        require(type(term) is tuple and len(term) == 3 and
+                all(type(v) is int and 0 <= v < 65536 for v in term), "invalid mask triple")
+    for x in range(16):
+        for y in range(16):
+            output = 0
+            for left, right, product in terms:
+                if left & (1 << x) and right & (1 << y):
+                    output ^= product
+            # E_ij times E_jk equals E_ik. Output masks use the transposed index 4k+i.
+            i, j = divmod(x, 4)
+            j2, k = divmod(y, 4)
+            expected = 1 << (4 * k + i) if j == j2 else 0
+            require(output == expected, f"matrix product differs at inputs {x}, {y}")
+    return len(terms)
+
+
+def audit_rank_history(repo, accepted, best_score):
+    commits = repo_git(repo, "rev-list", "--reverse", "HEAD").decode().splitlines()
+    require(len(commits) == 1 + len(accepted), "unexpected rank history length")
+    previous = None
+    for commit in commits:
+        source = repo_git(repo, "show", commit + ":Rank444/Certificate.lean").decode("utf-8")
+        score = check_rank_table(source)
+        require(score == 47 if previous is None else score < previous, "invalid rank progression")
+        print(f"  PASS {commit[:12]}: all 4096 coefficients correct at {score} products")
+        previous = score
+    require(previous == best_score, "published best score differs from certificate")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--image", default="sunstead/verifier-lean4:v0.2", help="preinstalled stock Lean/Mathlib toolchain image")
@@ -310,10 +354,11 @@ def main():
         detail = snapshot["mission"]
         mission = ROOT / "missions" / mid
         manifest = json.loads((mission / "sunstead.json").read_text(encoding="utf-8"))
-        require(not manifest.get("demo") and manifest["mode"] == "dag", "unsupported audited mission")
+        rank_mission = mid == "matrix-rank444-f2" and manifest["mode"] == "hillclimb"
+        require(not manifest.get("demo") and (rank_mission or manifest["mode"] == "dag"), "unsupported audited mission")
         require(manifest == detail["manifest"], "live manifest differs from trusted checkout")
         history = json.loads(download(endpoint + "/history"))["commits"]
-        require(history and len(history) == item["verified_tasks"], "history incomplete or changed during audit")
+        require(history and (rank_mission or len(history) == item["verified_tasks"]), "history incomplete or changed during audit")
         verified = {t["def"]["id"] for t in snapshot["tasks"] if t["status"] == "verified"}
         require(verified == {row["task_id"] for row in history}, "verified tasks and history disagree")
         with tempfile.TemporaryDirectory(prefix="sunstead-independent-audit-") as tmp:
@@ -321,6 +366,11 @@ def main():
                                     download(endpoint + "/history.mbox"),
                                     archive_files(download(endpoint + "/bundle.tar.gz?base=seed")),
                                     archive_files(download(endpoint + "/bundle.tar.gz")), detail["spec_sha256"])
+            if rank_mission:
+                task, = snapshot["tasks"]
+                audit_rank_history(Path(tmp) / "repo", accepted, task["best_score"])
+                count += len(accepted)
+                continue
             data, frozen, modules, checks = lean_input(tree, manifest, accepted, *proof_contract(mission))
             print(f"{mid}: {len(accepted)} accepted patches replayed against matching frozen spec", flush=True)
             check_lean(args.image, data, frozen, modules, checks)

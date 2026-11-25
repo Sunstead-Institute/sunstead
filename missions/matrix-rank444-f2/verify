@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+"""Verify the explicit binary decomposition and measure its table length."""
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify
+
+TASKS = {
+    "reduce_rank": {
+        "module": "Rank444.Bound",
+        "theorem": "B334.bound",
+        "score_const": "B334.score",
+        "statement": "def reduce_rank (r : Nat) : Prop := B334.RankLE (B334.mmT 4 4 4) r",
+        "label": "{score} products over F2",
+    },
+}
+
+
+def check_certificate(path):
+    # Restrict the editable source to a concrete table that can be replayed outside Lean.
+    source = path.read_bytes()
+    if len(source) > 8192:
+        emit(False, "Certificate exceeds 8192 bytes", stage="lint")
+    score_line, _, table = source.decode("utf-8").partition("\n")
+    if not re.fullmatch(r"def B334.score : Nat := [1-9][0-9]?", score_line):
+        emit(False, "Expected a literal natural-number score", stage="lint")
+    source = table.strip()
+    mask = r"(0|[1-9][0-9]{0,4})"
+    term = rf"\(\s*{mask}\s*,\s*{mask}\s*,\s*{mask}\s*\)"
+    header = r"def certificate : List \(Nat × Nat × Nat\) :=\s*"
+    match = re.fullmatch(header + r"\[\s*(.*?)\s*\]", source, re.DOTALL)
+    if not match or not re.fullmatch(rf"{term}(?:\s*,\s*{term}){{0,46}}", match[1]):
+        emit(False, "Expected a literal table of 1 to 47 decimal mask triples", stage="lint")
+    if any(int(value) > 65535 for value in re.findall(r"[0-9]+", match[1])):
+        emit(False, "Masks must fit in 16 bits", stage="lint")
+
+
+if __name__ == "__main__":
+    check_certificate(Path(__file__).resolve().parent / "Rank444" / "Certificate.lean")
+    lean_verify(
+        sys.argv[1], lib_root="Rank444", frozen_files=["Rank444/Spec.lean", "UPSTREAM.json",
+                                                      "lakefile.toml", "lean-toolchain"],
+        tasks=TASKS, uses_mathlib=True, timeout_sec=170,
+    )
