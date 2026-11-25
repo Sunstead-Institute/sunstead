@@ -678,6 +678,26 @@ test("ledger permalink view includes the patch and how to reproduce it", () => {
   assert.match(p.how_to_rebuild, /\| git am$/);
 });
 
+test("ledger entries carry an upstream verify command only where one upstream sorry exists", () => {
+  const row = { ...proofRow(), patch_sha256: `sha256:${LEDGER_SHA}` };
+  const e = buildLedgerEntry(row, ledgerMission(), "https://sunstead.org");
+  assert.equal(e.verify_command, `curl -fsSLO 'https://sunstead.org/verify.py' && python3 verify.py ${LEDGER_SHA}`);
+  const dev = buildLedgerProof(row, ledgerMission(), "http://localhost:8787");
+  assert.equal(
+    dev.verify_command,
+    `curl -fsSLO 'http://localhost:8787/verify.py' && python3 verify.py ${LEDGER_SHA} --hub 'http://localhost:8787'`
+  );
+  assert.equal(buildLedgerEntry(row, ledgerMission({ demo: true }), "https://sunstead.org").verify_command, null);
+  assert.equal(buildLedgerEntry(row, null, "https://sunstead.org").verify_command, null, "retired mission");
+  assert.equal(buildLedgerEntry({ ...row, entry_kind: "subgoal" }, ledgerMission(), "https://sunstead.org").verify_command, null);
+  assert.equal(buildLedgerEntry({ ...row, entry_kind: "refutation" }, ledgerMission(), "https://sunstead.org").verify_command, null);
+  const noUrl = ledgerMission({
+    tasks: [{ id: "liouville", title: "Liouville lemma", target_files: ["PNT/Liouville.lean"] }],
+  });
+  assert.equal(buildLedgerEntry(row, noUrl, "https://sunstead.org").verify_command, null, "hill-climb style task");
+  assert.equal(buildLedgerEntry({ ...row, patch_sha256: "sha256:<script>" }, ledgerMission(), "https://sunstead.org").verify_command, null);
+});
+
 test("parseLedgerQuery clamps limit and ignores bad cursors", () => {
   const q = (s: string) => parseLedgerQuery(new URLSearchParams(s));
   assert.deepEqual(q(""), { limit: LEDGER_DEFAULT_LIMIT, before: null, missionId: null });

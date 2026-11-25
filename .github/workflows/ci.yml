@@ -84,6 +84,7 @@ jobs:
             scripts/check-upstream.py scripts/check-statements.py scripts/redteam.py scripts/e2e.py \
             scripts/scout-upstream.py scripts/test_scout_upstream.py \
             scripts/export-upstream.py scripts/test_export_upstream.py \
+            scripts/sunstead_verify.py scripts/test_sunstead_verify.py \
             scripts/audit-live.py scripts/test_audit_live.py \
             scripts/test_bootstrap_snapshot.py \
             scripts/ci-path-gate.py scripts/test_ci_path_gate.py
@@ -94,6 +95,8 @@ jobs:
         run: python3 scripts/test_scout_upstream.py
       - name: Upstream export unit tests (offline, no Lean)
         run: python3 scripts/test_export_upstream.py
+      - name: Public verifier (/verify.py) unit tests (offline, no Lean)
+        run: python3 scripts/test_sunstead_verify.py
       - name: Repo-snapshot local bootstrap tests (offline)
         run: python3 scripts/test_bootstrap_snapshot.py -v
       - name: Independent audit unit tests (offline)

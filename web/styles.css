@@ -1310,6 +1310,10 @@ code, pre { font-family: var(--mono); }
 
 /* ================= VERIFIED PROOFS LEDGER (/proofs) ================= */
 .ledger-card { padding: 20px 22px; }
+.verify-card { padding: 20px 22px; margin-top: 18px; scroll-margin-top: 80px; }
+.verify-card h2 { margin: 0 0 10px; }
+.verify-card p { max-width: 72ch; }
+.verify-card code { overflow-wrap: anywhere; }
 .ledger-list { list-style: none; margin: 0; padding: 0; }
 .ledger-row {
   display: flex;

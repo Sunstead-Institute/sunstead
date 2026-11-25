@@ -57,6 +57,12 @@ const staticAssets = {
     contentType: "application/javascript; charset=utf-8",
     body: fs.readFileSync(path.join(webDir, "app.js"), "utf8"),
   },
+  // Standalone public verifier: checks a ledger proof against its upstream repo
+  // (see the ledger's `verify_command`). Served as text so browsers show it.
+  "/verify.py": {
+    contentType: "text/plain; charset=utf-8",
+    body: fs.readFileSync(path.join(REPO_ROOT, "scripts", "sunstead_verify.py"), "utf8"),
+  },
 };
 
 fs.writeFileSync(
