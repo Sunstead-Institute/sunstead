@@ -74,6 +74,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--mission", action="append", help="only these missions (repeatable)")
     ap.add_argument("--exclude-mission", action="append", help="skip these missions (repeatable)")
+    ap.add_argument("--image", action="append", help="only missions targeting these verifier image(s) (repeatable)")
     ap.add_argument("--timeout", type=int, default=900, help="seconds per task")
     args = ap.parse_args()
 
@@ -89,6 +90,8 @@ def main():
         with open(manifest_path, "r", encoding="utf-8") as f:
             manifest = json.load(f)
         image = manifest["verifier"]["image"]
+        if args.image and image not in args.image:
+            continue
         for task in manifest["tasks"]:
             res = run_task(mission_dir, image, task["id"], args.timeout)
             checked += 1

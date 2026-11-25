@@ -1928,6 +1928,7 @@ def main():
     ap.add_argument("--local", action="store_true")
     ap.add_argument("--mission", action="append")
     ap.add_argument("--exclude-mission", action="append")
+    ap.add_argument("--image", action="append", help="only cases targeting these verifier image(s) (repeatable)")
     ap.add_argument("--case", action="append")
     ap.add_argument("--timeout", type=int, default=300)
     args = ap.parse_args()
@@ -1942,6 +1943,8 @@ def main():
         if args.mission and mission not in args.mission:
             continue
         if args.exclude_mission and mission in args.exclude_mission:
+            continue
+        if args.image and IMAGES[mission] not in args.image:
             continue
         if args.case and name not in args.case:
             continue

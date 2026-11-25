@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # Weekly full 3-toolchain sweep on `main` (catches cross-PR drift without double-billing every merge).
+    - cron: "17 4 * * 0"
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -13,6 +17,38 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Path gate (fail-closed)
+    runs-on: ubuntu-latest
+    outputs:
+      run_v436: ${{ steps.gate.outputs.run_v436 }}
+      run_v435: ${{ steps.gate.outputs.run_v435 }}
+      run_v431: ${{ steps.gate.outputs.run_v431 }}
+      run_export: ${{ steps.gate.outputs.run_export }}
+      reason: ${{ steps.gate.outputs.reason }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Classify changed paths per Lean toolchain
+        id: gate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            python3 scripts/ci-path-gate.py --event pull_request --base "origin/${PR_BASE_REF}" --head HEAD
+          elif [ "$EVENT_NAME" = "push" ]; then
+            # PR merges already ran the full required verifier checks on refs/pull/<n>/merge;
+            # main push keeps Hub + Python always-on, while weekly schedule / publish-verifiers / deploy full cover main images.
+            printf 'run_v436=false\nrun_v435=false\nrun_v431=false\nrun_export=false\nreason=push-main-fast-path\n' >> "$GITHUB_OUTPUT"
+          else
+            python3 scripts/ci-path-gate.py --event "$EVENT_NAME"
+          fi
+
   hub:
     name: Hub (typecheck + unit tests)
     runs-on: ubuntu-latest
@@ -49,8 +85,11 @@ jobs:
             scripts/scout-upstream.py scripts/test_scout_upstream.py \
             scripts/export-upstream.py scripts/test_export_upstream.py \
             scripts/audit-live.py scripts/test_audit_live.py \
-            scripts/test_bootstrap_snapshot.py
+            scripts/test_bootstrap_snapshot.py \
+            scripts/ci-path-gate.py scripts/test_ci_path_gate.py
           for f in missions/*/verify; do python3 -m py_compile "$f"; done
+      - name: CI path gate unit tests (offline)
+        run: python3 scripts/test_ci_path_gate.py -v
       - name: Upstream scout unit tests (offline)
         run: python3 scripts/test_scout_upstream.py
       - name: Upstream export unit tests (offline, no Lean)
@@ -65,7 +104,8 @@ jobs:
   export-upstream:
     name: Upstream export (core Lean build)
     runs-on: ubuntu-latest
-    needs: python
+    needs: [changes, python]
+    if: ${{ needs.changes.outputs.run_export == 'true' }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -80,10 +120,11 @@ jobs:
       - name: Export tests with lake build, sorry and axiom checks
         run: python3 scripts/test_export_upstream.py -v
 
-  verifiers:
-    name: Lean 4 verifier images (v4.36.0 + v4.35.0) + red-team suite
+  verifiers-v436:
+    name: Lean 4.36.0 verifier + red-team + Cloudflare container
     runs-on: ubuntu-latest
-    needs: python
+    needs: [changes, python]
+    if: ${{ needs.changes.outputs.run_v436 == 'true' }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -102,19 +143,63 @@ jobs:
             /usr/share/swift
           docker system prune -af || true
           df -h /
-      - name: Build Lean 4 verifier images (v4.36.0 + v4.35.0, runs SunsteadCheck selftest)
-        run: ./scripts/build-verifiers.sh v4.36.0 v4.35.0
-      - name: Red-team suite (v4.36.0 + v4.35.0 missions)
-        run: python3 scripts/redteam.py --exclude-mission curve25519-dalek
-      - name: Frozen task statements match the seed theorems (v4.36.0 + v4.35.0 missions)
-        run: python3 scripts/check-statements.py --exclude-mission curve25519-dalek
-      - name: Independent audit container security tests (v4.36.0 + v4.35.0 repo-snapshot)
+      - name: Build Lean 4.36.0 verifier image (runs SunsteadCheck selftest)
+        run: ./scripts/build-verifiers.sh v4.36.0
+      - name: Red-team suite (v4.36.0 missions + synthetic attacks)
+        run: python3 scripts/redteam.py --image sunstead/verifier-lean4:v0.2
+      - name: Frozen task statements match seed theorems (v4.36.0 missions)
+        run: python3 scripts/check-statements.py --image sunstead/verifier-lean4:v0.2
+      - name: Independent audit container security tests (v4.36.0)
         run: python3 scripts/test_audit_live.py -v
+      - name: Build & verify Cloudflare Lean 4.36.0 container (reuses local elan + Mathlib layers)
+        run: |
+          docker build -t sunstead-verifier-lean4:ci -f cloudflare/containers/lean4/Dockerfile .
+          docker run --rm --network=none sunstead-verifier-lean4:ci sh -c '
+            test -d /missions/arklib-near-capacity-primes &&
+            test -d /missions/ieantn-chebyshev-kernel &&
+            test -d /missions/pnt-analytic-foundations &&
+            test -d /missions/matrix-rank444-f2 &&
+            test ! -d /missions/onboarding-sandbox &&
+            test -x /opt/sunstead/sunstead-check &&
+            /opt/sunstead/sunstead-check selftest | grep -q "\"selftest\":\"ok\"" &&
+            test "$(ls -1 /opt/sunstead/mission-cache | wc -l)" -ge 4 &&
+            python3 -m py_compile /opt/verifier_server.py
+          '
+
+  verifiers-v435:
+    name: Lean 4.35.0 verifier + red-team + Cloudflare container
+    runs-on: ubuntu-latest
+    needs: [changes, python]
+    if: ${{ needs.changes.outputs.run_v435 == 'true' }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Lean 4.35.0 verifier image (runs SunsteadCheck selftest)
+        run: ./scripts/build-verifiers.sh v4.35.0
+      - name: Red-team suite (v4.35.0 missions)
+        run: python3 scripts/redteam.py --image sunstead/verifier-lean4-v4.35.0:v0.1
+      - name: Frozen task statements match seed theorems (v4.35.0 missions)
+        run: python3 scripts/check-statements.py --image sunstead/verifier-lean4-v4.35.0:v0.1
+      - name: Independent audit container security tests (v4.35.0)
+        run: python3 scripts/test_audit_live.py -v
+      - name: Build & verify Cloudflare Lean 4.35.0 container (reuses local elan layers)
+        run: |
+          docker build -t sunstead-verifier-lean4-v435:ci -f cloudflare/containers/lean4-v4.35.0/Dockerfile .
+          docker run --rm --network=none sunstead-verifier-lean4-v435:ci sh -c '
+            test -d /missions/lnsym-aes-gcm-armv8 &&
+            test -d /missions/lnsym-gcm-gmult-armv8 &&
+            test -x /opt/sunstead/sunstead-check &&
+            /opt/sunstead/sunstead-check selftest | grep -q "\"selftest\":\"ok\"" &&
+            test -f /opt/sunstead/snapshots/lnsym-aes-gcm-armv8/manifest.json &&
+            test -f /opt/sunstead/snapshots/lnsym-gcm-gmult-armv8/manifest.json &&
+            python3 -m py_compile /opt/verifier_server.py
+          '
 
   verifiers-v431:
-    name: Lean 4 verifier image (v4.31.0) + curve25519-dalek checks
+    name: Lean 4.31.0 verifier + red-team + Cloudflare container
     runs-on: ubuntu-latest
-    needs: python
+    needs: [changes, python]
+    if: ${{ needs.changes.outputs.run_v431 == 'true' }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -135,89 +220,15 @@ jobs:
           df -h /
       - name: Build Lean 4.31.0 verifier image (runs SunsteadCheck selftest)
         run: ./scripts/build-verifiers.sh v4.31.0
-      - name: Red-team suite (curve25519-dalek)
-        run: python3 scripts/redteam.py --mission curve25519-dalek
-      - name: Frozen task statements match the seed theorems (curve25519-dalek)
-        run: python3 scripts/check-statements.py --mission curve25519-dalek
-      - name: Independent audit container security tests (v4.31.0 repo-snapshot)
+      - name: Red-team suite (v4.31.0 missions)
+        run: python3 scripts/redteam.py --image sunstead/verifier-lean4-v4.31.0:v0.1
+      - name: Frozen task statements match seed theorems (v4.31.0 missions)
+        run: python3 scripts/check-statements.py --image sunstead/verifier-lean4-v4.31.0:v0.1
+      - name: Independent audit container security tests (v4.31.0)
         run: python3 scripts/test_audit_live.py -v
-
-  hub-images:
-    name: Cloudflare container images (v4.36.0 + v4.35.0)
-    runs-on: ubuntu-latest
-    needs: python
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-      - name: Free runner disk space for Lean 4.36 + Mathlib Docker build
-        run: |
-          df -h /
-          sudo rm -rf \
-            /usr/share/dotnet \
-            /usr/local/lib/android \
-            /opt/ghc \
-            /usr/local/.ghcup \
-            /opt/hostedtoolcache/CodeQL \
-            /usr/local/share/boost \
-            /usr/local/share/powershell \
-            /usr/local/julia* \
-            /usr/share/swift
-          docker system prune -af || true
-          df -h /
-      - name: Build Cloudflare Lean 4 verifier container images (v4.36.0 + v4.35.0)
-        run: |
-          docker build -t sunstead-verifier-lean4:ci -f cloudflare/containers/lean4/Dockerfile .
-          docker build -t sunstead-verifier-lean4-v435:ci -f cloudflare/containers/lean4-v4.35.0/Dockerfile .
-      - name: Verify bundled missions & server inside container images
-        run: |
-          docker run --rm --network=none sunstead-verifier-lean4:ci sh -c '
-            test -d /missions/arklib-near-capacity-primes &&
-            test -d /missions/ieantn-chebyshev-kernel &&
-            test -d /missions/pnt-analytic-foundations &&
-            test -d /missions/matrix-rank444-f2 &&
-            test ! -d /missions/onboarding-sandbox &&
-            test -x /opt/sunstead/sunstead-check &&
-            /opt/sunstead/sunstead-check selftest | grep -q "\"selftest\":\"ok\"" &&
-            test "$(ls -1 /opt/sunstead/mission-cache | wc -l)" -ge 4 &&
-            python3 -m py_compile /opt/verifier_server.py
-          '
-          docker run --rm --network=none sunstead-verifier-lean4-v435:ci sh -c '
-            test -d /missions/lnsym-aes-gcm-armv8 &&
-            test -d /missions/lnsym-gcm-gmult-armv8 &&
-            test -x /opt/sunstead/sunstead-check &&
-            /opt/sunstead/sunstead-check selftest | grep -q "\"selftest\":\"ok\"" &&
-            test -f /opt/sunstead/snapshots/lnsym-aes-gcm-armv8/manifest.json &&
-            test -f /opt/sunstead/snapshots/lnsym-gcm-gmult-armv8/manifest.json &&
-            python3 -m py_compile /opt/verifier_server.py
-          '
-
-  hub-images-v431:
-    name: Cloudflare container image (v4.31.0)
-    runs-on: ubuntu-latest
-    needs: python
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-      - name: Free runner disk space for Lean 4.31 + Mathlib + Aeneas Docker build
-        run: |
-          df -h /
-          sudo rm -rf \
-            /usr/share/dotnet \
-            /usr/local/lib/android \
-            /opt/ghc \
-            /usr/local/.ghcup \
-            /opt/hostedtoolcache/CodeQL \
-            /usr/local/share/boost \
-            /usr/local/share/powershell \
-            /usr/local/julia* \
-            /usr/share/swift
-          docker system prune -af || true
-          df -h /
-      - name: Build Cloudflare Lean 4.31.0 verifier container image
+      - name: Build & verify Cloudflare Lean 4.31.0 container (reuses local elan + Mathlib + Aeneas layers)
         run: |
           docker build -t sunstead-verifier-lean4-v431:ci -f cloudflare/containers/lean4-v4.31.0/Dockerfile .
-      - name: Verify bundled curve25519-dalek mission & server inside v4.31.0 container image
-        run: |
           docker run --rm --network=none sunstead-verifier-lean4-v431:ci sh -c '
             test -d /missions/curve25519-dalek &&
             test -x /opt/sunstead/sunstead-check &&
@@ -226,3 +237,44 @@ jobs:
             test -f /opt/sunstead/snapshots/curve25519-dalek/frozen-sources/Curve25519Dalek/Math/Edwards/Representation.lean &&
             python3 -m py_compile /opt/verifier_server.py
           '
+
+  ci-gate:
+    name: CI Gate (required branch-protection check)
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [changes, hub, python, export-upstream, verifiers-v436, verifiers-v435, verifiers-v431]
+    steps:
+      - name: Verify every non-skipped required check succeeded
+        env:
+          RES_CHANGES: ${{ needs.changes.result }}
+          RES_HUB: ${{ needs.hub.result }}
+          RES_PYTHON: ${{ needs.python.result }}
+          RES_EXPORT: ${{ needs.export-upstream.result }}
+          RES_V436: ${{ needs.verifiers-v436.result }}
+          RES_V435: ${{ needs.verifiers-v435.result }}
+          RES_V431: ${{ needs.verifiers-v431.result }}
+          GATE_REASON: ${{ needs.changes.outputs.reason }}
+        run: |
+          echo "Path gate reason: ${GATE_REASON}"
+          for pair in \
+            "changes:${RES_CHANGES}" \
+            "hub:${RES_HUB}" \
+            "python:${RES_PYTHON}"; do
+            name="${pair%%:*}"; status="${pair#*:}"
+            if [ "$status" != "success" ]; then
+              echo "::error::Mandatory job ${name} ended with status=${status}"
+              exit 1
+            fi
+          done
+          for pair in \
+            "export-upstream:${RES_EXPORT}" \
+            "verifiers-v436:${RES_V436}" \
+            "verifiers-v435:${RES_V435}" \
+            "verifiers-v431:${RES_V431}"; do
+            name="${pair%%:*}"; status="${pair#*:}"
+            if [ "$status" != "success" ] && [ "$status" != "skipped" ]; then
+              echo "::error::Gated job ${name} ended with status=${status}"
+              exit 1
+            fi
+          done
+          echo "All applicable CI checks succeeded."
