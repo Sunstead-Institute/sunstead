@@ -1,0 +1,140 @@
+name: Deploy Production (sunstead.org)
+
+on:
+  workflow_dispatch:
+    inputs:
+      rollout:
+        description: "Cloudflare Containers rollout strategy"
+        required: false
+        default: "immediate"
+        type: choice
+        options:
+          - immediate
+          - gradual
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  hub:
+    name: Gate · Hub typecheck + unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cloudflare
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cloudflare/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  python:
+    name: Gate · Python lint + upstream provenance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Byte-compile harness, verify scripts and tools
+        run: |
+          python3 -m py_compile \
+            missions/verifier-common/sunstead_sandbox.py \
+            cloudflare/containers/verifier_server.py \
+            scripts/check-upstream.py scripts/check-statements.py scripts/redteam.py scripts/e2e.py
+          for f in missions/*/verify; do python3 -m py_compile "$f"; done
+      - name: Verify verbatim upstream provenance against pinned commits
+        run: python3 scripts/check-upstream.py
+
+  verifiers:
+    name: Gate · Lean 4 verifier + red-team + statement equality
+    runs-on: ubuntu-latest
+    needs: python
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free runner disk space for Lean 4.36 + Mathlib Docker build
+        run: |
+          df -h /
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /usr/local/.ghcup \
+            /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost \
+            /usr/local/share/powershell \
+            /usr/local/julia* \
+            /usr/share/swift
+          docker system prune -af || true
+          df -h /
+      - name: Build Lean 4 verifier image (runs SunsteadCheck selftest)
+        run: ./scripts/build-verifiers.sh
+      - name: Red-team suite
+        run: python3 scripts/redteam.py
+      - name: Frozen task statements match seed theorems
+        run: python3 scripts/check-statements.py
+
+  deploy:
+    name: Deploy Worker + Lean 4 Container to Cloudflare
+    runs-on: ubuntu-latest
+    needs: [hub, python, verifiers]
+    timeout-minutes: 60
+    steps:
+      - name: Check required Cloudflare secret
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::Missing repository secret CLOUDFLARE_API_TOKEN (see docs/DEPLOYMENT.md)"
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cloudflare/package-lock.json
+      - name: Free runner disk space for native x86_64 Lean 4.36 + Mathlib container build
+        run: |
+          df -h /
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /usr/local/.ghcup \
+            /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost \
+            /usr/local/share/powershell \
+            /usr/local/julia* \
+            /usr/share/swift
+          docker system prune -af || true
+          df -h /
+      - name: Install Cloudflare workspace dependencies
+        working-directory: cloudflare
+        run: npm ci
+      - name: Sync assets and deploy to Cloudflare
+        working-directory: cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ROLLOUT: ${{ inputs.rollout || 'immediate' }}
+        run: |
+          node scripts/sync-assets.mjs
+          npx cf deploy --containers-rollout "$ROLLOUT"
+      - name: Post-deploy read-only smoke checks
+        run: |
+          curl -fsSL https://sunstead.org/ >/dev/null
+          curl -fsSL https://sunstead.org/what-is-this >/dev/null
+          curl -fsSL https://sunstead.org/join.txt | grep -q "leanprover/lean4:v4.36.0"
+          curl -fsSL https://sunstead.org/api/health | grep -q '"ok":true'
+          curl -fsSL https://sunstead.org/api/missions | grep -q '"arklib-near-capacity-primes"'
