@@ -135,24 +135,32 @@ def run(cmd, cwd, check=True, timeout=None, log=None):
     return p
 
 
-GIT_ID = ["-c", "user.name=sunstead-export", "-c", "user.email=export@localhost", "-c", "commit.gpgsign=false"]
+# Every git call: no hooks from any repo config, fixed identity, no signing.
+GIT = ["git", "-c", "core.hooksPath=/dev/null", "-c", "user.name=sunstead-export",
+       "-c", "user.email=export@localhost", "-c", "commit.gpgsign=false"]
 
 
 def proved_file(mission: dict, patch: str, scratch: str):
     """Seed target file and the same file with the accepted patch applied."""
     work = os.path.join(scratch, "mission")
     shutil.copytree(mission["dir"], work)
-    run(["git", "init", "-q"], work)
-    run(["git", *GIT_ID, "add", "-A"], work)
-    run(["git", *GIT_ID, "commit", "-q", "-m", "seed"], work)
+    run([*GIT, "init", "-q"], work)
+    run([*GIT, "add", "-A"], work)
+    run([*GIT, "commit", "-q", "-m", "seed"], work)
     patch_path = os.path.join(scratch, "accepted.patch")
     with open(patch_path, "w", encoding="utf-8") as f:
         f.write(patch if patch.endswith("\n") else patch + "\n")
-    run(["git", "apply", "--whitespace=nowarn", patch_path], work)
-    changed = run(["git", "diff", "--name-only"], work).stdout.split()
-    untracked = run(["git", "ls-files", "--others", "--exclude-standard"], work).stdout.split()
+    run([*GIT, "apply", "--whitespace=nowarn", patch_path], work)
+    changed = run([*GIT, "diff", "--name-only"], work).stdout.split()
+    untracked = run([*GIT, "ls-files", "--others", "--exclude-standard"], work).stdout.split()
     if set(changed + untracked) - {mission["target_file"]}:
         raise ExportError(f"patch touches files other than {mission['target_file']}: {sorted(set(changed + untracked))}")
+    if os.path.islink(os.path.join(work, mission["target_file"])):
+        raise ExportError(f"patch turns {mission['target_file']} into a symlink")
+    for line in run([*GIT, "diff", "--raw"], work).stdout.splitlines():
+        old_mode, new_mode = line.split()[:2]
+        if old_mode.lstrip(":") != new_mode or new_mode != "100644":
+            raise ExportError(f"patch changes file mode ({line.strip()})")
     seed = read(os.path.join(mission["dir"], mission["target_file"]))
     proved = read(os.path.join(work, mission["target_file"]))
     return seed, proved
@@ -160,11 +168,11 @@ def proved_file(mission: dict, patch: str, scratch: str):
 
 def fetch_upstream(repo_url: str, commit: str, dest: str, log: list):
     os.makedirs(dest)
-    run(["git", "init", "-q"], dest)
-    run(["git", "remote", "add", "origin", repo_url], dest)
-    run(["git", "fetch", "-q", "--depth", "1", "origin", commit], dest, timeout=1800, log=log)
-    run(["git", "-c", "advice.detachedHead=false", "checkout", "-q", "FETCH_HEAD"], dest)
-    head = run(["git", "rev-parse", "HEAD"], dest).stdout.strip()
+    run([*GIT, "init", "-q"], dest)
+    run([*GIT, "remote", "add", "origin", repo_url], dest)
+    run([*GIT, "fetch", "-q", "--depth", "1", "origin", commit], dest, timeout=1800, log=log)
+    run([*GIT, "-c", "advice.detachedHead=false", "checkout", "-q", "FETCH_HEAD"], dest)
+    head = run([*GIT, "rev-parse", "HEAD"], dest).stdout.strip()
     if head != commit:
         raise ExportError(f"fetched {head}, expected pinned {commit}")
 
@@ -289,13 +297,15 @@ def transplant(upstream_src: str, mission: dict, contrib: dict) -> tuple:
     before = lines[:header_start] + helper_lines + lines[header_start:d.start_line - 1]
     decl_lines = new_decl.split("\n")
     text = "\n".join(before + decl_lines + lines[d.end_line:])
-    shift = len(contrib["new_imports"])
+    existing = set(re.findall(r"^import\s+(\S+)", upstream_src, re.M))
+    added_imports = [m for m in contrib["new_imports"] if m not in existing]
+    shift = len(added_imports)
     first = (header_start + 1 if helper_lines else len(before) + 1) + shift
     span = (first, len(before) + len(decl_lines) + shift)
-    if contrib["new_imports"]:
+    if added_imports:
         imp = [m.end() for m in re.finditer(r"^import\s+\S+[^\n]*\n", text, re.M)]
         at = imp[-1] if imp else 0
-        text = text[:at] + "".join(f"import {m}\n" for m in contrib["new_imports"]) + text[at:]
+        text = text[:at] + "".join(f"import {m}\n" for m in added_imports) + text[at:]
     return text, d, span
 
 
@@ -305,39 +315,77 @@ def lean_module(path: str) -> str:
     return path[: -len(".lean")].replace("/", ".")
 
 
-def build_and_check(updir: str, mission: dict, decl_name: str, lint_cmds, log: list) -> dict:
+# Standalone checker run with `lake env lean --run`. It imports only `Lean`, loads
+# the built module's environment with `importModules` (no elaborators, commands or
+# `#print` run), requires the declaration to be a theorem, and lists its axioms with
+# `collectAxioms`, so nothing in the upstream or contributed source can rewrite the
+# report (cf. redteam.py's lean-spoof-axiom-report).
+AXIOM_CHECKER = """import Lean
+open Lean
+
+def main (args : List String) : IO UInt32 := do
+  match args with
+  | [modStr, declStr] =>
+    let decl := declStr.toName
+    initSearchPath (← findSysroot)
+    let env ← importModules #[{ module := modStr.toName }] {} 0
+    match env.find? decl with
+    | some (.thmInfo _) => pure ()
+    | some _ =>
+      IO.println s!"NOT_A_THEOREM {decl}"
+      return 3
+    | none =>
+      IO.println s!"MISSING {decl}"
+      return 4
+    let ctx : Core.Context := { fileName := "<sunstead-export>", fileMap := default }
+    let (axs, _) ← (collectAxioms decl : CoreM (Array Name)).toIO ctx { env := env }
+    for a in axs do
+      IO.println s!"AXIOM {a}"
+    IO.println "SUNSTEAD_AXIOMS_DONE"
+    return 0
+  | _ =>
+    IO.eprintln "usage: lean --run check.lean <module> <declaration>"
+    return 2
+"""
+
+
+def tail(p, n=60) -> str:
+    lines = (p.stdout + p.stderr).rstrip().splitlines()
+    return "\n".join("    " + l for l in lines[-n:])
+
+
+def read_axioms(output: str, decl_name: str) -> list:
+    if f"NOT_A_THEOREM {decl_name}" in output:
+        raise ExportError(f"{decl_name} is not a theorem after the build")
+    if f"MISSING {decl_name}" in output:
+        raise ExportError(f"{decl_name} not found in the built module")
+    if "SUNSTEAD_AXIOMS_DONE" not in output:
+        raise ExportError("axiom checker did not finish")
+    return [l[len("AXIOM "):].strip() for l in output.splitlines() if l.startswith("AXIOM ")]
+
+
+def build_and_check(updir: str, mission: dict, decl_name: str, lint_cmds, log: list, scratch: str) -> dict:
     checks = {}
     run(["lake", "exe", "cache", "get"], updir, check=False, timeout=3600, log=log)
     module = lean_module(mission["upstream_path"])
     p = run(["lake", "build", module], updir, check=False, timeout=6 * 3600, log=log)
     checks["lake_build"] = p.returncode == 0
     if p.returncode != 0:
-        raise ExportError(f"lake build {module} failed; see build.log")
+        raise ExportError(f"lake build {module} failed:\n{tail(p)}")
     out = p.stdout + p.stderr
-    a, b = mission["upstream_lines"]
     # Lean prints `<file>:l:c: warning: declaration uses 'sorry'`; lake prints
     # `warning: ./<file>:l:c: declaration uses 'sorry'`. Accept both.
     sorry_warn = re.findall(
         rf"(?:\./)*{re.escape(mission['upstream_path'])}:(\d+):\d+:(?: warning:)? declaration uses 'sorry'", out
     )
     checks["sorry_warnings_in_file"] = [int(x) for x in sorry_warn]
-    probe = os.path.join(updir, "SunsteadExportAxioms.lean")
-    with open(probe, "w", encoding="utf-8") as f:
-        f.write(f"import {module}\n#print axioms {decl_name}\n")
-    try:
-        p = run(["lake", "env", "lean", probe], updir, check=False, timeout=3600, log=log)
-    finally:
-        os.remove(probe)
-    text = p.stdout + p.stderr
-    if p.returncode != 0:
-        raise ExportError(f"#print axioms {decl_name} failed; see build.log")
-    if "does not depend on any axioms" in text:
-        axioms = []
-    else:
-        m = re.search(r"depends on axioms:\s*\[([^\]]*)\]", text, re.S)
-        if not m:
-            raise ExportError("could not read #print axioms output")
-        axioms = [x.strip() for x in m.group(1).split(",") if x.strip()]
+    checker = os.path.join(scratch, "sunstead_axiom_check.lean")  # outside the upstream checkout
+    with open(checker, "w", encoding="utf-8") as f:
+        f.write(AXIOM_CHECKER)
+    p = run(["lake", "env", "lean", "--run", checker, module, decl_name], updir, check=False, timeout=3600, log=log)
+    if p.returncode not in (0, 3, 4):
+        raise ExportError(f"axiom checker failed for {decl_name}:\n{tail(p)}")
+    axioms = read_axioms(p.stdout, decl_name)
     checks["axioms"] = axioms
     bad = sorted(set(axioms) - STANDARD_AXIOMS)
     if bad:
@@ -401,60 +449,69 @@ def export(args) -> dict:
         raise ExportError("proof JSON has no patch")
     warnings = []
     log: list = []
-    with tempfile.TemporaryDirectory(prefix="sunstead-export-") as scratch:
-        seed, proved = proved_file(mission, proof["patch"], scratch)
-        contrib = extract_contribution(seed, proved, mission["theorem"])
-        lib_root = mission["theorem"].split(".")[0]
-        transplanted = "\n".join(contrib["helpers"] + [contrib["proof"]])
-        if re.search(rf"(?<![\w.]){re.escape(lib_root)}\.", transplanted):
-            warnings.append(f"proof text refers to the mission namespace `{lib_root}.`; rename to upstream names before sending")
-        if contrib["after_target"]:
-            warnings.append(f"declarations added after the theorem are not exported: {contrib['after_target']}")
-        if contrib["new_opens"]:
-            warnings.append(f"the proved file adds `open` lines; add what the proof needs upstream by hand: {contrib['new_opens']}")
-        if any(m.split(".")[0] == lib_root for m in contrib["new_imports"]):
-            raise ExportError("proof imports another mission module; export its dependency first")
-        updir = os.path.join(scratch, "upstream")
-        repo_url = args.upstream_url or f"https://github.com/{mission['upstream']['repo']}.git"
-        fetch_upstream(repo_url, mission["upstream"]["commit"], updir, log)
-        target = os.path.join(updir, mission["upstream_path"])
-        if not os.path.isfile(target):
-            raise ExportError(f"{mission['upstream_path']} not in upstream at the pinned commit")
-        src = read(target)
-        new_src, decl, span = transplant(src, mission, contrib)
-        with open(target, "w", encoding="utf-8") as f:
-            f.write(new_src)
-        checks = {}
-        if not args.no_build:
-            checks = build_and_check(updir, mission, decl.name, args.lint_cmd or [], log)
-            if any(span[0] <= ln <= span[1] for ln in checks["sorry_warnings_in_file"]):
-                raise ExportError(f"{decl.name} (or a helper) still reports `sorry` after the build")
-        diff = run(["git", "diff", "--no-color"], updir).stdout
-        os.makedirs(out, exist_ok=True)
-        with open(os.path.join(out, "upstream.patch"), "w", encoding="utf-8") as f:
-            f.write(diff)
-        with open(os.path.join(out, "build.log"), "w", encoding="utf-8") as f:
-            f.write("\n".join(log))
-        with open(os.path.join(out, "PR_BODY.md"), "w", encoding="utf-8") as f:
-            f.write(pr_body(proof, mission, decl.name, contrib, checks, not args.no_build))
-        meta = {
-            "proof_id": proof.get("proof_id"),
-            "permalink": proof.get("permalink"),
-            "mission_id": mission["id"],
-            "task_id": mission["task"]["id"],
-            "upstream_repo": mission["upstream"]["repo"],
-            "upstream_commit": mission["upstream"]["commit"],
-            "upstream_file": mission["upstream_path"],
-            "upstream_declaration": decl.name,
-            "upstream_lines": list(span),
-            "helpers": contrib["helper_names"],
-            "new_imports": contrib["new_imports"],
-            "built": not args.no_build,
-            "checks": checks,
-            "warnings": warnings,
-        }
-        with open(os.path.join(out, "metadata.json"), "w", encoding="utf-8") as f:
-            json.dump(meta, f, indent=2)
+    try:
+        with tempfile.TemporaryDirectory(prefix="sunstead-export-") as scratch:
+            seed, proved = proved_file(mission, proof["patch"], scratch)
+            contrib = extract_contribution(seed, proved, mission["theorem"])
+            lib_root = mission["theorem"].split(".")[0]
+            transplanted = "\n".join(contrib["helpers"] + [contrib["proof"]])
+            if re.search(rf"(?<![\w.]){re.escape(lib_root)}\.", transplanted):
+                warnings.append(f"proof text refers to the mission namespace `{lib_root}.`; rename to upstream names before sending")
+            if contrib["after_target"]:
+                warnings.append(f"declarations added after the theorem are not exported: {contrib['after_target']}")
+            if contrib["new_opens"]:
+                warnings.append(f"the proved file adds `open` lines; add what the proof needs upstream by hand: {contrib['new_opens']}")
+            if any(m.split(".")[0] == lib_root for m in contrib["new_imports"]):
+                raise ExportError("proof imports another mission module; export its dependency first")
+            updir = os.path.join(scratch, "upstream")
+            repo_url = args.upstream_url or f"https://github.com/{mission['upstream']['repo']}.git"
+            fetch_upstream(repo_url, mission["upstream"]["commit"], updir, log)
+            target = os.path.join(updir, mission["upstream_path"])
+            if not os.path.isfile(target):
+                raise ExportError(f"{mission['upstream_path']} not in upstream at the pinned commit")
+            src = read(target)
+            new_src, decl, span = transplant(src, mission, contrib)
+            with open(target, "w", encoding="utf-8") as f:
+                f.write(new_src)
+            checks = {}
+            if not args.no_build:
+                checks = build_and_check(updir, mission, decl.name, args.lint_cmd or [], log, scratch)
+                if any(span[0] <= ln <= span[1] for ln in checks["sorry_warnings_in_file"]):
+                    raise ExportError(f"{decl.name} (or a helper) still reports `sorry` after the build")
+            diff = run([*GIT, "diff", "--no-color"], updir).stdout
+            os.makedirs(out, exist_ok=True)
+            with open(os.path.join(out, "upstream.patch"), "w", encoding="utf-8") as f:
+                f.write(diff)
+            with open(os.path.join(out, "build.log"), "w", encoding="utf-8") as f:
+                f.write("\n".join(log))
+            with open(os.path.join(out, "PR_BODY.md"), "w", encoding="utf-8") as f:
+                f.write(pr_body(proof, mission, decl.name, contrib, checks, not args.no_build))
+            meta = {
+                "proof_id": proof.get("proof_id"),
+                "permalink": proof.get("permalink"),
+                "mission_id": mission["id"],
+                "task_id": mission["task"]["id"],
+                "upstream_repo": mission["upstream"]["repo"],
+                "upstream_commit": mission["upstream"]["commit"],
+                "upstream_file": mission["upstream_path"],
+                "upstream_declaration": decl.name,
+                "upstream_lines": list(span),
+                "helpers": contrib["helper_names"],
+                "new_imports": contrib["new_imports"],
+                "built": not args.no_build,
+                "checks": checks,
+                "warnings": warnings,
+            }
+            with open(os.path.join(out, "metadata.json"), "w", encoding="utf-8") as f:
+                json.dump(meta, f, indent=2)
+    except ExportError as e:
+        # Keep the command output for the maintainer even though no bundle is written.
+        if log:
+            os.makedirs(out, exist_ok=True)
+            with open(os.path.join(out, "build.log"), "w", encoding="utf-8") as f:
+                f.write("\n".join(log))
+            raise ExportError(f"{e}\n  Full command log: {os.path.join(out, 'build.log')} (no bundle written)") from e
+        raise
     return meta
 
 

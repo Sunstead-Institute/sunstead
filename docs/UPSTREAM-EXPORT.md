@@ -26,11 +26,18 @@ python3 scripts/export-upstream.py --proof-id <ledger id> --out /tmp/export-<id>
    the same name and the same statement as the mission's copy (comments,
    whitespace and attributes such as `@[simp]` are ignored).
 4. Its proof is replaced by the Sunstead proof. Helper declarations go directly
-   above it, and new `import` lines go after the file's imports.
+   above it, and `import` lines the file does not already have go after its
+   imports. The accepted patch may not change file modes or create symlinks, and
+   every git call runs with `core.hooksPath=/dev/null`.
 5. Unless `--no-build`: `lake exe cache get`, then `lake build <module>` on the
    full checkout. The bundle is refused if the build fails, if the declaration or
-   a helper still reports `sorry`, or if `#print axioms` lists anything besides
-   `propext`, `Classical.choice` and `Quot.sound`. Each `--lint-cmd` (for example
+   a helper still reports `sorry`, if the declaration is not a theorem, or if it
+   depends on any axiom besides `propext`, `Classical.choice` and `Quot.sound`.
+   Axioms are read by a standalone checker (`lake env lean --run`, importing only
+   `Lean`) that loads the built module with `importModules` and calls
+   `collectAxioms`; it never elaborates source, so `elab_rules` or `macro_rules`
+   cannot rewrite the report the way they can rewrite `#print axioms` output.
+   Each `--lint-cmd` (for example
    the upstream's own style linter) runs in the checkout and its result is
    recorded.
 
@@ -41,7 +48,7 @@ python3 scripts/export-upstream.py --proof-id <ledger id> --out /tmp/export-<id>
 | `upstream.patch` | `git diff` against the pinned commit |
 | `PR_BODY.md` | Attribution, Sunstead permalink, and the checks that ran |
 | `metadata.json` | Ids, upstream file and declaration, helpers, imports, checks, warnings |
-| `build.log` | Every command run in the upstream checkout and its output |
+| `build.log` | Every command run in the upstream checkout and its output (also written, alone, when a check fails) |
 
 The `--out` directory must be outside this repository, because the bundle
 contains a solution. The tool refuses otherwise.
@@ -66,4 +73,6 @@ contains a solution. The tool refuses otherwise.
 repositories. Without `lake` on `PATH` it skips the build tests. CI's
 `Upstream export (core Lean build)` job installs the pinned toolchain (core
 Lean only, no Mathlib) and runs them too, covering a successful build, a proof
-that does not compile, and a helper `axiom` that `#print axioms` rejects.
+that does not compile (its compiler output must reach the error and
+`build.log`), a helper `axiom` that the checker rejects, and the same axiom
+behind an `elab_rules` that spoofs `#print axioms`.

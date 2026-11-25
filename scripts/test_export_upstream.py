@@ -91,7 +91,7 @@ def git(cwd, *args):
     return subprocess.run([*GIT, *args], cwd=cwd, check=True, capture_output=True, text=True).stdout
 
 
-def make_patch(path, before, after):
+def make_patch(path, before, after, mode=None):
     with tempfile.TemporaryDirectory() as d:
         os.makedirs(os.path.join(d, os.path.dirname(path)))
         full = os.path.join(d, path)
@@ -100,6 +100,8 @@ def make_patch(path, before, after):
         git(d, "add", "-A")
         git(d, "commit", "-q", "-m", "s")
         write(full, after)
+        if mode:
+            os.chmod(full, int(mode, 8))
         return git(d, "diff")
 
 
@@ -218,6 +220,27 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("helper M1.helper_one contains `sorry`", err)
 
+    def test_does_not_duplicate_imports_upstream_already_has(self):
+        proved = PROVED_FILE.replace("import Mathlib.Tactic.Ring\n", "import Mathlib.Tactic.Ring\nimport Mathlib\n")
+        code, err, _ = self.run_export({**self.proof, "patch": make_patch("M1/Mult.lean", SEED_FILE, proved)})
+        self.assertEqual(code, 0, err)
+        patch = read(os.path.join(self.out, "upstream.patch"))
+        self.assertNotIn("+import Mathlib\n", patch)
+        self.assertIn("+import Mathlib.Tactic.Ring\n", patch)
+        meta = json.loads(read(os.path.join(self.out, "metadata.json")))
+        subprocess.run(["git", "apply", os.path.join(self.out, "upstream.patch")], cwd=self.up, check=True)
+        a, b = meta["upstream_lines"]
+        region = "\n".join(read(os.path.join(self.up, "Up", "Ch1.lean")).split("\n")[a - 1:b])
+        self.assertTrue(region.startswith("/-- A helper"), region)
+        self.assertTrue(region.rstrip().endswith("exact helper_one"), region)
+
+    def test_refuses_mode_changes(self):
+        patch = make_patch("M1/Mult.lean", SEED_FILE, PROVED_FILE, mode="755")
+        self.assertIn("new mode 100755", patch)
+        code, err, _ = self.run_export({**self.proof, "patch": patch})
+        self.assertEqual(code, 1)
+        self.assertIn("changes file mode", err)
+
     def test_refuses_demo_and_stale_spec(self):
         code, err, _ = self.run_export({**self.proof, "spec_is_current": False})
         self.assertEqual(code, 1)
@@ -297,11 +320,15 @@ class BuildTests(unittest.TestCase):
     """Full path including `lake build` and `#print axioms`, on a core-Lean-only upstream."""
 
     def setUp(self):
+        self.make_fixture(CORE_UPSTREAM)
+
+    def make_fixture(self, upstream_text):
         self.tmp = tempfile.TemporaryDirectory()
         t = self.tmp.name
         self.up = os.path.join(t, "upstream")
         os.makedirs(os.path.join(self.up, "Up"))
-        write(os.path.join(self.up, "Up", "Ch1.lean"), CORE_UPSTREAM)
+        write(os.path.join(self.up, "Up", "Ch1.lean"), upstream_text)
+        line = upstream_text.split("\n").index("theorem isCM_liouville :") + 1
         write(os.path.join(self.up, "Up.lean"), "import Up.Ch1\n")
         write(os.path.join(self.up, "lakefile.toml"), 'name = "up"\ndefaultTargets = ["Up"]\n\n[[lean_lib]]\nname = "Up"\n')
         toolchain = os.environ.get("SUNSTEAD_TEST_TOOLCHAIN") or read(
@@ -321,7 +348,7 @@ class BuildTests(unittest.TestCase):
             "upstream": {"repo": "o/up", "commit": self.sha, "license": "Apache-2.0"},
             "frozen_paths": [], "tasks": [{
                 "id": "is_cm", "title": "cm", "target_files": ["M1/Mult.lean"],
-                "upstream_url": f"https://github.com/o/up/blob/{self.sha}/Up/Ch1.lean#L6-L8",
+                "upstream_url": f"https://github.com/o/up/blob/{self.sha}/Up/Ch1.lean#L{line}-L{line + 2}",
             }],
         }))
         write(os.path.join(m, "UPSTREAM.json"), json.dumps({"repo": "o/up", "commit": self.sha, "license": "Apache-2.0"}))
@@ -368,6 +395,33 @@ class BuildTests(unittest.TestCase):
         code, err, _ = self.export_with(proved)
         self.assertEqual(code, 1)
         self.assertIn("non-standard axioms", err)
+
+    def test_build_failure_keeps_compiler_output(self):
+        proved = CORE_SEED.replace("liouville = 1 := by\n  sorry", "liouville = 1 := by\n  exact nonexistent_lemma")
+        code, err, _ = self.export_with(proved)
+        self.assertEqual(code, 1)
+        self.assertIn("nonexistent_lemma", err, "the error carries the compiler output")
+        log = read(os.path.join(self.out, "build.log"))
+        self.assertIn("lake build Up.Ch1", log)
+        self.assertFalse(os.path.exists(os.path.join(self.out, "upstream.patch")), "no bundle on failure")
+
+    def test_axiom_report_cannot_be_spoofed_by_elaborators(self):
+        # A source file that rewrites `#print axioms` output (redteam.py's
+        # lean-spoof-axiom-report). The checker never elaborates source, so the
+        # helper axiom is still found.
+        self.tmp.cleanup()
+        self.make_fixture(
+            "import Lean\nopen Lean Elab Command\n\n"
+            "elab_rules : command\n"
+            "  | `(#print axioms $_) => logInfo \"'Up.isCM_liouville' does not depend on any axioms\"\n\n"
+            + CORE_UPSTREAM
+        )
+        proved = CORE_SEED.replace(
+            "/-- Open", "axiom cheat : liouville = 1\n\n/-- Open"
+        ).replace("liouville = 1 := by\n  sorry", "liouville = 1 := by\n  exact cheat")
+        code, err, _ = self.export_with(proved)
+        self.assertEqual(code, 1, err)
+        self.assertIn("non-standard axioms: ['Up.cheat']", err)
 
 
 if __name__ == "__main__":
