@@ -5,7 +5,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { IMAGE_RE, dockerfileInputs, imageFromApplications, verifierInputsHash } from "../scripts/deploy.mjs";
+import {
+  IMAGE_RE,
+  buildCfDeployArgs,
+  dockerfileInputs,
+  imageFromApplications,
+  verifierInputsHash,
+} from "../scripts/deploy.mjs";
 
 const CF_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DIGEST = "a".repeat(64);
@@ -59,8 +65,33 @@ test("the real verifier inputs hash is a stable sha256", () => {
 test("imageFromApplications finds the live digest in common output shapes", () => {
   const app = { name: "sunstead-verifier-lean4", configuration: { image: IMAGE } };
   assert.equal(imageFromApplications(JSON.stringify([app])), IMAGE);
-  assert.equal(imageFromApplications("Loaded\n" + JSON.stringify({ result: [{ name: "other" }, app] })), IMAGE);
+  assert.equal(
+    imageFromApplications("[info] Loaded profile\n" + JSON.stringify({ result: [{ name: "other" }, app] })),
+    IMAGE
+  );
   assert.throws(() => imageFromApplications(JSON.stringify([{ name: "other" }])), /no container application/);
+});
+
+test("buildCfDeployArgs defaults to immediate rollout without duplicating caller flags", () => {
+  assert.deepEqual(buildCfDeployArgs(["--dry-run"]), [
+    "cf",
+    "deploy",
+    "--containers-rollout",
+    "immediate",
+    "--dry-run",
+  ]);
+  assert.deepEqual(buildCfDeployArgs(["--containers-rollout", "gradual"]), [
+    "cf",
+    "deploy",
+    "--containers-rollout",
+    "gradual",
+  ]);
+  assert.deepEqual(buildCfDeployArgs(["--containers-rollout=gradual", "--dry-run"]), [
+    "cf",
+    "deploy",
+    "--containers-rollout=gradual",
+    "--dry-run",
+  ]);
 });
 
 test("IMAGE_RE accepts only digest-pinned Cloudflare registry images", () => {

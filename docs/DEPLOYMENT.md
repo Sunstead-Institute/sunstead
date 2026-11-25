@@ -79,6 +79,35 @@ Guard rails:
   was built from the same `missions/` and verifier code, pass
   `npm run deploy:worker -- --force`.
 
+### GitHub Actions deploy (native `linux/amd64`, recommended for full deploys)
+
+`.github/workflows/deploy.yml` runs on native x86_64 `ubuntu-latest` runners,
+avoiding Apple Silicon QEMU emulation during full Lean 4.36 + Mathlib container
+builds. Trigger it manually from **Actions → Deploy Production (sunstead.org) →
+Run workflow** (or via `gh workflow run deploy.yml`):
+
+- **`mode: full`** (default): runs the `hub`, `python`, and `verifiers`
+  (`redteam.py` + `check-statements.py`) gates, frees runner disk headroom, builds
+  the Lean 4 container natively on x86_64, deploys via `node scripts/deploy.mjs full`,
+  and runs post-deploy read-only smoke checks against `https://sunstead.org`.
+- **`mode: worker`**: runs the `hub` and `python` gates, skips the container
+  Docker build, and deploys Worker/UI/hub changes via
+  `node scripts/deploy.mjs worker --force`. Only choose `worker` when `missions/`
+  and `cloudflare/containers/` are unchanged relative to the live container image.
+- **`rollout`**: `immediate` (default) or `gradual`.
+
+Required GitHub Actions repository secrets (**Settings → Secrets and variables → Actions**):
+
+- `CLOUDFLARE_API_TOKEN` (required): a Cloudflare API token with permissions to
+  deploy Workers, Durable Objects, and Cloudflare Containers (e.g. **Workers
+  Scripts: Edit**, **Workers KV / Durable Objects / Containers: Edit**,
+  **Account Settings: Read**).
+- `CLOUDFLARE_ACCOUNT_ID` (optional if the token is scoped to a single account):
+  the Cloudflare account ID owning `sunstead`.
+
+Concurrent runs are serialized via `concurrency: production-deploy`
+(`cancel-in-progress: false`).
+
 ### Retired v0.2 Rust / Verus verifiers
 
 The Rust and Verus Durable Object classes and their deleted-class tombstones

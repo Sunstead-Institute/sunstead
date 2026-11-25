@@ -3,6 +3,14 @@ name: Deploy Production (sunstead.org)
 on:
   workflow_dispatch:
     inputs:
+      mode:
+        description: "Deploy mode (full rebuilds Lean 4 container; worker reuses live container digest)"
+        required: false
+        default: "full"
+        type: choice
+        options:
+          - full
+          - worker
       rollout:
         description: "Cloudflare Containers rollout strategy"
         required: false
@@ -59,6 +67,7 @@ jobs:
     name: Gate · Lean 4 verifier + red-team + statement equality
     runs-on: ubuntu-latest
     needs: python
+    if: ${{ inputs.mode != 'worker' }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -85,9 +94,15 @@ jobs:
         run: python3 scripts/check-statements.py
 
   deploy:
-    name: Deploy Worker + Lean 4 Container to Cloudflare
+    name: Deploy to Cloudflare (${{ inputs.mode || 'full' }})
     runs-on: ubuntu-latest
     needs: [hub, python, verifiers]
+    if: >-
+      ${{ !cancelled() &&
+          needs.hub.result == 'success' &&
+          needs.python.result == 'success' &&
+          (needs.verifiers.result == 'success' ||
+           (inputs.mode == 'worker' && needs.verifiers.result == 'skipped')) }}
     timeout-minutes: 60
     steps:
       - name: Check required Cloudflare secret
@@ -105,6 +120,7 @@ jobs:
           cache: npm
           cache-dependency-path: cloudflare/package-lock.json
       - name: Free runner disk space for native x86_64 Lean 4.36 + Mathlib container build
+        if: ${{ inputs.mode != 'worker' }}
         run: |
           df -h /
           sudo rm -rf \
@@ -127,10 +143,15 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DEPLOY_MODE: ${{ inputs.mode || 'full' }}
           ROLLOUT: ${{ inputs.rollout || 'immediate' }}
         run: |
-          node scripts/sync-assets.mjs
-          npx cf deploy --containers-rollout "$ROLLOUT"
+          if [ "$DEPLOY_MODE" = "worker" ]; then
+            # Caller explicitly opted into worker-only mode on a fresh CI runner.
+            node scripts/deploy.mjs worker --force --containers-rollout "$ROLLOUT"
+          else
+            node scripts/deploy.mjs full --containers-rollout "$ROLLOUT"
+          fi
       - name: Post-deploy read-only smoke checks
         run: |
           curl -fsSL https://sunstead.org/ >/dev/null
