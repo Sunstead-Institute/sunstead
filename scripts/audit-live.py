@@ -284,89 +284,125 @@ def collectFrozenTypeDeps (frozenMap : Std.HashMap Name ConstantInfo) (rootExpr 
           go fuel (next ++ rest) visited' (n :: acc)
   go 100000 initNames {} []
 
-def verifyTargetOleanClean (targetMod : Name) : IO UInt32 := do
+def readFrozenParts (allowModuleSystem : Bool) (path : System.FilePath) : IO (Array (ModuleData × CompactedRegion)) := do
+  let privPath : System.FilePath := path.toString ++ ".private"
+  let serverPath : System.FilePath := path.toString ++ ".server"
+  if !allowModuleSystem then
+    if (← privPath.pathExists) then
+      throw <| IO.userError s!"FROZEN_PRIVATE_OLEAN_DISALLOWED {path}"
+    let (modData, reg) ← readModuleData path
+    if modData.isModule then
+      throw <| IO.userError s!"FROZEN_MODULE_SYSTEM_DISALLOWED {path}"
+    return #[(modData, reg)]
+  else
+    if (← privPath.pathExists) then
+      let mut partPaths : Array System.FilePath := #[path]
+      if (← serverPath.pathExists) then
+        partPaths := partPaths.push serverPath
+      partPaths := partPaths.push privPath
+      readModuleDataParts partPaths
+    else
+      let (modData, reg) ← readModuleData path
+      if modData.isModule then
+        throw <| IO.userError s!"FROZEN_PRIVATE_OLEAN_MISSING {path}"
+      return #[(modData, reg)]
+
+def verifyTargetOleanClean (targetMod : Name) (allowModuleSystem : Bool) : IO UInt32 := do
   let targetPath ← findOLean targetMod
   let privPath : System.FilePath := targetPath.toString ++ ".private"
-  if (← privPath.pathExists) then
-    IO.eprintln s!"PRIVATE_OLEAN {targetMod}"
-    return 2
-  let (modData, _) ← readModuleData targetPath
-  if modData.isModule then
-    IO.eprintln s!"MODULE_SYSTEM_DISALLOWED {targetMod}"
-    return 2
-  return 0
-
-def main (args : List String) : IO UInt32 := do
-  match args with
-  | ["--repo-snapshot", frozenOleanPath, targetModStr, targetConstStr] =>
-    let targetMod := parseLeanName targetModStr
-    let targetConst := parseLeanName targetConstStr
-    initSearchPath (← findSysroot)
-    let cleanRc ← verifyTargetOleanClean targetMod
-    if cleanRc != 0 then return cleanRc
-    let (frozenData, _) ← readModuleData (System.FilePath.mk frozenOleanPath)
-    if frozenData.isModule then
-      IO.eprintln s!"FROZEN_MODULE_SYSTEM_DISALLOWED {targetMod}"
+  if !allowModuleSystem then
+    if (← privPath.pathExists) then
+      IO.eprintln s!"PRIVATE_OLEAN {targetMod}"
       return 2
-    let mut frozenMap : Std.HashMap Name ConstantInfo := {}
+    let (modData, _) ← readModuleData targetPath
+    if modData.isModule then
+      IO.eprintln s!"MODULE_SYSTEM_DISALLOWED {targetMod}"
+      return 2
+    return 0
+  else
+    let (modData, _) ← readModuleData targetPath
+    if modData.isModule && !(← privPath.pathExists) then
+      IO.eprintln s!"PRIVATE_OLEAN_MISSING {targetMod}"
+      return 2
+    return 0
+
+def runRepoSnapshotAudit (allowModuleSystem : Bool) (frozenOleanPath : String)
+    (targetModStr targetConstStr : String) : IO UInt32 := do
+  let targetMod := parseLeanName targetModStr
+  let targetConst := parseLeanName targetConstStr
+  initSearchPath (← findSysroot)
+  let cleanRc ← verifyTargetOleanClean targetMod allowModuleSystem
+  if cleanRc != 0 then return cleanRc
+  let frozenParts ← readFrozenParts allowModuleSystem (System.FilePath.mk frozenOleanPath)
+  let mut frozenMap : Std.HashMap Name ConstantInfo := {}
+  for (frozenData, _) in frozenParts do
     for i in [:frozenData.constNames.size] do
       if h1 : i < frozenData.constNames.size then
         if h2 : i < frozenData.constants.size then
           frozenMap := frozenMap.insert frozenData.constNames[i] frozenData.constants[i]
-    let some frozenCi := frozenMap[targetConst]?
-      | do IO.eprintln s!"MISSING_FROZEN_TARGET {targetConst}"; return 3
-    match frozenCi with
-    | .thmInfo _ => pure ()
-    | _ =>
-      IO.eprintln s!"FROZEN_NOT_THEOREM {targetConst}"
-      return 3
-    -- loadExts := false ensures untrusted contributor elab_rules/macro_rules/initialize never run.
-    let env ← importModules #[{ module := targetMod }] {} 0 (loadExts := false)
-    let some tci := env.find? targetConst
-      | do IO.eprintln s!"MISSING_TARGET {targetConst}"; return 4
-    match tci with
-    | .thmInfo _ => pure ()
-    | _ =>
-      IO.eprintln s!"TARGET_NOT_THEOREM {targetConst}"
-      return 4
-    unless tci.levelParams.length == frozenCi.levelParams.length do
-      IO.eprintln s!"UNIVERSE_MISMATCH {targetConst}"
-      return 5
-    -- Lock every local definition/abbrev/inductive referenced by the theorem's type against modification.
-    let frozenDeps := collectFrozenTypeDeps frozenMap frozenCi.type
-    for depName in frozenDeps do
-      if depName == targetConst then
-        continue
-      match frozenMap[depName]?, env.find? depName with
-      | some fci, some lci =>
-        unless constInfoStructEq fci lci do
-          IO.eprintln s!"FROZEN_DEP_MODIFIED {depName}"
-          return 6
-      | _, _ =>
-        IO.eprintln s!"FROZEN_DEP_MISSING {depName}"
+  let some frozenCi := frozenMap[targetConst]?
+    | do IO.eprintln s!"MISSING_FROZEN_TARGET {targetConst}"; return 3
+  match frozenCi with
+  | .thmInfo _ => pure ()
+  | _ =>
+    IO.eprintln s!"FROZEN_NOT_THEOREM {targetConst}"
+    return 3
+  -- loadExts := false ensures untrusted contributor elab_rules/macro_rules/initialize never run.
+  -- importAll := allowModuleSystem loads `.olean.private` proof terms when module-system mode is opted in.
+  let env ← importModules #[{ module := targetMod, importAll := allowModuleSystem }] {} 0 (loadExts := false)
+  let some tci := env.find? targetConst
+    | do IO.eprintln s!"MISSING_TARGET {targetConst}"; return 4
+  match tci with
+  | .thmInfo _ => pure ()
+  | _ =>
+    IO.eprintln s!"TARGET_NOT_THEOREM {targetConst}"
+    return 4
+  unless tci.levelParams.length == frozenCi.levelParams.length do
+    IO.eprintln s!"UNIVERSE_MISMATCH {targetConst}"
+    return 5
+  -- Lock every local definition/abbrev/inductive referenced by the theorem's type against modification.
+  let frozenDeps := collectFrozenTypeDeps frozenMap frozenCi.type
+  for depName in frozenDeps do
+    if depName == targetConst then
+      continue
+    match frozenMap[depName]?, env.find? depName with
+    | some fci, some lci =>
+      unless constInfoStructEq fci lci do
+        IO.eprintln s!"FROZEN_DEP_MODIFIED {depName}"
         return 6
-    let ctx : Core.Context := { fileName := "<sunstead-audit>", fileMap := default }
-    let lvls := frozenCi.levelParams.map Level.param
-    let checkName := `_sunstead_audit_check
-    let (axs, _) ← (do
-      addDecl <| Declaration.thmDecl
-        { name := checkName
-          levelParams := frozenCi.levelParams
-          type := frozenCi.type
-          value := mkConst targetConst lvls
-          all := [checkName] }
-      collectAxioms checkName : CoreM (Array Name)).toIO ctx { env := env }
-    for a in axs do
-      IO.println s!"SUNSTEAD_AUDIT_AXIOM {targetConst} {a}"
-    IO.println s!"SUNSTEAD_AUDIT_OK {targetConst}"
-    return 0
+    | _, _ =>
+      IO.eprintln s!"FROZEN_DEP_MISSING {depName}"
+      return 6
+  let ctx : Core.Context := { fileName := "<sunstead-audit>", fileMap := default }
+  let lvls := frozenCi.levelParams.map Level.param
+  let checkName := `_sunstead_audit_check
+  let (axs, _) ← (do
+    addDecl <| Declaration.thmDecl
+      { name := checkName
+        levelParams := frozenCi.levelParams
+        type := frozenCi.type
+        value := mkConst targetConst lvls
+        all := [checkName] }
+    collectAxioms checkName : CoreM (Array Name)).toIO ctx { env := env }
+  for a in axs do
+    IO.println s!"SUNSTEAD_AUDIT_AXIOM {targetConst} {a}"
+  IO.println s!"SUNSTEAD_AUDIT_OK {targetConst}"
+  if frozenParts.size == 0 then pure ()
+  return 0
+
+def main (args : List String) : IO UInt32 := do
+  match args with
+  | ["--repo-snapshot", "--allow-module-system", frozenOleanPath, targetModStr, targetConstStr] =>
+    runRepoSnapshotAudit true frozenOleanPath targetModStr targetConstStr
+  | ["--repo-snapshot", frozenOleanPath, targetModStr, targetConstStr] =>
+    runRepoSnapshotAudit false frozenOleanPath targetModStr targetConstStr
   | [specModStr, targetModStr, specConstStr, targetConstStr] =>
     let specMod := parseLeanName specModStr
     let targetMod := parseLeanName targetModStr
     let specConst := parseLeanName specConstStr
     let targetConst := parseLeanName targetConstStr
     initSearchPath (← findSysroot)
-    let cleanRc ← verifyTargetOleanClean targetMod
+    let cleanRc ← verifyTargetOleanClean targetMod false
     if cleanRc != 0 then return cleanRc
     -- loadExts := false ensures untrusted contributor elab_rules/macro_rules/initialize never run.
     let env ← importModules #[{ module := specMod }, { module := targetMod }] {} 0 (loadExts := false)
@@ -511,7 +547,8 @@ done < audit_checks.txt
 
 RUN_REPO_SNAPSHOT = r"""
 snapshot_id="$1"
-shift
+allow_mod="$2"
+shift 2
 mkdir -p /tmp/work /tmp/home /tmp/frozen_merged /tmp/merged
 cd /tmp/work
 tar xf -
@@ -519,11 +556,15 @@ export HOME=/tmp/home
 snap="/opt/sunstead/snapshots/$snapshot_id"
 deps="$snap/deps"
 frozen_srcs="$snap/frozen-sources"
-test -d "$deps"
-cp -rs "$deps/." /tmp/frozen_merged/
-find /tmp/frozen_merged -type d -exec chmod 755 {} +
-cp -rs "$deps/." /tmp/merged/
-find /tmp/merged -type d -exec chmod 755 {} +
+if [ -d "$deps" ]; then
+    cp -rs "$deps/." /tmp/frozen_merged/
+    find /tmp/frozen_merged -type d -exec chmod 755 {} +
+    cp -rs "$deps/." /tmp/merged/
+    find /tmp/merged -type d -exec chmod 755 {} +
+elif [ "$snapshot_id" != "synthetic-no-deps" ]; then
+    echo "missing snapshot deps: $deps" >&2
+    exit 2
+fi
 frozen_path="/tmp/frozen_merged"
 merged_path="/tmp/merged"
 for p in /opt/mathlib/.lake/packages/*/.lake/build/lib/lean \
@@ -548,24 +589,28 @@ while IFS="$tab" read -r mod rel_no_ext target_const bridge_csv; do
             b_src="$frozen_srcs/$b_rel.lean"
             test -f "$b_src"
             mkdir -p "$(dirname "/tmp/frozen_merged/$b_rel.olean")" "$(dirname "/tmp/merged/$b_rel.olean")"
-            rm -f "/tmp/frozen_merged/$b_rel.olean" "/tmp/frozen_merged/$b_rel.olean.private" \
-                  "/tmp/merged/$b_rel.olean" "/tmp/merged/$b_rel.olean.private"
+            rm -f "/tmp/frozen_merged/$b_rel.olean" "/tmp/frozen_merged/$b_rel.olean.server" "/tmp/frozen_merged/$b_rel.olean.private" \
+                  "/tmp/merged/$b_rel.olean" "/tmp/merged/$b_rel.olean.server" "/tmp/merged/$b_rel.olean.private"
             LEAN_PATH="$frozen_path" lean "$@" --root="$frozen_srcs" -o "/tmp/frozen_merged/$b_rel.olean" "$b_src"
-            test ! -e "/tmp/frozen_merged/$b_rel.olean.private"
+            if [ "$allow_mod" != "1" ]; then test ! -e "/tmp/frozen_merged/$b_rel.olean.private"; fi
             LEAN_PATH="$merged_path" lean "$@" --root="$frozen_srcs" -o "/tmp/merged/$b_rel.olean" "$b_src"
-            test ! -e "/tmp/merged/$b_rel.olean.private"
+            if [ "$allow_mod" != "1" ]; then test ! -e "/tmp/merged/$b_rel.olean.private"; fi
         done
         IFS="$old_ifs"
     fi
     mkdir -p "$(dirname "/tmp/frozen_merged/$rel_no_ext.olean")" "$(dirname "/tmp/merged/$rel_no_ext.olean")"
-    rm -f "/tmp/frozen_merged/$rel_no_ext.olean" "/tmp/frozen_merged/$rel_no_ext.olean.private" \
-          "/tmp/merged/$rel_no_ext.olean" "/tmp/merged/$rel_no_ext.olean.private"
+    rm -f "/tmp/frozen_merged/$rel_no_ext.olean" "/tmp/frozen_merged/$rel_no_ext.olean.server" "/tmp/frozen_merged/$rel_no_ext.olean.private" \
+          "/tmp/merged/$rel_no_ext.olean" "/tmp/merged/$rel_no_ext.olean.server" "/tmp/merged/$rel_no_ext.olean.private"
     LEAN_PATH="$frozen_path" lean "$@" --root=/tmp/work/seed -o "/tmp/frozen_merged/$rel_no_ext.olean" "/tmp/work/seed/$rel_no_ext.lean"
-    test ! -e "/tmp/frozen_merged/$rel_no_ext.olean.private"
+    if [ "$allow_mod" != "1" ]; then test ! -e "/tmp/frozen_merged/$rel_no_ext.olean.private"; fi
     LEAN_PATH="$merged_path" lean "$@" --root=/tmp/work/live -o "/tmp/merged/$rel_no_ext.olean" "/tmp/work/live/$rel_no_ext.lean"
-    test ! -e "/tmp/merged/$rel_no_ext.olean.private"
+    if [ "$allow_mod" != "1" ]; then test ! -e "/tmp/merged/$rel_no_ext.olean.private"; fi
     LEAN_PATH="$merged_path" "$checker" "$mod"
-    LEAN_PATH="$merged_path" lean --run /tmp/work/SunsteadAuditCheck.lean --repo-snapshot "/tmp/frozen_merged/$rel_no_ext.olean" "$mod" "$target_const"
+    if [ "$allow_mod" = "1" ]; then
+        LEAN_PATH="$merged_path" lean --run /tmp/work/SunsteadAuditCheck.lean --repo-snapshot --allow-module-system "/tmp/frozen_merged/$rel_no_ext.olean" "$mod" "$target_const"
+    else
+        LEAN_PATH="$merged_path" lean --run /tmp/work/SunsteadAuditCheck.lean --repo-snapshot "/tmp/frozen_merged/$rel_no_ext.olean" "$mod" "$target_const"
+    fi
 done < /tmp/work/audit_checks.txt
 """
 
@@ -613,13 +658,16 @@ def check_lean(image, data, frozen, modules, checks, expected_version="4.36.0"):
     return results
 
 
-def check_lean_repo_snapshot(image, data, snapshot_id, lean_options, checks, expected_version="4.35.0"):
+def check_lean_repo_snapshot(image, data, snapshot_id, lean_options, checks, expected_version="4.35.0",
+                             allow_module_system=False):
     opt_flags = [f"-D{opt}" for opt in lean_options]
-    out = _run_container(image, RUN_REPO_SNAPSHOT, [snapshot_id, *opt_flags], data, tmpfs_size="1g")
+    allow_flag = "1" if allow_module_system else "0"
+    out = _run_container(image, RUN_REPO_SNAPSHOT, [snapshot_id, allow_flag, *opt_flags], data, tmpfs_size="1g")
     results = parse_audit_output(out, checks, expected_version=expected_version)
     for _mod, _rel, theorem in checks:
         actual = results[theorem]
-        print(f"  PASS {theorem}: stock Lean {expected_version} + leanchecker + repo-snapshot FrozenTypeDeps check; axioms: {', '.join(actual) or 'none'}")
+        mode_desc = "module-system (.olean.private) + " if allow_module_system else ""
+        print(f"  PASS {theorem}: stock Lean {expected_version} + leanchecker + {mode_desc}repo-snapshot FrozenTypeDeps check; axioms: {', '.join(actual) or 'none'}")
     return results
 
 
@@ -996,8 +1044,12 @@ def main():
                 data, snapshot_id, lean_options, checks = repo_snapshot_input(
                     seed_files, tree, manifest, accepted, contracts
                 )
+                allow_mod = bool((manifest.get("snapshot") or {}).get("allow_module_system"))
                 print(f"{mid}: {len(accepted)} accepted patches replayed against matching frozen repo-snapshot spec", flush=True)
-                axiom_map = check_lean_repo_snapshot(image, data, snapshot_id, lean_options, checks, expected_version=expected_version)
+                axiom_map = check_lean_repo_snapshot(
+                    image, data, snapshot_id, lean_options, checks,
+                    expected_version=expected_version, allow_module_system=allow_mod,
+                )
                 for row, (_mod, _rel, theorem) in zip(history, checks):
                     pid = seq_to_proof_id.get(row["seq"])
                     if pid:

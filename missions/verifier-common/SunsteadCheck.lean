@@ -82,6 +82,7 @@ structure Cfg where
   statementsModule : Name := .anonymous
   decompStatementsModule : Option Name := none
   subgoalConsts : List Name := []
+  allowModuleSystem : Bool := false
 
 /-- Strip surrounding French guillemets (`«AES-GCM»` → `"AES-GCM"`) using pure
 list ops so the helper compiles without warnings across Lean 4.31–4.37+. -/
@@ -146,6 +147,9 @@ partial def parseArgs : List String → Cfg → Except String Cfg
       | "target-const" => parseArgs rest { c with targetConst := parseLeanName v }
       | "statement" => parseArgs rest { c with statement := parseLeanName v }
       | "score-const" => parseArgs rest { c with scoreConst := some (parseLeanName v) }
+      | "allow-module-system" =>
+        let enabled := v == "1" || v == "true"
+        parseArgs rest { c with allowModuleSystem := enabled }
       | _ => .error s!"unknown argument {a}"
     | [] => .error s!"unknown argument {a}"
 
@@ -162,6 +166,36 @@ structure VisitAcc where
   trusted : Array Import := #[]
   consts : Std.HashMap Name ConstantInfo := {}
   untrustedMods : Array Name := #[]
+  regions : Array CompactedRegion := #[]
+
+/-- Read `.olean` (and, when `allowModuleSystem := true`, chained `.olean.server`
++ `.olean.private` via `readModuleDataParts`), keeping all `CompactedRegion`s
+returned so callers keep them alive until kernel replay completes. Fails closed
+if `allowModuleSystem := false` and `.olean.private` / `mod.isModule` is seen,
+or if `allowModuleSystem := true` and a `module` file is missing `.olean.private`. -/
+def readModulePartsChecked (allowModuleSystem : Bool) (path : System.FilePath)
+    (label : String) : IO (Array (ModuleData × CompactedRegion)) := do
+  let privPath : System.FilePath := path.toString ++ ".private"
+  let serverPath : System.FilePath := path.toString ++ ".server"
+  if !allowModuleSystem then
+    if (← privPath.pathExists) then
+      throw <| IO.userError s!"module-system `.olean.private` output is not allowed for {label}"
+    let (mod, region) ← readModuleData path
+    if mod.isModule then
+      throw <| IO.userError s!"Lean 4 `module` files are not allowed for {label}"
+    return #[(mod, region)]
+  else
+    if (← privPath.pathExists) then
+      let mut partPaths : Array System.FilePath := #[path]
+      if (← serverPath.pathExists) then
+        partPaths := partPaths.push serverPath
+      partPaths := partPaths.push privPath
+      readModuleDataParts partPaths
+    else
+      let (mod, region) ← readModuleData path
+      if mod.isModule then
+        throw <| IO.userError s!"Lean 4 `module` file is missing required `.olean.private` for {label}"
+      return #[(mod, region)]
 
 partial def visit (c : Cfg) (acc : IO.Ref VisitAcc) (m : Name) : IO Unit := do
   if (← acc.get).visited.contains m then return
@@ -170,23 +204,30 @@ partial def visit (c : Cfg) (acc : IO.Ref VisitAcc) (m : Name) : IO Unit := do
     let path := modToFilePath c.untrustedLib m "olean"
     unless (← path.pathExists) do
       throw <| IO.userError s!"missing build output for {m}"
-    let privPath : System.FilePath := path.toString ++ ".private"
-    if (← privPath.pathExists) then
-      throw <| IO.userError s!"module-system `.olean.private` output is not allowed for {m}"
-    let (mod, _region) ← readModuleData path
-    if mod.isModule then
-      throw <| IO.userError s!"Lean 4 `module` files are not allowed for {m}"
-    for imp in mod.imports do
-      visit c acc imp.module
+    let parts ← readModulePartsChecked c.allowModuleSystem path (toString m)
+    -- Keep compacted regions alive and visit all public, server, and private imports.
+    acc.modify fun a =>
+      let regs := parts.foldl (init := a.regions) fun r (_, reg) => r.push reg
+      { a with regions := regs }
+    for (mod, _) in parts do
+      for imp in mod.imports do
+        visit c acc imp.module
+    -- Merge parts for THIS module in order (`.olean` -> `.olean.server` -> `.olean.private`)
+    -- so private proof terms (`.thmInfo`) and unexposed defs overwrite public interface stubs,
+    -- while still rejecting any duplicate constant defined across distinct untrusted modules.
+    let mut modConsts : Std.HashMap Name ConstantInfo := {}
+    for (mod, _) in parts do
+      for (n, ci) in mod.constNames.zip mod.constants do
+        modConsts := modConsts.insert n ci
     let a ← acc.get
     let mut cs := a.consts
-    for (n, ci) in mod.constNames.zip mod.constants do
+    for (n, ci) in modConsts do
       if cs.contains n then
         throw <| IO.userError s!"constant {n} defined in more than one module"
       cs := cs.insert n ci
     acc.set { a with consts := cs, untrustedMods := a.untrustedMods.push m }
   else
-    acc.modify fun a => { a with trusted := a.trusted.push { module := m } }
+    acc.modify fun a => { a with trusted := a.trusted.push { module := m, importAll := c.allowModuleSystem } }
 
 /-- Explicit `QuotKind` equality so this file compiles without `BEq QuotKind`
 (absent in Lean 4.31, added in later releases). -/
@@ -609,15 +650,11 @@ def run (args : List String) : IO Json := do
       throw <| IO.userError "decompose mode is only supported for classic statement-based missions"
     unless (← frozenPath.pathExists) do
       throw <| IO.userError s!"missing frozen target .olean: {frozenPath}"
-    let frozenPriv : System.FilePath := frozenPath.toString ++ ".private"
-    if (← frozenPriv.pathExists) then
-      throw <| IO.userError s!"frozen target `.olean.private` is not supported: {frozenPath}"
-    let (frozenMod, _frozenRegion) ← readModuleData frozenPath
-    if frozenMod.isModule then
-      throw <| IO.userError s!"frozen target Lean 4 `module` file is not supported: {frozenPath}"
+    let frozenParts ← readModulePartsChecked c.allowModuleSystem frozenPath (toString frozenPath)
     let mut frozenMap : Std.HashMap Name ConstantInfo := {}
-    for (n, ci) in frozenMod.constNames.zip frozenMod.constants do
-      frozenMap := frozenMap.insert n ci
+    for (frozenMod, _) in frozenParts do
+      for (n, ci) in frozenMod.constNames.zip frozenMod.constants do
+        frozenMap := frozenMap.insert n ci
     let frozenConstName :=
       if c.mode == .refute && !c.statement.isAnonymous then c.statement else c.targetConst
     let some frozenTargetCI := frozenMap.get? frozenConstName
@@ -634,6 +671,8 @@ def run (args : List String) : IO Json := do
     let env ← sunsteadReplay a.consts env
     let ctx : Core.Context := { fileName := "<sunstead-check>", fileMap := default }
     let (j, _) ← (checkSnapshotM c frozenTargetCI frozenMap frozenTypeDeps).toIO ctx { env := env }
+    -- Keep compacted regions alive past kernel replay and checkSnapshotM.
+    if a.regions.size + frozenParts.size == 0 then pure ()
     return j
   | none =>
     let mut trustedImports := a.trusted
@@ -641,11 +680,11 @@ def run (args : List String) : IO Json := do
     for imp in a.trusted do
       seenTrusted := seenTrusted.insert imp.module
     if !c.statementsModule.isAnonymous && !seenTrusted.contains c.statementsModule then
-      trustedImports := trustedImports.push { module := c.statementsModule }
+      trustedImports := trustedImports.push { module := c.statementsModule, importAll := c.allowModuleSystem }
       seenTrusted := seenTrusted.insert c.statementsModule
     if let some dm := c.decompStatementsModule then
       if !dm.isAnonymous && !seenTrusted.contains dm then
-        trustedImports := trustedImports.push { module := dm }
+        trustedImports := trustedImports.push { module := dm, importAll := c.allowModuleSystem }
         seenTrusted := seenTrusted.insert dm
     let env ← importModules trustedImports {} 0 (loadExts := false)
     for (n, _) in a.consts do
@@ -657,10 +696,12 @@ def run (args : List String) : IO Json := do
       let (subAxs, _) ← (checkDecompSubgoalsM c).toIO ctx { env := env }
       let env ← sunsteadReplay a.consts env
       let (j, _) ← (checkDecompReductionM c a.consts subAxs).toIO ctx { env := env }
+      if a.regions.size == 0 then pure ()
       return j
     else
       let env ← sunsteadReplay a.consts env
       let (j, _) ← (checkClassicM c).toIO ctx { env := env }
+      if a.regions.size == 0 then pure ()
       return j
 
 def main (args : List String) : IO UInt32 := do

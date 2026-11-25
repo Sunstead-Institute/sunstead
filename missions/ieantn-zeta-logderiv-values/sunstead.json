@@ -1,0 +1,112 @@
+{
+  "id": "ieantn-zeta-logderiv-values",
+  "title": "IEANTN (Terence Tao): Explicit \u03b6'/\u03b6 Numerical Values & Low Zero Bounds",
+  "description": "Seven verbatim open explicit analytic number theory theorems from Terence Tao's IEANTN (teorth/IEANTN@cd9c2dd3, Apache-2.0): certified numerical values of \u03b6'/\u03b6 at s = 2, 3/2, -1 and (\u03b6'/\u03b6)'(-1), alternating signs of the Laurent coefficients of -\u03b6'/\u03b6 at s = 1, absence of nontrivial zeroes below the first ordinate \u03b3\u2081, and the explicit reciprocal-ordinate sum bound below 2\u00b710\u2074. Every frozen definition file is SHA-256 identical to upstream.",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/teorth/IEANTN",
+  "upstream": {
+    "repo": "teorth/IEANTN",
+    "commit": "cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3",
+    "license": "Apache-2.0"
+  },
+  "frozen_paths": [
+    "IEANTN/Nodes/LowZeroes/v1/Conclusions.lean",
+    "IEANTN/Nodes/ZetaLogDerivValues/v1/Conclusions.lean",
+    "IEANTN/Vocabulary/Numerics.lean",
+    "IEANTN/Vocabulary/Zeta.lean",
+    "IEANTN/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 240,
+    "memory_mb": 6144
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "logderiv_two",
+      "title": "ZetaLogDerivValues.v1: certified numerical value of \u03b6'/\u03b6(2)",
+      "description": "Prove `ZetaLogDerivValues.v1.challenge_logDeriv_two`: certify \u03b6'/\u03b6(2) within tolerance 10\u207b\u2076.",
+      "target_files": [
+        "IEANTN/Nodes/ZetaLogDerivValues/v1/TaskLogDerivTwo.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/ZetaLogDerivValues/v1/Challenge.lean#L19-L20"
+    },
+    {
+      "id": "logderiv_three_halves",
+      "title": "ZetaLogDerivValues.v1: certified numerical value of \u03b6'/\u03b6(3/2)",
+      "description": "Prove `ZetaLogDerivValues.v1.challenge_logDeriv_three_halves`: certify \u03b6'/\u03b6(3/2) within tolerance 10\u207b\u2076.",
+      "target_files": [
+        "IEANTN/Nodes/ZetaLogDerivValues/v1/TaskLogDerivThreeHalves.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/ZetaLogDerivValues/v1/Challenge.lean#L22-L23"
+    },
+    {
+      "id": "logderiv_neg_one",
+      "title": "ZetaLogDerivValues.v1: certified numerical value of \u03b6'/\u03b6(-1)",
+      "description": "Prove `ZetaLogDerivValues.v1.challenge_logDeriv_neg_one`: certify \u03b6'/\u03b6(-1) within tolerance 10\u207b\u2076.",
+      "target_files": [
+        "IEANTN/Nodes/ZetaLogDerivValues/v1/TaskLogDerivNegOne.lean"
+      ],
+      "depends_on": [
+        "logderiv_two"
+      ],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/ZetaLogDerivValues/v1/Challenge.lean#L25-L26"
+    },
+    {
+      "id": "deriv_logderiv_neg_one",
+      "title": "ZetaLogDerivValues.v1: certified numerical value of (\u03b6'/\u03b6)'(-1)",
+      "description": "Prove `ZetaLogDerivValues.v1.challenge_deriv_logDeriv_neg_one`: certify (\u03b6'/\u03b6)'(-1) within tolerance 10\u207b\u2076.",
+      "target_files": [
+        "IEANTN/Nodes/ZetaLogDerivValues/v1/TaskDerivLogDerivNegOne.lean"
+      ],
+      "depends_on": [
+        "logderiv_neg_one"
+      ],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/ZetaLogDerivValues/v1/Challenge.lean#L28-L29"
+    },
+    {
+      "id": "logderiv_laurent_alternating",
+      "title": "ZetaLogDerivValues.v1: alternating signs of Laurent coefficients of -\u03b6'/\u03b6 at 1",
+      "description": "Prove `ZetaLogDerivValues.v1.challenge_logDeriv_laurent_alternating`: sign alternation of the Laurent expansion coefficients of -\u03b6'/\u03b6 at s = 1.",
+      "target_files": [
+        "IEANTN/Nodes/ZetaLogDerivValues/v1/TaskLaurentAlternating.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/ZetaLogDerivValues/v1/Challenge.lean#L31-L32"
+    },
+    {
+      "id": "no_zeroes_below_first_ordinate",
+      "title": "LowZeroes.v1: no nontrivial zeroes of \u03b6(s) below the first ordinate \u03b3\u2081",
+      "description": "Prove `LowZeroes.v1.challenge_no_zeroes_below_first_ordinate`: \u03b6(s) has no nontrivial zeroes with 0 < |Im s| < 14.1347.",
+      "target_files": [
+        "IEANTN/Nodes/LowZeroes/v1/TaskNoZeroesBelowFirst.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/LowZeroes/v1/Challenge.lean#L22-L23"
+    },
+    {
+      "id": "sum_inv_ordinates_below_2e4",
+      "title": "LowZeroes.v1: explicit bound on \u2211 1/\u03b3 for zeta zeroes below 2\u00b710\u2074",
+      "description": "Prove `LowZeroes.v1.challenge_sum_inv_ordinates_below_2e4`: explicit upper bound on the reciprocal ordinate sum over zeroes with 0 < \u03b3 \u2264 20000.",
+      "target_files": [
+        "IEANTN/Nodes/LowZeroes/v1/TaskSumInvOrdinates.lean"
+      ],
+      "depends_on": [
+        "no_zeroes_below_first_ordinate"
+      ],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/LowZeroes/v1/Challenge.lean#L19-L20"
+    }
+  ]
+}

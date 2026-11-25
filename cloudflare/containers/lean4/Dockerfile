@@ -34,6 +34,9 @@ COPY missions/ieantn-chebyshev-pipeline /missions/ieantn-chebyshev-pipeline
 COPY missions/ieantn-schoenfeld-chebyshev /missions/ieantn-schoenfeld-chebyshev
 COPY missions/ieantn-short-interval-primes /missions/ieantn-short-interval-primes
 COPY missions/ieantn-zeta-foundations /missions/ieantn-zeta-foundations
+COPY missions/ieantn-zero-free-regions /missions/ieantn-zero-free-regions
+COPY missions/ieantn-zeta-logderiv-values /missions/ieantn-zeta-logderiv-values
+COPY missions/ieantn-buthe-prime-bounds /missions/ieantn-buthe-prime-bounds
 COPY missions/pnt-analytic-foundations /missions/pnt-analytic-foundations
 COPY missions/matrix-rank444-f2 /missions/matrix-rank444-f2
 COPY missions/matrix-rank-alphatensor-f2 /missions/matrix-rank-alphatensor-f2

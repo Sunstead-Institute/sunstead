@@ -1,0 +1,121 @@
+{
+  "id": "ieantn-buthe-prime-bounds",
+  "title": "IEANTN (Terence Tao): B\u00fcthe (2018) Explicit \u03c8(x), \u03b8(x) & li(x) - \u03c0(x) DAG",
+  "description": "Seven verbatim open explicit prime-counting theorems from active and `awaiting-solution` nodes in Terence Tao's IEANTN (teorth/IEANTN@cd9c2dd3, Apache-2.0): B\u00fcthe's Lemma 3 comparison bounds & positivity (`Buthe.v2`) converging with B\u00fcthe Theorem 2 explicit bounds on \u03c8(x), \u03b8(x), and lower \u03b8(x) (`Buthe.v1`) into explicit li(x) - \u03c0(x) bounds and li(x) > \u03c0(x) up to 10\u00b9\u2079. Every upstream assumption is an explicit theorem hypothesis (0 custom axioms).",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/teorth/IEANTN",
+  "upstream": {
+    "repo": "teorth/IEANTN",
+    "commit": "cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3",
+    "license": "Apache-2.0"
+  },
+  "frozen_paths": [
+    "IEANTN/Nodes/Buthe/v1/Conclusions.lean",
+    "IEANTN/Nodes/Buthe/v1/Tables.lean",
+    "IEANTN/Nodes/Buthe/v2/Conclusions.lean",
+    "IEANTN/Nodes/ButheNumerics/v1/Conclusions.lean",
+    "IEANTN/Nodes/FKBJ/v1/Conclusions.lean",
+    "IEANTN/Vocabulary/ErrorTerms.lean",
+    "IEANTN/Vocabulary/Numerics.lean",
+    "IEANTN/Vocabulary/PrimeCounting.lean",
+    "IEANTN/Vocabulary/Zeta.lean",
+    "IEANTN/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 240,
+    "memory_mb": 6144
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "buthe_lemma_3_bounds",
+      "title": "Buthe.v2 (`awaiting-solution`): Lemma 3 partial-summation bounds",
+      "description": "Prove `Buthe.v2.challenge_lemma_3_bounds`: B\u00fcthe (2018) Lemma 3 explicit bounds relating \u03b8(x) and li(x) - \u03c0(x).",
+      "target_files": [
+        "IEANTN/Nodes/Buthe/v2/TaskLemma3Bounds.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/Buthe/v2/Challenge.lean#L19-L20"
+    },
+    {
+      "id": "buthe_lemma_3_positivity",
+      "title": "Buthe.v2 (`awaiting-solution`): Lemma 3 positivity criterion for li(x) > \u03c0(x)",
+      "description": "Prove `Buthe.v2.challenge_lemma_3_positivity`: B\u00fcthe (2018) Lemma 3 positivity transfer from \u03b8(x) lower bounds to li(x) > \u03c0(x).",
+      "target_files": [
+        "IEANTN/Nodes/Buthe/v2/TaskLemma3Positivity.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/Buthe/v2/Challenge.lean#L22-L23"
+    },
+    {
+      "id": "buthe_theorem_2_psi",
+      "title": "Buthe.v1: Theorem 2 explicit bound on |\u03c8(x) - x| up to 10\u00b9\u2079",
+      "description": "Prove `Buthe.v1.challenge_theorem_2_psi` conditional on `FKBJ.v1.rh_up_to`.",
+      "target_files": [
+        "IEANTN/Nodes/Buthe/v1/TaskTheorem2Psi.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/Buthe/v1/Challenge.lean#L22-L25"
+    },
+    {
+      "id": "buthe_theorem_2_theta",
+      "title": "Buthe.v1: Theorem 2 explicit two-sided bound on \u03b8(x) up to 10\u00b9\u2079",
+      "description": "Prove `Buthe.v1.challenge_theorem_2_theta` conditional on `FKBJ.v1.rh_up_to`.",
+      "target_files": [
+        "IEANTN/Nodes/Buthe/v1/TaskTheorem2Theta.lean"
+      ],
+      "depends_on": [
+        "buthe_theorem_2_psi"
+      ],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/Buthe/v1/Challenge.lean#L27-L30"
+    },
+    {
+      "id": "buthe_theorem_2_theta_lower",
+      "title": "Buthe.v1: Theorem 2 explicit lower bound on \u03b8(x) up to 10\u00b9\u2079",
+      "description": "Prove `Buthe.v1.challenge_theorem_2_theta_lower` conditional on `FKBJ.v1.rh_up_to`.",
+      "target_files": [
+        "IEANTN/Nodes/Buthe/v1/TaskTheorem2ThetaLower.lean"
+      ],
+      "depends_on": [
+        "buthe_theorem_2_theta"
+      ],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/Buthe/v1/Challenge.lean#L32-L35"
+    },
+    {
+      "id": "buthe_theorem_2_li_minus_pi",
+      "title": "Buthe.v1: Theorem 2 explicit bound on li(x) - \u03c0(x) via Lemma 3 + \u03b8(x)",
+      "description": "Prove `Buthe.v1.challenge_theorem_2_li_minus_pi` from `Buthe.v1.theorem_2_theta`, `Buthe.v2.lemma_3_bounds`, and numeric hypotheses.",
+      "target_files": [
+        "IEANTN/Nodes/Buthe/v1/TaskTheorem2LiMinusPi.lean"
+      ],
+      "depends_on": [
+        "buthe_theorem_2_theta",
+        "buthe_lemma_3_bounds"
+      ],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/Buthe/v1/Challenge.lean#L42-L49"
+    },
+    {
+      "id": "buthe_theorem_2_li_gt_pi",
+      "title": "Buthe.v1: Theorem 2 strict positivity li(x) > \u03c0(x) for 2 \u2264 x \u2264 10\u00b9\u2079",
+      "description": "Prove `Buthe.v1.challenge_theorem_2_li_gt_pi` from `Buthe.v1.theorem_2_theta_lower`, `Buthe.v2.lemma_3_positivity`, and numeric hypotheses.",
+      "target_files": [
+        "IEANTN/Nodes/Buthe/v1/TaskTheorem2LiGtPi.lean"
+      ],
+      "depends_on": [
+        "buthe_theorem_2_theta_lower",
+        "buthe_lemma_3_positivity"
+      ],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/Buthe/v1/Challenge.lean#L51-L57"
+    }
+  ]
+}
