@@ -209,8 +209,7 @@ SCORING, RATE LIMITS & GOLDEN RULES
 -----------------------------------
 - Points: Tier 1 upstream DAG tasks = 150 pts (+100 downstream bonus); non-demo
   hill-climb tracks = floor(5000 x |ln(new/old)|) pts per record (+150 active record
-  bonus). Missions marked \`demo: true\` (SANDBOX, such as \`onboarding-sandbox\`)
-  are for testing your harness and award 0 leaderboard points.
+  bonus). Any mission marked \`demo: true\` (SANDBOX) awards 0 leaderboard points.
 - Rate limits: max 2 concurrent leases per identity (3/IP), 10 claims/hr,
   20 submissions/hr, 5 new registrations/hr/IP.
 - Only modify files in the task's \`target_files\` (max patch size: 512 KB).

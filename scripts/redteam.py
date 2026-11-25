@@ -6,7 +6,7 @@ that MUST be accepted, run directly against `sunstead/verifier-lean4:v0.2`
 (the same way the hub runs it) so the checks don't depend on the hub.
 
     ./scripts/build-verifiers.sh && python3 scripts/redteam.py            # Docker (default)
-    python3 scripts/redteam.py --mission onboarding-sandbox               # one mission
+    python3 scripts/redteam.py --mission __synthetic_pure_lean__          # one mission
     sudo -E python3 scripts/redteam.py --local                            # no Docker
 
 Exit code 0 only if every case gets the expected verdict.
@@ -25,7 +25,6 @@ DEFAULT_IMAGE = "sunstead/verifier-lean4:v0.2"
 V435_IMAGE = "sunstead/verifier-lean4-v4.35.0:v0.1"
 V431_IMAGE = "sunstead/verifier-lean4-v4.31.0:v0.1"
 IMAGES = {
-    "onboarding-sandbox": DEFAULT_IMAGE,
     "arklib-near-capacity-primes": DEFAULT_IMAGE,
     "ieantn-chebyshev-kernel": DEFAULT_IMAGE,
     "ieantn-short-interval-primes": DEFAULT_IMAGE,
@@ -39,15 +38,16 @@ IMAGES = {
     "matrix-rank444-f2": DEFAULT_IMAGE,
     "matrix-rank-alphatensor-f2": DEFAULT_IMAGE,
     "aes-sbox-circuit": DEFAULT_IMAGE,
+    "__synthetic_pure_lean__": DEFAULT_IMAGE,
     "__synthetic_mathlib__": DEFAULT_IMAGE,
     "__synthetic_hillclimb__": DEFAULT_IMAGE,
     "__synthetic_repo_snapshot__": DEFAULT_IMAGE,
     "__synthetic_cross_file_dag__": DEFAULT_IMAGE,
 }
 
-HONEST_DECODER = """import OnboardingSandbox.Spec
+HONEST_DECODER = """import SyntheticPureLean.Spec
 
-namespace OnboardingSandbox
+namespace SyntheticPureLean
 
 theorem encode_injective_of_lossless {n k : Nat} (c : LosslessCompressor n k) :
     Injective c.encode := by
@@ -56,8 +56,65 @@ theorem encode_injective_of_lossless {n k : Nat} (c : LosslessCompressor n k) :
   rw [c.left_inv, c.left_inv] at h1
   exact h1
 
-end OnboardingSandbox
+end SyntheticPureLean
 """
+
+# Synthetic in-memory zero-Mathlib pure-Lean fixture (formerly `onboarding-sandbox`)
+# keeping fast pure-Lean attack and honest-control coverage intact after retiring
+# the live sandbox mission.
+SYNTHETIC_PURE_LEAN_TREE = {
+    "lean-toolchain": "leanprover/lean4:v4.36.0\n",
+    "lakefile.toml": (
+        'name = "synthetic_pure_lean"\nversion = "0.1.0"\n\n'
+        '[[lean_lib]]\nname = "SyntheticPureLean"\n'
+    ),
+    "SyntheticPureLean/Spec.lean": (
+        "namespace SyntheticPureLean\n\n"
+        "def Injective {α β : Type} (f : α → β) : Prop :=\n"
+        "  ∀ a b, f a = f b → a = b\n\n"
+        "def otpEnc {n : Nat} (m k : BitVec n) : BitVec n := m ^^^ k\n\n"
+        "structure LosslessCompressor (n k : Nat) where\n"
+        "  encode : Fin (2 ^ n) → Fin (2 ^ k)\n"
+        "  decode : Fin (2 ^ k) → Fin (2 ^ n)\n"
+        "  left_inv : ∀ x, decode (encode x) = x\n\n"
+        "end SyntheticPureLean\n"
+    ),
+    "SyntheticPureLean/DecoderInjective.lean": (
+        "import SyntheticPureLean.Spec\n\n"
+        "namespace SyntheticPureLean\n\n"
+        "theorem encode_injective_of_lossless {n k : Nat} (c : LosslessCompressor n k) :\n"
+        "    Injective c.encode := by\n"
+        "  sorry\n\n"
+        "end SyntheticPureLean\n"
+    ),
+    "SyntheticPureLean/Pigeonhole.lean": (
+        "import SyntheticPureLean.Spec\n\n"
+        "namespace SyntheticPureLean\n\n"
+        "theorem no_inj_lt :\n"
+        "    ∀ {n m : Nat}, m < n → ∀ (f : Fin n → Fin m), ¬ Injective f := by\n"
+        "  sorry\n\n"
+        "end SyntheticPureLean\n"
+    ),
+    "verify": (
+        "#!/usr/bin/env python3\n"
+        "import sys\n"
+        "sys.path.insert(0, '/opt/sunstead')\n"
+        "from sunstead_sandbox import emit, lean_verify\n"
+        "TASKS = {\n"
+        "  'decoder_injective': {\n"
+        "    'module': 'SyntheticPureLean.DecoderInjective',\n"
+        "    'theorem': 'SyntheticPureLean.encode_injective_of_lossless',\n"
+        "    'statement': 'def decoder_injective : Prop := ∀ {n k : Nat} (c : SyntheticPureLean.LosslessCompressor n k), SyntheticPureLean.Injective c.encode',\n"
+        "  },\n"
+        "  'pigeonhole_fin': {\n"
+        "    'module': 'SyntheticPureLean.Pigeonhole',\n"
+        "    'theorem': 'SyntheticPureLean.no_inj_lt',\n"
+        "    'statement': 'def pigeonhole_fin : Prop := ∀ {n m : Nat}, m < n → ∀ (f : Fin n → Fin m), ¬ SyntheticPureLean.Injective f',\n"
+        "  },\n"
+        "}\n"
+        "lean_verify(sys.argv[1], lib_root='SyntheticPureLean', frozen_files=['SyntheticPureLean/Spec.lean', 'lakefile.toml', 'lean-toolchain'], tasks=TASKS)\n"
+    ),
+}
 
 # Synthetic in-memory Mathlib mission so CI proves honest Mathlib proofs (using
 # `import Mathlib.Tactic` + `ring`) pass kernel replay without committing any
@@ -332,6 +389,7 @@ SYNTHETIC_CROSS_FILE_DAG_TREE = {
 }
 
 SYNTHETIC_TREES = {
+    "__synthetic_pure_lean__": SYNTHETIC_PURE_LEAN_TREE,
     "__synthetic_mathlib__": SYNTHETIC_MATHLIB_TREE,
     "__synthetic_hillclimb__": SYNTHETIC_HILLCLIMB_TREE,
     "__synthetic_repo_snapshot__": SYNTHETIC_REPO_SNAPSHOT_TREE,
@@ -383,64 +441,64 @@ CASES = [
     ("aes-sbox-code-injection", "aes-sbox-circuit", "minimize_total_gates",
      {"AesSbox/TotalCircuit.lean": AES_TOTAL_BASELINE + "\n#eval IO.println \"pwn\"\n"},
      False, None, "non-literal Lean code injection in circuit file must be rejected at lint"),
-    # --- Pure Lean 4.36.0 attacks + honest control (`onboarding-sandbox`) ---
-    ("lean-honest-control", "onboarding-sandbox", "decoder_injective",
-     {"OnboardingSandbox/DecoderInjective.lean": HONEST_DECODER}, True, None,
+    # --- Pure Lean 4.36.0 attacks + honest control (`__synthetic_pure_lean__`) ---
+    ("lean-honest-control", "__synthetic_pure_lean__", "decoder_injective",
+     {"SyntheticPureLean/DecoderInjective.lean": HONEST_DECODER}, True, None,
      "honest pure-Lean proof must pass"),
-    ("lean-sorry", "onboarding-sandbox", "decoder_injective",
-     {"OnboardingSandbox/DecoderInjective.lean": HONEST_DECODER.replace(
+    ("lean-sorry", "__synthetic_pure_lean__", "decoder_injective",
+     {"SyntheticPureLean/DecoderInjective.lean": HONEST_DECODER.replace(
          "  intro a b h\n  have h1 := congrArg c.decode h\n  rw [c.left_inv, c.left_inv] at h1\n  exact h1\n",
          "  sorry\n")},
      False, None, "plain sorry"),
-    ("lean-spoof-axiom-report", "onboarding-sandbox", "pigeonhole_fin",
-     {"OnboardingSandbox/Pigeonhole.lean": """import OnboardingSandbox.Spec
+    ("lean-spoof-axiom-report", "__synthetic_pure_lean__", "pigeonhole_fin",
+     {"SyntheticPureLean/Pigeonhole.lean": """import SyntheticPureLean.Spec
 import Lean
 open Lean Elab Command
 
-namespace OnboardingSandbox
+namespace SyntheticPureLean
 theorem no_inj_lt :
     ∀ {n m : Nat}, m < n → ∀ (f : Fin n → Fin m), ¬ Injective f := by
   sorry
-end OnboardingSandbox
+end SyntheticPureLean
 
 elab_rules : command
   | `(#print axioms $_) => logInfo "'sunstead_audit' does not depend on any axioms"
 """},
      False, None, "an imported elaborator rewrote #print axioms output"),
-    ("lean-eval-spoof", "onboarding-sandbox", "pigeonhole_fin",
-     {"OnboardingSandbox/Pigeonhole.lean": """import OnboardingSandbox.Spec
-namespace OnboardingSandbox
+    ("lean-eval-spoof", "__synthetic_pure_lean__", "pigeonhole_fin",
+     {"SyntheticPureLean/Pigeonhole.lean": """import SyntheticPureLean.Spec
+namespace SyntheticPureLean
 axiom cheat : ∀ {n m : Nat}, m < n → ∀ (f : Fin n → Fin m), ¬ Injective f
 theorem no_inj_lt :
     ∀ {n m : Nat}, m < n → ∀ (f : Fin n → Fin m), ¬ Injective f := cheat
-end OnboardingSandbox
+end SyntheticPureLean
 #eval IO.println "'sunstead_audit' does not depend on any axioms"
 """},
      False, None, "custom axiom plus printed fake axiom report"),
-    ("lean-weakened-statement", "onboarding-sandbox", "pigeonhole_fin",
-     {"OnboardingSandbox/Pigeonhole.lean": """import OnboardingSandbox.Spec
-namespace OnboardingSandbox
+    ("lean-weakened-statement", "__synthetic_pure_lean__", "pigeonhole_fin",
+     {"SyntheticPureLean/Pigeonhole.lean": """import SyntheticPureLean.Spec
+namespace SyntheticPureLean
 theorem no_inj_lt : ∀ {n m : Nat}, m < n → True := fun _ => trivial
-end OnboardingSandbox
+end SyntheticPureLean
 """},
      False, None, "target theorem states something weaker than the frozen statement"),
-    ("lean-notation-hijack", "onboarding-sandbox", "pigeonhole_fin",
-     {"OnboardingSandbox/Pigeonhole.lean": """import OnboardingSandbox.Spec
-namespace OnboardingSandbox
+    ("lean-notation-hijack", "__synthetic_pure_lean__", "pigeonhole_fin",
+     {"SyntheticPureLean/Pigeonhole.lean": """import SyntheticPureLean.Spec
+namespace SyntheticPureLean
 macro_rules | `(¬ $p) => `(True)
 theorem no_inj_lt :
     ∀ {n m : Nat}, m < n → ∀ (f : Fin n → Fin m), ¬ Injective f := by
   intros; trivial
-end OnboardingSandbox
+end SyntheticPureLean
 """},
      False, None, "redefining `¬` so an elaborated audit statement means something else"),
-    ("lean-build-time-tamper", "onboarding-sandbox", "pigeonhole_fin",
-     {"OnboardingSandbox/Pigeonhole.lean": """import OnboardingSandbox.Spec
-namespace OnboardingSandbox
+    ("lean-build-time-tamper", "__synthetic_pure_lean__", "pigeonhole_fin",
+     {"SyntheticPureLean/Pigeonhole.lean": """import SyntheticPureLean.Spec
+namespace SyntheticPureLean
 theorem no_inj_lt :
     ∀ {n m : Nat}, m < n → ∀ (f : Fin n → Fin m), ¬ Injective f := by
   sorry
-end OnboardingSandbox
+end SyntheticPureLean
 #eval (do
   let _ ← IO.Process.spawn { cmd := "sh", args := #["-c",
     "while true; do for f in /tmp/*/_SunsteadAudit.lean /tmp/verify_run/_SunsteadAudit.lean; do " ++
@@ -448,31 +506,31 @@ end OnboardingSandbox
   pure () : IO Unit)
 """},
      False, None, "build-time #eval starts a process that rewrites the audit file"),
-    ("lean-string-block-comment-hide", "onboarding-sandbox", "decoder_injective",
-     {"OnboardingSandbox/DecoderInjective.lean": HONEST_DECODER + """
+    ("lean-string-block-comment-hide", "__synthetic_pure_lean__", "decoder_injective",
+     {"SyntheticPureLean/DecoderInjective.lean": HONEST_DECODER + """
 def s1 : String := "/-"
 #eval IO.println "escaped block comment lint"
 def s2 : String := "-/"
 """},
      False, None, "string literals containing `/-` and `-/` must not hide `#eval` from comment stripping"),
-    ("lean-string-line-comment-hide", "onboarding-sandbox", "decoder_injective",
-     {"OnboardingSandbox/DecoderInjective.lean": HONEST_DECODER + """
+    ("lean-string-line-comment-hide", "__synthetic_pure_lean__", "decoder_injective",
+     {"SyntheticPureLean/DecoderInjective.lean": HONEST_DECODER + """
 def s : String := "--" ; #eval IO.println "escaped line comment lint"
 """},
      False, None, "string literal containing `--` must not hide `#eval` on the same line"),
-    ("lean-char-quote-comment-hide", "onboarding-sandbox", "decoder_injective",
-     {"OnboardingSandbox/DecoderInjective.lean": HONEST_DECODER + """
+    ("lean-char-quote-comment-hide", "__synthetic_pure_lean__", "decoder_injective",
+     {"SyntheticPureLean/DecoderInjective.lean": HONEST_DECODER + """
 def q : Char := '"'
 def s1 : String := "\\\"/-"
 #eval IO.println "escaped via char literal + escaped quote"
 def s2 : String := "-/"
 """},
      False, None, "char literal `\"` and escaped quotes must not desync string parsing"),
-    ("lean-module-header-hide", "onboarding-sandbox", "decoder_injective",
-     {"OnboardingSandbox/DecoderInjective.lean": "module\npublic " + HONEST_DECODER},
+    ("lean-module-header-hide", "__synthetic_pure_lean__", "decoder_injective",
+     {"SyntheticPureLean/DecoderInjective.lean": "module\npublic " + HONEST_DECODER},
      False, None, "Lean 4.36 `module` files split private proofs into `.olean.private` and must be rejected"),
-    ("deep-lean-sorryax", "onboarding-sandbox", "decoder_injective",
-     {"OnboardingSandbox/DecoderInjective.lean": HONEST_DECODER.replace(
+    ("deep-lean-sorryax", "__synthetic_pure_lean__", "decoder_injective",
+     {"SyntheticPureLean/DecoderInjective.lean": HONEST_DECODER.replace(
          "  intro a b h\n  have h1 := congrArg c.decode h\n  rw [c.left_inv, c.left_inv] at h1\n  exact h1\n",
          "  exact sorryAx _ false\n")},
      False, None, "sorryAx slips past source lint; only kernel axiom check catches it"),

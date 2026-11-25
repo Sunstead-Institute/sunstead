@@ -11,7 +11,7 @@ and `sorryAx` because seeds are unsolved.
 
     ./scripts/build-verifiers.sh
     python3 scripts/check-statements.py            # every mission, every task
-    python3 scripts/check-statements.py --mission onboarding-sandbox
+    python3 scripts/check-statements.py --mission arklib-near-capacity-primes
 
 The sorry-accepting path (`check_seed_statement` in the harness) is only
 reachable from this script: it swaps it in for `lean_verify` inside its own

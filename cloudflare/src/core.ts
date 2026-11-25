@@ -722,6 +722,7 @@ export type AcceptedProofRow = {
   created_at: number;
   verify_ms: number | null;
   audit_json?: string | null;
+  is_demo?: number;
 };
 
 export interface ProofAuditRecord {
@@ -1452,7 +1453,8 @@ export function buildLedgerEntry(
   const manifest = mission?.manifest ?? null;
   const taskDef = manifest?.tasks.find((t) => t.id === row.task_id) ?? null;
   const upstream = manifest?.upstream ?? null;
-  const effectiveNonDemo = nonDemoVerifiedCount ?? (manifest?.demo ? 0 : 1);
+  const isDemo = Boolean(manifest?.demo || row.is_demo);
+  const effectiveNonDemo = nonDemoVerifiedCount ?? (isDemo ? 0 : 1);
   const social = gatePublicSocialHandles(
     { github: row.github, x: row.x ?? null, linkedin: row.linkedin ?? null },
     effectiveNonDemo
@@ -1465,7 +1467,7 @@ export function buildLedgerEntry(
     mission_id: row.mission_id,
     mission_title: manifest?.title ?? null,
     mission_retired: manifest === null,
-    mission_demo: Boolean(manifest?.demo),
+    mission_demo: isDemo,
     task_id: row.task_id,
     task_title: taskDef?.title ?? null,
     upstream: upstream

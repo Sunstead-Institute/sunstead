@@ -98,6 +98,7 @@ interface SubmissionRecord {
   unlocked_dependents_json?: string | null;
   created_at: number;
   completed_at?: number | null;
+  is_demo: boolean;
 }
 
 type ContributorRecord = {
@@ -252,7 +253,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         summary TEXT NOT NULL,
         patch_sha256 TEXT NOT NULL,
         verify_ms INTEGER NOT NULL,
-        created_at INTEGER NOT NULL
+        created_at INTEGER NOT NULL,
+        is_demo INTEGER NOT NULL DEFAULT 0
       );
 
       CREATE TABLE IF NOT EXISTS rate_events (
@@ -293,7 +295,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         summary TEXT NOT NULL,
         patch TEXT NOT NULL,
         spec_sha256 TEXT NOT NULL,
-        created_at INTEGER NOT NULL
+        created_at INTEGER NOT NULL,
+        is_demo INTEGER NOT NULL DEFAULT 0
       );
 
       CREATE INDEX IF NOT EXISTS idx_accepted_patches_mission
@@ -357,6 +360,36 @@ export class SunsteadHub extends DurableObject<HubEnv> {
              AND (a.patch_sha256 != submissions.patch_sha256 OR submissions.proof_id IS NULL)
          )`
     );
+
+    // Persist demo flag on historical submissions and accepted proofs so retired
+    // demo missions (such as `onboarding-sandbox`) stay flagged as 0-pt demo rows
+    // in /proofs and never count toward research verified_tasks or social-link unlock.
+    this.ensureColumn("submissions", "is_demo", "INTEGER NOT NULL DEFAULT 0");
+    this.ensureColumn("accepted_patches", "is_demo", "INTEGER NOT NULL DEFAULT 0");
+    const knownDemoIds = new Set<string>(["onboarding-sandbox"]);
+    for (const s of SEED_MISSIONS) {
+      if (s.manifest.demo) knownDemoIds.add(s.manifest.id);
+    }
+    for (const row of this.ctx.storage.sql
+      .exec<{ id: string; manifest_json: string }>("SELECT id, manifest_json FROM missions")
+      .toArray()) {
+      try {
+        const parsed = JSON.parse(row.manifest_json) as { demo?: boolean };
+        if (parsed.demo) knownDemoIds.add(row.id);
+      } catch {
+        // Ignore legacy rows with unreadable manifest JSON.
+      }
+    }
+    for (const demoId of knownDemoIds) {
+      this.ctx.storage.sql.exec(
+        "UPDATE submissions SET is_demo = 1 WHERE mission_id = ? AND is_demo = 0",
+        demoId
+      );
+      this.ctx.storage.sql.exec(
+        "UPDATE accepted_patches SET is_demo = 1 WHERE mission_id = ? AND is_demo = 0",
+        demoId
+      );
+    }
   }
 
   private ensureColumn(table: string, col: string, colDef: string): void {
@@ -674,9 +707,10 @@ export class SunsteadHub extends DurableObject<HubEnv> {
             verify_ms: number;
             created_at: number;
             completed_at: number | null;
+            is_demo: number;
           }>(
             `SELECT id, mission_id, task_id, contributor, status, accepted, score, points, summary,
-                    patch_sha256, proof_id, verify_ms, created_at, completed_at
+                    patch_sha256, proof_id, verify_ms, created_at, completed_at, is_demo
              FROM submissions WHERE mission_id = ? ORDER BY created_at DESC LIMIT ?`,
             missionId,
             limit
@@ -698,9 +732,10 @@ export class SunsteadHub extends DurableObject<HubEnv> {
             verify_ms: number;
             created_at: number;
             completed_at: number | null;
+            is_demo: number;
           }>(
             `SELECT id, mission_id, task_id, contributor, status, accepted, score, points, summary,
-                    patch_sha256, proof_id, verify_ms, created_at, completed_at
+                    patch_sha256, proof_id, verify_ms, created_at, completed_at, is_demo
              FROM submissions ORDER BY created_at DESC LIMIT ?`,
             limit
           )
@@ -717,6 +752,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         ...r,
         status,
         accepted: r.accepted !== 0,
+        is_demo: r.is_demo !== 0,
       };
     });
   }
@@ -724,8 +760,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
   private insertSubmission(rec: SubmissionRecord): void {
     this.ctx.storage.sql.exec(
       `INSERT INTO submissions
-       (id, mission_id, task_id, contributor, status, accepted, score, points, summary, patch_sha256, proof_id, verify_ms, stage, diagnostics, error, unlocked_dependents_json, created_at, completed_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, mission_id, task_id, contributor, status, accepted, score, points, summary, patch_sha256, proof_id, verify_ms, stage, diagnostics, error, unlocked_dependents_json, created_at, completed_at, is_demo)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       rec.id,
       rec.mission_id,
       rec.task_id,
@@ -743,7 +779,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       rec.error ?? null,
       rec.unlocked_dependents_json ?? null,
       rec.created_at,
-      rec.completed_at ?? null
+      rec.completed_at ?? null,
+      rec.is_demo ? 1 : 0
     );
   }
 
@@ -863,7 +900,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       .exec<{ contributor: string; mission_id: string; c: number }>(
         `SELECT contributor, mission_id, COUNT(*) AS c
          FROM submissions
-         WHERE accepted = 1
+         WHERE accepted = 1 AND is_demo = 0
          GROUP BY contributor, mission_id`
       )
       .toArray();
@@ -881,7 +918,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       .exec<{ mission_id: string; c: number }>(
         `SELECT mission_id, COUNT(*) AS c
          FROM submissions
-         WHERE contributor = ? AND accepted = 1
+         WHERE contributor = ? AND accepted = 1 AND is_demo = 0
          GROUP BY mission_id`,
         handle
       )
@@ -925,13 +962,13 @@ export class SunsteadHub extends DurableObject<HubEnv> {
            c.github AS github, c.github_verified_handle AS github_verified_handle,
            c.x_handle AS x_handle,
            c.linkedin_handle AS linkedin_handle,
-           COUNT(DISTINCT CASE WHEN s.accepted = 1 THEN s.mission_id || ':' || s.task_id END) AS verified_tasks,
-           SUM(CASE WHEN s.accepted = 1 THEN 1 ELSE 0 END) AS accepted_submissions,
-           SUM(CASE WHEN s.status != 'verifying' THEN 1 ELSE 0 END) AS total_submissions,
-           SUM(CASE WHEN s.accepted = 1 THEN s.points ELSE 0 END) AS base_points
+           COUNT(DISTINCT CASE WHEN s.accepted = 1 AND s.is_demo = 0 THEN s.mission_id || ':' || s.task_id END) AS verified_tasks,
+           SUM(CASE WHEN s.accepted = 1 AND s.is_demo = 0 THEN 1 ELSE 0 END) AS accepted_submissions,
+           SUM(CASE WHEN s.status != 'verifying' AND s.is_demo = 0 THEN 1 ELSE 0 END) AS total_submissions,
+           SUM(CASE WHEN s.accepted = 1 AND s.is_demo = 0 THEN s.points ELSE 0 END) AS base_points
          FROM submissions s
          LEFT JOIN contributors c ON c.handle = s.contributor
-         WHERE s.status != 'verifying'
+         WHERE s.status != 'verifying' AND s.is_demo = 0
          GROUP BY s.contributor`
       )
       .toArray();
@@ -1714,7 +1751,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         `SELECT a.seq, a.mission_id, a.task_id, a.submission_id, a.contributor,
                 COALESCE(c.display_name, a.contributor) AS display_name,
                 c.github AS github, c.github_verified_handle AS github_verified_handle, c.x_handle AS x, c.linkedin_handle AS linkedin,
-                a.summary, a.patch, a.spec_sha256, a.created_at, s.verify_ms AS verify_ms, a.audit_json AS audit_json
+                a.summary, a.patch, a.spec_sha256, a.created_at, s.verify_ms AS verify_ms, a.audit_json AS audit_json, a.is_demo AS is_demo
          FROM accepted_patches a
          LEFT JOIN contributors c ON c.handle = a.contributor
          LEFT JOIN submissions s ON s.id = a.submission_id
@@ -1761,7 +1798,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     SELECT a.seq, a.mission_id, a.task_id, a.submission_id, a.contributor,
            COALESCE(c.display_name, a.contributor) AS display_name,
            c.github AS github, c.github_verified_handle AS github_verified_handle, c.x_handle AS x, c.linkedin_handle AS linkedin,
-           a.summary, a.patch, a.patch_sha256, a.spec_sha256, a.created_at, s.verify_ms AS verify_ms, a.audit_json AS audit_json
+           a.summary, a.patch, a.patch_sha256, a.spec_sha256, a.created_at, s.verify_ms AS verify_ms, a.audit_json AS audit_json, a.is_demo AS is_demo
     FROM accepted_patches a
     LEFT JOIN contributors c ON c.handle = a.contributor
     LEFT JOIN submissions s ON s.id = a.submission_id`;
@@ -2256,6 +2293,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         error: summary,
         created_at: now,
         completed_at: now,
+        is_demo: Boolean(mission.manifest.demo),
       });
       this.emit({
         kind: "submission_rejected",
@@ -2289,6 +2327,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       verify_ms: 0,
       created_at: now,
       completed_at: null,
+      is_demo: Boolean(mission.manifest.demo),
     });
 
     this.emit({
@@ -2600,8 +2639,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         });
         this.ctx.storage.sql.exec(
           `INSERT INTO accepted_patches
-           (mission_id, task_id, submission_id, contributor, summary, patch, spec_sha256, created_at, patch_sha256)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (mission_id, task_id, submission_id, contributor, summary, patch, spec_sha256, created_at, patch_sha256, is_demo)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           missionId,
           taskId,
           subId,
@@ -2610,7 +2649,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
           storedPatch,
           mission.spec_sha256,
           finishedAt,
-          storedPatchSha
+          storedPatchSha,
+          mission.manifest.demo ? 1 : 0
         );
 
         this.emit({
