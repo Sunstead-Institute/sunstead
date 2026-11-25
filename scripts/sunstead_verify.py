@@ -412,13 +412,20 @@ def split_statement(d):
     return d.raw[:cut], d.raw[cut:]
 
 
-def extract_contribution(seed: str, proved: str, theorem: str) -> dict:
+def extract_contribution(seed: str, proved: str, theorem: str, allow_restated: bool = False) -> dict:
+    """The proof, helpers and imports a patch adds. With `allow_restated`, a proved
+    file whose statement text differs from the seed's is accepted: only its proof
+    is used, under the upstream statement, and the build's reference check decides."""
     seed_decls, proved_decls = split_declarations(seed), split_declarations(proved)
     seed_target, proved_target = find_decl(seed_decls, theorem), find_decl(proved_decls, theorem)
     seed_stmt, _ = split_statement(seed_target)
     proved_stmt, proof = split_statement(proved_target)
-    if norm_statement(seed_stmt) != norm_statement(proved_stmt):
-        raise VerifyError("the accepted file changed the frozen statement")
+    restated = norm_statement(seed_stmt) != norm_statement(proved_stmt)
+    if restated and not allow_restated:
+        raise VerifyError(
+            "the accepted file changed the frozen statement text:\n"
+            f"  frozen:   {norm_statement(seed_stmt)[:300]}\n  accepted: {norm_statement(proved_stmt)[:300]}"
+        )
     if SORRY_RE.search(mask_comments_and_strings(proof)):
         raise VerifyError("accepted proof still contains `sorry`")
     seed_names = {d.name for d in seed_decls}
@@ -433,6 +440,7 @@ def extract_contribution(seed: str, proved: str, theorem: str) -> dict:
     new_opens = [o for o in re.findall(r"^open\b.*$", proved, re.M) if o not in seed_opens]
     return {
         "statement": seed_stmt,
+        "statement_restated": restated,
         "proof": proof.rstrip(),
         "helpers": [decl_text_with_header(proved, d) for d in helpers],
         "helper_names": [d.name for d in helpers],
@@ -444,8 +452,9 @@ def extract_contribution(seed: str, proved: str, theorem: str) -> dict:
 
 def transplant(upstream_src: str, mission: dict, contrib: dict) -> tuple:
     """Upstream file text with the proof (and helpers, imports) put in place, the
-    upstream declaration, and the 1-based (first, last) lines of the new helpers
-    plus declaration."""
+    upstream declaration, the 1-based (first, last) lines of the new helpers plus
+    declaration, and the reference statement to build alongside (see
+    `reference_statement`; not part of the text, add it with `with_reference`)."""
     decls = split_declarations(upstream_src)
     a, b = mission["upstream_lines"]
     hits = [d for d in decls if d.start_line <= b and d.end_line >= a and d.sorry_lines]
@@ -483,7 +492,42 @@ def transplant(upstream_src: str, mission: dict, contrib: dict) -> tuple:
         imp = [m.end() for m in re.finditer(r"^import\s+\S+[^\n]*\n", text, re.M)]
         at = imp[-1] if imp else 0
         text = text[:at] + "".join(f"import {m}\n" for m in added_imports) + text[at:]
-    return text, d, span
+    ref = reference_statement(d, up_stmt, lines, masked, header_start)
+    ref["at"] = header_start + shift  # 0-based line index in `text`, above helpers and header
+    return text, d, span, ref
+
+
+REF_SUFFIX = "sunsteadRefStatement"
+REF_DECL_RE = re.compile(
+    r"^(?:@\[[^\n]*?\]\s*)*(?P<mods>(?:(?:" + "|".join(MODIFIERS) + r")\s+)*)"
+    r"(?P<kind>theorem|lemma)\b\s*(?P<name>[^\s:({\[⦃]+)"
+)
+
+
+def reference_statement(d, up_stmt: str, lines, masked, header_start: int) -> dict:
+    """A sorry'd copy of the pristine upstream statement under a fresh name, placed
+    above the contributed helpers. The checker requires the spliced theorem's
+    type to be identical to it, so a helper (an `instance`, or a `def` that
+    shadows a name) cannot change what the upstream statement means."""
+    m = REF_DECL_RE.match(up_stmt)
+    if not m or m.group("name").endswith("."):
+        raise VerifyError(f"cannot restate `{d.name}` for the statement check (only `theorem`/`lemma` are supported)")
+    src_name = m.group("name")
+    prefix = src_name.rsplit(".", 1)[0] + "." if "." in src_name else ""
+    full_prefix = d.name.rsplit(".", 1)[0] + "." if "." in d.name else ""
+    body = f"{m.group('mods')}theorem {prefix}{REF_SUFFIX}" + up_stmt[m.end():]
+    # Keep `set_option ... in` / `open ... in` prefixes: they change how the statement elaborates.
+    scoped = [
+        lines[i] for i in range(header_start, d.start_line - 1)
+        if SCOPED_PREFIX_RE.match(masked[i].strip())
+    ]
+    ref_lines = scoped + (body.rstrip() + " := sorry").split("\n") + [""]
+    return {"name": full_prefix + REF_SUFFIX, "lines": ref_lines}
+
+
+def with_reference(text: str, ref: dict) -> str:
+    lines = text.split("\n")
+    return "\n".join(lines[: ref["at"]] + ref["lines"] + lines[ref["at"]:])
 
 
 # ---------------------------------------------------------------- build & checks
@@ -515,7 +559,7 @@ def parseLeanName (s : String) : Name :=
 
 def main (args : List String) : IO UInt32 := do
   match args with
-  | [modStr, declStr] =>
+  | modStr :: declStr :: refStrs =>
     let mod := parseLeanName modStr
     let decl := parseLeanName declStr
     initSearchPath (← findSysroot)
@@ -528,6 +572,18 @@ def main (args : List String) : IO UInt32 := do
     | none =>
       IO.println s!"MISSING {decl}"
       return 4
+    -- The spliced theorem must state exactly what the pristine upstream
+    -- statement (elaborated before any contributed helper) states.
+    for refStr in refStrs do
+      let ref := parseLeanName refStr
+      match env.find? decl, env.find? ref with
+      | some d, some r =>
+        if d.type != r.type || d.levelParams != r.levelParams then
+          IO.println s!"STATEMENT_MISMATCH {ref}"
+          return 5
+      | _, _ =>
+        IO.println s!"MISSING {ref}"
+        return 4
     let ctx : Core.Context := { fileName := "<sunstead-verify>", fileMap := default }
     let (axs, _) ← (collectAxioms decl : CoreM (Array Name)).toIO ctx { env := env }
     for a in axs do
@@ -535,7 +591,7 @@ def main (args : List String) : IO UInt32 := do
     IO.println "SUNSTEAD_AXIOMS_DONE"
     return 0
   | _ =>
-    IO.eprintln "usage: lean --run check.lean <module> <declaration>"
+    IO.eprintln "usage: lean --run check.lean <module> <declaration> [<reference declaration>...]"
     return 2
 """
 
@@ -550,12 +606,24 @@ def read_axioms(output: str, decl_name: str) -> list:
         raise VerifyError(f"{decl_name} is not a theorem after the build")
     if f"MISSING {decl_name}" in output:
         raise VerifyError(f"{decl_name} not found in the built module")
+    if "STATEMENT_MISMATCH " in output:
+        raise VerifyError(
+            f"{decl_name} no longer states what the upstream statement states: with the contributed helpers "
+            "in scope it elaborates to a different type than the pristine copy built above them"
+        )
+    for line in output.splitlines():
+        if line.startswith("MISSING "):
+            raise VerifyError(f"{line[len('MISSING '):]} not found in the built module")
     if "SUNSTEAD_AXIOMS_DONE" not in output:
         raise VerifyError("axiom checker did not finish")
     return [l[len("AXIOM "):].strip() for l in output.splitlines() if l.startswith("AXIOM ")]
 
 
-def build_and_check(updir: str, mission: dict, decl_name: str, lint_cmds, log: list, scratch: str) -> dict:
+def build_and_check(updir: str, mission: dict, decl_name: str, log: list, scratch: str,
+                    ref_name: str = None) -> dict:
+    """Build the module and check the declaration. `ref_name` is the reference
+    statement written into the file by `with_reference`; without it the type
+    check against the pristine statement is skipped."""
     checks = {}
     run(["lake", "exe", "cache", "get"], updir, check=False, timeout=3600, log=log)
     module = lean_module(mission["upstream_path"])
@@ -573,19 +641,26 @@ def build_and_check(updir: str, mission: dict, decl_name: str, lint_cmds, log: l
     checker = os.path.join(scratch, "sunstead_axiom_check.lean")  # outside the upstream checkout
     with open(checker, "w", encoding="utf-8") as f:
         f.write(AXIOM_CHECKER)
-    p = run(["lake", "env", "lean", "--run", checker, module, decl_name], updir, check=False, timeout=3600, log=log)
-    if p.returncode not in (0, 3, 4):
+    argv = ["lake", "env", "lean", "--run", checker, module, decl_name] + ([ref_name] if ref_name else [])
+    p = run(argv, updir, check=False, timeout=3600, log=log)
+    checks["statement_matches_upstream"] = bool(ref_name) and p.returncode == 0
+    if p.returncode not in (0, 3, 4, 5):
         raise VerifyError(f"axiom checker failed for {decl_name}:\n{tail(p)}")
     axioms = read_axioms(p.stdout, decl_name)
     checks["axioms"] = axioms
     bad = sorted(set(axioms) - STANDARD_AXIOMS)
     if bad:
         raise VerifyError(f"{decl_name} depends on non-standard axioms: {bad}")
-    checks["lint"] = []
+    return checks
+
+
+def run_lints(updir: str, lint_cmds, log: list) -> list:
+    """Extra maintainer checks, run on the checkout as it will be proposed."""
+    results = []
     for cmd in lint_cmds:
         p = run(["bash", "-c", cmd], updir, check=False, timeout=3600, log=log)
-        checks["lint"].append({"cmd": cmd, "ok": p.returncode == 0})
-    return checks
+        results.append({"cmd": cmd, "ok": p.returncode == 0})
+    return results
 
 # ---------------------------------------------------------------- public verification
 
@@ -690,7 +765,10 @@ def verify(args) -> dict:
         if up.get("repo") and (up.get("repo"), up.get("commit")) != (mission["upstream"]["repo"], mission["upstream"]["commit"]):
             raise VerifyError("ledger upstream and the seed bundle's UPSTREAM.json disagree")
         seed, proved = proved_file(mission, proof["patch"], scratch)
-        contrib = extract_contribution(seed, proved, mission["theorem"])
+        # The accepted file may restate the theorem (say, a shorter name inside a
+        # namespace); only its proof is used, under the upstream statement, and with
+        # a build the reference check confirms the type is unchanged.
+        contrib = extract_contribution(seed, proved, mission["theorem"], allow_restated=True)
         if not args.allow_metaprogramming:
             check_no_metaprogramming(contrib)
         updir = os.path.join(scratch, "upstream")
@@ -700,15 +778,21 @@ def verify(args) -> dict:
         target = os.path.join(updir, mission["upstream_path"])
         if not os.path.isfile(target):
             raise VerifyError(f"{mission['upstream_path']} not in upstream at the pinned commit")
-        new_src, decl, span = transplant(read(target), mission, contrib)
-        with open(target, "w", encoding="utf-8") as f:
-            f.write(new_src)
+        new_src, decl, span, ref = transplant(read(target), mission, contrib)
         checks = {}
-        if not args.no_build:
+        if args.no_build:
+            with open(target, "w", encoding="utf-8") as f:
+                f.write(new_src)
+        else:
+            with open(target, "w", encoding="utf-8") as f:
+                f.write(with_reference(new_src, ref))
             print(f"Building {lean_module(mission['upstream_path'])} (can take a while) ...", file=sys.stderr)
-            checks = build_and_check(updir, mission, decl.name, [], log, scratch)
-            if any(span[0] <= ln <= span[1] for ln in checks["sorry_warnings_in_file"]):
+            checks = build_and_check(updir, mission, decl.name, log, scratch, ref_name=ref["name"])
+            shift = len(ref["lines"])
+            if any(span[0] + shift <= ln <= span[1] + shift for ln in checks["sorry_warnings_in_file"]):
                 raise VerifyError(f"{decl.name} (or a helper) still reports `sorry` after the build")
+            with open(target, "w", encoding="utf-8") as f:
+                f.write(new_src)  # --keep gets the checkout without the reference statement
         if args.keep:
             kept = os.path.abspath(args.keep)
             shutil.copytree(updir, kept, symlinks=True)
@@ -724,6 +808,7 @@ def verify(args) -> dict:
         "upstream_lines": list(span),
         "helpers": contrib["helper_names"],
         "new_imports": contrib["new_imports"],
+        "statement_restated": contrib["statement_restated"],
         "axioms": checks.get("axioms"),
     }
 
@@ -769,6 +854,8 @@ def main(argv=None) -> int:
         print(f"STATEMENT MATCHES upstream, proof spliced in, NOT BUILT (--no-build): {result['upstream_declaration']} ({where})")
     if result["helpers"]:
         print(f"  helper lemmas added: {', '.join(result['helpers'])}")
+    if result["statement_restated"]:
+        print("  note: the accepted file restates the theorem in different words; its proof was checked under the upstream statement")
     return 0
 
 

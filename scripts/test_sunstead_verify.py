@@ -135,11 +135,19 @@ class VerifyTests(fx.ExportTests.__base__):
         self.assertEqual(code, 1)
         self.assertIn("not the requested id", err)
 
-    def test_rejects_changed_statement_and_upstream_mismatch(self):
-        bad = fx.PROVED_FILE.replace("liouville = 1 := by\n  --", "liouville = liouville := by\n  --")
-        code, err, _ = self.run_verify(self.proof_with(fx.make_patch("M1/Mult.lean", fx.SEED_FILE, bad)))
-        self.assertEqual(code, 1)
-        self.assertIn("changed the frozen statement", err)
+    def test_restated_theorem_uses_the_upstream_statement(self):
+        # Only the proof is taken: the spliced declaration keeps the upstream
+        # statement verbatim, and a real build's reference check decides.
+        restated = fx.PROVED_FILE.replace("liouville = 1 := by\n  --", "M1.liouville = 1 := by\n  --")
+        keep = os.path.join(self.tmp.name, "kept")
+        code, err, out = self.run_verify(
+            self.proof_with(fx.make_patch("M1/Mult.lean", fx.SEED_FILE, restated)), extra=("--no-build", "--keep", keep)
+        )
+        self.assertEqual(code, 0, err)
+        self.assertIn("restates the theorem", out)
+        self.assertIn("lemma isCM_liouville :\n    liouville = 1 := by\n  -- the actual proof", fx.read(os.path.join(keep, "Up", "Ch1.lean")))
+
+    def test_rejects_upstream_mismatch(self):
         # A seed whose statement differs from upstream (a dishonest or stale hub) is caught upstream-side.
         seed2 = fx.SEED_FILE.replace("liouville = 1", "liouville = 2")
         self.write_mission(seed=seed2)
@@ -230,6 +238,45 @@ class VerifyTests(fx.ExportTests.__base__):
         self.assertIn("`lake` not found", err)
         self.assertIn("elan", err)
 
+    def test_reference_statement_is_the_pristine_upstream_statement(self):
+        src = fx.UPSTREAM_FILE
+        mission = sv.load_mission(self.missions, self.proof)
+        seed, proved = sv.proved_file(mission, self.proof["patch"], self.tmp.name)
+        contrib = sv.extract_contribution(seed, proved, mission["theorem"])
+        text, decl, span, ref = sv.transplant(src, mission, contrib)
+        self.assertEqual(ref["name"], "Up.sunsteadRefStatement")
+        self.assertEqual(ref["lines"], ["theorem sunsteadRefStatement :", "    liouville = 1 := sorry", ""])
+        full = sv.with_reference(text, ref).split("\n")
+        at = full.index("theorem sunsteadRefStatement :")
+        helper = full.index("theorem helper_one : (1 : Nat) = 1 := rfl")
+        self.assertLess(at, helper, "reference is elaborated before any contributed helper")
+        self.assertEqual(full[span[0] - 1 + len(ref["lines"])], "/-- A helper the contributor added. -/")
+        self.assertNotIn("sunsteadRefStatement", text, "the proposed file never contains the reference")
+
+    def test_reference_keeps_scoped_prefixes_modifiers_and_dotted_names(self):
+        class D:  # minimal stand-in for a parsed declaration
+            name = "Patel2020.v1.challenge_x"
+            start_line = 3
+        lines = ["", "set_option maxHeartbeats 400000 in", "private theorem Patel2020.v1.challenge_x : P := by", "  sorry"]
+        ref = sv.reference_statement(D, "@[simp] private theorem Patel2020.v1.challenge_x : P ", lines, lines, 1)
+        self.assertEqual(ref["name"], "Patel2020.v1.sunsteadRefStatement")
+        self.assertEqual(ref["lines"], [
+            "set_option maxHeartbeats 400000 in",
+            "private theorem Patel2020.v1.sunsteadRefStatement : P := sorry", "",
+        ])
+        D.name = "foo"
+        with self.assertRaises(sv.VerifyError):
+            sv.reference_statement(D, "def foo : Nat ", lines, lines, 1)
+
+    def test_checker_compares_against_the_reference(self):
+        self.assertIn("STATEMENT_MISMATCH", sv.AXIOM_CHECKER)
+        self.assertIn("d.type != r.type", sv.AXIOM_CHECKER)
+        with self.assertRaises(sv.VerifyError) as cm:
+            sv.read_axioms("STATEMENT_MISMATCH Up.sunsteadRefStatement\n", "Up.isCM_liouville")
+        self.assertIn("no longer states", str(cm.exception))
+        with self.assertRaises(sv.VerifyError):
+            sv.read_axioms("MISSING Up.sunsteadRefStatement\nSUNSTEAD_AXIOMS_DONE\n", "Up.isCM_liouville")
+
     def test_bad_proof_id_argument(self):
         err = io.StringIO()
         with contextlib.redirect_stderr(err):
@@ -243,6 +290,52 @@ class VerifyTests(fx.ExportTests.__base__):
             code = sv.main(["ab" * 32, "--hub", "http://example.com"])
         self.assertEqual(code, 1)
         self.assertIn("non-https", err.getvalue())
+
+
+@unittest.skipUnless(sv.shutil.which("lake"), "needs a Lean toolchain (lake on PATH)")
+class PublicBuildTests(unittest.TestCase):
+    """verify.py end to end with `lake build`, on export's core-Lean-only fixture."""
+
+    setUp = fx.BuildTests.setUp
+    make_fixture = fx.BuildTests.make_fixture
+    tearDown = fx.BuildTests.tearDown
+
+    def run_public(self, proved):
+        patch = fx.make_patch("M1/Mult.lean", self.seed, proved)
+        t = self.tmp.name
+        pj, bj = os.path.join(t, "proof.json"), os.path.join(t, "seed.tar.gz")
+        fx.write(pj, json.dumps({
+            "proof_id": hashlib.sha256(patch.encode()).hexdigest(), "mission_id": "m1", "task_id": "is_cm",
+            "patch": patch, "upstream": {"repo": "o/up", "commit": self.sha},
+        }))
+        with open(bj, "wb") as f:
+            f.write(tar_of(os.path.join(self.missions, "m1")))
+        err, out = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stderr(err), contextlib.redirect_stdout(out):
+            code = sv.main(["--proof-json", pj, "--seed-bundle", bj, "--upstream-url", "file://" + self.up, "--json"])
+        return code, err.getvalue(), out.getvalue()
+
+    def test_verifies_against_upstream(self):
+        proved = fx.CORE_SEED.replace("liouville = 1 := by\n  sorry", "liouville = 1 := by\n  rfl")
+        code, err, out = self.run_public(proved)
+        self.assertEqual(code, 0, err)
+        r = json.loads(out)
+        self.assertTrue(r["verified"])
+        self.assertEqual(r["axioms"], [])
+
+    def test_rejects_meaning_changing_instance(self):
+        self.tmp.cleanup()
+        self.make_fixture(
+            fx.CORE_UPSTREAM.replace("liouville = 1 := by", "liouville ≤ 0 := by"),
+            seed=fx.CORE_SEED.replace("liouville = 1 := by", "liouville ≤ 0 := by"),
+        )
+        proved = self.seed.replace(
+            "/-- Open", "theorem helper_ok : True := trivial\n\n"
+            "instance (priority := high) cheatLE : LE Nat := ⟨fun _ _ => True⟩\n\n/-- Open"
+        ).replace("liouville ≤ 0 := by\n  sorry", "liouville ≤ 0 := by\n  trivial")
+        code, err, _ = self.run_public(proved)
+        self.assertEqual(code, 1, err)
+        self.assertIn("no longer states what the upstream statement states", err)
 
 
 if __name__ == "__main__":

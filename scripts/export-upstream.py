@@ -142,14 +142,20 @@ def export(args) -> dict:
             if not os.path.isfile(target):
                 raise ExportError(f"{mission['upstream_path']} not in upstream at the pinned commit")
             src = read(target)
-            new_src, decl, span = transplant(src, mission, contrib)
-            with open(target, "w", encoding="utf-8") as f:
-                f.write(new_src)
+            new_src, decl, span, ref = transplant(src, mission, contrib)
             checks = {}
             if not args.no_build:
-                checks = build_and_check(updir, mission, decl.name, args.lint_cmd or [], log, scratch)
-                if any(span[0] <= ln <= span[1] for ln in checks["sorry_warnings_in_file"]):
+                # Build with the pristine reference statement in place, then drop it from the diff.
+                with open(target, "w", encoding="utf-8") as f:
+                    f.write(sv.with_reference(new_src, ref))
+                checks = build_and_check(updir, mission, decl.name, log, scratch, ref_name=ref["name"])
+                shift = len(ref["lines"])
+                if any(span[0] + shift <= ln <= span[1] + shift for ln in checks["sorry_warnings_in_file"]):
                     raise ExportError(f"{decl.name} (or a helper) still reports `sorry` after the build")
+            with open(target, "w", encoding="utf-8") as f:
+                f.write(new_src)
+            if not args.no_build:
+                checks["lint"] = sv.run_lints(updir, args.lint_cmd or [], log)
             diff = run([*GIT, "diff", "--no-color"], updir).stdout
             os.makedirs(out, exist_ok=True)
             with open(os.path.join(out, "upstream.patch"), "w", encoding="utf-8") as f:

@@ -432,7 +432,8 @@ class BuildTests(unittest.TestCase):
     def setUp(self):
         self.make_fixture(CORE_UPSTREAM)
 
-    def make_fixture(self, upstream_text):
+    def make_fixture(self, upstream_text, seed=None):
+        self.seed = seed or CORE_SEED
         self.tmp = tempfile.TemporaryDirectory()
         t = self.tmp.name
         self.up = os.path.join(t, "upstream")
@@ -463,7 +464,7 @@ class BuildTests(unittest.TestCase):
         }))
         write(os.path.join(m, "UPSTREAM.json"), json.dumps({"repo": "o/up", "commit": self.sha, "license": "Apache-2.0"}))
         write(os.path.join(m, "verify"), VERIFY)
-        write(os.path.join(m, "M1", "Mult.lean"), CORE_SEED)
+        write(os.path.join(m, "M1", "Mult.lean"), self.seed)
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -471,7 +472,7 @@ class BuildTests(unittest.TestCase):
     def export_with(self, proved, extra=()):
         pj = os.path.join(self.tmp.name, "proof.json")
         write(pj, json.dumps({"mission_id": "m1", "task_id": "is_cm", "spec_is_current": True,
-                              "patch": make_patch("M1/Mult.lean", CORE_SEED, proved)}))
+                              "patch": make_patch("M1/Mult.lean", self.seed, proved)}))
         self.out = os.path.join(self.tmp.name, "bundle")
         err, out = io.StringIO(), io.StringIO()
         with contextlib.redirect_stderr(err), contextlib.redirect_stdout(out):
@@ -489,7 +490,25 @@ class BuildTests(unittest.TestCase):
         self.assertTrue(meta["built"])
         self.assertTrue(meta["checks"]["lake_build"])
         self.assertEqual(meta["checks"]["axioms"], [])
+        self.assertTrue(meta["checks"]["statement_matches_upstream"])
         self.assertEqual(meta["checks"]["lint"], [{"cmd": "test -f lakefile.toml", "ok": True}])
+        self.assertNotIn("sunsteadRefStatement", read(os.path.join(self.out, "upstream.patch")))
+
+    def test_rejects_helper_that_changes_what_the_statement_means(self):
+        # A high-priority `LE Nat` instance among the helpers would make the upstream
+        # statement `liouville ≤ 0` (false) elaborate to `True`. The pristine
+        # reference copy, built above the helpers, catches it.
+        self.tmp.cleanup()
+        self.make_fixture(
+            CORE_UPSTREAM.replace("liouville = 1 := by", "liouville ≤ 0 := by"),
+            seed=CORE_SEED.replace("liouville = 1 := by", "liouville ≤ 0 := by"),
+        )
+        proved = self.seed.replace(
+            "/-- Open", "instance (priority := high) cheatLE : LE Nat := ⟨fun _ _ => True⟩\n\n/-- Open"
+        ).replace("liouville ≤ 0 := by\n  sorry", "liouville ≤ 0 := by\n  trivial")
+        code, err, _ = self.export_with(proved)
+        self.assertEqual(code, 1, err)
+        self.assertIn("no longer states what the upstream statement states", err)
         self.assertIn("lake build Up.Ch1`: ok", read(os.path.join(self.out, "PR_BODY.md")))
 
     def test_rejects_a_proof_that_does_not_compile(self):

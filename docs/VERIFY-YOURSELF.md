@@ -26,8 +26,9 @@ none, because they have no single upstream declaration to check against.
    name is read from the `verify` script's `TASKS` table with `ast`.
 3. Applies the accepted patch (it may only change the task's target file, with
    no mode changes or symlinks), and extracts the proof, any helper lemmas added
-   above it and any new imports. The frozen statement must be unchanged and
-   nothing may contain `sorry`.
+   above it and any new imports. Nothing may contain `sorry`. Only the proof is
+   taken: if the accepted file restates the theorem in different words (say, a
+   shorter name inside a `namespace`), the upstream statement is used anyway.
 4. Clones the upstream repository from GitHub at the pinned 40-character commit,
    finds the declaration at the task's `upstream_url`, and requires its name and
    statement to match (comments, whitespace and attributes ignored). The ledger
@@ -39,6 +40,12 @@ none, because they have no single upstream declaration to check against.
    `importModules (loadExts := false)` and `collectAxioms`, so no elaborator in
    the upstream or contributed code can rewrite the report. Only `propext`,
    `Classical.choice` and `Quot.sound` pass.
+6. Builds a second, `sorry`'d copy of the pristine upstream statement
+   (`<namespace>.sunsteadRefStatement`) in the same file, *above* the
+   contributed helpers, and requires the spliced theorem's type to be
+   identical to it. A helper `instance` or a `def` that shadows a name could
+   otherwise change what the upstream statement means. The reference copy is
+   only there during the build.
 
 Exit status: 0 verified, 1 a check failed, 2 usage or environment problem,
 3 not checkable automatically (the upstream `sorry` sits inside a larger
