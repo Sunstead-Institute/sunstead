@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: What is Sunstead? (Plain-English Explainer & Trust Model)
+    url: https://sunstead.org/what-is-this
+    about: Learn how Sunstead verifies proofs with Lean 4 kernel replay and verbatim upstream specs.
