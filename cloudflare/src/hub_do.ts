@@ -13,6 +13,8 @@ import {
   filesStateSha256,
   renderMbox,
   type AcceptedPatch,
+  buildProofView,
+  type AcceptedProofRow,
 } from "./core";
 import { SEED_MISSIONS, type SeedMission } from "./generated/missions";
 import { renderJoinTxt } from "./join_txt";
@@ -861,6 +863,15 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       return this.handleHistory(decodeURIComponent(historyMatch[1]), historyMatch[2] === ".mbox");
     }
 
+    const proofMatch = path.match(/^\/api\/missions\/([^/]+)\/tasks\/([^/]+)\/proof$/);
+    if (method === "GET" && proofMatch) {
+      return this.handleProof(
+        decodeURIComponent(proofMatch[1]),
+        decodeURIComponent(proofMatch[2]),
+        url.origin
+      );
+    }
+
     if (method === "GET" && path === "/api/stats") {
       return jsonResp(this.computeStats());
     }
@@ -1187,6 +1198,37 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         created_at: r.created_at,
       })),
     });
+  }
+
+  /** Latest accepted proof for one task, for the inspector's "View verified proof" panel. */
+  private async handleProof(missionId: string, taskId: string, hubOrigin: string): Promise<Response> {
+    const mission = this.getMissionRow(missionId);
+    if (!mission) return jsonResp({ error: `unknown mission: ${missionId}` }, 404);
+    const rows = this.ctx.storage.sql
+      .exec<AcceptedProofRow>(
+        `SELECT a.seq, a.mission_id, a.task_id, a.submission_id, a.contributor,
+                COALESCE(c.display_name, a.contributor) AS display_name, c.github AS github,
+                a.summary, a.patch, a.spec_sha256, a.created_at, s.verify_ms AS verify_ms
+         FROM accepted_patches a
+         LEFT JOIN contributors c ON c.handle = a.contributor
+         LEFT JOIN submissions s ON s.id = a.submission_id
+         WHERE a.mission_id = ? AND a.task_id = ?
+         ORDER BY a.seq DESC LIMIT 1`,
+        missionId,
+        taskId
+      )
+      .toArray();
+    if (rows.length === 0) {
+      return jsonResp({ error: `no accepted proof for ${missionId}/${taskId}` }, 404);
+    }
+    const row = rows[0];
+    return jsonResp(
+      buildProofView(row, {
+        hubOrigin,
+        currentSpecSha256: mission.spec_sha256,
+        patchSha256: await sha256Hex(row.patch),
+      })
+    );
   }
 
   /** Contributor funnel: registered -> claimed -> submitted -> verified. */

@@ -1219,3 +1219,66 @@ code, pre { font-family: var(--mono); }
   .pillars-inner { grid-template-columns: 1fr; }
   .hero-metrics { grid-template-columns: 1fr; width: 100%; }
 }
+
+/* ================= VERIFIED PROOF VIEWER ================= */
+.proof-panel {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--bone-rule-strong);
+}
+.proof-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.proof-kicker {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--teal);
+}
+.proof-by { font-family: var(--serif); font-size: 19px; color: var(--indigo); margin-top: 2px; }
+.proof-by code { font-size: 11px; }
+.proof-link { color: var(--teal); text-decoration: none; font-family: var(--sans); font-size: 12px; }
+.proof-warn {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  background: var(--gold-soft);
+  color: var(--gold-deep);
+}
+.proof-summary { margin: 10px 0 0; }
+.proof-block { margin-top: 14px; }
+.proof-block-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.proof-block-head .kv-label { margin: 0; overflow-wrap: anywhere; }
+.proof-head .btn-outline-ink { text-decoration: none; }
+.proof-copy { padding: 5px 11px; font-size: 11px; flex-shrink: 0; }
+.proof-diff,
+.proof-cmd {
+  margin: 0;
+  max-height: 420px;
+  overflow: auto;
+  background: var(--indigo-deep);
+  color: var(--bone);
+  border-radius: 4px;
+  padding: 12px 0;
+  font-size: 12px;
+  line-height: 1.55;
+  font-variant-ligatures: none; /* show Lean source exactly as written (no => / -> ligatures) */
+}
+.proof-cmd { padding: 12px 14px; white-space: pre-wrap; word-break: break-all; max-height: none; }
+.diff-line { display: block; padding: 0 14px; white-space: pre; min-width: max-content; }
+.diff-meta { color: var(--gold); }
+.diff-hunk { color: var(--teal-bright); background: rgba(74, 166, 168, 0.08); }
+.diff-add { color: #CDEBD9; background: rgba(42, 125, 127, 0.28); }
+.diff-del { color: #F1C9C9; background: rgba(180, 67, 67, 0.22); }
+.diff-ctx { color: rgba(244, 241, 234, 0.78); }
