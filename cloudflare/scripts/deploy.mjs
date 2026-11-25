@@ -52,7 +52,14 @@ function listFiles(abs) {
   if (st.isFile()) return [abs];
   const out = [];
   for (const entry of fs.readdirSync(abs, { withFileTypes: true })) {
-    if (entry.name === ".lake" || entry.name === "__pycache__" || entry.name === ".DS_Store") continue;
+    if (
+      entry.name === ".git" ||
+      entry.name === ".lake" ||
+      entry.name === "__pycache__" ||
+      entry.name === ".DS_Store"
+    ) {
+      continue;
+    }
     out.push(...listFiles(path.join(abs, entry.name)));
   }
   return out;
@@ -81,15 +88,36 @@ function run(cmd, args, opts = {}) {
 
 /** Find `configuration.image` of the live verifier application. */
 export function imageFromApplications(stdout) {
-  const start = stdout.search(/[[{]/);
-  if (start < 0) throw new Error("no JSON in `cf containers applications list` output");
-  const parsed = JSON.parse(stdout.slice(start));
+  let parsed;
+  const re = /^[ \t]*[[{]/gm;
+  for (const m of stdout.matchAll(re)) {
+    try {
+      const candidate = JSON.parse(stdout.slice(m.index));
+      if (candidate && typeof candidate === "object") {
+        parsed = candidate;
+        break;
+      }
+    } catch {}
+  }
+  if (parsed === undefined) {
+    throw new Error("no JSON in `cf containers applications list` output");
+  }
   const apps = Array.isArray(parsed) ? parsed : parsed.result ?? parsed.applications ?? parsed.items ?? [];
   const app = apps.find((a) => a?.name === APP_NAME);
   if (!app) throw new Error(`no container application named ${APP_NAME} (has a full deploy run yet?)`);
   const image = app.configuration?.image ?? app.image;
   if (typeof image !== "string") throw new Error(`${APP_NAME} has no configuration.image`);
   return image;
+}
+
+/** Build `cf deploy` args without duplicating `--containers-rollout` if caller supplied it. */
+export function buildCfDeployArgs(cfArgs) {
+  const hasRollout = cfArgs.some(
+    (a) => a === "--containers-rollout" || a.startsWith("--containers-rollout=")
+  );
+  return hasRollout
+    ? ["cf", "deploy", ...cfArgs]
+    : ["cf", "deploy", "--containers-rollout", "immediate", ...cfArgs];
 }
 
 function liveImage() {
@@ -104,8 +132,10 @@ function liveImage() {
 
 function main(argv) {
   const [mode, ...rest] = argv;
-  const force = rest.includes("--force");
-  const cfArgs = rest.filter((a) => a !== "--force");
+  // `--force` only overrides the worker-mode inputs-hash check; in `full` mode,
+  // forward every flag untouched to `cf deploy`.
+  const force = mode === "worker" && rest.includes("--force");
+  const cfArgs = mode === "worker" ? rest.filter((a) => a !== "--force") : rest;
   const inputs = verifierInputsHash();
 
   if (mode === "inputs") {
@@ -118,7 +148,7 @@ function main(argv) {
   }
 
   if (run("node", ["scripts/sync-assets.mjs"]) !== 0) return 1;
-  const deployArgs = ["cf", "deploy", "--containers-rollout", "immediate", ...cfArgs];
+  const deployArgs = buildCfDeployArgs(cfArgs);
   const dryRun = cfArgs.includes("--dry-run");
 
   if (mode === "full") {

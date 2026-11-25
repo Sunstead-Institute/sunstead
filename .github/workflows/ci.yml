@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 permissions:
   contents: read
 
@@ -51,6 +55,21 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+      - name: Free runner disk space for Lean 4.36 + Mathlib Docker build
+        run: |
+          df -h /
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /usr/local/.ghcup \
+            /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost \
+            /usr/local/share/powershell \
+            /usr/local/julia* \
+            /usr/share/swift
+          docker system prune -af || true
+          df -h /
       - name: Build Lean 4 verifier image (runs SunsteadCheck selftest)
         run: ./scripts/build-verifiers.sh
       - name: Red-team suite (every attack rejected, every honest control accepted)
@@ -65,4 +84,28 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -f cloudflare/containers/lean4/Dockerfile .
+      - name: Free runner disk space for Lean 4.36 + Mathlib Docker build
+        run: |
+          df -h /
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /usr/local/.ghcup \
+            /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost \
+            /usr/local/share/powershell \
+            /usr/local/julia* \
+            /usr/share/swift
+          docker system prune -af || true
+          df -h /
+      - name: Build Cloudflare Lean 4 verifier container image
+        run: docker build -t sunstead-verifier-lean4:ci -f cloudflare/containers/lean4/Dockerfile .
+      - name: Verify bundled missions & server inside container image
+        run: |
+          docker run --rm --network=none sunstead-verifier-lean4:ci sh -c '
+            test -d /missions/arklib-near-capacity-primes &&
+            test -d /missions/pnt-analytic-foundations &&
+            test -d /missions/onboarding-sandbox &&
+            python3 -m py_compile /opt/verifier_server.py
+          '
