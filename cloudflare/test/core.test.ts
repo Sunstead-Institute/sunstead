@@ -28,6 +28,8 @@ import {
   buildTaskFilesView,
   sanitizeFailureDiagnostics,
   MAX_DIAGNOSTICS_CHARS,
+  resolveVerifierKind,
+  SUPPORTED_VERIFIER_TOOLCHAINS,
   type AcceptedProofRow,
   type MissionManifest,
   type TaskState,
@@ -575,4 +577,39 @@ test("buildTaskFilesView overlays mutable target files while keeping frozen file
     "PntFoundations/Spec.lean": "def spec := 1\n",
     "lakefile.toml": "name = \"Pnt\"\n",
   });
+});
+
+// ---------------------------------------------------------------- multi-toolchain routing
+
+test("resolveVerifierKind routes by pinned toolchain or image and fails closed on unknown ones", () => {
+  assert.equal(resolveVerifierKind({ image: "sunstead/verifier-lean4:v0.2" }), "lean4");
+  assert.equal(
+    resolveVerifierKind({
+      image: "sunstead/verifier-lean4:v0.2",
+      toolchain: "leanprover/lean4:v4.36.0",
+    }),
+    "lean4"
+  );
+  assert.equal(
+    resolveVerifierKind({
+      image: "sunstead/verifier-lean4-v4.35.0:v0.1",
+      toolchain: "leanprover/lean4:v4.35.0",
+    }),
+    "lean4-v4.35.0"
+  );
+  assert.equal(resolveVerifierKind({ image: "sunstead/verifier-lean4-v4.35.0:v0.1" }), "lean4-v4.35.0");
+  assert.throws(
+    () =>
+      resolveVerifierKind({
+        image: "sunstead/verifier-lean4-v4.31.0:v0.1",
+        toolchain: "leanprover/lean4:v4.31.0",
+      }),
+    /unsupported verifier toolchain/
+  );
+  assert.throws(
+    () => resolveVerifierKind({ image: "sunstead/verifier-rust:v0.1" }),
+    /unsupported verifier image/
+  );
+  assert.equal(SUPPORTED_VERIFIER_TOOLCHAINS["lean4"].toolchain, "leanprover/lean4:v4.36.0");
+  assert.equal(SUPPORTED_VERIFIER_TOOLCHAINS["lean4-v4.35.0"].toolchain, "leanprover/lean4:v4.35.0");
 });

@@ -43,6 +43,7 @@ jobs:
           python3 -m py_compile \
             missions/verifier-common/sunstead_sandbox.py \
             missions/verifier-common/prebuild_cache.py \
+            missions/verifier-common/prebuild_snapshot.py \
             cloudflare/containers/verifier_server.py \
             scripts/check-upstream.py scripts/check-statements.py scripts/redteam.py scripts/e2e.py \
             scripts/scout-upstream.py scripts/test_scout_upstream.py \
@@ -127,9 +128,11 @@ jobs:
             /usr/share/swift
           docker system prune -af || true
           df -h /
-      - name: Build Cloudflare Lean 4 verifier container image
-        run: docker build -t sunstead-verifier-lean4:ci -f cloudflare/containers/lean4/Dockerfile .
-      - name: Verify bundled missions & server inside container image
+      - name: Build Cloudflare Lean 4 verifier container images (v4.36.0 + v4.35.0)
+        run: |
+          docker build -t sunstead-verifier-lean4:ci -f cloudflare/containers/lean4/Dockerfile .
+          docker build -t sunstead-verifier-lean4-v435:ci -f cloudflare/containers/lean4-v4.35.0/Dockerfile .
+      - name: Verify bundled missions & server inside container images
         run: |
           docker run --rm --network=none sunstead-verifier-lean4:ci sh -c '
             test -d /missions/arklib-near-capacity-primes &&
@@ -138,5 +141,12 @@ jobs:
             test -x /opt/sunstead/sunstead-check &&
             /opt/sunstead/sunstead-check selftest | grep -q "\"selftest\":\"ok\"" &&
             test "$(ls -1 /opt/sunstead/mission-cache | wc -l)" -ge 3 &&
+            python3 -m py_compile /opt/verifier_server.py
+          '
+          docker run --rm --network=none sunstead-verifier-lean4-v435:ci sh -c '
+            test -d /missions/lnsym-aes-gcm-armv8 &&
+            test -x /opt/sunstead/sunstead-check &&
+            /opt/sunstead/sunstead-check selftest | grep -q "\"selftest\":\"ok\"" &&
+            test -f /opt/sunstead/snapshots/lnsym-aes-gcm-armv8/manifest.json &&
             python3 -m py_compile /opt/verifier_server.py
           '

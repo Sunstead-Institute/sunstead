@@ -7,6 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   IMAGE_RE,
+  VERIFIER_APPS,
   buildCfDeployArgs,
   dockerfileInputs,
   imageFromApplications,
@@ -113,4 +114,32 @@ test("cloudflare.config.ts caps the Durable Object code-update delay", () => {
   assert.match(src, /code_update_strategy:\s*\{\s*mode:\s*"deferred",\s*max_delay:\s*DO_CODE_UPDATE_MAX_DELAY_SEC\s*\}/);
   const delay = Number(src.match(/const DO_CODE_UPDATE_MAX_DELAY_SEC = (\d+);/)?.[1]);
   assert.ok(delay > 0 && delay <= 60, `max_delay ${delay}s should be short`);
+});
+
+test("multi-toolchain deploy tracks both v4.36.0 and v4.35.0 verifier container inputs", () => {
+  const names = VERIFIER_APPS.map((a) => a.name);
+  assert.deepEqual(names, ["sunstead-verifier-lean4", "sunstead-verifier-lean4-v435"]);
+  const v435Inputs = dockerfileInputs(
+    fs.readFileSync(path.join(CF_ROOT, "containers/lean4-v4.35.0/Dockerfile"), "utf8")
+  );
+  for (const expected of [
+    "missions/lnsym-aes-gcm-armv8",
+    "missions/verifier-common/sunstead_sandbox.py",
+    "missions/verifier-common/SunsteadCheck.lean",
+    "missions/verifier-common/prebuild_snapshot.py",
+    "cloudflare/containers/verifier_server.py",
+  ]) {
+    assert.ok(v435Inputs.includes(expected), `${expected} missing from ${v435Inputs.join(", ")}`);
+  }
+  const v435Img = IMAGE.replace("sunstead-verifier-lean4", "sunstead-verifier-lean4-v435");
+  assert.equal(
+    imageFromApplications(
+      JSON.stringify([
+        { name: "sunstead-verifier-lean4", configuration: { image: IMAGE } },
+        { name: "sunstead-verifier-lean4-v435", configuration: { image: v435Img } },
+      ]),
+      "sunstead-verifier-lean4-v435"
+    ),
+    v435Img
+  );
 });
