@@ -17,6 +17,14 @@ import {
   howToRebuild,
   sseHello,
   SSE_RETRY_MS,
+  buildLedgerEntry,
+  buildLedgerProof,
+  isLedgerPagePath,
+  parseLedgerQuery,
+  PROOF_HASH_RE,
+  proofIdFromPatchSha,
+  LEDGER_DEFAULT_LIMIT,
+  LEDGER_MAX_LIMIT,
   type AcceptedProofRow,
   type MissionManifest,
   type TaskState,
@@ -414,4 +422,98 @@ test("SSE streams open with a retry directive so clients reconnect fast after a 
   assert.match(hello, /^retry: \d+\n/);
   assert.equal(hello, `retry: ${SSE_RETRY_MS}\n: connected\n\n`);
   assert.ok(SSE_RETRY_MS >= 1000 && SSE_RETRY_MS <= 5000);
+});
+
+// ---------------------------------------------------------------- proof ledger
+
+const LEDGER_SHA = "ab".repeat(32);
+
+function ledgerMission(over: Partial<MissionManifest> = {}) {
+  return {
+    manifest: mission("dag", 1, {
+      id: "pnt-analytic-foundations",
+      title: "PNT+ analytic foundations",
+      upstream: { repo: "AlexKontorovich/PrimeNumberTheoremAnd", commit: "e990613" + "0".repeat(33), license: "Apache-2.0" },
+      tasks: [
+        {
+          id: "liouville",
+          title: "Liouville lemma",
+          target_files: ["PNT/Liouville.lean"],
+          upstream_url: "https://github.com/AlexKontorovich/PrimeNumberTheoremAnd/blob/x/PNT.lean#L1",
+        },
+      ],
+      ...over,
+    }),
+    spec_sha256: "sha256:aaa",
+  };
+}
+
+test("ledger entries carry provenance, attribution, spec status and a permalink", () => {
+  const e = buildLedgerEntry({ ...proofRow(), patch_sha256: `sha256:${LEDGER_SHA}` }, ledgerMission(), "https://sunstead.org");
+  assert.equal(e.permalink, `https://sunstead.org/proofs/${LEDGER_SHA}`);
+  assert.equal(e.proof_id, LEDGER_SHA);
+  assert.equal(e.patch_sha256, `sha256:${LEDGER_SHA}`, "same form as the task proof endpoint");
+  assert.equal(e.mission_title, "PNT+ analytic foundations");
+  assert.equal(e.task_title, "Liouville lemma");
+  assert.equal(e.mission_retired, false);
+  assert.equal(e.mission_demo, false);
+  assert.equal(e.spec_is_current, true);
+  assert.deepEqual(e.upstream, {
+    repo: "AlexKontorovich/PrimeNumberTheoremAnd",
+    commit: "e990613" + "0".repeat(33),
+    license: "Apache-2.0",
+    task_url: "https://github.com/AlexKontorovich/PrimeNumberTheoremAnd/blob/x/PNT.lean#L1",
+  });
+  assert.equal(e.display_name, "Codex Dirichlet");
+  assert.deepEqual(e.files, ["PNT/Liouville.lean"]);
+  assert.equal(e.audit, null);
+  assert.equal("patch" in e, false, "list entries leave the patch body to the permalink");
+});
+
+test("ledger keeps proofs from retired missions and flags demo and stale-spec proofs", () => {
+  const retired = buildLedgerEntry({ ...proofRow(), patch_sha256: `sha256:${LEDGER_SHA}` }, null, "https://h");
+  assert.equal(retired.mission_retired, true);
+  assert.equal(retired.mission_title, null);
+  assert.equal(retired.upstream, null);
+  assert.equal(retired.spec_is_current, false);
+
+  const demo = buildLedgerEntry(
+    { ...proofRow({ spec_sha256: "sha256:old" }), patch_sha256: `sha256:${LEDGER_SHA}` },
+    ledgerMission({ demo: true, upstream: undefined }),
+    "https://h"
+  );
+  assert.equal(demo.mission_demo, true);
+  assert.equal(demo.spec_is_current, false);
+  assert.equal(demo.upstream, null);
+});
+
+test("ledger permalink view includes the patch and how to reproduce it", () => {
+  const p = buildLedgerProof({ ...proofRow(), patch_sha256: `sha256:${LEDGER_SHA}` }, ledgerMission(), "https://sunstead.org");
+  assert.match(p.patch, /\+  exact foo/);
+  assert.equal(p.submission_id, "sub-1");
+  assert.equal(p.task_proof_url, "https://sunstead.org/api/missions/pnt-analytic-foundations/tasks/liouville/proof");
+  assert.equal(p.history_mbox, "https://sunstead.org/api/missions/pnt-analytic-foundations/history.mbox");
+  assert.match(p.how_to_rebuild, /\| git am$/);
+});
+
+test("parseLedgerQuery clamps limit and ignores bad cursors", () => {
+  const q = (s: string) => parseLedgerQuery(new URLSearchParams(s));
+  assert.deepEqual(q(""), { limit: LEDGER_DEFAULT_LIMIT, before: null, missionId: null });
+  assert.equal(q("limit=10").limit, 10);
+  assert.equal(q("limit=100000").limit, LEDGER_MAX_LIMIT);
+  for (const bad of ["limit=0", "limit=-3", "limit=abc", "limit=2.5"]) assert.equal(q(bad).limit, LEDGER_DEFAULT_LIMIT, bad);
+  assert.equal(q("before=42").before, 42);
+  for (const bad of ["before=0", "before=-1", "before=x", "before=1.5", "before="]) assert.equal(q(bad).before, null, bad);
+  assert.equal(q("mission_id=onboarding-sandbox").missionId, "onboarding-sandbox");
+});
+
+test("ledger page paths and proof ids accept only lowercase 64-hex hashes", () => {
+  for (const ok of ["/proofs", "/proofs/", `/proofs/${LEDGER_SHA}`, `/proofs/${LEDGER_SHA}/`]) assert.ok(isLedgerPagePath(ok), ok);
+  for (const bad of ["/proofsx", "/proofs/abc", `/proofs/${LEDGER_SHA.toUpperCase()}`, `/proofs/${LEDGER_SHA}/x`, "/proofs.html/"]) {
+    assert.ok(!isLedgerPagePath(bad), bad);
+  }
+  assert.ok(PROOF_HASH_RE.test(LEDGER_SHA));
+  assert.ok(!PROOF_HASH_RE.test(LEDGER_SHA + "0"));
+  assert.ok(!PROOF_HASH_RE.test("<script>"));
+  assert.equal(proofIdFromPatchSha(`sha256:${LEDGER_SHA}`), LEDGER_SHA);
 });

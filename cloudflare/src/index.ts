@@ -1,4 +1,5 @@
 import { Lean4Verifier } from "./containers";
+import { isLedgerPagePath } from "./core";
 import { STATIC_ASSETS } from "./generated/static";
 import { SunsteadHub, type HubEnv } from "./hub_do";
 
@@ -37,6 +38,15 @@ export default {
             : "public, max-age=300",
           ...SECURITY_HEADERS,
         },
+      });
+    }
+
+    // Ledger pages: /proofs and /proofs/<patch sha256> share one page; app.js
+    // reads the hash from the URL and loads it from /api/proofs.
+    if ((request.method === "GET" || request.method === "HEAD") && isLedgerPagePath(path)) {
+      const asset = STATIC_ASSETS["/proofs.html"];
+      return new Response(request.method === "HEAD" ? null : asset.body, {
+        headers: { "Content-Type": asset.contentType, "Cache-Control": "public, max-age=60", ...SECURITY_HEADERS },
       });
     }
 

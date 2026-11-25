@@ -560,3 +560,104 @@ export const SSE_RETRY_MS = 2_000;
 export function sseHello(): string {
   return `retry: ${SSE_RETRY_MS}\n: connected\n\n`;
 }
+
+// ---------------------------------------------------------------------------
+// Public proof ledger (GET /api/proofs, GET /api/proofs/:patch_sha256, /proofs pages)
+
+/**
+ * A ledger permalink key: the bare hex SHA-256 of the accepted patch exactly as
+ * stored. The API's `patch_sha256` fields carry the same hash as `sha256:<hex>`.
+ */
+export const PROOF_HASH_RE = /^[0-9a-f]{64}$/;
+
+/** `sha256:<hex>` (as stored) to the bare hex used in /proofs/<id> URLs. */
+export function proofIdFromPatchSha(patchSha256: string): string {
+  return patchSha256.replace(/^sha256:/, "");
+}
+
+export const LEDGER_DEFAULT_LIMIT = 50;
+export const LEDGER_MAX_LIMIT = 200;
+
+/** accepted_patches row (with contributor join) as the ledger reads it. */
+export type LedgerRow = AcceptedProofRow & { patch_sha256: string };
+
+/** What the ledger needs to know about a mission; null when it has been retired. */
+export type LedgerMissionInfo = {
+  manifest: MissionManifest;
+  spec_sha256: string;
+} | null;
+
+/** Parse ?limit= and ?before= for GET /api/proofs. Bad values fall back to defaults. */
+export function parseLedgerQuery(params: URLSearchParams): {
+  limit: number;
+  before: number | null;
+  missionId: string | null;
+} {
+  const rawLimit = Number(params.get("limit"));
+  const limit =
+    Number.isInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, LEDGER_MAX_LIMIT) : LEDGER_DEFAULT_LIMIT;
+  const rawBefore = Number(params.get("before"));
+  const before = params.has("before") && Number.isInteger(rawBefore) && rawBefore > 0 ? rawBefore : null;
+  const missionId = params.get("mission_id") || null;
+  return { limit, before, missionId };
+}
+
+/**
+ * One ledger entry. Mission and task titles and upstream provenance come from the
+ * live manifest; a proof from a retired mission keeps its record but has none.
+ */
+export function buildLedgerEntry(row: LedgerRow, mission: LedgerMissionInfo, hubOrigin: string) {
+  const manifest = mission?.manifest ?? null;
+  const taskDef = manifest?.tasks.find((t) => t.id === row.task_id) ?? null;
+  const upstream = manifest?.upstream ?? null;
+  return {
+    proof_id: proofIdFromPatchSha(row.patch_sha256),
+    patch_sha256: row.patch_sha256,
+    permalink: `${hubOrigin}/proofs/${proofIdFromPatchSha(row.patch_sha256)}`,
+    seq: row.seq,
+    mission_id: row.mission_id,
+    mission_title: manifest?.title ?? null,
+    mission_retired: manifest === null,
+    mission_demo: Boolean(manifest?.demo),
+    task_id: row.task_id,
+    task_title: taskDef?.title ?? null,
+    upstream: upstream
+      ? {
+          repo: upstream.repo,
+          commit: upstream.commit,
+          license: upstream.license,
+          task_url: taskDef?.upstream_url ?? null,
+        }
+      : null,
+    contributor: row.contributor,
+    display_name: row.display_name || row.contributor,
+    github: row.github || null,
+    accepted_at: row.created_at,
+    verify_ms: row.verify_ms,
+    spec_sha256: row.spec_sha256,
+    spec_is_current: mission !== null && row.spec_sha256 === mission.spec_sha256,
+    files: extractPatchPaths(row.patch),
+    // Reserved for an independent re-check (e.g. a leanchecker audit workflow).
+    // null means no audit has run; nothing on the hub fills it in yet.
+    audit: null,
+  };
+}
+
+/** Full permalink view: ledger entry plus the patch and how to reproduce it. */
+export function buildLedgerProof(row: LedgerRow, mission: LedgerMissionInfo, hubOrigin: string) {
+  return {
+    ...buildLedgerEntry(row, mission, hubOrigin),
+    submission_id: row.submission_id,
+    summary: row.summary,
+    patch: row.patch,
+    task_proof_url: `${hubOrigin}/api/missions/${encodeURIComponent(row.mission_id)}/tasks/${encodeURIComponent(row.task_id)}/proof`,
+    history_mbox: `${hubOrigin}/api/missions/${encodeURIComponent(row.mission_id)}/history.mbox`,
+    how_to_rebuild: howToRebuild(hubOrigin, row.mission_id),
+  };
+}
+
+/** `/proofs`, `/proofs/` and `/proofs/<64 lowercase hex>` (optionally with a trailing slash). */
+export function isLedgerPagePath(path: string): boolean {
+  return /^\/proofs\/?$/.test(path) || /^\/proofs\/[0-9a-f]{64}\/?$/.test(path);
+}
+
