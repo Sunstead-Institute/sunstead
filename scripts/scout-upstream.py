@@ -560,6 +560,36 @@ def ensure_clone(repo: str, workdir: str) -> str:
     return d
 
 
+PREFETCH_RE = re.compile(r"\.(lean|tex)$|(^|/)(LICENSE(\.md|\.txt)?|COPYING|lean-toolchain|lake-manifest\.json)$")
+
+
+def wanted_blobs(ls_tree):
+    """Blob ids of the files a scan reads, from `git ls-tree -r <commit>` output."""
+    out = []
+    for line in ls_tree.splitlines():
+        meta, _, path = line.partition("\t")
+        parts = meta.split()
+        if len(parts) == 3 and parts[1] == "blob" and PREFETCH_RE.search(path):
+            out.append(parts[2])
+    return out
+
+
+def prefetch_blobs(repo_dir, ls_tree, run=subprocess.run):
+    """Fetch the blobs a scan needs in one round trip. In a blob:none partial
+    clone, `git checkout` otherwise fetches missing blobs lazily, which takes
+    minutes per repo. Best effort: on failure the lazy path still works."""
+    blobs = wanted_blobs(ls_tree)
+    if not blobs:
+        return 0
+    r = run(
+        ["git", "-C", repo_dir, "-c", "fetch.negotiationAlgorithm=noop", "fetch", "-q", "origin",
+         "--no-tags", "--no-write-fetch-head", "--recurse-submodules=no", "--filter=blob:none", "--stdin"],
+        input="\n".join(blobs) + "\n", capture_output=True, text=True,
+        env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+    )
+    return len(blobs) if r.returncode == 0 else 0
+
+
 def show(repo_dir, commit, path):
     r = subprocess.run(["git", "-C", repo_dir, "show", f"{commit}:{path}"], capture_output=True)
     return r.stdout.decode("utf-8", "replace") if r.returncode == 0 else None
@@ -607,6 +637,9 @@ def scout_repo(repo, workdir, toolchain, live, check_prs=False, gh=run_gh):
     except RuntimeError as e:
         info["error"] = str(e)
         return info, []
+    # One batched fetch of every blob read below (license, toolchain, manifest,
+    # blueprint .tex, .lean); without it a partial clone fetches them one by one.
+    prefetch_blobs(d, git(d, "ls-tree", "-r", commit))
     lic_text = next((t for t in (show(d, commit, p) for p in ("LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING")) if t), "")
     info.update(
         commit=commit,
@@ -623,7 +656,7 @@ def scout_repo(repo, workdir, toolchain, live, check_prs=False, gh=run_gh):
     blueprint_names = set(re.findall(r"\\lean\{([^}]*)\}", blueprint_tex))
     blueprint_names = {n.strip() for group in blueprint_names for n in group.split(",")}
 
-    # Fetch every .lean blob in one batch (partial clone), then read them.
+    # Check out the (prefetched) .lean blobs, then read them.
     cands, proof_text, sorry_decls = [], {}, {}
     contents = {}
     if files:
