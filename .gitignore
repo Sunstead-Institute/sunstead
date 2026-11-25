@@ -3,6 +3,12 @@
 *.sqlite-shm
 .lake/
 .DS_Store
+.env
+.env.*
+.dev.vars
+.dev.vars.*
+*.pem
+*.key
 cloudflare/node_modules
 cloudflare/.cloudflare
 cloudflare/src/generated
