@@ -145,7 +145,8 @@ DECL_RE = re.compile(
 )
 MARKER_RE = re.compile(
     r"\b(upstreamed|upstreaming|wip|work[- ]in[- ]progress|do[- ]not[- ]touch|don'?t touch|deprecated|"
-    r"not intended to be proved|false as stated|this is false|from mathlib|mathlib pr|in mathlib now)\b",
+    r"not intended to be proved|false as stated|this is false|from mathlib|mathlib pr|in mathlib now|"
+    r"externally[_ ]verified)\b",  # curve25519-dalek: `@[externally_verified]` = intentional sorry
     re.IGNORECASE,
 )
 SKIP_PATH_RE = re.compile(r"(^|/)(test|tests|examples?|scratch|archive|\.lake|lake-packages)(/|$)", re.IGNORECASE)
