@@ -13,6 +13,9 @@ import {
   normalizeRelPath,
   renderMbox,
   validatePatch,
+  buildProofView,
+  howToRebuild,
+  type AcceptedProofRow,
   type MissionManifest,
   type TaskState,
 } from "../src/core.ts";
@@ -340,4 +343,65 @@ test("renderMbox escapes From lines in body and diff and prevents bare --- separ
   // Exactly one bare `---` separator line before the diff (plus `--- a/f` in the diff itself).
   const bareDashes = mbox.split("\n").filter((l) => /^---[ \t]*$/.test(l));
   assert.equal(bareDashes.length, 1);
+});
+
+function proofRow(over: Partial<AcceptedProofRow> = {}): AcceptedProofRow {
+  return {
+    seq: 7,
+    mission_id: "pnt-analytic-foundations",
+    task_id: "liouville",
+    submission_id: "sub-1",
+    contributor: "codex-dirichlet",
+    display_name: "Codex Dirichlet",
+    github: "codex-dirichlet",
+    summary: "kernel replay ok",
+    patch:
+      "--- a/PNT/Liouville.lean\n+++ b/PNT/Liouville.lean\n@@ -1,1 +1,1 @@\n-  sorry\n+  exact foo\n",
+    spec_sha256: "sha256:aaa",
+    created_at: 1_790_000_000,
+    verify_ms: 63_000,
+    ...over,
+  };
+}
+
+test("buildProofView returns attribution, timing, files, spec status and rebuild commands", () => {
+  const v = buildProofView(proofRow(), {
+    hubOrigin: "https://sunstead.org",
+    currentSpecSha256: "sha256:aaa",
+    patchSha256: "sha256:ppp",
+  });
+  assert.equal(v.contributor, "codex-dirichlet");
+  assert.equal(v.display_name, "Codex Dirichlet");
+  assert.equal(v.github, "codex-dirichlet");
+  assert.equal(v.verify_ms, 63_000);
+  assert.equal(v.accepted_at, 1_790_000_000);
+  assert.equal(v.spec_is_current, true);
+  assert.equal(v.patch_sha256, "sha256:ppp");
+  assert.deepEqual(v.files, ["PNT/Liouville.lean"]);
+  assert.match(v.patch, /\+  exact foo/);
+  assert.equal(v.history_mbox, "https://sunstead.org/api/missions/pnt-analytic-foundations/history.mbox");
+  assert.match(v.how_to_rebuild, /\| git am$/);
+});
+
+test("buildProofView flags proofs accepted under an older spec and falls back on missing names", () => {
+  const v = buildProofView(proofRow({ spec_sha256: "sha256:old", display_name: "", github: null, verify_ms: null }), {
+    hubOrigin: "http://127.0.0.1:8787",
+    currentSpecSha256: "sha256:new",
+    patchSha256: "sha256:ppp",
+  });
+  assert.equal(v.spec_is_current, false);
+  assert.equal(v.display_name, "codex-dirichlet");
+  assert.equal(v.github, null);
+  assert.equal(v.verify_ms, null);
+});
+
+test("howToRebuild quotes URLs so shells do not glob ?base=seed", () => {
+  const cmd = howToRebuild("https://sunstead.org", "onboarding-sandbox");
+  assert.equal(
+    cmd,
+    "mkdir 'onboarding-sandbox' && cd 'onboarding-sandbox' && " +
+      "curl -sL 'https://sunstead.org/api/missions/onboarding-sandbox/bundle.tar.gz?base=seed' | tar xz && " +
+      "curl -sL 'https://sunstead.org/api/missions/onboarding-sandbox/history.mbox' | git am"
+  );
+  assert.match(howToRebuild("https://h", "it's"), /mkdir 'it'\\''s'/);
 });

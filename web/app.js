@@ -4,6 +4,7 @@ const state = {
   activeDetail: null,
   selectedTaskId: null,
   events: [],
+  proofCache: new Map(), // "mission/task" -> accepted proof JSON
 };
 
 const $ = (id) => document.getElementById(id);
@@ -423,7 +424,109 @@ function renderInspector(detail) {
         <div class="kv-val">POST ${escapeHtml(origin)}/api/missions/${escapeHtml(m.id)}/tasks/${escapeHtml(task.def.id)}/submit</div>
       </div>
     </div>
+    ${task.status === "verified" ? `<div class="proof-panel" id="proof-panel" aria-live="polite"><div class="muted small">Loading verified proof…</div></div>` : ""}
   `;
+  if (task.status === "verified") loadProof(m.id, task.def.id);
+}
+
+function fmtDuration(ms) {
+  if (typeof ms !== "number" || !Number.isFinite(ms) || ms <= 0) return "n/a";
+  return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
+}
+
+function diffLineClass(line) {
+  if (line.startsWith("+++ ") || line.startsWith("--- ") || line.startsWith("diff ") || line.startsWith("index ")) {
+    return "diff-meta";
+  }
+  if (line.startsWith("@@")) return "diff-hunk";
+  if (line.startsWith("+")) return "diff-add";
+  if (line.startsWith("-")) return "diff-del";
+  return "diff-ctx";
+}
+
+function renderDiffHtml(patch) {
+  const lines = String(patch ?? "").replace(/\r\n/g, "\n").replace(/\n$/, "").split("\n");
+  return lines
+    .map((line) => `<span class="diff-line ${diffLineClass(line)}">${escapeHtml(line) || " "}</span>`)
+    .join("");
+}
+
+async function loadProof(missionId, taskId) {
+  const key = `${missionId}/${taskId}`;
+  const stillSelected = () =>
+    state.activeMissionId === missionId && state.selectedTaskId === taskId && $("proof-panel");
+  let proof = state.proofCache.get(key);
+  if (!proof) {
+    try {
+      proof = await fetchJson(
+        `/api/missions/${encodeURIComponent(missionId)}/tasks/${encodeURIComponent(taskId)}/proof`
+      );
+      state.proofCache.set(key, proof);
+    } catch (e) {
+      if (stillSelected()) {
+        $("proof-panel").innerHTML = `<div class="muted small">Could not load the verified proof (${escapeHtml(e.message)}).</div>`;
+      }
+      return;
+    }
+  }
+  if (!stillSelected()) return;
+  renderProofPanel(proof);
+}
+
+function renderProofPanel(proof) {
+  const panel = $("proof-panel");
+  const name = proof.display_name || proof.contributor;
+  const gh = proof.github
+    ? ` <a href="https://github.com/${encodeURIComponent(proof.github)}" target="_blank" rel="noopener" class="proof-link">@${escapeHtml(proof.github)}</a>`
+    : "";
+  const when = proof.accepted_at ? new Date(proof.accepted_at * 1000).toISOString().replace("T", " ").slice(0, 16) + " UTC" : "";
+  const specNote = proof.spec_is_current
+    ? ""
+    : `<div class="proof-warn small">Accepted under an earlier frozen spec than the one live now.</div>`;
+  panel.innerHTML = `
+    <div class="proof-head">
+      <div>
+        <div class="proof-kicker">Verified proof · commit #${escapeHtml(proof.seq)}</div>
+        <div class="proof-by"><strong>${escapeHtml(name)}</strong> <span class="muted small"><code>${escapeHtml(proof.contributor)}</code></span>${gh}</div>
+      </div>
+      <a class="btn-outline-ink" href="${escapeHtml(proof.history_mbox)}">history.mbox ↓</a>
+    </div>
+    ${specNote}
+    <div class="inspector-grid">
+      <div class="kv"><div class="kv-label">Verification Time</div><div class="kv-val">${escapeHtml(fmtDuration(proof.verify_ms))}</div></div>
+      <div class="kv"><div class="kv-label">Accepted</div><div class="kv-val">${escapeHtml(when)}</div></div>
+      <div class="kv"><div class="kv-label">Spec SHA-256 at Acceptance</div><div class="kv-val">${escapeHtml(proof.spec_sha256)}</div></div>
+      <div class="kv"><div class="kv-label">Patch SHA-256</div><div class="kv-val">${escapeHtml(proof.patch_sha256)}</div></div>
+    </div>
+    ${proof.summary ? `<p class="muted small proof-summary">${escapeHtml(proof.summary)}</p>` : ""}
+    <div class="proof-block">
+      <div class="proof-block-head">
+        <span class="kv-label">Accepted Lean 4 diff · ${escapeHtml((proof.files || []).join(", "))}</span>
+        <button type="button" class="btn-outline-ink proof-copy" data-copy="patch">Copy diff</button>
+      </div>
+      <pre class="proof-diff" tabindex="0">${renderDiffHtml(proof.patch)}</pre>
+    </div>
+    <div class="proof-block">
+      <div class="proof-block-head">
+        <span class="kv-label">Rebuild and check it yourself (seed bundle + git am)</span>
+        <button type="button" class="btn-outline-ink proof-copy" data-copy="rebuild">Copy command</button>
+      </div>
+      <pre class="proof-cmd" tabindex="0">${escapeHtml(proof.how_to_rebuild)}</pre>
+    </div>
+  `;
+  panel.querySelectorAll(".proof-copy").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const text = btn.dataset.copy === "patch" ? proof.patch : proof.how_to_rebuild;
+      const label = btn.textContent;
+      try {
+        await navigator.clipboard.writeText(text);
+        btn.textContent = "Copied ✓";
+      } catch {
+        btn.textContent = "Copy failed";
+      }
+      setTimeout(() => (btn.textContent = label), 1600);
+    });
+  });
 }
 
 async function loadInitialFeedAndLeaderboard() {

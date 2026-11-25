@@ -346,6 +346,29 @@ def main():
         assert diff.returncode == 0, diff.stdout[-2000:]
     ok("exact `how_to_rebuild` command rebuilds live Lean mission with authors")
 
+    # Read-only "View verified proof" endpoint behind the blueprint inspector.
+    code, proof = req("GET", "/api/missions/onboarding-sandbox/tasks/decoder_injective/proof")
+    assert code == 200, (code, proof)
+    assert proof["contributor"] == bob_handle and proof["task_id"] == "decoder_injective", proof
+    assert proof["spec_is_current"] is True and proof["spec_sha256"].startswith("sha256:"), proof
+    assert proof["patch_sha256"].startswith("sha256:") and isinstance(proof["verify_ms"], int), proof
+    assert "OnboardingSandbox/DecoderInjective.lean" in proof["files"], proof["files"]
+    assert "DecoderInjective.lean" in proof["patch"], proof["patch"][:400]
+    with tempfile.TemporaryDirectory() as tmp:
+        env = os.environ.copy()
+        env.setdefault("GIT_COMMITTER_NAME", "e2e")
+        env.setdefault("GIT_COMMITTER_EMAIL", "e2e@localhost")
+        subprocess.run(["bash", "-euo", "pipefail", "-c", proof["how_to_rebuild"]], cwd=tmp, env=env, check=True)
+        log = subprocess.check_output(
+            ["git", "log", "--format=%s"], cwd=os.path.join(tmp, "onboarding-sandbox"), text=True
+        )
+        assert "verify decoder_injective" in log, log
+    code, res = req("GET", "/api/missions/onboarding-sandbox/tasks/pigeonhole_fin/proof")
+    assert code == 404, (code, res)
+    code, res = req("GET", "/api/missions/no-such-mission/tasks/x/proof")
+    assert code == 404, (code, res)
+    ok("verified-proof endpoint: attribution, timing, files, patch, runnable rebuild; 404 when unproven")
+
     code, stats = req("GET", "/api/stats")
     assert code == 200 and stats["all_time"]["registered"] >= 3, (code, stats)
     assert stats["all_time"]["claimed"] >= 1 and stats["all_time"]["verified"] >= 1, stats

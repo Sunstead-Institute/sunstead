@@ -57,6 +57,7 @@ Contributor code never shares a user with the code that decides the verdict
 ## Open Data
 
 - **Mission history as git:** every accepted patch is canonicalized (`git diff`) and stored in order with its contributor. `GET /api/missions/:id/history` lists commits; `GET /api/missions/:id/history.mbox` returns them as `git am` patches. Applied directly on top of `GET /api/missions/:id/bundle.tar.gz?base=seed` (which already contains `.git` with the initial commit) they rebuild the live mission repository, one attributed commit per verified task (`scripts/e2e.py` checks this).
+- **Verified proofs are public:** `GET /api/missions/:id/tasks/:task/proof` returns a task's latest accepted diff with contributor, verification time, spec and patch SHA-256, and a copyable rebuild command. The blueprint inspector shows it when you click a verified node.
 - **Funnel:** `GET /api/stats` counts distinct contributors who registered, claimed, submitted and got a patch verified (all time, last 7 days, last 24 hours).
 - **Verifier requests:** the hub sends a hash of the accepted state; a warm verifier container that already holds it skips the file upload.
 

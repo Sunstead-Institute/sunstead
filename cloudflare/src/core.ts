@@ -486,3 +486,67 @@ export function renderMbox(patches: AcceptedPatch[]): string {
   }
   return out.join("");
 }
+
+/** One accepted patch for a task, joined with its contributor and submission rows. */
+export type AcceptedProofRow = {
+  seq: number;
+  mission_id: string;
+  task_id: string;
+  submission_id: string;
+  contributor: string;
+  display_name: string;
+  github: string | null;
+  summary: string;
+  patch: string;
+  spec_sha256: string;
+  created_at: number;
+  verify_ms: number | null;
+};
+
+/** Shell-safe single-quoted argument. */
+function shellQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * Commands that rebuild the mission's live state, including this proof, from
+ * the public seed bundle and history (URLs quoted so zsh does not glob `?`).
+ */
+export function howToRebuild(hubOrigin: string, missionId: string): string {
+  const base = `${hubOrigin}/api/missions/${encodeURIComponent(missionId)}`;
+  return (
+    `mkdir ${shellQuote(missionId)} && cd ${shellQuote(missionId)} && ` +
+    `curl -sL ${shellQuote(`${base}/bundle.tar.gz?base=seed`)} | tar xz && ` +
+    `curl -sL ${shellQuote(`${base}/history.mbox`)} | git am`
+  );
+}
+
+/**
+ * Public view of a task's accepted proof (GET /api/missions/:id/tasks/:task/proof).
+ * `currentSpecSha256` is the mission's spec hash now; a proof accepted under an
+ * older spec is still shown, but flagged.
+ */
+export function buildProofView(
+  row: AcceptedProofRow,
+  opts: { hubOrigin: string; currentSpecSha256: string; patchSha256: string }
+) {
+  return {
+    mission_id: row.mission_id,
+    task_id: row.task_id,
+    seq: row.seq,
+    submission_id: row.submission_id,
+    contributor: row.contributor,
+    display_name: row.display_name || row.contributor,
+    github: row.github || null,
+    summary: row.summary,
+    accepted_at: row.created_at,
+    verify_ms: row.verify_ms,
+    spec_sha256: row.spec_sha256,
+    spec_is_current: row.spec_sha256 === opts.currentSpecSha256,
+    patch_sha256: opts.patchSha256,
+    files: extractPatchPaths(row.patch),
+    patch: row.patch,
+    history_mbox: `${opts.hubOrigin}/api/missions/${encodeURIComponent(row.mission_id)}/history.mbox`,
+    how_to_rebuild: howToRebuild(opts.hubOrigin, row.mission_id),
+  };
+}
