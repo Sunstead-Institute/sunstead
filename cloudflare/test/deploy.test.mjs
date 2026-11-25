@@ -1,0 +1,76 @@
+// Tests for scripts/deploy.mjs (Worker-only vs full deploy helper).
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { IMAGE_RE, dockerfileInputs, imageFromApplications, verifierInputsHash } from "../scripts/deploy.mjs";
+
+const CF_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const DIGEST = "a".repeat(64);
+const IMAGE = `registry.cloudflare.com/0adabb27c28d2e046f74e8af29c6b211/sunstead-verifier-lean4@sha256:${DIGEST}`;
+
+test("dockerfileInputs lists the real verifier image's COPY sources", () => {
+  const inputs = dockerfileInputs(fs.readFileSync(path.join(CF_ROOT, "containers/lean4/Dockerfile"), "utf8"));
+  for (const expected of [
+    "missions/pnt-analytic-foundations",
+    "missions/verifier-common/sunstead_sandbox.py",
+    "missions/verifier-common/SunsteadCheck.lean",
+    "cloudflare/containers/verifier_server.py",
+  ]) {
+    assert.ok(inputs.includes(expected), `${expected} missing from ${inputs.join(", ")}`);
+  }
+});
+
+test("dockerfileInputs handles flags, continuations and multi-stage copies", () => {
+  const text = [
+    "FROM x AS build",
+    "COPY --chown=1000:1000 a/b \\",
+    "     c.txt /dst/",
+    "COPY --from=build /out /out",
+    'ADD d /d',
+  ].join("\n");
+  assert.deepEqual(dockerfileInputs(text), ["a/b", "c.txt", "d"]);
+});
+
+test("verifierInputsHash changes when a copied mission file changes, not otherwise", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "sunstead-deploy-"));
+  fs.mkdirSync(path.join(root, "missions/m"), { recursive: true });
+  fs.mkdirSync(path.join(root, "web"), { recursive: true });
+  const dockerfile = path.join(root, "Dockerfile");
+  fs.writeFileSync(dockerfile, "FROM scratch\nCOPY missions/m /missions/m\n");
+  fs.writeFileSync(path.join(root, "missions/m/Spec.lean"), "theorem t : True := sorry\n");
+  fs.writeFileSync(path.join(root, "web/app.js"), "1");
+  const before = verifierInputsHash(root, dockerfile);
+  fs.writeFileSync(path.join(root, "web/app.js"), "2"); // UI-only edit
+  assert.equal(verifierInputsHash(root, dockerfile), before);
+  fs.writeFileSync(path.join(root, "missions/m/Spec.lean"), "theorem t : False := sorry\n");
+  assert.notEqual(verifierInputsHash(root, dockerfile), before);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("the real verifier inputs hash is a stable sha256", () => {
+  const h = verifierInputsHash();
+  assert.match(h, /^[0-9a-f]{64}$/);
+  assert.equal(verifierInputsHash(), h);
+});
+
+test("imageFromApplications finds the live digest in common output shapes", () => {
+  const app = { name: "sunstead-verifier-lean4", configuration: { image: IMAGE } };
+  assert.equal(imageFromApplications(JSON.stringify([app])), IMAGE);
+  assert.equal(imageFromApplications("Loaded\n" + JSON.stringify({ result: [{ name: "other" }, app] })), IMAGE);
+  assert.throws(() => imageFromApplications(JSON.stringify([{ name: "other" }])), /no container application/);
+});
+
+test("IMAGE_RE accepts only digest-pinned Cloudflare registry images", () => {
+  assert.ok(IMAGE_RE.test(IMAGE));
+  assert.ok(!IMAGE_RE.test(IMAGE.replace(/@sha256:.*/, ":latest")));
+  assert.ok(!IMAGE_RE.test(`docker.io/evil/img@sha256:${DIGEST}`));
+  assert.ok(!IMAGE_RE.test(`${IMAGE} `));
+});
+
+test("cloudflare.config.ts and deploy.mjs use the same image pattern", () => {
+  const config = fs.readFileSync(path.join(CF_ROOT, "cloudflare.config.ts"), "utf8");
+  assert.ok(config.includes(`const VERIFIER_IMAGE_RE = ${IMAGE_RE.toString()};`));
+});
