@@ -67,6 +67,7 @@
           <a href="/" class="btn-outline-gold">← BACK TO LIVE BLUEPRINTS</a>
           <a href="/api/proofs" class="btn-ghost-bone" target="_blank" rel="noopener">LEDGER API (JSON)</a>
           <a href="#verify-yourself" class="btn-ghost-bone">CHECK IT WITHOUT TRUSTING US</a>
+          <a href="https://github.com/Sunstead-Institute/sunstead/actions/workflows/audit-proofs.yml" class="btn-ghost-bone" target="_blank" rel="noopener">INDEPENDENT AUDIT LOG ↗</a>
         </div>
       </div>
     </div>
@@ -80,7 +81,8 @@
     <section class="section-block card verify-card" id="verify-yourself">
       <h2>Check a proof without trusting Sunstead</h2>
       <p>
-        <a href="/verify.py">verify.py</a> is one standard-library Python file. Give it a proof id from this page and it
+        <a href="/verify.py">verify.py</a> is one standard-library Python file
+        (<a href="https://github.com/Sunstead-Institute/sunstead/blob/main/scripts/sunstead_verify.py" target="_blank" rel="noopener">source and tests</a>). Give it a proof id from this page and it
         clones the upstream repository from GitHub at the pinned commit, checks that the upstream statement is exactly the
         one the proof was checked against, puts the proof in place of the upstream <code>sorry</code>, builds it with the
         project's own Lean toolchain and lists the theorem's axioms (only <code>propext</code>,
