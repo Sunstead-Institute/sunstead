@@ -107,7 +107,7 @@ def replay(root, mission, manifest, history, mbox, seed, live, current_hash):
         require(isinstance(row["seq"], int) and row["seq"] > previous_seq, "invalid history order")
         require(row["spec_sha256"] == current_hash, "history refers to a different frozen spec")
         require(task_id in tasks and task_id not in accepted, "unknown or duplicate verified task")
-        require(set(tasks[task_id]["depends_on"]) <= set(accepted), "verified task precedes its dependency")
+        require(set(tasks[task_id].get("depends_on", [])) <= set(accepted), "verified task precedes its dependency")
         accepted.append(task_id)
         previous_seq = row["seq"]
 
@@ -140,10 +140,60 @@ def replay(root, mission, manifest, history, mbox, seed, live, current_hash):
     return accepted, tree
 
 
+AUDIT_CHECKER_LEAN = r"""import Lean
+open Lean
+
+def main (args : List String) : IO UInt32 := do
+  match args with
+  | [specModStr, targetModStr, specConstStr, targetConstStr] =>
+    let specMod := specModStr.toName
+    let targetMod := targetModStr.toName
+    let specConst := specConstStr.toName
+    let targetConst := targetConstStr.toName
+    initSearchPath (← findSysroot)
+    let targetPath ← findOLean targetMod
+    let privPath : System.FilePath := targetPath.toString ++ ".private"
+    if (← privPath.pathExists) then
+      IO.eprintln s!"PRIVATE_OLEAN {targetMod}"
+      return 2
+    let (modData, _) ← readModuleData targetPath
+    if modData.isModule then
+      IO.eprintln s!"MODULE_SYSTEM_DISALLOWED {targetMod}"
+      return 2
+    -- loadExts := false ensures untrusted contributor elab_rules/macro_rules/initialize never run.
+    let env ← importModules #[{ module := specMod }, { module := targetMod }] {} 0 (loadExts := false)
+    let some sci := env.find? specConst
+      | do IO.eprintln s!"MISSING_SPEC {specConst}"; return 3
+    let some tci := env.find? targetConst
+      | do IO.eprintln s!"MISSING_TARGET {targetConst}"; return 4
+    unless tci.levelParams.length == sci.levelParams.length do
+      IO.eprintln s!"UNIVERSE_MISMATCH {targetConst}"
+      return 5
+    let ctx : Core.Context := { fileName := "<sunstead-audit>", fileMap := default }
+    let lvls := sci.levelParams.map Level.param
+    let checkName := `_sunstead_audit_check
+    let (axs, _) ← (do
+      addDecl <| Declaration.thmDecl
+        { name := checkName
+          levelParams := sci.levelParams
+          type := mkConst specConst lvls
+          value := mkConst targetConst lvls
+          all := [checkName] }
+      collectAxioms checkName : CoreM (Array Name)).toIO ctx { env := env }
+    for a in axs do
+      IO.println s!"SUNSTEAD_AUDIT_AXIOM {targetConst} {a}"
+    IO.println s!"SUNSTEAD_AUDIT_OK {targetConst}"
+    return 0
+  | _ =>
+    IO.eprintln "usage: lean --run SunsteadAuditCheck.lean <specMod> <targetMod> <specConst> <targetConst>"
+    return 2
+"""
+
+
 def lean_input(tree, manifest, accepted, contracts, preamble):
     modules = []
-    audit = []
-    check = []
+    spec_decls = []
+    checks = []  # list of (target_module, spec_const, target_const)
     touched = {t["id"]: t["target_files"] for t in manifest["tasks"]}
     for task in accepted:
         entry = contracts[task]
@@ -154,9 +204,9 @@ def lean_input(tree, manifest, accepted, contracts, preamble):
         modules.append(module)
         m = re.fullmatch(r"\s*def\s+([A-Za-z_][A-Za-z_0-9]*)\s*:\s*Prop\s*:=([\s\S]+)", entry["statement"])
         require(m, "unsupported frozen Lean statement shape")
-        audit.append(f"namespace Audit_{len(modules)}\n" + entry["statement"]
-                     + f"\nexample : {m[1]} := {symbol}\nend Audit_{len(modules)}\n")
-        check.append(symbol)
+        idx = len(modules)
+        spec_decls.append(f"namespace AuditSpec_{idx}\n" + entry["statement"] + f"\nend AuditSpec_{idx}\n")
+        checks.append((module, f"AuditSpec_{idx}.{m[1]}", symbol))
     frozen = [p[:-5].replace("/", ".") for p in manifest["frozen_paths"] if p.endswith(".lean")]
     require(all(IDENT.fullmatch(m) for m in frozen), "invalid frozen module")
     out = io.BytesIO()
@@ -168,10 +218,13 @@ def lean_input(tree, manifest, accepted, contracts, preamble):
         for mod in [*frozen, *modules]:
             rel = mod.replace(".", "/") + ".lean"
             add(rel, tree[rel][0])
-        audit_header = "".join(f"import {m}\n" for m in modules)
-        add("Audit.lean", (audit_header + preamble + "\n" + "\n".join(audit)
-                           + "\n".join(f"#print axioms {x}" for x in check) + "\n").encode("utf-8"))
-    return out.getvalue(), [*frozen, *modules], check
+        # SunsteadAuditSpec imports ONLY frozen modules — never untrusted contributor modules.
+        spec_header = "".join(f"import {m}\n" for m in frozen)
+        add("SunsteadAuditSpec.lean", (spec_header + preamble + "\n" + "\n".join(spec_decls)).encode("utf-8"))
+        add("SunsteadAuditCheck.lean", AUDIT_CHECKER_LEAN.encode("utf-8"))
+        check_manifest = "\n".join(f"{mod} {spec_c} {target_c}" for mod, spec_c, target_c in checks) + "\n"
+        add("audit_checks.txt", check_manifest.encode("utf-8"))
+    return out.getvalue(), frozen, modules, checks
 
 
 RUN = r"""
@@ -189,20 +242,40 @@ test -x "$checker"
 for mod do
     src="$(printf '%s' "$mod" | tr . /)"
     lean --root="$PWD" -o "$src.olean" "$src.lean"
+    test ! -e "$src.olean.private"
     "$checker" "$mod"
 done
-lean --root="$PWD" Audit.lean
+lean --root="$PWD" -o SunsteadAuditSpec.olean SunsteadAuditSpec.lean
+while read -r mod spec_const target_const; do
+    [ -n "$mod" ] || continue
+    lean --run SunsteadAuditCheck.lean SunsteadAuditSpec "$mod" "$spec_const" "$target_const"
+done < audit_checks.txt
 """
 
 
-def check_lean(image, data, modules, checks):
+def parse_audit_output(out, checks):
+    require(re.search(r"^Lean \(version 4\.36\.0,", out, re.MULTILINE), "wrong Lean version")
+    results = {}
+    for _mod, _spec_c, theorem in checks:
+        oks = re.findall(r"^SUNSTEAD_AUDIT_OK " + re.escape(theorem) + r"\s*$", out, re.MULTILINE)
+        require(len(oks) == 1, "missing or ambiguous audit result for " + theorem)
+        axioms = set(re.findall(
+            r"^SUNSTEAD_AUDIT_AXIOM " + re.escape(theorem) + r" (\S+)\s*$", out, re.MULTILINE
+        ))
+        require(axioms <= AXIOMS, "non-standard axiom in " + theorem + f": {sorted(axioms - AXIOMS)}")
+        results[theorem] = sorted(axioms)
+    return results
+
+
+def check_lean(image, data, frozen, modules, checks):
+    all_mods = [*frozen, *modules]
     with tempfile.TemporaryDirectory(prefix="sunstead-audit-container-") as tmp:
         cid = Path(tmp) / "cid"
         cmd = ["docker", "run", "--rm", "-i", "--pull=never",
                "--network=none", "--read-only", "--tmpfs=/tmp:rw,nosuid,nodev,size=512m,mode=1777",
                "--user=10003:10003", "--cap-drop=ALL", "--security-opt=no-new-privileges",
                "--pids-limit=128", "--memory=5g", "--cpus=2", f"--cidfile={cid}",
-               "--entrypoint=/bin/sh", image, "-ceu", RUN, "sunstead-audit", *modules]
+               "--entrypoint=/bin/sh", image, "-ceu", RUN, "sunstead-audit", *all_mods]
         try:
             result = subprocess.run(cmd, input=data, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                     timeout=360, check=True)
@@ -213,16 +286,10 @@ def check_lean(image, data, modules, checks):
                     subprocess.run(["docker", "rm", "-f", container], stdout=subprocess.DEVNULL,
                                    stderr=subprocess.DEVNULL, timeout=20, check=False)
     out = result.stdout.decode("utf-8", errors="replace")
-    require(re.search(r"^Lean \(version 4\.36\.0,", out, re.MULTILINE), "wrong Lean version")
-    for theorem in checks:
-        m = re.findall(r"^'" + re.escape(theorem) + r"' depends on axioms: \[([^\]]*)\]\s*$",
-                       out, re.MULTILINE)
-        no_axioms = re.findall(r"^'" + re.escape(theorem) + r"' does not depend on any axioms\s*$",
-                               out, re.MULTILINE)
-        require(len(m) + len(no_axioms) == 1, "missing or ambiguous axiom result")
-        actual = {x.strip() for x in (m[0].split(",") if m else []) if x.strip()}
-        require(actual <= AXIOMS, "non-standard axiom in " + theorem)
-        print(f"  PASS {theorem}: stock Lean + leanchecker; axioms: {', '.join(sorted(actual)) or 'none'}")
+    results = parse_audit_output(out, checks)
+    for _mod, _spec_c, theorem in checks:
+        actual = results[theorem]
+        print(f"  PASS {theorem}: stock Lean + leanchecker + loadExts:=false kernel check; axioms: {', '.join(actual) or 'none'}")
 
 
 def main():
@@ -254,9 +321,9 @@ def main():
                                     download(endpoint + "/history.mbox"),
                                     archive_files(download(endpoint + "/bundle.tar.gz?base=seed")),
                                     archive_files(download(endpoint + "/bundle.tar.gz")), detail["spec_sha256"])
-            data, modules, checks = lean_input(tree, manifest, accepted, *proof_contract(mission))
+            data, frozen, modules, checks = lean_input(tree, manifest, accepted, *proof_contract(mission))
             print(f"{mid}: {len(accepted)} accepted patches replayed against matching frozen spec", flush=True)
-            check_lean(args.image, data, modules, checks)
+            check_lean(args.image, data, frozen, modules, checks)
             count += len(checks)
     require(count > 0, "no accepted non-demo proofs audited")
     print(f"Independently verified {count} proof(s).")
