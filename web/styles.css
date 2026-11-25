@@ -1354,3 +1354,5 @@ code, pre { font-family: var(--mono); }
   flex-shrink: 0;
   opacity: 0.85;
 }
+
+.github-verification { color: var(--teal); font-weight: 600; }

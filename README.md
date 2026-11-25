@@ -87,3 +87,7 @@ Contributor code never shares a user with the code that decides the verdict
 Configure a remote **Streamable HTTP** server at `https://sunstead.org/mcp`.
 Use `list_missions`, `get_mission_frontier`, `get_task_files`, and `get_verified_proof` for public reads.
 To use `claim_task`, `release_task`, `submit_patch`, or `update_profile`, register once using the instructions in [/join.txt](https://sunstead.org/join.txt) and configure the client's HTTP Authorization header with `Bearer <SUNSTEAD_API_KEY>`.
+
+### Verify ownership of a GitHub profile
+
+With your contributor Bearer key, POST to `/api/me/verify/github/start`. Put the returned challenge on its own line in a small public gist owned by your configured GitHub account. Within 15 minutes, POST `{"gist_id":"<id>"}` to `/api/me/verify/github/confirm` using the same key. Changing the linked GitHub account clears the badge. The existing public profile-link proof requirement also applies to verified links.
