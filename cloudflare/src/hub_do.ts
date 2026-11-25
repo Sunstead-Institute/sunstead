@@ -22,6 +22,9 @@ import {
   PROOF_HASH_RE,
   type LedgerMissionInfo,
   type LedgerRow,
+  buildTaskFilesView,
+  sanitizeFailureDiagnostics,
+  type FailureStage,
 } from "./core";
 import { SEED_MISSIONS, type SeedMission } from "./generated/missions";
 import { renderJoinTxt } from "./join_txt";
@@ -72,6 +75,8 @@ interface ContainerVerifyResponse {
   ok: boolean;
   score?: number | null;
   summary: string;
+  stage?: FailureStage;
+  diagnostics?: string;
   spec_sha256: string;
   updated_files?: Record<string, string>;
   normalized_patch?: string;
@@ -895,6 +900,14 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       return this.handleLedgerProof(decodeURIComponent(ledgerMatch[1]), url.origin);
     }
 
+    const taskFilesMatch = path.match(/^\/api\/missions\/([^/]+)\/tasks\/([^/]+)\/files$/);
+    if (method === "GET" && taskFilesMatch) {
+      return this.handleTaskFiles(
+        decodeURIComponent(taskFilesMatch[1]),
+        decodeURIComponent(taskFilesMatch[2])
+      );
+    }
+
     if (method === "GET" && path === "/api/stats") {
       return jsonResp(this.computeStats());
     }
@@ -1357,6 +1370,26 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     });
   }
 
+  /** Single-request inspection of a task's current target files + frozen specs (no container wake-up). */
+  private handleTaskFiles(missionId: string, taskId: string): Response {
+    const mission = this.getMissionRow(missionId);
+    if (!mission) return jsonResp({ error: `unknown mission: ${missionId}` }, 404);
+    const tasks = this.getTasks(missionId);
+    const task = tasks.find((t) => t.def.id === taskId);
+    if (!task) return jsonResp({ error: `unknown task: ${taskId}` }, 404);
+    const seed = SEED_MISSIONS.find((s) => s.manifest.id === missionId);
+    return jsonResp(
+      buildTaskFilesView({
+        mission: mission.manifest,
+        specSha256: mission.spec_sha256,
+        task,
+        unlocked: isTaskUnlocked(task, tasks),
+        seedFiles: seed?.seed_files ?? {},
+        liveOverlay: this.getMissionFiles(missionId),
+      })
+    );
+  }
+
   /** Contributor funnel: registered -> claimed -> submitted -> verified. */
   private computeStats() {
     const count = (sql: string, ...args: (string | number)[]) =>
@@ -1649,7 +1682,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     try {
       validatePatch(patch, mission.manifest.frozen_paths, task.def.target_files);
     } catch (e) {
-      const summary = `policy rejected: ${e instanceof Error ? e.message : String(e)}`;
+      const detail = e instanceof Error ? e.message : String(e);
+      const summary = `policy rejected: ${detail}`;
       this.ctx.storage.sql.exec(
         "UPDATE tasks SET attempts = attempts + 1 WHERE mission_id = ? AND task_id = ?",
         missionId,
@@ -1678,7 +1712,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         summary,
         timestamp: now,
       });
-      return jsonResp({ error: summary }, 422);
+      const diag = sanitizeFailureDiagnostics("patch", detail);
+      return jsonResp({ error: summary, ...diag }, 422);
     }
 
     this.emit({
@@ -1882,12 +1917,14 @@ export class SunsteadHub extends DurableObject<HubEnv> {
             summary: reason,
             timestamp: finishedAt,
           });
+          const diag = sanitizeFailureDiagnostics(cRes.stage, cRes.diagnostics);
           return jsonResp(
             {
               accepted: false,
               submission_id: subId,
               error: reason,
               verify_ms: verifyMs,
+              ...diag,
             },
             422
           );

@@ -158,7 +158,14 @@ const missions = missionDirs.map((dirName) => {
     throw new Error(`unsupported verifier image in ${dirName}: ${image} (v1 hub is Lean 4 only)`);
   }
   const verifier_kind = "lean4";
-  return { manifest, spec_sha256, verifier_kind };
+  // Embed readable seed source/config files so `GET /api/missions/:id/tasks/:task/files`
+  // serves theorem stubs and frozen specs directly from the Worker without waking containers.
+  const seed_files = {};
+  for (const f of walkFiles(fullDir).sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0))) {
+    if (f.rel === "verify" || f.rel === "sunstead.json") continue;
+    seed_files[f.rel] = fs.readFileSync(f.abs, "utf8");
+  }
+  return { manifest, spec_sha256, verifier_kind, seed_files };
 });
 
 fs.writeFileSync(
@@ -169,6 +176,7 @@ fs.writeFileSync(
     `  manifest: MissionManifest;\n` +
     `  spec_sha256: string;\n` +
     `  verifier_kind: "lean4";\n` +
+    `  seed_files?: Record<string, string>;\n` +
     `}\n\n` +
     `export const SEED_MISSIONS: SeedMission[] = ${JSON.stringify(missions, null, 2)};\n`
 );
