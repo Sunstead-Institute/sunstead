@@ -489,6 +489,42 @@ function safeHttpUrl(u) {
 
 const GITHUB_REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const HEX_RE = /^[0-9a-f]{7,64}$/;
+const GITHUB_HANDLE_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
+const X_HANDLE_RE = /^[A-Za-z0-9_]{1,15}$/;
+const LINKEDIN_HANDLE_RE = /^[A-Za-z0-9-]{3,100}$/;
+
+const SOCIAL_ICONS = {
+  github: `<svg class="social-icon" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>`,
+  x: `<svg class="social-icon" viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M12.6 1h2.2l-4.8 5.5L15.7 15h-4.4L7.8 10.4 3.8 15H1.6l5.1-5.9L1.3 1h4.5l3.1 4.2L12.6 1zm-.8 12.6h1.2L4.9 2.3H3.6l8.2 11.3z"/></svg>`,
+  linkedin: `<svg class="social-icon" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M13.6 1H2.4C1.6 1 1 1.6 1 2.4v11.2c0 .8.6 1.4 1.4 1.4h11.2c.8 0 1.4-.6 1.4-1.4V2.4c0-.8-.6-1.4-1.4-1.4zM5.3 13H3.1V6.3h2.2V13zM4.2 5.4c-.7 0-1.3-.6-1.3-1.3s.6-1.3 1.3-1.3 1.3.6 1.3 1.3-.6 1.3-1.3 1.3zM13 13h-2.2V9.6c0-.8 0-1.9-1.1-1.9s-1.3.9-1.3 1.8V13H6.2V6.3h2.1v.9h.03c.3-.6 1-1.1 2.1-1.1 2.2 0 2.6 1.5 2.6 3.4V13z"/></svg>`,
+};
+
+/**
+ * Render canonical outbound social links strictly from validated handles
+ * (never raw URLs from JSON; proof-gated server-side; no verified badge).
+ */
+function renderSocialLinksHtml(entry) {
+  const parts = [];
+  const gh = typeof entry?.github === "string" && GITHUB_HANDLE_RE.test(entry.github) ? entry.github : null;
+  if (gh) {
+    parts.push(
+      `<a class="social-link" href="https://github.com/${encodeURIComponent(gh)}" target="_blank" rel="noopener noreferrer nofollow ugc" title="GitHub: ${escapeHtml(gh)}">${SOCIAL_ICONS.github}<span>@${escapeHtml(gh)}</span></a>`
+    );
+  }
+  const x = typeof entry?.x === "string" && X_HANDLE_RE.test(entry.x) ? entry.x : null;
+  if (x) {
+    parts.push(
+      `<a class="social-link" href="https://x.com/${encodeURIComponent(x)}" target="_blank" rel="noopener noreferrer nofollow ugc" title="X: @${escapeHtml(x)}">${SOCIAL_ICONS.x}<span>@${escapeHtml(x)}</span></a>`
+    );
+  }
+  const li = typeof entry?.linkedin === "string" && LINKEDIN_HANDLE_RE.test(entry.linkedin) ? entry.linkedin : null;
+  if (li) {
+    parts.push(
+      `<a class="social-link" href="https://www.linkedin.com/in/${encodeURIComponent(li)}" target="_blank" rel="noopener noreferrer nofollow ugc" title="LinkedIn: in/${escapeHtml(li)}">${SOCIAL_ICONS.linkedin}<span>in/${escapeHtml(li)}</span></a>`
+    );
+  }
+  return parts.length ? ` <span class="social-links">${parts.join("")}</span>` : "";
+}
 
 /** "owner/repo @ abc1234" linked to that commit's tree on GitHub when the parts look sane. */
 function upstreamHtml(up) {
@@ -510,10 +546,7 @@ function upstreamHtml(up) {
 
 function contributorHtml(proof) {
   const name = proof.display_name || proof.contributor;
-  const gh = proof.github
-    ? ` <a href="https://github.com/${encodeURIComponent(proof.github)}" target="_blank" rel="noopener" class="proof-link">@${escapeHtml(proof.github)}</a>`
-    : "";
-  return `<strong>${escapeHtml(name)}</strong> <span class="muted small"><code>${escapeHtml(proof.contributor)}</code></span>${gh}`;
+  return `<strong>${escapeHtml(name)}</strong> <span class="muted small"><code>${escapeHtml(proof.contributor)}</code></span>${renderSocialLinksHtml(proof)}`;
 }
 
 /** Diff, metadata and rebuild command for one accepted proof (task panel and ledger page). */
@@ -738,15 +771,13 @@ function renderLeaderboard(entries) {
   el.innerHTML = entries
     .map((e, idx) => {
       const name = e.display_name || e.contributor;
-      const ghBadge = e.github
-        ? ` <a href="https://github.com/${encodeURIComponent(e.github)}" target="_blank" rel="noopener" style="color:var(--teal);text-decoration:none;font-size:11px">@${escapeHtml(e.github)}</a>`
-        : "";
+      const socialHtml = renderSocialLinksHtml(e);
       const pts = e.points !== undefined ? `${e.points} pts · ` : "";
       const crowns = e.active_records > 0 ? ` · ★${e.active_records}` : "";
       return `
       <div class="lb-row">
         <div>
-          <strong>#${idx + 1} ${escapeHtml(name)}</strong>${ghBadge}
+          <strong>#${idx + 1} ${escapeHtml(name)}</strong>${socialHtml}
           <div class="muted" style="font-size:11px;font-family:var(--mono)">${escapeHtml(e.contributor)}</div>
         </div>
         <div class="small" style="font-family:var(--mono);color:var(--teal);font-weight:500;text-align:right">

@@ -15,7 +15,7 @@ export async function handleMcp(request: Request, fetchHub: (req: Request) => Pr
 
   // Each request owns its server and transport. Credentials and responses never span requests.
   const server = new McpServer({ name: "sunstead", version: "1.0.0" });
-  async function forward(path: string, body?: object) {
+  async function forward(path: string, body?: object, method?: "GET" | "POST" | "PATCH") {
     const headers = new Headers();
     for (const key of ["Authorization", "CF-Connecting-IP", "X-Forwarded-For"]) {
       const value = request.headers.get(key);
@@ -23,7 +23,7 @@ export async function handleMcp(request: Request, fetchHub: (req: Request) => Pr
     }
     if (body) headers.set("Content-Type", "application/json");
     const response = await fetchHub(new Request(new URL(path, url), {
-      method: body ? "POST" : "GET", headers, body: JSON.stringify(body),
+      method: method ?? (body ? "POST" : "GET"), headers, body: body ? JSON.stringify(body) : undefined,
     }));
     const text = await response.text();
     return {
@@ -48,6 +48,19 @@ export async function handleMcp(request: Request, fetchHub: (req: Request) => Pr
     args => forward(`${taskPath(args)}/release`, {}));
   server.registerTool("submit_patch", { description: "Submit a unified git diff for verification.", inputSchema: { ...task, patch: z.string() } },
     args => forward(`${taskPath(args)}/submit`, { patch: args.patch }));
+  server.registerTool(
+    "update_profile",
+    {
+      description: "Update or clear your contributor display_name and GitHub, X, or LinkedIn handles (handle only, never URLs).",
+      inputSchema: {
+        display_name: z.string().nullable().optional(),
+        github: z.string().nullable().optional(),
+        x: z.string().nullable().optional(),
+        linkedin: z.string().nullable().optional(),
+      },
+    },
+    args => forward("/api/me", args, "PATCH")
+  );
 
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   await server.connect(transport);

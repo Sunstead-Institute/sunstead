@@ -4,13 +4,20 @@ import { handleMcp } from "../src/mcp.ts";
 
 const task = { mission_id: "example", task_id: "task_1" };
 const tools = [
-  ["list_missions", {}, "/api/missions", undefined],
-  ["get_mission_frontier", {mission_id: "example"}, "/api/missions/example", undefined],
-  ["get_task_files", task, "/api/missions/example/tasks/task_1/files", undefined],
-  ["get_verified_proof", task, "/api/missions/example/tasks/task_1/proof", undefined],
-  ["claim_task", {...task, lease_seconds: 900}, "/api/missions/example/tasks/task_1/claim", {lease_seconds: 900}],
-  ["release_task", task, "/api/missions/example/tasks/task_1/release", {}],
-  ["submit_patch", {...task, patch: "diff"}, "/api/missions/example/tasks/task_1/submit", {patch: "diff"}],
+  ["list_missions", {}, "/api/missions", "GET", undefined],
+  ["get_mission_frontier", {mission_id: "example"}, "/api/missions/example", "GET", undefined],
+  ["get_task_files", task, "/api/missions/example/tasks/task_1/files", "GET", undefined],
+  ["get_verified_proof", task, "/api/missions/example/tasks/task_1/proof", "GET", undefined],
+  ["claim_task", {...task, lease_seconds: 900}, "/api/missions/example/tasks/task_1/claim", "POST", {lease_seconds: 900}],
+  ["release_task", task, "/api/missions/example/tasks/task_1/release", "POST", {}],
+  ["submit_patch", {...task, patch: "diff"}, "/api/missions/example/tasks/task_1/submit", "POST", {patch: "diff"}],
+  [
+    "update_profile",
+    { display_name: "Ada", github: "ada-gh", x: null, linkedin: "ada-lovelace" },
+    "/api/me",
+    "PATCH",
+    { display_name: "Ada", github: "ada-gh", x: null, linkedin: "ada-lovelace" },
+  ],
 ] as const;
 
 function rpc(method: string, params: object, extra: Record<string,string> = {}) {
@@ -31,14 +38,14 @@ test("remote MCP initialization and tools/list", async () => {
   assert.deepEqual((await list.json()).result.tools.map(t => t.name).sort(), tools.map(([name]) => name).sort());
 });
 
-for (const [name, args, path, body] of tools) {
+for (const [name, args, path, method, body] of tools) {
   test(name + " forwards to the existing hub handler", async () => {
     let calls = 0;
     const req = rpc("tools/call", {name, arguments: args}, {Authorization: "Bearer test", "CF-Connecting-IP": "192.0.2.1"});
     const result = await handleMcp(req, async forwarded => {
       calls++;
       assert.equal(new URL(forwarded.url).pathname, path);
-      assert.equal(forwarded.method, body ? "POST" : "GET");
+      assert.equal(forwarded.method, method);
       assert.equal(forwarded.headers.get("Authorization"), "Bearer test");
       assert.equal(forwarded.headers.get("CF-Connecting-IP"), "192.0.2.1");
       if (body) assert.deepEqual(await forwarded.json(), body);

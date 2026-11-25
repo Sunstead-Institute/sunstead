@@ -25,6 +25,12 @@ import {
   buildTaskFilesView,
   sanitizeFailureDiagnostics,
   type FailureStage,
+  normalizeGithubHandle,
+  normalizeXHandle,
+  normalizeLinkedinHandle,
+  parseProfilePatch,
+  gatePublicSocialHandles,
+  buildSocialLinksFromHandles,
 } from "./core";
 import { SEED_MISSIONS, type SeedMission } from "./generated/missions";
 import { renderJoinTxt } from "./join_txt";
@@ -70,6 +76,8 @@ type ContributorRecord = {
   handle: string;
   display_name: string;
   github: string | null;
+  x_handle: string | null;
+  linkedin_handle: string | null;
   created_at: number;
 };
 
@@ -97,6 +105,7 @@ const RATE_LIMITS = {
   claim_ip: { limit: 15, windowSec: 3600 },
   submit_id: { limit: 20, windowSec: 3600 },
   submit_ip: { limit: 30, windowSec: 3600 },
+  profile_id: { limit: 30, windowSec: 3600 },
 } as const;
 
 function sanitizeHandle(raw: string): string {
@@ -110,12 +119,6 @@ function sanitizeHandle(raw: string): string {
 function sanitizeOptionalText(raw: unknown, maxLen: number): string {
   if (typeof raw !== "string") return "";
   return raw.trim().replace(/[\r\n\t]+/g, " ").slice(0, maxLen);
-}
-
-function sanitizeGithub(raw: unknown): string | null {
-  if (typeof raw !== "string") return null;
-  const cleaned = raw.trim().replace(/^@/, "").replace(/[^A-Za-z0-9-]/g, "").slice(0, 39);
-  return cleaned || null;
 }
 
 async function sha256Hex(text: string): Promise<string> {
@@ -274,6 +277,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     // Safe additive schema migrations for existing Durable Object SQLite instances.
     this.ensureColumn("tasks", "lease_ip", "TEXT");
     this.ensureColumn("submissions", "points", "INTEGER NOT NULL DEFAULT 0");
+    this.ensureColumn("contributors", "x_handle", "TEXT");
+    this.ensureColumn("contributors", "linkedin_handle", "TEXT");
     // Ledger permalink key: SHA-256 of the stored (possibly normalized) patch.
     // Rows from before this column are filled in by backfillPatchHashes().
     this.ensureColumn("accepted_patches", "patch_sha256", "TEXT");
@@ -683,6 +688,54 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     return this.env.LEAN4_VERIFIER.getByName(key);
   }
 
+  private getDemoMissionIds(): Set<string> {
+    const demo = new Set<string>();
+    for (const m of this.listMissionsRows()) {
+      if (m.manifest.demo) demo.add(m.manifest.id);
+    }
+    for (const s of SEED_MISSIONS) {
+      if (s.manifest.demo) demo.add(s.manifest.id);
+    }
+    return demo;
+  }
+
+  /** Map of contributor handle -> count of accepted proofs on non-demo missions. */
+  private getNonDemoProofCounts(): Map<string, number> {
+    const demoIds = this.getDemoMissionIds();
+    const rows = this.ctx.storage.sql
+      .exec<{ contributor: string; mission_id: string; c: number }>(
+        `SELECT contributor, mission_id, COUNT(*) AS c
+         FROM submissions
+         WHERE accepted = 1
+         GROUP BY contributor, mission_id`
+      )
+      .toArray();
+    const counts = new Map<string, number>();
+    for (const r of rows) {
+      if (demoIds.has(r.mission_id)) continue;
+      counts.set(r.contributor, (counts.get(r.contributor) ?? 0) + r.c);
+    }
+    return counts;
+  }
+
+  private getContributorNonDemoProofCount(handle: string): number {
+    const demoIds = this.getDemoMissionIds();
+    const rows = this.ctx.storage.sql
+      .exec<{ mission_id: string; c: number }>(
+        `SELECT mission_id, COUNT(*) AS c
+         FROM submissions
+         WHERE contributor = ? AND accepted = 1
+         GROUP BY mission_id`,
+        handle
+      )
+      .toArray();
+    let total = 0;
+    for (const r of rows) {
+      if (!demoIds.has(r.mission_id)) total += r.c;
+    }
+    return total;
+  }
+
   private computeLeaderboard(limit = 30) {
     // Count active hill-climb crowns (+150 bonus per active non-demo hillclimb record held)
     const hillclimbCrowns = new Map<string, number>();
@@ -695,11 +748,14 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       }
     }
 
+    const nonDemoCounts = this.getNonDemoProofCounts();
     const rows = this.ctx.storage.sql
       .exec<{
         contributor: string;
         display_name: string | null;
         github: string | null;
+        x_handle: string | null;
+        linkedin_handle: string | null;
         verified_tasks: number;
         accepted_submissions: number;
         total_submissions: number;
@@ -709,6 +765,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
            s.contributor AS contributor,
            c.display_name AS display_name,
            c.github AS github,
+           c.x_handle AS x_handle,
+           c.linkedin_handle AS linkedin_handle,
            COUNT(DISTINCT CASE WHEN s.accepted = 1 THEN s.mission_id || ':' || s.task_id END) AS verified_tasks,
            SUM(CASE WHEN s.accepted = 1 THEN 1 ELSE 0 END) AS accepted_submissions,
            COUNT(*) AS total_submissions,
@@ -722,10 +780,18 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     const enriched = rows.map((r) => {
       const active_records = hillclimbCrowns.get(r.contributor) ?? 0;
       const points = r.base_points + active_records * 150;
+      const nonDemoVerified = nonDemoCounts.get(r.contributor) ?? 0;
+      const social = gatePublicSocialHandles(
+        { github: r.github, x: r.x_handle, linkedin: r.linkedin_handle },
+        nonDemoVerified
+      );
       return {
         contributor: r.contributor,
         display_name: r.display_name || r.contributor,
-        github: r.github,
+        github: social.github,
+        x: social.x,
+        linkedin: social.linkedin,
+        social_links: buildSocialLinksFromHandles(social),
         verified_identity: r.display_name !== null,
         points,
         active_records,
@@ -754,7 +820,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         status: 204,
         headers: {
           "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+          "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
           "Access-Control-Allow-Headers": "Content-Type, Authorization",
         },
       });
@@ -789,8 +855,16 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       });
     }
 
-    if (method === "POST" && path === "/api/contributors/register") {
+    if (method === "POST" && (path === "/api/contributors/register" || path === "/api/register")) {
       return this.handleRegisterContributor(request);
+    }
+
+    if (method === "GET" && path === "/api/me") {
+      return this.handleGetMe(request);
+    }
+
+    if (method === "PATCH" && path === "/api/me") {
+      return this.handlePatchMe(request);
     }
 
     const contribMatch = path.match(/^\/api\/contributors\/([^/]+)$/);
@@ -971,9 +1045,15 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     const ip = clientIp(request);
     const now = Math.floor(Date.now() / 1000);
 
-    let body: { handle?: string; display_name?: string; github?: string };
+    let body: { handle?: string; display_name?: string; github?: unknown; x?: unknown; linkedin?: unknown };
     try {
-      body = (await request.json()) as { handle?: string; display_name?: string; github?: string };
+      body = (await request.json()) as {
+        handle?: string;
+        display_name?: string;
+        github?: unknown;
+        x?: unknown;
+        linkedin?: unknown;
+      };
     } catch {
       return jsonResp({ error: "invalid JSON body" }, 400);
     }
@@ -984,6 +1064,17 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         { error: "handle must be at least 3 characters (a-z, 0-9, ., _, -)" },
         400
       );
+    }
+
+    let github: string | null;
+    let xHandle: string | null;
+    let linkedinHandle: string | null;
+    try {
+      github = normalizeGithubHandle(body.github);
+      xHandle = normalizeXHandle(body.x);
+      linkedinHandle = normalizeLinkedinHandle(body.linkedin);
+    } catch (e) {
+      return jsonResp({ error: e instanceof Error ? e.message : String(e) }, 400);
     }
 
     const existing = this.ctx.storage.sql
@@ -1011,16 +1102,17 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     }
 
     const displayName = sanitizeOptionalText(body.display_name, 64) || handle;
-    const github = sanitizeGithub(body.github);
     const apiKey = generateApiKey();
     const tokenHash = await sha256Hex(apiKey);
 
     this.ctx.storage.sql.exec(
-      `INSERT INTO contributors (handle, display_name, github, token_sha256, created_at)
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO contributors (handle, display_name, github, x_handle, linkedin_handle, token_sha256, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       handle,
       displayName,
       github,
+      xHandle,
+      linkedinHandle,
       tokenHash,
       now
     );
@@ -1031,17 +1123,128 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         handle,
         display_name: displayName,
         github,
+        x: xHandle,
+        linkedin: linkedinHandle,
+        social_links: buildSocialLinksFromHandles({ github, x: xHandle, linkedin: linkedinHandle }),
+        links_public: false,
         api_key: apiKey,
-        note: "Save this api_key now—Sunstead stores only its SHA-256 hash and cannot recover it. Share it across all agents you run to aggregate credit under one identity.",
+        note: "Save this api_key now—Sunstead stores only its SHA-256 hash and cannot recover it. Share it across all agents you run to aggregate credit under one identity. Profile links appear publicly once you have at least 1 accepted non-demo proof.",
       },
       201
     );
   }
 
+  private getOwnProfileResponse(handle: string): Response {
+    const rows = this.ctx.storage.sql
+      .exec<ContributorRecord>(
+        "SELECT handle, display_name, github, x_handle, linkedin_handle, created_at FROM contributors WHERE handle = ?",
+        handle
+      )
+      .toArray();
+    if (rows.length === 0) {
+      return jsonResp({ error: `unknown contributor: ${handle}` }, 404);
+    }
+    const row = rows[0];
+    const nonDemoVerified = this.getContributorNonDemoProofCount(handle);
+    const handles = {
+      github: row.github,
+      x: row.x_handle,
+      linkedin: row.linkedin_handle,
+    };
+    return jsonResp({
+      handle: row.handle,
+      display_name: row.display_name || row.handle,
+      github: row.github,
+      x: row.x_handle,
+      linkedin: row.linkedin_handle,
+      social_links: buildSocialLinksFromHandles(handles),
+      links_public: nonDemoVerified >= 1,
+      non_demo_verified_proofs: nonDemoVerified,
+      created_at: row.created_at,
+    });
+  }
+
+  private async handleGetMe(request: Request): Promise<Response> {
+    const auth = await this.resolveContributor(request);
+    if (!auth.ok) return jsonResp({ error: auth.error }, auth.status);
+    return this.getOwnProfileResponse(auth.handle);
+  }
+
+  private async handlePatchMe(request: Request): Promise<Response> {
+    const auth = await this.resolveContributor(request);
+    if (!auth.ok) return jsonResp({ error: auth.error }, auth.status);
+    const handle = auth.handle;
+
+    let rawBody: unknown;
+    try {
+      rawBody = await request.json();
+    } catch {
+      return jsonResp({ error: "invalid JSON body" }, 400);
+    }
+    if (!rawBody || typeof rawBody !== "object" || Array.isArray(rawBody)) {
+      return jsonResp({ error: "request body must be a JSON object" }, 400);
+    }
+
+    let parsed: ReturnType<typeof parseProfilePatch>;
+    try {
+      parsed = parseProfilePatch(rawBody as Record<string, unknown>);
+    } catch (e) {
+      return jsonResp({ error: e instanceof Error ? e.message : String(e) }, 400);
+    }
+    if (!parsed.hasUpdates) {
+      return jsonResp(
+        { error: "specify at least one field to update: display_name, github, x, or linkedin" },
+        400
+      );
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const rl = this.checkRateLimit(
+      `profile:id:${handle}`,
+      RATE_LIMITS.profile_id.limit,
+      RATE_LIMITS.profile_id.windowSec,
+      now
+    );
+    if (!rl.allowed) {
+      return jsonResp(
+        { error: `profile update rate limit reached; retry in ${rl.retryAfterSec}s` },
+        429,
+        { "Retry-After": String(rl.retryAfterSec) }
+      );
+    }
+    this.recordRateEvent(`profile:id:${handle}`, now);
+
+    const sets: string[] = [];
+    const params: (string | null)[] = [];
+    if ("display_name" in parsed) {
+      sets.push("display_name = ?");
+      params.push(parsed.display_name || handle);
+    }
+    if ("github" in parsed) {
+      sets.push("github = ?");
+      params.push(parsed.github ?? null);
+    }
+    if ("x" in parsed) {
+      sets.push("x_handle = ?");
+      params.push(parsed.x ?? null);
+    }
+    if ("linkedin" in parsed) {
+      sets.push("linkedin_handle = ?");
+      params.push(parsed.linkedin ?? null);
+    }
+
+    this.ctx.storage.sql.exec(
+      `UPDATE contributors SET ${sets.join(", ")} WHERE handle = ?`,
+      ...params,
+      handle
+    );
+    return this.getOwnProfileResponse(handle);
+  }
+
   private handleGetContributor(handle: string): Response {
     const profileRows = this.ctx.storage.sql
       .exec<ContributorRecord>(
-        "SELECT handle, display_name, github, created_at FROM contributors WHERE handle = ?",
+        "SELECT handle, display_name, github, x_handle, linkedin_handle, created_at FROM contributors WHERE handle = ?",
         handle
       )
       .toArray();
@@ -1071,12 +1274,25 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       .toArray()
       .map((r) => ({ ...r, accepted: r.accepted !== 0 }));
 
+    const row = profileRows[0];
+    const nonDemoVerified = this.getContributorNonDemoProofCount(handle);
+    const social = gatePublicSocialHandles(
+      row
+        ? { github: row.github, x: row.x_handle, linkedin: row.linkedin_handle }
+        : { github: null, x: null, linkedin: null },
+      nonDemoVerified
+    );
+
     return jsonResp({
-      contributor: profileRows[0] ?? {
-        handle,
-        display_name: handle,
-        github: null,
-        created_at: null,
+      contributor: {
+        handle: row?.handle ?? handle,
+        display_name: row?.display_name || handle,
+        github: social.github,
+        x: social.x,
+        linkedin: social.linkedin,
+        social_links: buildSocialLinksFromHandles(social),
+        links_public: nonDemoVerified >= 1,
+        created_at: row?.created_at ?? null,
       },
       rank: rankIdx >= 0 ? rankIdx + 1 : null,
       stats: rankIdx >= 0 ? board[rankIdx] : { points: 0, verified_tasks: 0, active_records: 0 },
@@ -1249,7 +1465,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     const rows = this.ctx.storage.sql
       .exec<AcceptedProofRow>(
         `SELECT a.seq, a.mission_id, a.task_id, a.submission_id, a.contributor,
-                COALESCE(c.display_name, a.contributor) AS display_name, c.github AS github,
+                COALESCE(c.display_name, a.contributor) AS display_name,
+                c.github AS github, c.x_handle AS x, c.linkedin_handle AS linkedin,
                 a.summary, a.patch, a.spec_sha256, a.created_at, s.verify_ms AS verify_ms
          FROM accepted_patches a
          LEFT JOIN contributors c ON c.handle = a.contributor
@@ -1264,11 +1481,13 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       return jsonResp({ error: `no accepted proof for ${missionId}/${taskId}` }, 404);
     }
     const row = rows[0];
+    const nonDemoVerifiedCount = this.getContributorNonDemoProofCount(row.contributor);
     return jsonResp(
       buildProofView(row, {
         hubOrigin,
         currentSpecSha256: mission.spec_sha256,
         patchSha256: await sha256Hex(row.patch),
+        nonDemoVerifiedCount,
       })
     );
   }
@@ -1293,7 +1512,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
 
   private static readonly LEDGER_SELECT = `
     SELECT a.seq, a.mission_id, a.task_id, a.submission_id, a.contributor,
-           COALESCE(c.display_name, a.contributor) AS display_name, c.github AS github,
+           COALESCE(c.display_name, a.contributor) AS display_name,
+           c.github AS github, c.x_handle AS x, c.linkedin_handle AS linkedin,
            a.summary, a.patch, a.patch_sha256, a.spec_sha256, a.created_at, s.verify_ms AS verify_ms
     FROM accepted_patches a
     LEFT JOIN contributors c ON c.handle = a.contributor
@@ -1332,6 +1552,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       .toArray();
     const page = rows.slice(0, limit);
     const missionInfo = this.ledgerMissionInfo();
+    const nonDemoCounts = this.getNonDemoProofCounts();
     const total = this.ctx.storage.sql
       .exec<{ c: number }>(
         missionId === null
@@ -1342,7 +1563,9 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       .one().c;
     return jsonResp({
       total,
-      proofs: page.map((r) => buildLedgerEntry(r, missionInfo(r.mission_id), hubOrigin)),
+      proofs: page.map((r) =>
+        buildLedgerEntry(r, missionInfo(r.mission_id), hubOrigin, nonDemoCounts.get(r.contributor) ?? 0)
+      ),
       next_before: rows.length > limit ? page[page.length - 1].seq : null,
     });
   }
@@ -1363,8 +1586,9 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     if (rows.length === 0) return jsonResp({ error: `no accepted proof with patch sha256:${key}` }, 404);
     const missionInfo = this.ledgerMissionInfo();
     const [first, ...rest] = rows;
+    const nonDemoCount = this.getContributorNonDemoProofCount(first.contributor);
     return jsonResp({
-      ...buildLedgerProof(first, missionInfo(first.mission_id), hubOrigin),
+      ...buildLedgerProof(first, missionInfo(first.mission_id), hubOrigin, nonDemoCount),
       // The same patch text accepted again (another task or mission) shares this hash.
       also_accepted_as: rest.map((r) => ({
         seq: r.seq,
