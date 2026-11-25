@@ -1,0 +1,25 @@
+{
+  "mode": "repo-snapshot",
+  "repo": "Beneficial-AI-Foundation/curve25519-dalek-lean-verify",
+  "commit": "52cad87d054943c96c984d99d9ea9e5d043b0d65",
+  "license": "Apache-2.0",
+  "checks": [
+    {
+      "local_file": "lean-toolchain",
+      "upstream_file": "lean-toolchain",
+      "exact_sha256": "efac0b94923b2d8b6840cd35be9177ad0fc5ab2332f4f4311c98712cee92fdee"
+    },
+    {
+      "local_file": "Curve25519Dalek/Math/Edwards/Curve.lean",
+      "upstream_file": "Curve25519Dalek/Math/Edwards/Curve.lean",
+      "exact_sha256": "38e6f15d0b01e5a71a8033cfe65e0e93941f425d747e400baeaa179f59a85ea7",
+      "upstream_anchor": "theorem add_assoc_Ed25519 (p q r : Point Ed25519) : p + q + r = p + (q + r) := by"
+    },
+    {
+      "local_file": "Curve25519Dalek/Math/Ristretto/Representation.lean",
+      "upstream_file": "Curve25519Dalek/Math/Ristretto/Representation.lean",
+      "exact_sha256": "2ddf90153a48226ebec3b066542157628989f1789d6a74cc46fd83d10ed2f2c3",
+      "upstream_anchor": "theorem IsEven_iff_in_doubling_image_right (P : Point Ed25519) :"
+    }
+  ]
+}

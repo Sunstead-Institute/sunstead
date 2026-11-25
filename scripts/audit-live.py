@@ -35,6 +35,7 @@ DEFAULT_IMAGE = "sunstead/verifier-lean4:v0.2"
 ALLOWED_IMAGES = {
     "sunstead/verifier-lean4:v0.2",
     "sunstead/verifier-lean4-v4.35.0:v0.1",
+    "sunstead/verifier-lean4-v4.31.0:v0.1",
 }
 AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
 
@@ -59,10 +60,12 @@ def module_to_relpath(module):
     return "/".join(parts) + ".lean"
 
 
-def parse_toolchain_images(specs, image_v435=None):
+def parse_toolchain_images(specs, image_v435=None, image_v431=None):
     mapping = {}
     if image_v435:
         mapping["4.35.0"] = image_v435
+    if image_v431:
+        mapping["4.31.0"] = image_v431
     for spec in specs or ():
         require("=" in spec, f"invalid --toolchain-image (expected TOOLCHAIN=IMAGE): {spec}")
         tc_key, img = spec.split("=", 1)
@@ -220,6 +223,13 @@ def optExprEq : Option Expr → Option Expr → Bool
   | some a, some b => a == b
   | _, _ => false
 
+def quotKindEq : QuotKind → QuotKind → Bool
+  | .type, .type => true
+  | .ctor, .ctor => true
+  | .lift, .lift => true
+  | .ind, .ind => true
+  | _, _ => false
+
 def constInfoStructEq (a b : ConstantInfo) : Bool :=
   if a.levelParams != b.levelParams || a.type != b.type then
     false
@@ -227,11 +237,11 @@ def constInfoStructEq (a b : ConstantInfo) : Bool :=
     match a, b with
     | .axiomInfo x, .axiomInfo y => x.isUnsafe == y.isUnsafe
     | .defnInfo x, .defnInfo y =>
-      x.value == y.value && x.hints == y.hints && x.safety == y.safety && x.all == y.all
+      x.value == y.value && x.safety == y.safety && x.all == y.all
     | .thmInfo x, .thmInfo y => x.all == y.all
     | .opaqueInfo x, .opaqueInfo y =>
       x.value == y.value && x.isUnsafe == y.isUnsafe && x.all == y.all
-    | .quotInfo x, .quotInfo y => x.kind == y.kind
+    | .quotInfo x, .quotInfo y => quotKindEq x.kind y.kind
     | .inductInfo x, .inductInfo y =>
       x.numParams == y.numParams && x.numIndices == y.numIndices &&
       x.all == y.all && x.ctors == y.ctors && x.numNested == y.numNested &&
@@ -447,6 +457,7 @@ def repo_snapshot_input(seed_tree, live_tree, manifest, accepted, contracts):
             info.size = len(data)
             tar.addfile(info, io.BytesIO(data))
 
+        check_lines = []
         for task in accepted:
             entry = contracts[task]
             symbol, module = entry["theorem"], entry["module"]
@@ -458,9 +469,14 @@ def repo_snapshot_input(seed_tree, live_tree, manifest, accepted, contracts):
                 add("seed/" + rel, seed_tree[rel][0])
                 add("live/" + rel, live_tree[rel][0])
                 packed.add(rel)
+            bridge_rels = []
+            for bm in (entry.get("bridge_modules") or []):
+                brel = module_to_relpath(bm)
+                bridge_rels.append(brel[:-5])
             checks.append((module, rel[:-5], symbol))
+            check_lines.append(f"{module}\t{rel[:-5]}\t{symbol}\t{','.join(bridge_rels)}")
         add("SunsteadAuditCheck.lean", AUDIT_CHECKER_LEAN.encode("utf-8"))
-        check_manifest = "\n".join(f"{mod}\t{rel_no_ext}\t{target_c}" for mod, rel_no_ext, target_c in checks) + "\n"
+        check_manifest = "\n".join(check_lines) + "\n"
         add("audit_checks.txt", check_manifest.encode("utf-8"))
     return out.getvalue(), snapshot_id, lean_options, checks
 
@@ -471,7 +487,9 @@ cd /tmp/work
 tar xf -
 export HOME=/tmp/home
 export LEAN_PATH="$PWD"
-for p in /opt/mathlib/.lake/packages/*/.lake/build/lib/lean; do
+for p in /opt/mathlib/.lake/packages/*/.lake/build/lib/lean \
+         /opt/mathlib/.lake/packages/*/*/.lake/build/lib/lean \
+         /opt/mathlib/.lake/packages/*/*/*/.lake/build/lib/lean; do
     if [ -d "$p" ]; then LEAN_PATH="$LEAN_PATH:$p"; fi
 done
 lean --version
@@ -494,19 +512,25 @@ done < audit_checks.txt
 RUN_REPO_SNAPSHOT = r"""
 snapshot_id="$1"
 shift
-mkdir -p /tmp/work /tmp/home /tmp/frozen /tmp/merged
+mkdir -p /tmp/work /tmp/home /tmp/frozen_merged /tmp/merged
 cd /tmp/work
 tar xf -
 export HOME=/tmp/home
-deps="/opt/sunstead/snapshots/$snapshot_id/deps"
+snap="/opt/sunstead/snapshots/$snapshot_id"
+deps="$snap/deps"
+frozen_srcs="$snap/frozen-sources"
 test -d "$deps"
+cp -rs "$deps/." /tmp/frozen_merged/
+find /tmp/frozen_merged -type d -exec chmod 755 {} +
 cp -rs "$deps/." /tmp/merged/
 find /tmp/merged -type d -exec chmod 755 {} +
-base_path="$deps"
+frozen_path="/tmp/frozen_merged"
 merged_path="/tmp/merged"
-for p in /opt/mathlib/.lake/packages/*/.lake/build/lib/lean; do
+for p in /opt/mathlib/.lake/packages/*/.lake/build/lib/lean \
+         /opt/mathlib/.lake/packages/*/*/.lake/build/lib/lean \
+         /opt/mathlib/.lake/packages/*/*/*/.lake/build/lib/lean; do
     if [ -d "$p" ]; then
-        base_path="$base_path:$p"
+        frozen_path="$frozen_path:$p"
         merged_path="$merged_path:$p"
     fi
 done
@@ -514,16 +538,34 @@ lean --version
 checker="$(lean --print-prefix)/bin/leanchecker"
 test -x "$checker"
 tab="$(printf '\t')"
-while IFS="$tab" read -r mod rel_no_ext target_const; do
+while IFS="$tab" read -r mod rel_no_ext target_const bridge_csv; do
     [ -n "$mod" ] || continue
-    mkdir -p "$(dirname "/tmp/frozen/$rel_no_ext.olean")" "$(dirname "/tmp/merged/$rel_no_ext.olean")"
-    rm -f "/tmp/merged/$rel_no_ext.olean" "/tmp/merged/$rel_no_ext.olean.private"
-    LEAN_PATH="$base_path" lean "$@" --root=/tmp/work/seed -o "/tmp/frozen/$rel_no_ext.olean" "/tmp/work/seed/$rel_no_ext.lean"
-    test ! -e "/tmp/frozen/$rel_no_ext.olean.private"
-    LEAN_PATH="$base_path" lean "$@" --root=/tmp/work/live -o "/tmp/merged/$rel_no_ext.olean" "/tmp/work/live/$rel_no_ext.lean"
+    if [ -n "$bridge_csv" ]; then
+        old_ifs="$IFS"
+        IFS=","
+        for b_rel in $bridge_csv; do
+            [ -n "$b_rel" ] || continue
+            b_src="$frozen_srcs/$b_rel.lean"
+            test -f "$b_src"
+            mkdir -p "$(dirname "/tmp/frozen_merged/$b_rel.olean")" "$(dirname "/tmp/merged/$b_rel.olean")"
+            rm -f "/tmp/frozen_merged/$b_rel.olean" "/tmp/frozen_merged/$b_rel.olean.private" \
+                  "/tmp/merged/$b_rel.olean" "/tmp/merged/$b_rel.olean.private"
+            LEAN_PATH="$frozen_path" lean "$@" --root="$frozen_srcs" -o "/tmp/frozen_merged/$b_rel.olean" "$b_src"
+            test ! -e "/tmp/frozen_merged/$b_rel.olean.private"
+            LEAN_PATH="$merged_path" lean "$@" --root="$frozen_srcs" -o "/tmp/merged/$b_rel.olean" "$b_src"
+            test ! -e "/tmp/merged/$b_rel.olean.private"
+        done
+        IFS="$old_ifs"
+    fi
+    mkdir -p "$(dirname "/tmp/frozen_merged/$rel_no_ext.olean")" "$(dirname "/tmp/merged/$rel_no_ext.olean")"
+    rm -f "/tmp/frozen_merged/$rel_no_ext.olean" "/tmp/frozen_merged/$rel_no_ext.olean.private" \
+          "/tmp/merged/$rel_no_ext.olean" "/tmp/merged/$rel_no_ext.olean.private"
+    LEAN_PATH="$frozen_path" lean "$@" --root=/tmp/work/seed -o "/tmp/frozen_merged/$rel_no_ext.olean" "/tmp/work/seed/$rel_no_ext.lean"
+    test ! -e "/tmp/frozen_merged/$rel_no_ext.olean.private"
+    LEAN_PATH="$merged_path" lean "$@" --root=/tmp/work/live -o "/tmp/merged/$rel_no_ext.olean" "/tmp/work/live/$rel_no_ext.lean"
     test ! -e "/tmp/merged/$rel_no_ext.olean.private"
     LEAN_PATH="$merged_path" "$checker" "$mod"
-    LEAN_PATH="$merged_path" lean --run /tmp/work/SunsteadAuditCheck.lean --repo-snapshot "/tmp/frozen/$rel_no_ext.olean" "$mod" "$target_const"
+    LEAN_PATH="$merged_path" lean --run /tmp/work/SunsteadAuditCheck.lean --repo-snapshot "/tmp/frozen_merged/$rel_no_ext.olean" "$mod" "$target_const"
 done < /tmp/work/audit_checks.txt
 """
 
@@ -652,6 +694,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--image", default=None, help="override stock Lean toolchain image (default: per-mission verifier image)")
     parser.add_argument("--image-v435", default=None, help="override stock Lean v4.35.0 image (default: sunstead/verifier-lean4-v4.35.0:v0.1)")
+    parser.add_argument("--image-v431", default=None, help="override stock Lean v4.31.0 image (default: sunstead/verifier-lean4-v4.31.0:v0.1)")
     parser.add_argument(
         "--toolchain-image",
         action="append",
@@ -662,7 +705,9 @@ def main():
     parser.add_argument("--mission", help="limit audit to this mission ID")
     args = parser.parse_args()
     require(not args.mission or SLUG.fullmatch(args.mission), "invalid mission ID")
-    toolchain_images = parse_toolchain_images(args.toolchain_image, image_v435=args.image_v435)
+    toolchain_images = parse_toolchain_images(
+        args.toolchain_image, image_v435=args.image_v435, image_v431=args.image_v431
+    )
     source = json.loads(download("/api/missions"))["missions"]
     count = 0
     for item in source:

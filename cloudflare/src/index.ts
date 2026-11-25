@@ -1,10 +1,10 @@
 import { handleMcp } from "./mcp";
-import { Lean4Verifier, Lean4V435Verifier } from "./containers";
+import { Lean4Verifier, Lean4V435Verifier, Lean4V431Verifier } from "./containers";
 import { isLedgerPagePath } from "./core";
 import { STATIC_ASSETS } from "./generated/static";
 import { SunsteadHub, type HubEnv } from "./hub_do";
 
-export { SunsteadHub, Lean4Verifier, Lean4V435Verifier };
+export { SunsteadHub, Lean4Verifier, Lean4V435Verifier, Lean4V431Verifier };
 
 const SECURITY_HEADERS: Record<string, string> = {
   "X-Content-Type-Options": "nosniff",

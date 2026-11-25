@@ -35,9 +35,14 @@ jobs:
             /usr/local/share/powershell /usr/local/julia* /usr/share/swift
           docker system prune -af || true
           df -h /
-      - name: Build pinned Lean toolchains (v4.36.0 + Mathlib and v4.35.0 repo-snapshot) from trusted checkout
-        run: ./scripts/build-verifiers.sh
-      - name: Verify audit spoofing resistance against v4.36.0 and v4.35.0 container images
+      - name: Build pinned Lean toolchains (v4.36.0, v4.35.0, v4.31.0) from trusted checkout
+        run: |
+          ./scripts/build-verifiers.sh v4.36.0
+          docker builder prune -af || true
+          ./scripts/build-verifiers.sh v4.35.0 v4.31.0
+          docker builder prune -af || true
+          df -h /
+      - name: Verify audit spoofing resistance against v4.36.0, v4.35.0, and v4.31.0 container images
         run: python3 -m unittest discover -s scripts -p 'test_audit_live.py' -v
       - name: Reproduce published proofs with stock Lean and leanchecker across toolchains
         run: python3 scripts/audit-live.py

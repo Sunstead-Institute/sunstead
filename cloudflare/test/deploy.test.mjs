@@ -183,9 +183,13 @@ test("cloudflare.config.ts caps the Durable Object code-update delay", () => {
   assert.ok(delay > 0 && delay <= 60, `max_delay ${delay}s should be short`);
 });
 
-test("multi-toolchain deploy tracks both v4.36.0 and v4.35.0 verifier container inputs", () => {
+test("multi-toolchain deploy tracks v4.36.0, v4.35.0, and v4.31.0 verifier container inputs", () => {
   const names = VERIFIER_APPS.map((a) => a.name);
-  assert.deepEqual(names, ["sunstead-verifier-lean4", "sunstead-verifier-lean4-v435"]);
+  assert.deepEqual(names, [
+    "sunstead-verifier-lean4",
+    "sunstead-verifier-lean4-v435",
+    "sunstead-verifier-lean4-v431",
+  ]);
   const v435Inputs = dockerfileInputs(
     fs.readFileSync(path.join(CF_ROOT, "containers/lean4-v4.35.0/Dockerfile"), "utf8")
   );
@@ -199,15 +203,41 @@ test("multi-toolchain deploy tracks both v4.36.0 and v4.35.0 verifier container 
   ]) {
     assert.ok(v435Inputs.includes(expected), `${expected} missing from ${v435Inputs.join(", ")}`);
   }
+  const v431Inputs = dockerfileInputs(
+    fs.readFileSync(path.join(CF_ROOT, "containers/lean4-v4.31.0/Dockerfile"), "utf8")
+  );
+  for (const expected of [
+    "missions/curve25519-dalek",
+    "missions/verifier-common/sunstead_sandbox.py",
+    "missions/verifier-common/SunsteadCheck.lean",
+    "missions/verifier-common/prebuild_snapshot.py",
+    "cloudflare/containers/verifier_server.py",
+  ]) {
+    assert.ok(v431Inputs.includes(expected), `${expected} missing from ${v431Inputs.join(", ")}`);
+  }
   const v435Img = IMAGE.replace("sunstead-verifier-lean4", "sunstead-verifier-lean4-v435");
-  assert.equal(
-    imageFromApplications(
-      JSON.stringify([
-        { name: "sunstead-verifier-lean4", configuration: { image: IMAGE } },
-        { name: "sunstead-verifier-lean4-v435", configuration: { image: v435Img } },
-      ]),
-      "sunstead-verifier-lean4-v435"
-    ),
-    v435Img
+  const v431Img = IMAGE.replace("sunstead-verifier-lean4", "sunstead-verifier-lean4-v431");
+  const listPayload = JSON.stringify([
+    { name: "sunstead-verifier-lean4", configuration: { image: IMAGE } },
+    { name: "sunstead-verifier-lean4-v435", configuration: { image: v435Img } },
+    { name: "sunstead-verifier-lean4-v431", configuration: { image: v431Img } },
+  ]);
+  assert.equal(imageFromApplications(listPayload, "sunstead-verifier-lean4-v435"), v435Img);
+  assert.equal(imageFromApplications(listPayload, "sunstead-verifier-lean4-v431"), v431Img);
+
+  // Verify the v4.31.0 app reports its own env var name on active-rollout fail-closed.
+  assert.throws(
+    () =>
+      imageFromApplications(
+        JSON.stringify([
+          {
+            name: "sunstead-verifier-lean4-v431",
+            active_rollout_id: "22222222-3333-4444-5555-666666666666",
+            configuration: { image: v431Img },
+          },
+        ]),
+        "sunstead-verifier-lean4-v431"
+      ),
+    /active container rollout.*SUNSTEAD_VERIFIER_V431_IMAGE/
   );
 });

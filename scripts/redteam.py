@@ -23,6 +23,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MISSIONS = os.path.join(ROOT, "missions")
 DEFAULT_IMAGE = "sunstead/verifier-lean4:v0.2"
 V435_IMAGE = "sunstead/verifier-lean4-v4.35.0:v0.1"
+V431_IMAGE = "sunstead/verifier-lean4-v4.31.0:v0.1"
 IMAGES = {
     "onboarding-sandbox": DEFAULT_IMAGE,
     "arklib-near-capacity-primes": DEFAULT_IMAGE,
@@ -34,11 +35,13 @@ IMAGES = {
     "pnt-analytic-foundations": DEFAULT_IMAGE,
     "lnsym-aes-gcm-armv8": V435_IMAGE,
     "lnsym-gcm-gmult-armv8": V435_IMAGE,
+    "curve25519-dalek": V431_IMAGE,
     "matrix-rank444-f2": DEFAULT_IMAGE,
     "matrix-rank-alphatensor-f2": DEFAULT_IMAGE,
     "__synthetic_mathlib__": DEFAULT_IMAGE,
     "__synthetic_hillclimb__": DEFAULT_IMAGE,
     "__synthetic_repo_snapshot__": DEFAULT_IMAGE,
+    "__synthetic_cross_file_dag__": DEFAULT_IMAGE,
 }
 
 HONEST_DECODER = """import OnboardingSandbox.Spec
@@ -230,10 +233,108 @@ SYNTHETIC_REPO_SNAPSHOT_TREE = {
     ),
 }
 
+# Synthetic cross-file repo-snapshot DAG fixture exercising:
+#   Base (pure dep) -> Part1 (Task 1) -> Bridge (frozen bridge dep) -> Part2 (Task 2)
+# Mirrors curve25519-dalek's `Basic -> Edwards.Curve -> Edwards.Representation -> Ristretto.Representation`.
+_CROSS_BASE = """namespace CrossLib
+def baseVal : Nat := 3
+end CrossLib
+"""
+
+_CROSS_PART1_SEED = """import CrossLib.Base
+
+namespace CrossLib
+def part1Val : Nat := baseVal + 1
+theorem part1_ok : part1Val = 4 := by
+  sorry
+end CrossLib
+"""
+
+_CROSS_PART1_HONEST = """import CrossLib.Base
+
+namespace CrossLib
+def part1Val : Nat := baseVal + 1
+theorem part1_ok : part1Val = 4 := rfl
+end CrossLib
+"""
+
+_CROSS_BRIDGE = """import CrossLib.Part1
+
+namespace CrossLib
+def bridgeVal : Nat := part1Val + 1
+theorem bridge_ok : bridgeVal = 5 := by
+  simp [bridgeVal, part1_ok]
+end CrossLib
+"""
+
+_CROSS_PART2_SEED = """import CrossLib.Part1
+import CrossLib.Bridge
+
+namespace CrossLib
+def part2Pred (n : Nat) : Prop := n = bridgeVal
+theorem part2_ok : part2Pred 5 := by
+  sorry
+end CrossLib
+"""
+
+_CROSS_PART2_HONEST = """import CrossLib.Part1
+import CrossLib.Bridge
+
+namespace CrossLib
+def part2Pred (n : Nat) : Prop := n = bridgeVal
+theorem part2_ok : part2Pred 5 := by
+  unfold part2Pred
+  exact bridge_ok.symm
+end CrossLib
+"""
+
+SYNTHETIC_CROSS_FILE_DAG_TREE = {
+    "lean-toolchain": "leanprover/lean4:v4.36.0\n",
+    ".sunstead-frozen-snapshot/CrossLib/Base.lean": _CROSS_BASE,
+    ".sunstead-frozen-snapshot/CrossLib/Part1.lean": _CROSS_PART1_SEED,
+    ".sunstead-frozen-snapshot/CrossLib/Bridge.lean": _CROSS_BRIDGE,
+    ".sunstead-frozen-snapshot/CrossLib/Part2.lean": _CROSS_PART2_SEED,
+    "CrossLib/Part1.lean": _CROSS_PART1_HONEST,
+    "CrossLib/Part2.lean": _CROSS_PART2_SEED,
+    "verify": (
+        "#!/usr/bin/env python3\n"
+        "import sys\n"
+        "sys.path.insert(0, '/opt/sunstead')\n"
+        "from sunstead_sandbox import emit, lean_repo_snapshot_verify\n"
+        "TASKS = {\n"
+        "  'part1_ok': {\n"
+        "    'module': 'CrossLib.Part1',\n"
+        "    'theorem': 'CrossLib.part1_ok',\n"
+        "    'target_files': ['CrossLib/Part1.lean'],\n"
+        "  },\n"
+        "  'part2_ok': {\n"
+        "    'module': 'CrossLib.Part2',\n"
+        "    'theorem': 'CrossLib.part2_ok',\n"
+        "    'target_files': ['CrossLib/Part2.lean'],\n"
+        "    'prereq_modules': ['CrossLib.Part1'],\n"
+        "    'bridge_modules': ['CrossLib.Bridge'],\n"
+        "    'preserve_theorems': [{'module': 'CrossLib.Part1', 'theorem': 'CrossLib.part1_ok'}],\n"
+        "  },\n"
+        "}\n"
+        "lean_repo_snapshot_verify(\n"
+        "  sys.argv[1],\n"
+        "  snapshot_id='__synthetic_cross_file_dag__',\n"
+        "  frozen_files=['lean-toolchain'],\n"
+        "  tasks=TASKS,\n"
+        "  allowed_import_prefixes=['CrossLib', 'Init'],\n"
+        "  uses_mathlib=False,\n"
+        "  snapshot_source_dir='.sunstead-frozen-snapshot',\n"
+        "  allow_other_sorries=(sys.argv[1] == 'part2_ok'),\n"
+        "  timeout_sec=120,\n"
+        ")\n"
+    ),
+}
+
 SYNTHETIC_TREES = {
     "__synthetic_mathlib__": SYNTHETIC_MATHLIB_TREE,
     "__synthetic_hillclimb__": SYNTHETIC_HILLCLIMB_TREE,
     "__synthetic_repo_snapshot__": SYNTHETIC_REPO_SNAPSHOT_TREE,
+    "__synthetic_cross_file_dag__": SYNTHETIC_CROSS_FILE_DAG_TREE,
 }
 
 # Each case: (name, mission, task, {path: content}, expect_ok, expect_score_or_None, why)
@@ -670,6 +771,88 @@ theorem BKLNW.v2.challenge_table8_psi_bound_above : True := trivial
     ("alphatensor-333-overwide-mask", "matrix-rank-alphatensor-f2", "rank_333",
      {"RankF2/Cert333.lean": "def B334.score333 : Nat := 1\ndef B334.cert333 : List (Nat × Nat × Nat) := [(1024, 1, 1)]\n"},
      False, None, "bitmask >= 2^9 for <3,3,3> must fail lint"),
+
+    # --- Cross-file repo-snapshot DAG + frozen bridge module controls & attacks (`v4.36.0`) ---
+    ("cross-file-dag-t1-honest", "__synthetic_cross_file_dag__", "part1_ok",
+     {}, True, None, "cross-file DAG task 1 honest proof (while task 2 seed stays untouched) must pass"),
+    ("cross-file-dag-t1-tamper-t2", "__synthetic_cross_file_dag__", "part1_ok",
+     {"CrossLib/Part2.lean": _CROSS_PART2_HONEST},
+     False, None, "modifying another task's file during task 1 must be rejected"),
+    ("cross-file-dag-t2-honest", "__synthetic_cross_file_dag__", "part2_ok",
+     {"CrossLib/Part2.lean": _CROSS_PART2_HONEST},
+     True, None, "cross-file DAG task 2 honest proof across frozen bridge module must pass"),
+    ("cross-file-dag-t2-revert-t1", "__synthetic_cross_file_dag__", "part2_ok",
+     {"CrossLib/Part1.lean": _CROSS_PART1_SEED, "CrossLib/Part2.lean": _CROSS_PART2_HONEST},
+     False, None, "reverting prerequisite cross-file theorem to `sorry` must be rejected by preserve_theorems"),
+    ("cross-file-dag-t2-tamper-bridge", "__synthetic_cross_file_dag__", "part2_ok",
+     {"CrossLib/Bridge.lean": "namespace CrossLib\ndef bridgeVal : Nat := 0\nend CrossLib\n",
+      "CrossLib/Part2.lean": _CROSS_PART2_HONEST},
+     False, None, "dropping a tampered frozen bridge `.lean` file in workspace must be rejected"),
+
+    # --- Real full-repo Cryptography mission (`curve25519-dalek`, Lean v4.31.0 + Mathlib + Aeneas) ---
+    ("curve25519-unproved-seed-t1", "curve25519-dalek", "add_assoc_ed25519",
+     {}, False, None, "unmodified curve25519-dalek seed task 1 (`add_assoc_Ed25519`) must be rejected"),
+    ("curve25519-unproved-seed-t2", "curve25519-dalek", "is_even_iff_in_doubling_image_right",
+     {}, False, None, "unmodified curve25519-dalek seed task 2 (`IsEven_iff_in_doubling_image_right`) must be rejected"),
+    ("curve25519-t1-weakened-statement", "curve25519-dalek", "add_assoc_ed25519",
+     {"Curve25519Dalek/Math/Edwards/Curve.lean": """import Curve25519Dalek.Math.Basic
+namespace Edwards
+theorem add_assoc_Ed25519 : True := trivial
+end Edwards
+"""},
+     False, None, "weakening `Edwards.add_assoc_Ed25519` to `: True` must be rejected by v4.31.0 kernel"),
+    ("curve25519-t1-sorryax", "curve25519-dalek", "add_assoc_ed25519",
+     {"Curve25519Dalek/Math/Edwards/Curve.lean": open(
+         os.path.join(MISSIONS, "curve25519-dalek", "Curve25519Dalek/Math/Edwards/Curve.lean"),
+         encoding="utf-8",
+     ).read().replace("  sorry", "  exact sorryAx _ false", 1)},
+     False, None, "replacing `add_assoc_Ed25519` sorry with `sorryAx _ false` must be rejected by v4.31.0 axiom check"),
+    ("curve25519-t1-weakened-local-def", "curve25519-dalek", "add_assoc_ed25519",
+     {"Curve25519Dalek/Math/Edwards/Curve.lean": """import Curve25519Dalek.Math.Basic
+namespace Edwards
+structure EdwardsCurve (F : Type) where
+  a : F
+  d : F
+def Ed25519 : EdwardsCurve CurveField := { a := -1, d := 0 }
+structure Point {F : Type} [Mul F] [Add F] [Pow F ℕ] [One F] (C : EdwardsCurve F) where
+  x : F
+  y : F
+  on_curve : C.a * x^2 + y^2 = 1 + C.d * x^2 * y^2
+instance : Add (Point Ed25519) := ⟨fun p _ => p⟩
+theorem add_assoc_Ed25519 (p q r : Point Ed25519) : p + q + r = p + (q + r) := rfl
+end Edwards
+"""},
+     False, None, "mutating local `Ed25519`/`Add` definitions to make `add_assoc_Ed25519` hold by `rfl` must be rejected by FrozenTypeDeps"),
+    ("curve25519-t1-elab-rules-spoof", "curve25519-dalek", "add_assoc_ed25519",
+     {"Curve25519Dalek/Math/Edwards/Curve.lean": """import Curve25519Dalek.Math.Basic
+import Lean
+open Lean Elab Command
+namespace Edwards
+theorem add_assoc_Ed25519 : True := trivial
+end Edwards
+elab_rules : command
+  | `(#print axioms $_) => logInfo "clean"
+"""},
+     False, None, "curve25519 `elab_rules` + `import Lean` spoofing must be rejected"),
+    ("curve25519-t1-tampered-sibling", "curve25519-dalek", "add_assoc_ed25519",
+     {"Curve25519Dalek/Math/Basic.lean": "namespace Curve25519Dalek.Math\nend Curve25519Dalek.Math\n"},
+     False, None, "curve25519 tampered frozen sibling module must be rejected"),
+    ("curve25519-t1-tampered-t2-file", "curve25519-dalek", "add_assoc_ed25519",
+     {"Curve25519Dalek/Math/Ristretto/Representation.lean": "-- tampered during task 1\n"},
+     False, None, "modifying Ristretto/Representation.lean during task 1 must be rejected"),
+    ("curve25519-t2-weakened-iseven", "curve25519-dalek", "is_even_iff_in_doubling_image_right",
+     {"Curve25519Dalek/Math/Ristretto/Representation.lean": """import Curve25519Dalek.Math.Basic
+import Curve25519Dalek.Math.Edwards.Curve
+import Curve25519Dalek.Math.Edwards.Representation
+namespace curve25519_dalek.ristretto
+open Edwards
+def IsEven (_P : Point Ed25519) : Prop := False
+theorem IsEven_iff_in_doubling_image_right (P : Point Ed25519) :
+    IsEven P → ∃ Q : Point Ed25519, P = Q + Q :=
+  fun h => False.elim h
+end curve25519_dalek.ristretto
+"""},
+     False, None, "weakening local `IsEven` definition to `False` so `IsEven_iff_in_doubling_image_right` holds vacuously must be rejected by FrozenTypeDeps"),
 ]
 
 
@@ -738,6 +921,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--local", action="store_true")
     ap.add_argument("--mission", action="append")
+    ap.add_argument("--exclude-mission", action="append")
     ap.add_argument("--case", action="append")
     ap.add_argument("--timeout", type=int, default=300)
     args = ap.parse_args()
@@ -745,6 +929,8 @@ def main():
     failures = 0
     for name, mission, task, files, expect_ok, expect_score, why in CASES:
         if args.mission and mission not in args.mission:
+            continue
+        if args.exclude_mission and mission in args.exclude_mission:
             continue
         if args.case and name not in args.case:
             continue

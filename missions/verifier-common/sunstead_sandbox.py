@@ -507,14 +507,33 @@ def _mathlib_lib_paths():
     if not os.path.isdir(pkgs_dir):
         emit(False, f"sandbox error: Mathlib cache not found at {pkgs_dir}")
     libs = []
+    seen = set()
+
+    def _add(p):
+        if p not in seen:
+            seen.add(p)
+            libs.append(p)
+
     for pkg in sorted(os.listdir(pkgs_dir)):
-        lean_lib = os.path.join(pkgs_dir, pkg, ".lake", "build", "lib", "lean")
-        if os.path.isdir(lean_lib):
-            libs.append(lean_lib)
+        pkg_dir = os.path.join(pkgs_dir, pkg)
+        if not os.path.isdir(pkg_dir):
             continue
-        legacy_lib = os.path.join(pkgs_dir, pkg, ".lake", "build", "lib")
+        lean_lib = os.path.join(pkg_dir, ".lake", "build", "lib", "lean")
+        if os.path.isdir(lean_lib):
+            _add(lean_lib)
+            continue
+        legacy_lib = os.path.join(pkg_dir, ".lake", "build", "lib")
         if os.path.isdir(legacy_lib) and glob.glob(os.path.join(legacy_lib, "*.olean")):
-            libs.append(legacy_lib)
+            _add(legacy_lib)
+            continue
+        # Support Lake packages with `subDir` (e.g. `aeneas/backends/lean`).
+        for pat in (
+            os.path.join(pkg_dir, "*", ".lake", "build", "lib", "lean"),
+            os.path.join(pkg_dir, "*", "*", ".lake", "build", "lib", "lean"),
+        ):
+            for sub_lib in sorted(glob.glob(pat)):
+                if os.path.isdir(sub_lib):
+                    _add(sub_lib)
     if not libs:
         emit(False, f"sandbox error: no compiled Mathlib .olean directories found under {pkgs_dir}")
     return libs
@@ -898,20 +917,44 @@ def _mod_to_rel_lean(mod):
     return "/".join(_validate_mod_name(mod)) + ".lean"
 
 
+def _populate_symlink_overlay_as(user, src_dir, dst_dir, timeout=60):
+    """Create a writable overlay directory as `user` containing 0755 subdirs
+    and symlinks to every regular file under read-only `src_dir`."""
+    script = (
+        "import os, sys\n"
+        "src, dst = sys.argv[1], sys.argv[2]\n"
+        "os.makedirs(dst, mode=0o755, exist_ok=True)\n"
+        "for root, dirs, files in os.walk(src):\n"
+        "    rel = os.path.relpath(root, src)\n"
+        "    out = dst if rel == '.' else os.path.join(dst, rel)\n"
+        "    os.makedirs(out, mode=0o755, exist_ok=True)\n"
+        "    for fn in files:\n"
+        "        s = os.path.join(root, fn)\n"
+        "        d = os.path.join(out, fn)\n"
+        "        if os.path.lexists(d):\n"
+        "            os.unlink(d)\n"
+        "        os.symlink(s, d)\n"
+    )
+    p = run_as(user, [sys.executable, "-I", "-c", script, src_dir, dst_dir], cwd="/", timeout=timeout)
+    if p.returncode != 0:
+        emit(False, f"sandbox error: overlay setup as {user} failed: {tail(p.stderr)}", stage="sandbox")
+
+
 def _build_live_snapshot(job, snap_src_abs, target_modules, extra_lib_paths,
                          lean_options, deadline_fn, fsize_mb):
     """Build a synthetic/uncached repo-snapshot as `sunstead-checker` into
-    `job.checker_dir/snapshot/{deps,frozen-targets}` (used by red-team fixtures)."""
+    `job.checker_dir/snapshot/{deps,frozen-targets,frozen-sources}` (used by red-team fixtures)."""
     snap_out = os.path.join(job.checker_dir, "snapshot")
     deps_dir = os.path.join(snap_out, "deps")
     frozen_dir = os.path.join(snap_out, "frozen-targets")
-    for d in (deps_dir, frozen_dir):
+    frozen_sources_dir = os.path.join(snap_out, "frozen-sources")
+    for d in (deps_dir, frozen_dir, frozen_sources_dir):
         p = run_as(CHECKER_USER, ["mkdir", "-p", d], cwd="/", timeout=30)
         if p.returncode != 0:
             emit(False, f"sandbox error: mkdir snapshot dir failed: {tail(p.stderr)}", stage="sandbox")
 
     # Trace local modules inside snap_src_abs.
-    visited, order = set(), []
+    visited, order, graph = set(), [], {}
 
     def dfs(mod):
         if mod in visited:
@@ -923,36 +966,54 @@ def _build_live_snapshot(job, snap_src_abs, target_modules, extra_lib_paths,
             return
         with open(p_src, "r", encoding="utf-8") as f:
             code = _strip_lean_comments(f.read())
+        local_deps = []
         for imp in _extract_imports(code):
             try:
                 imp_segs = _validate_mod_name(imp)
             except SystemExit:
                 continue
             if os.path.isfile(os.path.join(snap_src_abs, *imp_segs) + ".lean"):
+                if imp not in local_deps:
+                    local_deps.append(imp)
                 dfs(imp)
+        graph[mod] = local_deps
         order.append(mod)
 
     for tm in target_modules:
         dfs(tm)
 
     target_set = set(target_modules)
+    memo_hits = {}
+
+    def _depends_on_target(m):
+        if m in memo_hits:
+            return memo_hits[m]
+        if m in target_set:
+            memo_hits[m] = True
+            return True
+        hit = any(_depends_on_target(d) for d in graph.get(m, []))
+        memo_hits[m] = hit
+        return hit
+
+    bridge_set = {m for m in order if m not in target_set and _depends_on_target(m)}
     opt_flags = []
     for opt in (lean_options or []):
         opt_flags.extend(["-D", opt])
-    lean_path = ":".join([deps_dir] + list(extra_lib_paths))
+    deps_lean_path = ":".join([deps_dir] + list(extra_lib_paths))
 
     for mod in order:
+        if mod in target_set or mod in bridge_set:
+            continue
         segs = _validate_mod_name(mod)
         rel_src = os.path.join(*segs) + ".lean"
-        base_out = frozen_dir if mod in target_set else deps_dir
-        out_olean = os.path.join(base_out, *segs) + ".olean"
+        out_olean = os.path.join(deps_dir, *segs) + ".olean"
         run_as(CHECKER_USER, ["mkdir", "-p", os.path.dirname(out_olean)], cwd="/", timeout=30)
         p = run_as(
             CHECKER_USER,
             ["lean", f"--root={snap_src_abs}"] + opt_flags + ["-o", out_olean, rel_src],
             cwd=snap_src_abs,
             timeout=deadline_fn(),
-            env_extra={"HOME": job.checker_dir, "LEAN_PATH": lean_path},
+            env_extra={"HOME": job.checker_dir, "LEAN_PATH": deps_lean_path},
             fsize_mb=fsize_mb,
         )
         ensure_no_processes(CHECKER_USER)
@@ -961,7 +1022,45 @@ def _build_live_snapshot(job, snap_src_abs, target_modules, extra_lib_paths,
             st = "timeout" if p.returncode == -9 else "sandbox"
             emit(False, f"trusted snapshot build failed ({mod}): {tail(combined)}",
                  stage=st, diagnostics=combined)
-    return deps_dir, frozen_dir
+
+    overlay_dir = os.path.join(snap_out, "overlay")
+    _populate_symlink_overlay_as(CHECKER_USER, deps_dir, overlay_dir)
+    overlay_lean_path = ":".join([overlay_dir] + list(extra_lib_paths))
+
+    for mod in order:
+        if mod not in target_set and mod not in bridge_set:
+            continue
+        segs = _validate_mod_name(mod)
+        rel_src = os.path.join(*segs) + ".lean"
+        ov_olean = os.path.join(overlay_dir, *segs) + ".olean"
+        run_as(CHECKER_USER, ["mkdir", "-p", os.path.dirname(ov_olean)], cwd="/", timeout=30)
+        run_as(CHECKER_USER, ["rm", "-f", ov_olean], cwd="/", timeout=30)
+        p = run_as(
+            CHECKER_USER,
+            ["lean", f"--root={snap_src_abs}"] + opt_flags + ["-o", ov_olean, rel_src],
+            cwd=snap_src_abs,
+            timeout=deadline_fn(),
+            env_extra={"HOME": job.checker_dir, "LEAN_PATH": overlay_lean_path},
+            fsize_mb=fsize_mb,
+        )
+        ensure_no_processes(CHECKER_USER)
+        if p.returncode != 0:
+            combined = (p.stdout + "\n" + p.stderr).strip()
+            st = "timeout" if p.returncode == -9 else "sandbox"
+            emit(False, f"trusted snapshot build failed ({mod}): {tail(combined)}",
+                 stage=st, diagnostics=combined)
+        if mod in target_set:
+            dst_frozen = os.path.join(frozen_dir, *segs) + ".olean"
+            run_as(CHECKER_USER, ["mkdir", "-p", os.path.dirname(dst_frozen)], cwd="/", timeout=30)
+            p_cp = run_as(CHECKER_USER, ["cp", ov_olean, dst_frozen], cwd="/", timeout=30)
+            if p_cp.returncode != 0:
+                emit(False, f"sandbox error: copy frozen target {mod} failed: {tail(p_cp.stderr)}", stage="sandbox")
+        else:
+            dst_src = os.path.join(frozen_sources_dir, *segs) + ".lean"
+            run_as(CHECKER_USER, ["mkdir", "-p", os.path.dirname(dst_src)], cwd="/", timeout=30)
+            with open(os.path.join(snap_src_abs, *segs) + ".lean", "r", encoding="utf-8") as bf:
+                job.write_as(CHECKER_USER, dst_src, bf.read())
+    return deps_dir, frozen_dir, frozen_sources_dir
 
 
 def lean_repo_snapshot_verify(task_id, *, snapshot_id, frozen_files, tasks,
@@ -1025,6 +1124,22 @@ def _lean_repo_snapshot_check(task_id, *, snapshot_id, frozen_files, tasks,
     if target_rel not in target_files:
         target_files.add(target_rel)
 
+    prereq_mods = list(task.get("prereq_modules") or [])
+    bridge_mods = list(task.get("bridge_modules") or [])
+    prereq_files = set()
+    for pm in prereq_mods:
+        prereq_files.add("/".join(_validate_mod_name(pm)) + ".lean")
+    for bm in bridge_mods:
+        _validate_mod_name(bm)
+
+    all_task_files = set()
+    for t in tasks.values():
+        t_default = "/".join(_validate_mod_name(t["module"])) + ".lean"
+        all_task_files.add(t_default)
+        for rel in (t.get("target_files") or [t_default]):
+            all_task_files.add(rel.replace("\\", "/"))
+    other_task_files = all_task_files - target_files - prereq_files
+
     extra_lib_paths = _mathlib_lib_paths() if uses_mathlib else []
     fsize_mb = 1024 if uses_mathlib else 512
     allowed_imports = tuple(allowed_import_prefixes)
@@ -1071,8 +1186,23 @@ def _lean_repo_snapshot_check(task_id, *, snapshot_id, frozen_files, tasks,
                     or rel.startswith(".lake/")):
                 msg = f"{rel}: prebuilt binary/build artifacts are forbidden in submissions"
                 emit(False, msg, stage="lint", diagnostics=msg)
-            if fn.endswith(".lean") and rel not in target_files:
-                if snap_manifest is not None:
+            if fn.endswith(".lean") and rel not in target_files and rel not in prereq_files:
+                if rel in other_task_files:
+                    if snap_manifest is not None:
+                        expected = (snap_manifest.get("target_seed_hashes") or {}).get(rel)
+                        if expected is None or _sha256_file(abs_p) != expected:
+                            msg = f"{rel}: non-target task file modified outside task scope"
+                            emit(False, msg, stage="lint", diagnostics=msg)
+                    elif snap_src_abs is not None:
+                        ref_p = os.path.join(snap_src_abs, rel)
+                        if (not os.path.isfile(ref_p)
+                                or _sha256_file(abs_p) != _sha256_file(ref_p)):
+                            msg = f"{rel}: non-target task file modified outside task scope"
+                            emit(False, msg, stage="lint", diagnostics=msg)
+                    else:
+                        msg = f"{rel}: non-target Lean file not allowed in submission"
+                        emit(False, msg, stage="lint", diagnostics=msg)
+                elif snap_manifest is not None:
                     expected = (snap_manifest.get("frozen_file_hashes") or {}).get(rel)
                     if expected is None or _sha256_file(abs_p) != expected:
                         msg = f"{rel}: frozen sibling module modified or unauthorized"
@@ -1087,9 +1217,9 @@ def _lean_repo_snapshot_check(task_id, *, snapshot_id, frozen_files, tasks,
                     msg = f"{rel}: non-target Lean file not allowed in submission"
                     emit(False, msg, stage="lint", diagnostics=msg)
 
-    # 1. Lint every target file.
+    # 1. Lint every writable target file and prerequisite DAG module file.
     seed_lint_map = (snap_manifest or {}).get("seed_allowed_lint_lines") or {}
-    for rel in sorted(target_files):
+    for rel in sorted(target_files | prereq_files):
         abs_p = os.path.join(work, rel)
         if not os.path.isfile(abs_p):
             emit(False, f"missing target file: {rel}", stage="lint", diagnostics=f"missing target file: {rel}")
@@ -1109,15 +1239,17 @@ def _lean_repo_snapshot_check(task_id, *, snapshot_id, frozen_files, tasks,
 
     job = Job()
     try:
-        # 2. Resolve read-only trusted snapshot (`deps/` + `frozen-targets/`).
+        # 2. Resolve read-only trusted snapshot (`deps/` + `frozen-targets/` + optional `frozen-sources/`).
         if snap_manifest is not None:
             deps_dir = os.path.join(snap_root, "deps")
-            frozen_target_olean = os.path.join(snap_root, "frozen-targets", *target_segs) + ".olean"
+            frozen_dir = os.path.join(snap_root, "frozen-targets")
+            frozen_sources_dir = os.path.join(snap_root, "frozen-sources")
+            frozen_target_olean = os.path.join(frozen_dir, *target_segs) + ".olean"
             if not (os.path.isdir(deps_dir) and os.path.isfile(frozen_target_olean)):
                 emit(False, f"sandbox error: incomplete prebuilt snapshot `{snapshot_id}`", stage="sandbox")
         elif snap_src_abs and os.path.isdir(snap_src_abs):
             all_target_mods = list(dict.fromkeys(t["module"] for t in tasks.values()))
-            deps_dir, frozen_dir = _build_live_snapshot(
+            deps_dir, frozen_dir, frozen_sources_dir = _build_live_snapshot(
                 job, snap_src_abs, all_target_mods, extra_lib_paths,
                 lean_opts, deadline, fsize_mb,
             )
@@ -1126,41 +1258,96 @@ def _lean_repo_snapshot_check(task_id, *, snapshot_id, frozen_files, tasks,
             emit(False, f"sandbox error: prebuilt snapshot `{snapshot_id}` not found at {snap_root}",
                  stage="sandbox")
 
-        # 3. Untrusted build of ONLY the writable target file(s) as `sunstead-runner`.
+        # Validate frozen bridge sources (if any) against baked hashes before runner compilation.
+        bridge_hashes = (snap_manifest or {}).get("bridge_source_hashes") or {}
+        for bm in bridge_mods:
+            b_segs = _validate_mod_name(bm)
+            b_rel = "/".join(b_segs) + ".lean"
+            b_path = os.path.join(frozen_sources_dir, *b_segs) + ".lean"
+            if not os.path.isfile(b_path):
+                emit(False, f"sandbox error: missing frozen bridge source `{bm}` ({b_rel})", stage="sandbox")
+            if snap_manifest is not None:
+                expected_b = bridge_hashes.get(b_rel)
+                if expected_b is None or _sha256_file(b_path) != expected_b:
+                    emit(False, f"sandbox error: frozen bridge source hash mismatch for `{bm}`", stage="sandbox")
+
+        # 3. Untrusted build of writable target file(s) (+ any prerequisite DAG
+        #    modules and frozen bridge modules) as `sunstead-runner`.
         src_dir = os.path.join(job.runner_dir, "src")
         out_lib = os.path.join(src_dir, ".lake", "build", "lib", "lean")
-        out_olean = os.path.join(out_lib, *target_segs) + ".olean"
-        for rel in sorted(target_files):
+        for rel in sorted(target_files | prereq_files):
             dst = os.path.join(src_dir, rel)
             run_as(RUNNER_USER, ["mkdir", "-p", os.path.dirname(dst)], cwd="/", timeout=30)
             with open(os.path.join(work, rel), "r", encoding="utf-8") as f:
                 job.write_as(RUNNER_USER, dst, f.read())
-        run_as(RUNNER_USER, ["mkdir", "-p", os.path.dirname(out_olean)], cwd="/", timeout=30)
+        for bm in bridge_mods:
+            b_segs = _validate_mod_name(bm)
+            b_rel = "/".join(b_segs) + ".lean"
+            dst = os.path.join(src_dir, b_rel)
+            run_as(RUNNER_USER, ["mkdir", "-p", os.path.dirname(dst)], cwd="/", timeout=30)
+            with open(os.path.join(frozen_sources_dir, *b_segs) + ".lean", "r", encoding="utf-8") as f:
+                job.write_as(RUNNER_USER, dst, f.read())
 
         opt_flags = []
         for opt in lean_opts:
             opt_flags.extend(["-D", opt])
-        # Keep `out_lib` off `LEAN_PATH` when building a single target module:
-        # Lean's single-root package lookup stops at the first `LEAN_PATH` entry
-        # containing a package directory (e.g. `Proofs/`), so placing `out_lib`
-        # before `deps_dir` would shadow sibling modules in `deps_dir`.
-        runner_lean_path = ":".join([deps_dir] + extra_lib_paths)
         runner_cpu = max(timeout_sec * 4, 240)
-        p = run_as(
-            RUNNER_USER,
-            ["lean", f"--root={src_dir}"] + opt_flags + ["-o", out_olean, target_rel],
-            cwd=src_dir,
-            timeout=deadline(),
-            env_extra={"HOME": job.runner_dir, "LEAN_PATH": runner_lean_path},
-            fsize_mb=fsize_mb,
-            cpu_sec=runner_cpu,
-        )
-        ensure_no_processes(RUNNER_USER)
-        if p.returncode != 0:
-            combined = (p.stdout + "\n" + p.stderr).strip()
-            st = "timeout" if p.returncode == -9 else "compile"
-            emit(False, f"lean build {target_mod} failed: {tail(combined)}",
-                 stage=st, diagnostics=combined)
+        compile_order = list(dict.fromkeys(prereq_mods + bridge_mods + [target_mod]))
+
+        if len(compile_order) == 1:
+            # Keep `out_lib` off `LEAN_PATH` when building a single target module:
+            # Lean's single-root package lookup stops at the first `LEAN_PATH` entry
+            # containing a package directory (e.g. `Proofs/`), so placing `out_lib`
+            # before `deps_dir` would shadow sibling modules in `deps_dir`.
+            out_olean = os.path.join(out_lib, *target_segs) + ".olean"
+            run_as(RUNNER_USER, ["mkdir", "-p", os.path.dirname(out_olean)], cwd="/", timeout=30)
+            runner_lean_path = ":".join([deps_dir] + extra_lib_paths)
+            p = run_as(
+                RUNNER_USER,
+                ["lean", f"--root={src_dir}"] + opt_flags + ["-o", out_olean, target_rel],
+                cwd=src_dir,
+                timeout=deadline(),
+                env_extra={"HOME": job.runner_dir, "LEAN_PATH": runner_lean_path},
+                fsize_mb=fsize_mb,
+                cpu_sec=runner_cpu,
+            )
+            ensure_no_processes(RUNNER_USER)
+            if p.returncode != 0:
+                combined = (p.stdout + "\n" + p.stderr).strip()
+                st = "timeout" if p.returncode == -9 else "compile"
+                emit(False, f"lean build {target_mod} failed: {tail(combined)}",
+                     stage=st, diagnostics=combined)
+        else:
+            overlay_lib = os.path.join(job.runner_dir, "overlay")
+            _populate_symlink_overlay_as(RUNNER_USER, deps_dir, overlay_lib)
+            runner_lean_path = ":".join([overlay_lib] + extra_lib_paths)
+            for mod in compile_order:
+                segs = _validate_mod_name(mod)
+                rel_src = os.path.join(*segs) + ".lean"
+                out_olean = os.path.join(out_lib, *segs) + ".olean"
+                ov_olean = os.path.join(overlay_lib, *segs) + ".olean"
+                run_as(RUNNER_USER, ["mkdir", "-p", os.path.dirname(out_olean)], cwd="/", timeout=30)
+                run_as(RUNNER_USER, ["mkdir", "-p", os.path.dirname(ov_olean)], cwd="/", timeout=30)
+                run_as(RUNNER_USER, ["rm", "-f", ov_olean], cwd="/", timeout=30)
+                p = run_as(
+                    RUNNER_USER,
+                    ["lean", f"--root={src_dir}"] + opt_flags + ["-o", out_olean, rel_src],
+                    cwd=src_dir,
+                    timeout=deadline(),
+                    env_extra={"HOME": job.runner_dir, "LEAN_PATH": runner_lean_path},
+                    fsize_mb=fsize_mb,
+                    cpu_sec=runner_cpu,
+                )
+                ensure_no_processes(RUNNER_USER)
+                if p.returncode != 0:
+                    combined = (p.stdout + "\n" + p.stderr).strip()
+                    st = "timeout" if p.returncode == -9 else "compile"
+                    emit(False, f"lean build {mod} failed: {tail(combined)}",
+                         stage=st, diagnostics=combined)
+                p_ln = run_as(RUNNER_USER, ["ln", "-sf", out_olean, ov_olean], cwd="/", timeout=30)
+                if p_ln.returncode != 0:
+                    emit(False, f"sandbox error: overlay link for {mod} failed: {tail(p_ln.stderr)}",
+                         stage="sandbox")
 
         # 4. Trusted kernel replay against pinned upstream `.olean` (`sunstead-checker`).
         if os.path.isfile(LEAN_CHECKER_BIN) and os.access(LEAN_CHECKER_BIN, os.X_OK):
@@ -1168,20 +1355,34 @@ def _lean_repo_snapshot_check(task_id, *, snapshot_id, frozen_files, tasks,
         else:
             checker_cmd = ["lean", "--run", LEAN_CHECKER]
         trusted_lib_paths = [deps_dir] + extra_lib_paths
-        theorems_to_check = [task["theorem"]]
+        untrusted_mods_arg = ",".join(compile_order)
+        checks_to_run = [(target_mod, task["theorem"], True)]
         if not allow_sorry:
-            for prev_thm in task.get("preserve_theorems") or []:
-                if prev_thm not in theorems_to_check:
-                    theorems_to_check.append(prev_thm)
+            for prev in task.get("preserve_theorems") or []:
+                if isinstance(prev, dict):
+                    p_mod = prev["module"]
+                    p_thm = prev["theorem"]
+                else:
+                    p_mod = target_mod
+                    p_thm = prev
+                if p_mod not in compile_order:
+                    emit(False, f"sandbox error: preserved theorem module `{p_mod}` not in build order",
+                         stage="sandbox")
+                if not any(m == p_mod and t == p_thm for m, t, _ in checks_to_run):
+                    checks_to_run.append((p_mod, p_thm, False))
         allowed_axioms = set(ALLOWED_AXIOMS) | ({"sorryAx"} if allow_sorry else set())
         target_axioms = []
-        for check_thm in theorems_to_check:
+        for check_mod, check_thm, is_primary in checks_to_run:
+            check_segs = _validate_mod_name(check_mod)
+            check_frozen_olean = os.path.join(frozen_dir, *check_segs) + ".olean"
+            if not os.path.isfile(check_frozen_olean):
+                emit(False, f"sandbox error: missing frozen target .olean for `{check_mod}`", stage="sandbox")
             argv = checker_cmd + [
                 "trusted-lib=" + ":".join(trusted_lib_paths),
                 "untrusted-lib=" + out_lib,
-                "untrusted-modules=" + target_mod,
-                "frozen-target-olean=" + frozen_target_olean,
-                "target-module=" + target_mod,
+                "untrusted-modules=" + untrusted_mods_arg,
+                "frozen-target-olean=" + check_frozen_olean,
+                "target-module=" + check_mod,
                 "target-const=" + check_thm,
             ]
             p = run_as(CHECKER_USER, argv, cwd=job.checker_dir, timeout=deadline(),
@@ -1203,16 +1404,16 @@ def _lean_repo_snapshot_check(task_id, *, snapshot_id, frozen_files, tasks,
                      stage=st, diagnostics=combined)
             if not result.get("ok"):
                 err_msg = str(result.get("error", "unknown error"))
-                prefix = "" if check_thm == task["theorem"] else f"preserved prior theorem `{check_thm}` broken: "
+                prefix = "" if is_primary else f"preserved prior theorem `{check_thm}` broken: "
                 emit(False, f"kernel check failed: {prefix}{err_msg[:400]}",
                      stage="kernel", diagnostics=prefix + err_msg)
             bad = [a for a in result.get("axioms", []) if a not in allowed_axioms]
             if bad:
-                prefix = "" if check_thm == task["theorem"] else f"preserved prior theorem `{check_thm}` uses "
+                prefix = "" if is_primary else f"preserved prior theorem `{check_thm}` uses "
                 msg = f"{prefix}forbidden axioms: {', '.join(bad)}"
                 emit(False, msg, stage="axioms",
                      diagnostics=f"{msg} (allowed: {', '.join(sorted(allowed_axioms))})")
-            if check_thm == task["theorem"]:
+            if is_primary:
                 target_axioms = result.get("axioms", [])
         elapsed = int((time.monotonic() - started) * 1000)
         if allow_sorry:

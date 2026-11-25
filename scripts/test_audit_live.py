@@ -14,6 +14,7 @@ MODULE.loader.exec_module(audit)
 
 IMAGE = "sunstead/verifier-lean4:v0.2"
 IMAGE_V435 = "sunstead/verifier-lean4-v4.35.0:v0.1"
+IMAGE_V431 = "sunstead/verifier-lean4-v4.31.0:v0.1"
 
 
 def has_verifier_image(image=IMAGE):
@@ -150,14 +151,31 @@ diff --git a/Proof.lean b/Proof.lean
         lnsym_manifest = json.loads((lnsym_dir / "sunstead.json").read_text(encoding="utf-8"))
         self.assertEqual(audit.resolve_audit_target(lnsym_dir, lnsym_manifest), (IMAGE_V435, "4.35.0"))
         self.assertTrue(audit.is_repo_snapshot(lnsym_manifest))
-        tc_map = audit.parse_toolchain_images(["v4.35.0=custom/v435:test", "leanprover/lean4:v4.36.0=custom/v436:test"])
+
+        c25519_dir = audit.ROOT / "missions" / "curve25519-dalek"
+        c25519_manifest = json.loads((c25519_dir / "sunstead.json").read_text(encoding="utf-8"))
+        self.assertEqual(audit.resolve_audit_target(c25519_dir, c25519_manifest), (IMAGE_V431, "4.31.0"))
+        self.assertTrue(audit.is_repo_snapshot(c25519_manifest))
+
+        tc_map = audit.parse_toolchain_images([
+            "v4.35.0=custom/v435:test",
+            "v4.31.0=custom/v431:test",
+            "leanprover/lean4:v4.36.0=custom/v436:test",
+        ])
         self.assertEqual(audit.resolve_audit_target(lnsym_dir, lnsym_manifest, toolchain_images=tc_map), ("custom/v435:test", "4.35.0"))
+        self.assertEqual(audit.resolve_audit_target(c25519_dir, c25519_manifest, toolchain_images=tc_map), ("custom/v431:test", "4.31.0"))
         self.assertEqual(audit.resolve_audit_target(pnt_dir, pnt_manifest, toolchain_images=tc_map), ("custom/v436:test", "4.36.0"))
         self.assertEqual(
             audit.resolve_audit_target(
                 lnsym_dir, lnsym_manifest, toolchain_images=audit.parse_toolchain_images([], image_v435="alt/v435:1")
             ),
             ("alt/v435:1", "4.35.0"),
+        )
+        self.assertEqual(
+            audit.resolve_audit_target(
+                c25519_dir, c25519_manifest, toolchain_images=audit.parse_toolchain_images([], image_v431="alt/v431:1")
+            ),
+            ("alt/v431:1", "4.31.0"),
         )
         with self.assertRaisesRegex(ValueError, "invalid --toolchain-image"):
             audit.parse_toolchain_images(["badspec"])
@@ -296,6 +314,82 @@ diff --git a/Proof.lean b/Proof.lean
         for tid in ("gcm_polyval_mul_eq_polynomial_mult", "polynomial_mult_append"):
             with self.subTest(task=tid):
                 raw, snap_id, opts, checks = audit.repo_snapshot_input(tree, tree, manifest, [tid], contracts)
+                with self.assertRaisesRegex(ValueError, "non-standard axiom.*sorryAx"):
+                    audit.check_lean_repo_snapshot(image, raw, snap_id, opts, checks, expected_version=version)
+
+    @unittest.skipUnless(has_verifier_image(IMAGE_V431), f"requires local {IMAGE_V431} container image")
+    def test_container_v431_repo_snapshot_honest_and_attacks(self):
+        manifest = {
+            "snapshot": {"mode": "repo-snapshot", "snapshot_id": "curve25519-dalek", "lean_options": []},
+            "tasks": [{"id": "t1", "depends_on": [], "target_files": ["Snap431/Target.lean"]}],
+        }
+        contracts = {"t1": {"module": "Snap431.Target", "theorem": "Snap431.ok"}}
+        seed_src = (
+            b"namespace Snap431\n"
+            b"abbrev modulus : Nat := 25519\n"
+            b"theorem ok : modulus = 25519 := by\n"
+            b"  sorry\n"
+            b"end Snap431\n"
+        )
+        honest_src = (
+            b"namespace Snap431\n"
+            b"abbrev modulus : Nat := 25519\n"
+            b"theorem ok : modulus = 25519 := rfl\n"
+            b"end Snap431\n"
+        )
+        seed_tree = {"Snap431/Target.lean": (seed_src, False)}
+
+        raw, snap_id, opts, checks = audit.repo_snapshot_input(
+            seed_tree, {"Snap431/Target.lean": (honest_src, False)}, manifest, ["t1"], contracts
+        )
+        audit.check_lean_repo_snapshot(IMAGE_V431, raw, snap_id, opts, checks, expected_version="4.31.0")
+
+        weak_abbrev = (
+            b"namespace Snap431\n"
+            b"abbrev modulus : Nat := 17\n"
+            b"axiom fake : 17 = 25519\n"
+            b"theorem ok : modulus = 25519 := fake\n"
+            b"end Snap431\n"
+        )
+        raw, snap_id, opts, checks = audit.repo_snapshot_input(
+            seed_tree, {"Snap431/Target.lean": (weak_abbrev, False)}, manifest, ["t1"], contracts
+        )
+        with self.assertRaises(subprocess.CalledProcessError) as ctx:
+            audit.check_lean_repo_snapshot(IMAGE_V431, raw, snap_id, opts, checks, expected_version="4.31.0")
+        self.assertIn(b"FROZEN_DEP_MODIFIED Snap431.modulus", ctx.exception.output)
+
+        spoofed = (
+            b"import Lean\n"
+            b"open Lean Elab Command\n"
+            b"elab_rules : command | `(#print axioms $_) => logInfo \"'Snap431.ok' does not depend on any axioms\"\n"
+            b"namespace Snap431\n"
+            b"abbrev modulus : Nat := 25519\n"
+            b"axiom cheat : modulus = 25519\n"
+            b"theorem ok : modulus = 25519 := cheat\n"
+            b"end Snap431\n"
+        )
+        raw, snap_id, opts, checks = audit.repo_snapshot_input(
+            seed_tree, {"Snap431/Target.lean": (spoofed, False)}, manifest, ["t1"], contracts
+        )
+        with self.assertRaisesRegex(ValueError, "non-standard axiom.*Snap431.cheat"):
+            audit.check_lean_repo_snapshot(IMAGE_V431, raw, snap_id, opts, checks, expected_version="4.31.0")
+
+    @unittest.skipUnless(has_verifier_image(IMAGE_V431), f"requires local {IMAGE_V431} container image")
+    def test_container_curve25519_real_seed_detects_sorry_axiom(self):
+        c_dir = audit.ROOT / "missions" / "curve25519-dalek"
+        manifest = json.loads((c_dir / "sunstead.json").read_text(encoding="utf-8"))
+        contracts, _ = audit.proof_contract(c_dir)
+        rel_curve = "Curve25519Dalek/Math/Edwards/Curve.lean"
+        rel_rist = "Curve25519Dalek/Math/Ristretto/Representation.lean"
+        tree = {
+            rel_curve: ((c_dir / rel_curve).read_bytes(), False),
+            rel_rist: ((c_dir / rel_rist).read_bytes(), False),
+        }
+        image, version = audit.resolve_audit_target(c_dir, manifest)
+        # Task 1 alone + full 2-task DAG with frozen bridge module (Edwards/Representation.lean).
+        for accepted in (["add_assoc_ed25519"], ["add_assoc_ed25519", "is_even_iff_in_doubling_image_right"]):
+            with self.subTest(accepted=accepted):
+                raw, snap_id, opts, checks = audit.repo_snapshot_input(tree, tree, manifest, accepted, contracts)
                 with self.assertRaisesRegex(ValueError, "non-standard axiom.*sorryAx"):
                     audit.check_lean_repo_snapshot(image, raw, snap_id, opts, checks, expected_version=version)
 

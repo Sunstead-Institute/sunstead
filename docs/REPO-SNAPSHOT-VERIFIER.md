@@ -2,7 +2,7 @@
 
 > **Status:** Implemented (v1.1)
 >
-> **Scope:** Extending Sunstead's hermetic Lean 4 verifier from standalone Mathlib-only extractions (`v4.36.0`) to full-repository upstream snapshots across multiple pinned Lean 4 toolchains (`v4.36.0`, `v4.35.0`, and roadmap `v4.31.0`+), while preserving every trust and provenance invariant in [docs/DESIGN.md](./DESIGN.md) Section 4.
+> **Scope:** Extending Sunstead's hermetic Lean 4 verifier from standalone Mathlib-only extractions (`v4.36.0`) to full-repository upstream snapshots across multiple pinned Lean 4 toolchains (`v4.36.0`, `v4.35.0`, `v4.31.0`, and future versions), while preserving every trust and provenance invariant in [docs/DESIGN.md](./DESIGN.md) Section 4.
 
 ---
 
@@ -136,15 +136,15 @@ Each Lean toolchain runs in its own digest-pinned, networkless (`enableInternet 
 | :--- | :--- | :--- | :--- | :--- |
 | `lean4` (default) | `leanprover/lean4:v4.36.0` | `sunstead/verifier-lean4:v0.2` (`cloudflare/containers/lean4/Dockerfile`) | `LEAN4_VERIFIER` (`Lean4Verifier`) | `PrimeNumberTheoremAnd`, `ArkLib` (standalone), `onboarding-sandbox`, `v4.36.0` Mathlib snapshots |
 | `lean4-v4.35.0` | `leanprover/lean4:v4.35.0` | `sunstead/verifier-lean4-v4.35.0:v0.1` (`cloudflare/containers/lean4-v4.35.0/Dockerfile`) | `LEAN4_V435_VERIFIER` (`Lean4V435Verifier`) | `leanprover/LNSym` (pure Lean, zero Mathlib), plus `v4.35.0` snapshots (`Clean`, `FLT` once Mathlib `v4.35.0` layer is added) |
-| `lean4-v4.31.0` *(planned)* | `leanprover/lean4:v4.31.0` | `sunstead/verifier-lean4-v4.31.0:v0.1` | `LEAN4_V431_VERIFIER` | `Beneficial-AI-Foundation/curve25519-dalek-lean-verify` (`aeneas` + `PrimeCert` + Mathlib `v4.31.0`) |
+| `lean4-v4.31.0` | `leanprover/lean4:v4.31.0` | `sunstead/verifier-lean4-v4.31.0:v0.1` (`cloudflare/containers/lean4-v4.31.0/Dockerfile`) | `LEAN4_V431_VERIFIER` (`Lean4V431Verifier`) | `Beneficial-AI-Foundation/curve25519-dalek-lean-verify` (`aeneas` + `PrimeCert` + Mathlib `v4.31.0`) |
 
 ### Routing Flow
 
 1. `sunstead.json` declares `verifier.image` and `verifier.toolchain`.
 2. `resolveVerifierKind(verifier)` in `cloudflare/src/core.ts` deterministically maps the toolchain/image to a `VerifierKind` (failing closed on unknown toolchains).
 3. `cloudflare/scripts/sync-assets.mjs` embeds `verifier_kind` into `src/generated/missions.ts`.
-4. `SunsteadHub.getVerifierStub(mission)` routes requests to the matching Durable Object namespace (`LEAN4_VERIFIER` vs `LEAN4_V435_VERIFIER`), keyed by `verifier_kind:image:mission_id`.
-5. `cloudflare/scripts/deploy.mjs` hashes all verifier Dockerfiles and their `COPY` sources together and supports digest-pinned Worker-only reuse for every container app (`SUNSTEAD_VERIFIER_IMAGE`, `SUNSTEAD_VERIFIER_V435_IMAGE`).
+4. `SunsteadHub.getVerifierStub(mission)` routes requests to the matching Durable Object namespace (`LEAN4_VERIFIER`, `LEAN4_V435_VERIFIER`, or `LEAN4_V431_VERIFIER`), keyed by `verifier_kind:image:mission_id`.
+5. `cloudflare/scripts/deploy.mjs` hashes all verifier Dockerfiles and their `COPY` sources together and supports digest-pinned Worker-only reuse for every container app (`SUNSTEAD_VERIFIER_IMAGE`, `SUNSTEAD_VERIFIER_V435_IMAGE`, `SUNSTEAD_VERIFIER_V431_IMAGE`).
 
 ---
 

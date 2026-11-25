@@ -22,6 +22,7 @@ function readPinnedImage(envName: string): string | undefined {
 
 const prebuiltVerifierImage = readPinnedImage("SUNSTEAD_VERIFIER_IMAGE");
 const prebuiltVerifierV435Image = readPinnedImage("SUNSTEAD_VERIFIER_V435_IMAGE");
+const prebuiltVerifierV431Image = readPinnedImage("SUNSTEAD_VERIFIER_V431_IMAGE");
 
 const DO_CODE_UPDATE_MAX_DELAY_SEC = 15;
 
@@ -49,6 +50,18 @@ const lean4V435Container = defineContainer({
   maxInstances: 4,
 });
 
+const lean4V431Container = defineContainer({
+  name: "sunstead-verifier-lean4-v431",
+  image: prebuiltVerifierV431Image
+    ? { reference: prebuiltVerifierV431Image }
+    : {
+        dockerfile: "./containers/lean4-v4.31.0/Dockerfile",
+        buildContext: "..",
+      },
+  instanceType: "standard-3", // 2 vCPU, 8 GiB RAM, 16 GB disk (Lean 4.31.0 + Mathlib + Aeneas repo-snapshot)
+  maxInstances: 4,
+});
+
 const worker = defineWorker({
   name: "sunstead",
   compatibilityDate: "2026-11-24",
@@ -71,15 +84,17 @@ const worker = defineWorker({
     SunsteadHub: exports.durableObject({ storage: "sqlite" }),
     Lean4Verifier: exports.durableObject({ storage: "sqlite", container: lean4Container }),
     Lean4V435Verifier: exports.durableObject({ storage: "sqlite", container: lean4V435Container }),
+    Lean4V431Verifier: exports.durableObject({ storage: "sqlite", container: lean4V431Container }),
   },
   env: {
     HUB: bindings.durableObject({ worker: "sunstead", exportName: "SunsteadHub" }),
     LEAN4_VERIFIER: bindings.durableObject({ worker: "sunstead", exportName: "Lean4Verifier" }),
     LEAN4_V435_VERIFIER: bindings.durableObject({ worker: "sunstead", exportName: "Lean4V435Verifier" }),
+    LEAN4_V431_VERIFIER: bindings.durableObject({ worker: "sunstead", exportName: "Lean4V431Verifier" }),
   },
 });
 
 export default defineConfig({
   worker,
-  containers: [lean4Container, lean4V435Container],
+  containers: [lean4Container, lean4V435Container, lean4V431Container],
 });

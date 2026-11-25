@@ -210,6 +210,46 @@ def _reuse_compatible_deps(snapshot_base, snapshot_id, repo, commit, toolchain,
     return reused
 
 
+def _make_symlink_overlay(src_dir, dst_dir):
+    """Populate `dst_dir` with writable 0755 directories and symlinks to every
+    regular file in `src_dir` so incremental `.olean` builds can overlay new
+    modules without mutating read-only `deps/`."""
+    os.makedirs(dst_dir, exist_ok=True)
+    for root, dirs, files in os.walk(src_dir):
+        rel_root = os.path.relpath(root, src_dir)
+        out_root = dst_dir if rel_root == "." else os.path.join(dst_dir, rel_root)
+        os.makedirs(out_root, exist_ok=True)
+        for fn in files:
+            src_f = os.path.join(root, fn)
+            dst_f = os.path.join(out_root, fn)
+            if os.path.lexists(dst_f):
+                os.unlink(dst_f)
+            os.symlink(src_f, dst_f)
+
+
+def _topo_sort_subset(graph, mod_set):
+    """Topologically sort `mod_set` according to dependencies in `graph`."""
+    order = []
+    state = {}
+
+    def dfs(m):
+        st = state.get(m, 0)
+        if st == 2:
+            return
+        if st == 1:
+            raise RuntimeError(f"cyclic Lean import involving `{m}`")
+        state[m] = 1
+        for d in graph.get(m, []):
+            if d in mod_set:
+                dfs(d)
+        state[m] = 2
+        order.append(m)
+
+    for m in sorted(mod_set):
+        dfs(m)
+    return order
+
+
 def prebuild_snapshot_mission(mission_dir, snapshot_base, upstream_dir=None, jobs=None, clone_cache=None):
     started = time.monotonic()
     mission_name = os.path.basename(os.path.normpath(mission_dir))
@@ -246,6 +286,7 @@ def prebuild_snapshot_mission(mission_dir, snapshot_base, upstream_dir=None, job
     snap_root = os.path.join(snapshot_base, snapshot_id)
     deps_dir = os.path.join(snap_root, "deps")
     frozen_targets_dir = os.path.join(snap_root, "frozen-targets")
+    frozen_sources_dir = os.path.join(snap_root, "frozen-sources")
     if os.path.exists(snap_root):
         shutil.rmtree(snap_root)
     os.makedirs(deps_dir, exist_ok=True)
@@ -270,6 +311,7 @@ def prebuild_snapshot_mission(mission_dir, snapshot_base, upstream_dir=None, job
 
         # Verify lean-toolchain and every local target file match pinned upstream byte-for-byte.
         seed_allowed_lint_lines = {}
+        target_seed_hashes = {}
         for rel in sorted({"lean-toolchain"} | target_rels):
             local_f = os.path.join(mission_dir, rel)
             up_f = os.path.join(src_root, rel)
@@ -282,24 +324,55 @@ def prebuild_snapshot_mission(mission_dir, snapshot_base, upstream_dir=None, job
                 raise RuntimeError(
                     f"{mission_name}: {rel} does not match pinned {repo}@{commit[:12]} byte-for-byte"
                 )
-            if rel in target_rels and rel.endswith(".lean"):
-                allowed_lines = sb.extract_seed_allowed_lint_lines(local_bytes.decode("utf-8"))
-                if allowed_lines:
-                    seed_allowed_lint_lines[rel] = allowed_lines
+            if rel in target_rels:
+                target_seed_hashes[rel] = hashlib.sha256(local_bytes).hexdigest()
+                if rel.endswith(".lean"):
+                    allowed_lines = sb.extract_seed_allowed_lint_lines(local_bytes.decode("utf-8"))
+                    if allowed_lines:
+                        seed_allowed_lint_lines[rel] = allowed_lines
 
         # Trace minimal transitive dependency graph for the target module(s).
         graph = _trace_dependency_graph(src_root, target_modules)
         target_mod_set = set(target_modules)
-        dep_graph = {m: [d for d in ds if d not in target_mod_set]
-                     for m, ds in graph.items() if m not in target_mod_set}
 
-        # Verify no dependency module contains a live `sorry`.
+        # Separate pure upstream dependencies (which never import any target
+        # module and are baked into read-only `deps/`) from frozen bridge
+        # modules (non-target modules that transitively import an earlier
+        # target module in a multi-file DAG, kept as read-only source under
+        # `frozen-sources/` so `deps/` never holds a `sorry`-bearing target).
+        memo_hits_target = {}
+
+        def _depends_on_target(m):
+            if m in memo_hits_target:
+                return memo_hits_target[m]
+            if m in target_mod_set:
+                memo_hits_target[m] = True
+                return True
+            hit = any(_depends_on_target(d) for d in graph.get(m, []))
+            memo_hits_target[m] = hit
+            return hit
+
+        bridge_mod_set = {
+            m for m in graph if m not in target_mod_set and _depends_on_target(m)
+        }
+        dep_graph = {
+            m: list(ds)
+            for m, ds in graph.items()
+            if m not in target_mod_set and m not in bridge_mod_set
+        }
+
+        # Verify no non-target dependency or bridge module contains a live `sorry`.
         dep_source_hashes = {}
-        for mod in sorted(dep_graph.keys()):
+        bridge_source_hashes = {}
+        for mod in sorted(set(dep_graph.keys()) | bridge_mod_set):
             segs = sb._validate_mod_name(mod)
             rel = "/".join(segs) + ".lean"
             abs_p = os.path.join(src_root, *segs) + ".lean"
-            dep_source_hashes[rel] = _sha256_file(abs_p)
+            digest = _sha256_file(abs_p)
+            if mod in bridge_mod_set:
+                bridge_source_hashes[rel] = digest
+            else:
+                dep_source_hashes[rel] = digest
             stripped = sb._strip_lean_comments(open(abs_p, encoding="utf-8").read())
             if re.search(r"(?<![\w.])sorry\b", stripped):
                 raise RuntimeError(
@@ -342,12 +415,46 @@ def prebuild_snapshot_mission(mission_dir, snapshot_base, upstream_dir=None, job
 
         # Build unmodified pinned upstream target module(s) into `frozen-targets/`
         # (kept strictly outside `deps/` so sunstead-runner never imports them).
+        # When targets depend on earlier targets (directly or via frozen bridge
+        # modules), compile them in topological order over a scratch overlay of
+        # `deps/` and preserve bridge `.lean` sources read-only in `frozen-sources/`.
         frozen_target_hashes = {}
-        for mod in target_modules:
-            out_olean = _compile_module(
-                src_root, mod, frozen_targets_dir, deps_lean_path, lean_options
-            )
-            frozen_target_hashes[mod] = _sha256_file(out_olean)
+        bridge_modules_ordered = []
+        dynamic_mods = target_mod_set | bridge_mod_set
+        has_cross_target_deps = bool(bridge_mod_set) or any(
+            any(d in target_mod_set for d in graph.get(m, [])) for m in target_modules
+        )
+        if not has_cross_target_deps:
+            for mod in target_modules:
+                out_olean = _compile_module(
+                    src_root, mod, frozen_targets_dir, deps_lean_path, lean_options
+                )
+                frozen_target_hashes[mod] = _sha256_file(out_olean)
+        else:
+            tmp_overlay = os.path.join(tmp_ctx.name, "overlay")
+            _make_symlink_overlay(deps_dir, tmp_overlay)
+            overlay_lean_path = ":".join([tmp_overlay] + extra_lib_paths)
+            if bridge_mod_set:
+                os.makedirs(frozen_sources_dir, exist_ok=True)
+            for mod in _topo_sort_subset(graph, dynamic_mods):
+                segs = sb._validate_mod_name(mod)
+                overlay_olean = os.path.join(tmp_overlay, *segs) + ".olean"
+                if os.path.lexists(overlay_olean):
+                    os.unlink(overlay_olean)
+                out_olean = _compile_module(
+                    src_root, mod, tmp_overlay, overlay_lean_path, lean_options
+                )
+                if mod in target_mod_set:
+                    dst_frozen = os.path.join(frozen_targets_dir, *segs) + ".olean"
+                    os.makedirs(os.path.dirname(dst_frozen), exist_ok=True)
+                    shutil.copy2(out_olean, dst_frozen)
+                    frozen_target_hashes[mod] = _sha256_file(dst_frozen)
+                else:
+                    src_lean = os.path.join(src_root, *segs) + ".lean"
+                    dst_lean = os.path.join(frozen_sources_dir, *segs) + ".lean"
+                    os.makedirs(os.path.dirname(dst_lean), exist_ok=True)
+                    shutil.copy2(src_lean, dst_lean)
+                    bridge_modules_ordered.append(mod)
 
         elapsed_ms = int((time.monotonic() - started) * 1000)
         meta = {
@@ -360,6 +467,9 @@ def prebuild_snapshot_mission(mission_dir, snapshot_base, upstream_dir=None, job
             "lean_options": lean_options,
             "target_modules": target_modules,
             "target_files": sorted(target_rels),
+            "target_seed_hashes": target_seed_hashes,
+            "bridge_modules": bridge_modules_ordered,
+            "bridge_source_hashes": bridge_source_hashes,
             "dep_modules_count": len(dep_graph),
             "frozen_file_hashes": dep_source_hashes,
             "dep_olean_hashes": dep_olean_hashes,
@@ -372,7 +482,8 @@ def prebuild_snapshot_mission(mission_dir, snapshot_base, upstream_dir=None, job
             f.write("\n")
         print(
             f"[prebuild-snapshot] {mission_name} ({repo}@{commit[:12]}): "
-            f"{len(dep_graph)} deps + {len(target_modules)} frozen target(s) built in {elapsed_ms} ms",
+            f"{len(dep_graph)} deps + {len(bridge_modules_ordered)} bridge(s) + "
+            f"{len(target_modules)} frozen target(s) built in {elapsed_ms} ms",
             flush=True,
         )
         return True

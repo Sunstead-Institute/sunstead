@@ -73,6 +73,7 @@ def main():
         return
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--mission", action="append", help="only these missions (repeatable)")
+    ap.add_argument("--exclude-mission", action="append", help="skip these missions (repeatable)")
     ap.add_argument("--timeout", type=int, default=900, help="seconds per task")
     args = ap.parse_args()
 
@@ -81,7 +82,9 @@ def main():
     for name in sorted(os.listdir(MISSIONS)):
         mission_dir = os.path.join(MISSIONS, name)
         manifest_path = os.path.join(mission_dir, "sunstead.json")
-        if not os.path.isfile(manifest_path) or (args.mission and name not in args.mission):
+        if (not os.path.isfile(manifest_path)
+                or (args.mission and name not in args.mission)
+                or (args.exclude_mission and name in args.exclude_mission)):
             continue
         with open(manifest_path, "r", encoding="utf-8") as f:
             manifest = json.load(f)
