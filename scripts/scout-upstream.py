@@ -488,12 +488,16 @@ def match_open_work(c, work):
                 continue
             kind = kind or "file"
             for start, length, ctx, lines in hunks(f["patch"]):
-                removes_sorry = any(l.startswith("-") and SORRY_RE.search(l) for l in lines)
+                removed = sum(1 for l in lines if l.startswith("-") and SORRY_RE.search(l))
+                added = sum(1 for l in lines if l.startswith("+") and SORRY_RE.search(l))
                 covers = start <= c.line < start + max(length, 1)
                 named = pat.search(ctx) or any(pat.search(l) for l in lines)
-                if removes_sorry and (covers or named):
-                    kind = "solves"
-                elif kind != "solves" and any(l[:1] in "+-" and pat.search(l) for l in lines):
+                if removed > added and (covers or named):
+                    kind = "solves"  # net fewer sorries: the PR fills it
+                elif kind != "solves" and (
+                    (removed and (covers or named))  # proof rewritten but still admitted
+                    or any(l[:1] in "+-" and pat.search(l) for l in lines)
+                ):
                     kind = "edits"
         if kind is None and text_ok and pat.search(pr["text"]):
             kind = "mentions"

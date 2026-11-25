@@ -229,6 +229,23 @@ class CheckPrsTests(unittest.TestCase):
         c.line = 50
         self.assertEqual(scout.match_open_work(c, work)[0]["match"], "file")
 
+    def test_refactor_that_keeps_a_sorry_is_not_solved(self):
+        # Shape of a real upstream draft PR: the old admit is removed but the
+        # restructured proof still ends in `sorry`, so the work is not done.
+        patch = (
+            "@@ -306,8 +304,9 @@ codes over prime fields\n"
+            " theorem exists_rs_epsCa_large_near_capacity\n"
+            "-  sorry -- external admit\n"
+            "+  have hprimes : True := by\n"
+            "+    sorry\n"
+            "+  exact of_primes hprimes\n"
+        )
+        work = {"prs": [{"number": 1572, "url": "u", "text": "", "files": [{"filename": "F.lean", "patch": patch}]}], "issues": []}
+        c = cand("CodingTheory.exists_rs_epsCa_large_near_capacity", file="F.lean", line=320)
+        self.assertEqual(scout.match_open_work(c, work)[0]["match"], "edits")
+        scout.apply_open_work([c], work)
+        self.assertEqual(c.status, "candidate")
+
     def test_pagination(self):
         calls = []
 
