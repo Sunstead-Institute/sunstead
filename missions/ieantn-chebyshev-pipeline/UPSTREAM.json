@@ -1,0 +1,112 @@
+{
+  "repo": "teorth/IEANTN",
+  "commit": "cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3",
+  "license": "Apache-2.0",
+  "checks": [
+    {
+      "local_file": "IEANTN/Nodes/BKLNW/v1/Tables.lean",
+      "upstream_file": "IEANTN/Nodes/BKLNW/v1/Tables.lean",
+      "exact_sha256": "e8f10d8e017d00431a982f618c40fa86f98505b188b7f69906d6bb6b664f8731"
+    },
+    {
+      "local_file": "IEANTN/Nodes/BKLNW/v2/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/BKLNW/v2/Conclusions.lean",
+      "exact_sha256": "fbb606ebe41f5ab50476cf449d7f31dbb31048126c30b62c8f1ec71a9ca39b3f"
+    },
+    {
+      "local_file": "IEANTN/Nodes/BKLNWNumerics/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/BKLNWNumerics/v1/Conclusions.lean",
+      "exact_sha256": "52423b6c17c1e00fb88494e7ca254691cb01398a3bddcf8ad5b18db3ace8598b"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Buthe/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/Buthe/v1/Conclusions.lean",
+      "exact_sha256": "06118da7c74732c2c063c0d7b6e8ea9eaf4249faed3207df4601ae4022831244"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Buthe/v1/Tables.lean",
+      "upstream_file": "IEANTN/Nodes/Buthe/v1/Tables.lean",
+      "exact_sha256": "a5e96d99d74c6bb472792ac8cd689d09015e4de760d797659a4ceac7ddc79e92"
+    },
+    {
+      "local_file": "IEANTN/Nodes/FKS/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/FKS/v1/Conclusions.lean",
+      "exact_sha256": "b88c3ddee6e0ce912a44362ed9c063358567bbc90780133afbbcf637e0bd1875"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Hiary2016/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/Hiary2016/v1/Conclusions.lean",
+      "exact_sha256": "0648adb42e1ca2a0cd9566fe8bb04dd41e63a67a389d066f1a347abed42a647c"
+    },
+    {
+      "local_file": "IEANTN/Nodes/KLN/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/KLN/v1/Conclusions.lean",
+      "exact_sha256": "3848cdd5d0b528f497933fb45a4e159d3e1d78a2fcc361262459390acde45e7a"
+    },
+    {
+      "local_file": "IEANTN/Nodes/MT/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/MT/v1/Conclusions.lean",
+      "exact_sha256": "448ac115c812d25f11dc2634249455c930a8751241a79ef1af4e60cdefa20a3b"
+    },
+    {
+      "local_file": "IEANTN/Nodes/MT/v2/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/MT/v2/Conclusions.lean",
+      "exact_sha256": "b25b1c5e5072be6ce2e8191fe1d9b4a60ba538569855a350d7d23e7003696a3e"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Platt2017/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/Platt2017/v1/Conclusions.lean",
+      "exact_sha256": "09778061a4e01d3a47420a12f47fc262215fb52132c4789ef412b9b2bbffbca0"
+    },
+    {
+      "local_file": "IEANTN/Nodes/PlattTrudgian/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/PlattTrudgian/v1/Conclusions.lean",
+      "exact_sha256": "3a5dfbca68c5ef883b9b0372f62224311b17bd29963cbb19d4dc0cb0feeb4667"
+    },
+    {
+      "local_file": "IEANTN/Vocabulary/ErrorTerms.lean",
+      "upstream_file": "IEANTN/Vocabulary/ErrorTerms.lean",
+      "exact_sha256": "8027fc677653f3d86229a586404f9d4ab2ca6c8404d8ccc18df056b22c2e01bc"
+    },
+    {
+      "local_file": "IEANTN/Vocabulary/PrimeCounting.lean",
+      "upstream_file": "IEANTN/Vocabulary/PrimeCounting.lean",
+      "exact_sha256": "ff46c70252ac31f5f33aae9940bf029c36c2d466ff60a8615198b31b319a84c5"
+    },
+    {
+      "local_file": "IEANTN/Vocabulary/Zeta.lean",
+      "upstream_file": "IEANTN/Vocabulary/Zeta.lean",
+      "exact_sha256": "42e239de4c1151d03ed94ee4c0c51d031f974faa6998f447e85845665bb846ef"
+    },
+    {
+      "local_file": "IEANTN/Nodes/BKLNW/v2/TaskTable8Above.lean",
+      "upstream_file": "IEANTN/Nodes/BKLNW/v2/Challenge.lean",
+      "verbatim_snippet": "theorem BKLNW.v2.challenge_table8_psi_bound_above\n    (bklnwnumerics_v1_table8_psi_bound : BKLNWNumerics.v1.table8_psi_bound) :\n    BKLNW.v2.table8_psi_bound_above := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/BKLNW/v2/TaskCorollary51.lean",
+      "upstream_file": "IEANTN/Nodes/BKLNW/v2/Challenge.lean",
+      "verbatim_snippet": "theorem BKLNW.v2.challenge_corollary_5_1\n    (buthe_v1_theorem_2_theta_lower : Buthe.v1.theorem_2_theta_lower) :\n    BKLNW.v2.corollary_5_1 := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/MT/v2/TaskCorollary1.lean",
+      "upstream_file": "IEANTN/Nodes/MT/v2/Challenge.lean",
+      "verbatim_snippet": "theorem MT.v2.challenge_corollary_1\n    (mt_v1_zero_free_region : MT.v1.zero_free_region) :\n    MT.v2.corollary_1 := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/KLN/v1/TaskZeroDensity.lean",
+      "upstream_file": "IEANTN/Nodes/KLN/v1/Challenge.lean",
+      "verbatim_snippet": "theorem KLN.v1.challenge_zero_density\n    (platt2017_v1_rh_up_to : Platt2017.v1.rh_up_to) :\n    KLN.v1.zero_density := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/FKS/v1/TaskPsiBoundAllX.lean",
+      "upstream_file": "IEANTN/Nodes/FKS/v1/Challenge.lean",
+      "verbatim_snippet": "theorem FKS.v1.challenge_psi_bound_all_x\n    (kln_v1_subconvexity_bound : KLN.v1.subconvexity_bound)\n    (mt_v1_zero_free_region_sharpened : MT.v1.zero_free_region_sharpened)\n    (platttrudgian_v1_rh_up_to : PlattTrudgian.v1.rh_up_to) :\n    FKS.v1.psi_bound_all_x := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/FKS/v1/TaskPsiClassicalBound.lean",
+      "upstream_file": "IEANTN/Nodes/FKS/v1/Challenge.lean",
+      "verbatim_snippet": "theorem FKS.v1.challenge_psi_classical_bound\n    (kln_v1_subconvexity_bound : KLN.v1.subconvexity_bound)\n    (mt_v1_zero_free_region_sharpened : MT.v1.zero_free_region_sharpened)\n    (platttrudgian_v1_rh_up_to : PlattTrudgian.v1.rh_up_to) :\n    FKS.v1.psi_classical_bound := by\n  sorry"
+    }
+  ]
+}

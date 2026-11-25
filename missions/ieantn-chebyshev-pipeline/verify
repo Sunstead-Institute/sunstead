@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+"""Frozen verifier for `ieantn-chebyshev-pipeline`.
+
+Uses the shared trusted harness baked into `/opt/sunstead/sunstead_sandbox.py`
+with Lean 4.36.0 + read-only Mathlib v4.36.0.
+"""
+import sys
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify  # noqa: E402
+
+LIB_ROOT = "IEANTN"
+FROZEN_FILES = [
+    "IEANTN/Nodes/BKLNW/v1/Tables.lean",
+    "IEANTN/Nodes/BKLNW/v2/Conclusions.lean",
+    "IEANTN/Nodes/BKLNWNumerics/v1/Conclusions.lean",
+    "IEANTN/Nodes/Buthe/v1/Conclusions.lean",
+    "IEANTN/Nodes/Buthe/v1/Tables.lean",
+    "IEANTN/Nodes/FKS/v1/Conclusions.lean",
+    "IEANTN/Nodes/Hiary2016/v1/Conclusions.lean",
+    "IEANTN/Nodes/KLN/v1/Conclusions.lean",
+    "IEANTN/Nodes/MT/v1/Conclusions.lean",
+    "IEANTN/Nodes/MT/v2/Conclusions.lean",
+    "IEANTN/Nodes/Platt2017/v1/Conclusions.lean",
+    "IEANTN/Nodes/PlattTrudgian/v1/Conclusions.lean",
+    "IEANTN/Vocabulary/ErrorTerms.lean",
+    "IEANTN/Vocabulary/PrimeCounting.lean",
+    "IEANTN/Vocabulary/Zeta.lean",
+    "IEANTN/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain"
+]
+
+TASKS = {
+    "bklnw_table8_psi_bound_above": {
+        "module": "IEANTN.Nodes.BKLNW.v2.TaskTable8Above",
+        "theorem": "BKLNW.v2.challenge_table8_psi_bound_above",
+        "statement": "\ndef bklnw_table8_psi_bound_above : Prop :=\n  \u2200 (bklnwnumerics_v1_table8_psi_bound : BKLNWNumerics.v1.table8_psi_bound), BKLNW.v2.table8_psi_bound_above\n"
+    },
+    "bklnw_corollary_5_1": {
+        "module": "IEANTN.Nodes.BKLNW.v2.TaskCorollary51",
+        "theorem": "BKLNW.v2.challenge_corollary_5_1",
+        "statement": "\ndef bklnw_corollary_5_1 : Prop :=\n  \u2200 (buthe_v1_theorem_2_theta_lower : Buthe.v1.theorem_2_theta_lower), BKLNW.v2.corollary_5_1\n"
+    },
+    "mt_v2_corollary_1": {
+        "module": "IEANTN.Nodes.MT.v2.TaskCorollary1",
+        "theorem": "MT.v2.challenge_corollary_1",
+        "statement": "\ndef mt_v2_corollary_1 : Prop :=\n  \u2200 (mt_v1_zero_free_region : MT.v1.zero_free_region), MT.v2.corollary_1\n"
+    },
+    "kln_zero_density": {
+        "module": "IEANTN.Nodes.KLN.v1.TaskZeroDensity",
+        "theorem": "KLN.v1.challenge_zero_density",
+        "statement": "\ndef kln_zero_density : Prop :=\n  \u2200 (platt2017_v1_rh_up_to : Platt2017.v1.rh_up_to), KLN.v1.zero_density\n"
+    },
+    "fks_psi_bound_all_x": {
+        "module": "IEANTN.Nodes.FKS.v1.TaskPsiBoundAllX",
+        "theorem": "FKS.v1.challenge_psi_bound_all_x",
+        "statement": "\ndef fks_psi_bound_all_x : Prop :=\n  \u2200 (kln_v1_subconvexity_bound : KLN.v1.subconvexity_bound)\n    (mt_v1_zero_free_region_sharpened : MT.v1.zero_free_region_sharpened)\n    (platttrudgian_v1_rh_up_to : PlattTrudgian.v1.rh_up_to), FKS.v1.psi_bound_all_x\n"
+    },
+    "fks_psi_classical_bound": {
+        "module": "IEANTN.Nodes.FKS.v1.TaskPsiClassicalBound",
+        "theorem": "FKS.v1.challenge_psi_classical_bound",
+        "statement": "\ndef fks_psi_classical_bound : Prop :=\n  \u2200 (kln_v1_subconvexity_bound : KLN.v1.subconvexity_bound)\n    (mt_v1_zero_free_region_sharpened : MT.v1.zero_free_region_sharpened)\n    (platttrudgian_v1_rh_up_to : PlattTrudgian.v1.rh_up_to), FKS.v1.psi_classical_bound\n"
+    }
+}
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>")
+    lean_verify(
+        sys.argv[1],
+        lib_root=LIB_ROOT,
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        uses_mathlib=True,
+        timeout_sec=230,
+    )

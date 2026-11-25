@@ -27,10 +27,15 @@ IMAGES = {
     "onboarding-sandbox": DEFAULT_IMAGE,
     "arklib-near-capacity-primes": DEFAULT_IMAGE,
     "ieantn-chebyshev-kernel": DEFAULT_IMAGE,
+    "ieantn-short-interval-primes": DEFAULT_IMAGE,
+    "ieantn-zeta-foundations": DEFAULT_IMAGE,
+    "ieantn-chebyshev-pipeline": DEFAULT_IMAGE,
+    "ieantn-schoenfeld-chebyshev": DEFAULT_IMAGE,
     "pnt-analytic-foundations": DEFAULT_IMAGE,
     "lnsym-aes-gcm-armv8": V435_IMAGE,
     "lnsym-gcm-gmult-armv8": V435_IMAGE,
     "matrix-rank444-f2": DEFAULT_IMAGE,
+    "matrix-rank-alphatensor-f2": DEFAULT_IMAGE,
     "__synthetic_mathlib__": DEFAULT_IMAGE,
     "__synthetic_hillclimb__": DEFAULT_IMAGE,
     "__synthetic_repo_snapshot__": DEFAULT_IMAGE,
@@ -629,6 +634,42 @@ theorem ChebyshevNumerics.v1.challenge_psi_le_below_11723 :
 theorem ChebyshevNumerics.v1.challenge_psi_le_below_11723 : True := trivial
 """},
      False, None, "IEANTN Chebyshev weakened statement must be rejected"),
+
+    # --- IEANTN Wave 1 missions (short-interval, zeta, pipeline, schoenfeld) ---
+    ("ieantn-short-seed-sorry", "ieantn-short-interval-primes", "kadiri_lumley_exp_59",
+     {},
+     False, None, "unmodified IEANTN short-interval seed still has sorry and must be rejected"),
+    ("ieantn-zeta-weakened", "ieantn-zeta-foundations", "patel_cheng_graham_lemma_2",
+     {"IEANTN/Nodes/Patel2020/v1/TaskChengGraham2.lean": """import IEANTN.Nodes.Patel2020.v1.Conclusions
+
+theorem Patel2020.v1.challenge_cheng_graham_lemma_2 : True := trivial
+"""},
+     False, None, "weakened Patel2020 theorem must be rejected by kernel"),
+    ("ieantn-pipeline-weakened", "ieantn-chebyshev-pipeline", "bklnw_table8_psi_bound_above",
+     {"IEANTN/Nodes/BKLNW/v2/TaskTable8Above.lean": """import IEANTN.Nodes.BKLNW.v2.Conclusions
+import IEANTN.Nodes.BKLNWNumerics.v1.Conclusions
+import IEANTN.Nodes.Buthe.v1.Conclusions
+
+theorem BKLNW.v2.challenge_table8_psi_bound_above : True := trivial
+"""},
+     False, None, "weakened BKLNW.v2 theorem must be rejected by kernel"),
+    ("ieantn-schoenfeld-seed-sorry", "ieantn-schoenfeld-chebyshev", "psi_upper_theorem_11",
+     {},
+     False, None, "unmodified IEANTN Schoenfeld seed still has sorry and must be rejected"),
+
+    # --- AlphaTensor F2 matrix-rank suite (6 shapes) ---
+    ("alphatensor-333-baseline", "matrix-rank-alphatensor-f2", "rank_333",
+     {},
+     True, 23, "honest AlphaTensor <3,3,3> baseline must pass kernel check with score 23"),
+    ("alphatensor-445-baseline", "matrix-rank-alphatensor-f2", "rank_445",
+     {},
+     True, 63, "honest AlphaTensor <4,4,5> baseline must pass kernel check with score 63"),
+    ("alphatensor-333-corrupt-table", "matrix-rank-alphatensor-f2", "rank_333",
+     {"RankF2/Cert333.lean": "def B334.score333 : Nat := 1\ndef B334.cert333 : List (Nat × Nat × Nat) := [(1, 1, 1)]\n"},
+     False, None, "invalid <3,3,3> decomposition must fail decide +kernel"),
+    ("alphatensor-333-overwide-mask", "matrix-rank-alphatensor-f2", "rank_333",
+     {"RankF2/Cert333.lean": "def B334.score333 : Nat := 1\ndef B334.cert333 : List (Nat × Nat × Nat) := [(1024, 1, 1)]\n"},
+     False, None, "bitmask >= 2^9 for <3,3,3> must fail lint"),
 ]
 
 

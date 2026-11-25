@@ -1,0 +1,107 @@
+{
+  "id": "ieantn-chebyshev-pipeline",
+  "title": "IEANTN (Terence Tao): Explicit Chebyshev \u03c8/\u03b8 & Zero-Density Pipeline",
+  "description": "Six verbatim open pipeline theorems from active and `awaiting-solution` nodes in Terence Tao's IEANTN (teorth/IEANTN@cd9c2dd3, Apache-2.0): BKLNW.v2 Table 8 tail deduction & Corollary 5.1 (\u03c8(x) - \u03b8(x) explicit bound), Mossinghoff\u2013Trudgian Corollary 1 (zero-free region to E_\u03b8), Kadiri\u2013Lumley\u2013Ng zero-density estimate N(\u03c3, T), and Fiori\u2013Kadiri\u2013Swidinsky (2023) explicit Chebyshev \u03c8 bounds. Every upstream assumption is an explicit theorem hypothesis (0 custom axioms).",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/teorth/IEANTN",
+  "upstream": {
+    "repo": "teorth/IEANTN",
+    "commit": "cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3",
+    "license": "Apache-2.0"
+  },
+  "frozen_paths": [
+    "IEANTN/Nodes/BKLNW/v1/Tables.lean",
+    "IEANTN/Nodes/BKLNW/v2/Conclusions.lean",
+    "IEANTN/Nodes/BKLNWNumerics/v1/Conclusions.lean",
+    "IEANTN/Nodes/Buthe/v1/Conclusions.lean",
+    "IEANTN/Nodes/Buthe/v1/Tables.lean",
+    "IEANTN/Nodes/FKS/v1/Conclusions.lean",
+    "IEANTN/Nodes/Hiary2016/v1/Conclusions.lean",
+    "IEANTN/Nodes/KLN/v1/Conclusions.lean",
+    "IEANTN/Nodes/MT/v1/Conclusions.lean",
+    "IEANTN/Nodes/MT/v2/Conclusions.lean",
+    "IEANTN/Nodes/Platt2017/v1/Conclusions.lean",
+    "IEANTN/Nodes/PlattTrudgian/v1/Conclusions.lean",
+    "IEANTN/Vocabulary/ErrorTerms.lean",
+    "IEANTN/Vocabulary/PrimeCounting.lean",
+    "IEANTN/Vocabulary/Zeta.lean",
+    "IEANTN/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 240,
+    "memory_mb": 6144
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "bklnw_table8_psi_bound_above",
+      "title": "BKLNW.v2 (`awaiting-solution`): Table 8 unbounded tail from consecutive rows",
+      "description": "Prove `BKLNW.v2.challenge_table8_psi_bound_above`: deduce the full-range Table 8 bound for e^b \u2264 x \u2264 e^25000 from `BKLNWNumerics.v1.table8_psi_bound` and monotonicity of Table 8.",
+      "target_files": [
+        "IEANTN/Nodes/BKLNW/v2/TaskTable8Above.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/BKLNW/v2/Challenge.lean#L26-L29"
+    },
+    {
+      "id": "bklnw_corollary_5_1",
+      "title": "BKLNW.v2 (`awaiting-solution`): Corollary 5.1 explicit \u03c8(x) - \u03b8(x) bound",
+      "description": "Prove `BKLNW.v2.challenge_corollary_5_1`: explicit bound on \u03c8(x) - \u03b8(x) for 7 \u2264 b \u2264 38 log 10 and x \u2265 e^b given `Buthe.v1.theorem_2_theta_lower`.",
+      "target_files": [
+        "IEANTN/Nodes/BKLNW/v2/TaskCorollary51.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/BKLNW/v2/Challenge.lean#L21-L24"
+    },
+    {
+      "id": "mt_v2_corollary_1",
+      "title": "Mossinghoff\u2013Trudgian (2015) Corollary 1: zero-free region \u2192 E_\u03b8 classical bound",
+      "description": "Prove `MT.v2.challenge_corollary_1`: convert `MT.v1.zero_free_region` into the explicit admissible classical bound on E_\u03b8(x) for x \u2265 149.",
+      "target_files": [
+        "IEANTN/Nodes/MT/v2/TaskCorollary1.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/MT/v2/Challenge.lean#L20-L23"
+    },
+    {
+      "id": "kln_zero_density",
+      "title": "Kadiri\u2013Lumley\u2013Ng (2018): explicit zero-density estimate N(\u03c3, T)",
+      "description": "Prove `KLN.v1.challenge_zero_density`: explicit N(\u03c3, T) \u2264 C\u2081 T^{8(1-\u03c3)/3} (log T)^{5-2\u03c3} + C\u2082 (log T)^2 for \u03c3 \u2208 [0.75, 1) given `Platt2017.v1.rh_up_to`.",
+      "target_files": [
+        "IEANTN/Nodes/KLN/v1/TaskZeroDensity.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/KLN/v1/Challenge.lean#L26-L29"
+    },
+    {
+      "id": "fks_psi_bound_all_x",
+      "title": "Fiori\u2013Kadiri\u2013Swidinsky (2023) Corollary 1.4: all-x explicit E_\u03c8(x) bound",
+      "description": "Prove `FKS.v1.challenge_psi_bound_all_x`: E_\u03c8(x) < 9.22022 (log x)^{3/2} exp(-0.8476836 \u221a(log x)) for all x > 2 from KLN, MT, and Platt\u2013Trudgian hypotheses.",
+      "target_files": [
+        "IEANTN/Nodes/FKS/v1/TaskPsiBoundAllX.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/FKS/v1/Challenge.lean#L22-L27"
+    },
+    {
+      "id": "fks_psi_classical_bound",
+      "title": "Fiori\u2013Kadiri\u2013Swidinsky (2023) Theorem 1.2: admissible classical E_\u03c8 bound for x \u2265 e^30",
+      "description": "Prove `FKS.v1.challenge_psi_classical_bound`: `HasClassicalBound E\u03c8 121.096 (3/2) 2 5.5666305 (Real.exp 30)` from KLN, MT, and Platt\u2013Trudgian hypotheses.",
+      "target_files": [
+        "IEANTN/Nodes/FKS/v1/TaskPsiClassicalBound.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/FKS/v1/Challenge.lean#L29-L34"
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+"""Frozen verifier for `ieantn-short-interval-primes`.
+
+Uses the shared trusted harness baked into `/opt/sunstead/sunstead_sandbox.py`
+with Lean 4.36.0 + read-only Mathlib v4.36.0.
+"""
+import sys
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify  # noqa: E402
+
+LIB_ROOT = "IEANTN"
+FROZEN_FILES = [
+    "IEANTN/Nodes/Dusart2018/v1/Conclusions.lean",
+    "IEANTN/Nodes/KadiriLumley/v1/Conclusions.lean",
+    "IEANTN/Nodes/RamareSaouter2003/v1/Conclusions.lean",
+    "IEANTN/Vocabulary/PrimeGaps.lean",
+    "IEANTN/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain"
+]
+
+TASKS = {
+    "kadiri_lumley_exp_59": {
+        "module": "IEANTN.Nodes.KadiriLumley.v1.TaskPrimeExp59",
+        "theorem": "KadiriLumley.v1.challenge_prime_in_interval_above_exp_59",
+        "statement": "\ndef kadiri_lumley_exp_59 : Prop :=\n  KadiriLumley.v1.prime_in_interval_above_exp_59\n"
+    },
+    "kadiri_lumley_exp_60": {
+        "module": "IEANTN.Nodes.KadiriLumley.v1.TaskPrimeExp60",
+        "theorem": "KadiriLumley.v1.challenge_prime_in_interval_above_exp_60",
+        "statement": "\ndef kadiri_lumley_exp_60 : Prop :=\n  KadiriLumley.v1.prime_in_interval_above_exp_60\n"
+    },
+    "kadiri_lumley_table_2": {
+        "module": "IEANTN.Nodes.KadiriLumley.v1.TaskTable2",
+        "theorem": "KadiriLumley.v1.challenge_table_2",
+        "statement": "\ndef kadiri_lumley_table_2 : Prop :=\n  KadiriLumley.v1.table_2\n"
+    },
+    "ramare_saouter_2003": {
+        "module": "IEANTN.Nodes.RamareSaouter2003.v1.TaskShortInterval",
+        "theorem": "RamareSaouter2003.v1.challenge_prime_in_short_interval",
+        "statement": "\ndef ramare_saouter_2003 : Prop :=\n  RamareSaouter2003.v1.prime_in_short_interval\n"
+    },
+    "dusart_2018_prop_5_4": {
+        "module": "IEANTN.Nodes.Dusart2018.v1.TaskProp54",
+        "theorem": "Dusart2018.v1.challenge_proposition_5_4",
+        "statement": "\ndef dusart_2018_prop_5_4 : Prop :=\n  Dusart2018.v1.proposition_5_4\n"
+    }
+}
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>")
+    lean_verify(
+        sys.argv[1],
+        lib_root=LIB_ROOT,
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        uses_mathlib=True,
+        timeout_sec=230,
+    )
