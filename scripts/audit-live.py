@@ -875,6 +875,85 @@ def audit_aes_sbox_history(repo, accepted, snapshot_tasks, manifest):
             require(previous[tid] == task["best_score"], f"published best score differs from circuit for {tid}")
 
 
+_SORTNET_TARGETS = {
+    f"sort_n{n}": (n, f"SortNet/Net{n}.lean", f"SortNet.score{n}", f"SortNet.net{n}")
+    for n in range(9, 17)
+}
+
+
+def check_sorting_network(source, task_id):
+    """Read only literal comparator pairs and verify sorting across all 2^n Boolean inputs."""
+    require(task_id in _SORTNET_TARGETS, f"unknown sorting-network task: {task_id}")
+    require(len(source.encode("utf-8")) <= 16384, "sorting network file exceeds 16384 bytes")
+    n, _, score_name, net_name = _SORTNET_TARGETS[task_id]
+    pattern = (
+        rf"\s*def\s+{re.escape(score_name)}\s*:\s*Nat\s*:=\s*(0|[1-9][0-9]{{0,2}})\s*\n"
+        rf"\s*def\s+{re.escape(net_name)}\s*:\s*List\s*\(Nat\s*×\s*Nat\)\s*:=\s*(\[[\s\S]*?\])\s*"
+    )
+    match = re.fullmatch(pattern, source)
+    require(match, "unexpected sorting network format")
+    claimed_score = int(match[1])
+    net_lit = match[2]
+    require(re.fullmatch(r"[0-9\s(),\[\]]+", net_lit), "invalid sorting network comparator table")
+    comparators = ast.literal_eval(net_lit)
+    require(type(comparators) is list and 1 <= len(comparators) <= 256, "invalid comparator count")
+    for idx, comp in enumerate(comparators):
+        require(
+            type(comp) is tuple and len(comp) == 2
+            and type(comp[0]) is int and type(comp[1]) is int,
+            f"invalid comparator pair at index {idx}",
+        )
+        i, j = comp
+        require(0 <= i < j < n, f"invalid comparator wire index ({i}, {j}) for n={n} at index {idx}")
+    require(len(comparators) == claimed_score, "invalid sorting network score")
+
+    total_inputs = 1 << n
+    wires = []
+    for b in range(n):
+        block = ((1 << (1 << b)) - 1) << (1 << b)
+        w = block
+        step = 1 << (b + 1)
+        while step < total_inputs:
+            w |= w << step
+            step <<= 1
+        wires.append(w)
+    for i, j in comparators:
+        a, b = wires[i], wires[j]
+        wires[i] = a & b
+        wires[j] = a | b
+    for i in range(n - 1):
+        bad = wires[i] & ~wires[i + 1]
+        if bad:
+            failing_input = (bad & -bad).bit_length() - 1
+            raise ValueError(
+                f"sorting network unsorted at wires ({i}, {i + 1}) for input 0x{failing_input:x}"
+            )
+    return len(comparators)
+
+
+def audit_sorting_network_history(repo, accepted, snapshot_tasks, manifest):
+    commits = repo_git(repo, "rev-list", "--reverse", "HEAD").decode().splitlines()
+    require(len(commits) == 1 + len(accepted), "unexpected sorting network history length")
+    baselines = {t["id"]: t["baseline_score"] for t in manifest["tasks"]}
+    previous = {}
+    for task_id, (_, rel_path, _, _) in _SORTNET_TARGETS.items():
+        seed_src = repo_git(repo, "show", commits[0] + ":" + rel_path).decode("utf-8")
+        seed_score = check_sorting_network(seed_src, task_id)
+        require(seed_score == baselines[task_id], f"unexpected sorting network seed baseline for {task_id}")
+        previous[task_id] = seed_score
+    for commit, task_id in zip(commits[1:], accepted):
+        n, rel_path, _, _ = _SORTNET_TARGETS[task_id]
+        source = repo_git(repo, "show", commit + ":" + rel_path).decode("utf-8")
+        score = check_sorting_network(source, task_id)
+        require(score < previous[task_id], f"invalid sorting network progression for {task_id}")
+        print(f"  PASS {commit[:12]} ({task_id}): all {1 << n} inputs sorted at {score} comparators")
+        previous[task_id] = score
+    for task in snapshot_tasks:
+        tid = task["def"]["id"]
+        if task["status"] == "verified":
+            require(previous[tid] == task["best_score"], f"published best score differs from network for {tid}")
+
+
 def build_audit_attestation(
     *,
     status="passed",
@@ -987,7 +1066,8 @@ def main():
         manifest = json.loads((mission / "sunstead.json").read_text(encoding="utf-8"))
         rank_mission = mid in ("matrix-rank444-f2", "matrix-rank-alphatensor-f2") and manifest["mode"] == "hillclimb"
         aes_sbox_mission = mid == "aes-sbox-circuit" and manifest["mode"] == "hillclimb"
-        hillclimb_mission = rank_mission or aes_sbox_mission
+        sortnet_mission = mid == "sorting-networks-opt" and manifest["mode"] == "hillclimb"
+        hillclimb_mission = rank_mission or aes_sbox_mission or sortnet_mission
         require(not manifest.get("demo") and (hillclimb_mission or manifest["mode"] == "dag"), "unsupported audited mission")
         require(manifest == detail["manifest"], "live manifest differs from trusted checkout")
         history = json.loads(download(endpoint + "/history"))["commits"]
@@ -1030,6 +1110,23 @@ def main():
                                 toolchain="python-fips197-evaluator",
                                 axioms=[],
                                 summary=f"Independent 256-input FIPS 197 AES S-box audit passed for {mid}/{row['task_id']}",
+                                run_url=run_url,
+                                commit_sha=commit_sha,
+                            ),
+                        ))
+                count += len(accepted)
+                continue
+            if sortnet_mission:
+                audit_sorting_network_history(Path(tmp) / "repo", accepted, snapshot["tasks"], manifest)
+                for row in history:
+                    pid = seq_to_proof_id.get(row["seq"])
+                    if pid:
+                        attestations.append((
+                            pid,
+                            build_audit_attestation(
+                                toolchain="python-sortnet-evaluator",
+                                axioms=[],
+                                summary=f"Independent 2^n-input sorting-network audit passed for {mid}/{row['task_id']}",
                                 run_url=run_url,
                                 commit_sha=commit_sha,
                             ),

@@ -286,6 +286,41 @@ test("aes-sbox-circuit mission isolates independent total and AND circuit target
   validatePatch(patchFor("AesSbox/AndCircuit.lean"), manifest.frozen_paths, byId.minimize_and_gates.target_files);
 });
 
+test("sorting-networks-opt mission isolates independent n=9..16 network targets", () => {
+  const manifest = JSON.parse(readFileSync(new URL(
+    "../../missions/sorting-networks-opt/sunstead.json", import.meta.url
+  ), "utf8")) as MissionManifest;
+  assert.equal(manifest.mode, "hillclimb");
+  assert.equal(manifest.score_direction, "minimize");
+  assert.equal(manifest.tier, 2);
+  const byId = Object.fromEntries(manifest.tasks.map((t) => [t.id, t]));
+  const expected: Record<string, [number, string]> = {
+    sort_n9: [26, "SortNet/Net9.lean"],
+    sort_n10: [31, "SortNet/Net10.lean"],
+    sort_n11: [37, "SortNet/Net11.lean"],
+    sort_n12: [41, "SortNet/Net12.lean"],
+    sort_n13: [48, "SortNet/Net13.lean"],
+    sort_n14: [53, "SortNet/Net14.lean"],
+    sort_n15: [59, "SortNet/Net15.lean"],
+    sort_n16: [63, "SortNet/Net16.lean"],
+  };
+  for (const [id, [baseline, target]] of Object.entries(expected)) {
+    assert.equal(byId[id].baseline_score, baseline);
+    assert.deepEqual(byId[id].target_files, [target]);
+    validatePatch(patchFor(target), manifest.frozen_paths, byId[id].target_files);
+  }
+  for (const file of ["SortNet/Spec.lean", "SortNet/Bound9.lean", "SortNet/Bound16.lean", "verify"]) {
+    assert.throws(
+      () => validatePatch(patchFor(file), manifest.frozen_paths, byId.sort_n9.target_files),
+      /frozen/
+    );
+  }
+  assert.throws(
+    () => validatePatch(patchFor("SortNet/Net10.lean"), manifest.frozen_paths, byId.sort_n9.target_files),
+    /outside/
+  );
+});
+
 test("validatePatch blocks frozen paths and files outside target_files", () => {
   assert.throws(
     () => validatePatch(patchFor("MetaComplexity/Spec.lean"), FROZEN, ["MetaComplexity/X.lean"]),

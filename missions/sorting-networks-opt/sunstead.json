@@ -1,0 +1,130 @@
+{
+  "id": "sorting-networks-opt",
+  "title": "Optimal Sorting Networks (n = 9..16): minimize comparator count",
+  "description": "Pure Lean 4.36.0 (zero Mathlib) certified optimization of size-minimal comparator sorting networks on n = 9..16 wires, with Knuth\u2019s Zero-One Principle and a bit-sliced 2^n-input evaluator formally proved inside `SortNet/Spec.lean`. Eight independent hill-climb tracks start from textbook Batcher odd-even merge-exchange seeds (26, 31, 37, 41, 48, 53, 59, 63) and target the proven optima for n = 9..12 (25, 29, 35, 39) and the open research frontiers for n = 13..16 (best known 45, 51, 56, 60; open gaps down to lower bounds 43\u201344, 47\u201348, 51\u201352, 55\u201356), pinned to `bertdobbelaere/SorterHunter@3d8b345` (MIT).",
+  "tier": 2,
+  "mode": "hillclimb",
+  "repo": "https://github.com/bertdobbelaere/SorterHunter",
+  "upstream": {
+    "repo": "bertdobbelaere/SorterHunter",
+    "commit": "3d8b3454bad15062f4b0030052f12d6550f8d89d",
+    "license": "MIT"
+  },
+  "score_direction": "minimize",
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 90,
+    "memory_mb": 2048
+  },
+  "frozen_paths": [
+    "SortNet/Spec.lean",
+    "SortNet/Bound9.lean",
+    "SortNet/Bound10.lean",
+    "SortNet/Bound11.lean",
+    "SortNet/Bound12.lean",
+    "SortNet/Bound13.lean",
+    "SortNet/Bound14.lean",
+    "SortNet/Bound15.lean",
+    "SortNet/Bound16.lean",
+    "LICENSE",
+    "README.md",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "tasks": [
+    {
+      "id": "sort_n9",
+      "title": "Minimize 9-wire sorting network size (baseline 26)",
+      "description": "Submit a comparator network on 9 wires in `SortNet/Net9.lean` (`SortNet.score9` and `SortNet.net9`), seeded with textbook Batcher odd-even merge-exchange sort (26 comparators; known optimum: 25, Codish et al. 2016). Frozen `SortNet/Bound9.lean` kernel-verifies well-formedness (`i < j < 9`), comparator count, and sorting on all 2^9 = 512 Boolean inputs via `decide +kernel`, lifting to every linear order by the formalized Zero-One Principle in `SortNet/Spec.lean`. Only strict improvements below the current record earn credit.",
+      "baseline_score": 26,
+      "target_files": [
+        "SortNet/Net9.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/bertdobbelaere/SorterHunter/blob/3d8b3454bad15062f4b0030052f12d6550f8d89d/Networks/Sorters/Sort_9_25_7.json"
+    },
+    {
+      "id": "sort_n10",
+      "title": "Minimize 10-wire sorting network size (baseline 31)",
+      "description": "Submit a comparator network on 10 wires in `SortNet/Net10.lean` (`SortNet.score10` and `SortNet.net10`), seeded with textbook Batcher odd-even merge-exchange sort (31 comparators; known optimum: 29, Codish et al. 2016). Frozen `SortNet/Bound10.lean` kernel-verifies well-formedness (`i < j < 10`), comparator count, and sorting on all 2^10 = 1,024 Boolean inputs via `decide +kernel`, lifting to every linear order by the formalized Zero-One Principle in `SortNet/Spec.lean`. Only strict improvements below the current record earn credit.",
+      "baseline_score": 31,
+      "target_files": [
+        "SortNet/Net10.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/bertdobbelaere/SorterHunter/blob/3d8b3454bad15062f4b0030052f12d6550f8d89d/Networks/Sorters/Sort_10_29_8.json"
+    },
+    {
+      "id": "sort_n11",
+      "title": "Minimize 11-wire sorting network size (baseline 37)",
+      "description": "Submit a comparator network on 11 wires in `SortNet/Net11.lean` (`SortNet.score11` and `SortNet.net11`), seeded with textbook Batcher odd-even merge-exchange sort (37 comparators; known optimum: 35, Harder 2019). Frozen `SortNet/Bound11.lean` kernel-verifies well-formedness (`i < j < 11`), comparator count, and sorting on all 2^11 = 2,048 Boolean inputs via `decide +kernel`, lifting to every linear order by the formalized Zero-One Principle in `SortNet/Spec.lean`. Only strict improvements below the current record earn credit.",
+      "baseline_score": 37,
+      "target_files": [
+        "SortNet/Net11.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/bertdobbelaere/SorterHunter/blob/3d8b3454bad15062f4b0030052f12d6550f8d89d/Networks/Sorters/Sort_11_35_8.json"
+    },
+    {
+      "id": "sort_n12",
+      "title": "Minimize 12-wire sorting network size (baseline 41)",
+      "description": "Submit a comparator network on 12 wires in `SortNet/Net12.lean` (`SortNet.score12` and `SortNet.net12`), seeded with textbook Batcher odd-even merge-exchange sort (41 comparators; known optimum: 39, Harder 2019). Frozen `SortNet/Bound12.lean` kernel-verifies well-formedness (`i < j < 12`), comparator count, and sorting on all 2^12 = 4,096 Boolean inputs via `decide +kernel`, lifting to every linear order by the formalized Zero-One Principle in `SortNet/Spec.lean`. Only strict improvements below the current record earn credit.",
+      "baseline_score": 41,
+      "target_files": [
+        "SortNet/Net12.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/bertdobbelaere/SorterHunter/blob/3d8b3454bad15062f4b0030052f12d6550f8d89d/Networks/Sorters/Sort_12_39_9.json"
+    },
+    {
+      "id": "sort_n13",
+      "title": "Minimize 13-wire sorting network size (baseline 48)",
+      "description": "Submit a comparator network on 13 wires in `SortNet/Net13.lean` (`SortNet.score13` and `SortNet.net13`), seeded with textbook Batcher odd-even merge-exchange sort (48 comparators; open research frontier \u2014 best known: 45, lower bound: 43\u201344). Frozen `SortNet/Bound13.lean` kernel-verifies well-formedness (`i < j < 13`), comparator count, and sorting on all 2^13 = 8,192 Boolean inputs via `decide +kernel`, lifting to every linear order by the formalized Zero-One Principle in `SortNet/Spec.lean`. Only strict improvements below the current record earn credit.",
+      "baseline_score": 48,
+      "target_files": [
+        "SortNet/Net13.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/bertdobbelaere/SorterHunter/blob/3d8b3454bad15062f4b0030052f12d6550f8d89d/Networks/Sorters/Sort_13_45_10.json"
+    },
+    {
+      "id": "sort_n14",
+      "title": "Minimize 14-wire sorting network size (baseline 53)",
+      "description": "Submit a comparator network on 14 wires in `SortNet/Net14.lean` (`SortNet.score14` and `SortNet.net14`), seeded with textbook Batcher odd-even merge-exchange sort (53 comparators; open research frontier \u2014 best known: 51, lower bound: 47\u201348). Frozen `SortNet/Bound14.lean` kernel-verifies well-formedness (`i < j < 14`), comparator count, and sorting on all 2^14 = 16,384 Boolean inputs via `decide +kernel`, lifting to every linear order by the formalized Zero-One Principle in `SortNet/Spec.lean`. Only strict improvements below the current record earn credit.",
+      "baseline_score": 53,
+      "target_files": [
+        "SortNet/Net14.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/bertdobbelaere/SorterHunter/blob/3d8b3454bad15062f4b0030052f12d6550f8d89d/Networks/Sorters/Sort_14_51_10.json"
+    },
+    {
+      "id": "sort_n15",
+      "title": "Minimize 15-wire sorting network size (baseline 59)",
+      "description": "Submit a comparator network on 15 wires in `SortNet/Net15.lean` (`SortNet.score15` and `SortNet.net15`), seeded with textbook Batcher odd-even merge-exchange sort (59 comparators; open research frontier \u2014 best known: 56, lower bound: 51\u201352). Frozen `SortNet/Bound15.lean` kernel-verifies well-formedness (`i < j < 15`), comparator count, and sorting on all 2^15 = 32,768 Boolean inputs via `decide +kernel`, lifting to every linear order by the formalized Zero-One Principle in `SortNet/Spec.lean`. Only strict improvements below the current record earn credit.",
+      "baseline_score": 59,
+      "target_files": [
+        "SortNet/Net15.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/bertdobbelaere/SorterHunter/blob/3d8b3454bad15062f4b0030052f12d6550f8d89d/Networks/Sorters/Sort_15_56_10.json"
+    },
+    {
+      "id": "sort_n16",
+      "title": "Minimize 16-wire sorting network size (baseline 63)",
+      "description": "Submit a comparator network on 16 wires in `SortNet/Net16.lean` (`SortNet.score16` and `SortNet.net16`), seeded with textbook Batcher odd-even merge-exchange sort (63 comparators; open research frontier \u2014 best known: 60, lower bound: 55\u201356). Frozen `SortNet/Bound16.lean` kernel-verifies well-formedness (`i < j < 16`), comparator count, and sorting on all 2^16 = 65,536 Boolean inputs via `decide +kernel`, lifting to every linear order by the formalized Zero-One Principle in `SortNet/Spec.lean`. Only strict improvements below the current record earn credit.",
+      "baseline_score": 63,
+      "target_files": [
+        "SortNet/Net16.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/bertdobbelaere/SorterHunter/blob/3d8b3454bad15062f4b0030052f12d6550f8d89d/Networks/Sorters/Sort_16_60_10.json"
+    }
+  ]
+}

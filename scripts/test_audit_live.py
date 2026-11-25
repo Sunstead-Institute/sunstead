@@ -81,6 +81,88 @@ class AuditTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "progression"):
                 audit.audit_aes_sbox_history(repo, ["minimize_total_gates"], snap_tasks, manifest)
 
+    def test_sorting_networks_baseline_and_corrupt_networks(self):
+        mdir = audit.ROOT / "missions/sorting-networks-opt"
+        manifest = json.loads((mdir / "sunstead.json").read_text(encoding="utf-8"))
+        baselines = {t["id"]: t["baseline_score"] for t in manifest["tasks"]}
+        for n in range(9, 17):
+            tid = f"sort_n{n}"
+            src = (mdir / f"SortNet/Net{n}.lean").read_text(encoding="utf-8")
+            with self.subTest(task=tid):
+                self.assertEqual(audit.check_sorting_network(src, tid), baselines[tid])
+
+        n9_src = (mdir / "SortNet/Net9.lean").read_text(encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "score"):
+            audit.check_sorting_network(n9_src.replace("Nat := 26", "Nat := 25", 1), "sort_n9")
+        with self.assertRaisesRegex(ValueError, "unsorted"):
+            audit.check_sorting_network(
+                n9_src.replace("Nat := 26", "Nat := 25", 1).replace(", (7, 8)", "", 1),
+                "sort_n9",
+            )
+        with self.assertRaisesRegex(ValueError, "wire index"):
+            audit.check_sorting_network(n9_src.replace("(0, 8)", "(0, 9)", 1), "sort_n9")
+        with self.assertRaisesRegex(ValueError, "wire index"):
+            audit.check_sorting_network(n9_src.replace("(0, 8)", "(8, 0)", 1), "sort_n9")
+        with self.assertRaisesRegex(ValueError, "format"):
+            audit.check_sorting_network(n9_src + "\n#eval 1\n", "sort_n9")
+        with self.assertRaisesRegex(ValueError, "format"):
+            audit.check_sorting_network(
+                "def SortNet.score9 : Nat := 25\ndef SortNet.net9 : List (Nat × Nat) := sorry\n",
+                "sort_n9",
+            )
+
+        # Verify audit_sorting_network_history rejects non-improving progression and validates all seeds.
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            (repo / "SortNet").mkdir(parents=True)
+            for n in range(9, 17):
+                (repo / f"SortNet/Net{n}.lean").write_text(
+                    (mdir / f"SortNet/Net{n}.lean").read_text(encoding="utf-8"),
+                    encoding="utf-8",
+                )
+            audit.repo_git(repo, "init", "--quiet", "--template=")
+            audit.repo_git(repo, "add", ".")
+            audit.repo_git(repo, "commit", "--quiet", "-m", "seed")
+            (repo / "SortNet/Net9.lean").write_text(n9_src + "\n", encoding="utf-8")
+            audit.repo_git(repo, "add", ".")
+            audit.repo_git(repo, "commit", "--quiet", "-m", "no improvement")
+            snap_tasks = [
+                {
+                    "def": {"id": f"sort_n{n}"},
+                    "status": "verified" if n == 9 else "open",
+                    "best_score": baselines[f"sort_n{n}"],
+                }
+                for n in range(9, 17)
+            ]
+            with self.assertRaisesRegex(ValueError, "progression"):
+                audit.audit_sorting_network_history(repo, ["sort_n9"], snap_tasks, manifest)
+
+        # Verify missions/sorting-networks-opt/verify handles __prebuild__, __inspect__, missing arg, and non-UTF-8.
+        with tempfile.TemporaryDirectory() as tmp:
+            dst = Path(tmp) / "m"
+            (dst / "SortNet").mkdir(parents=True)
+            shutil.copy2(mdir / "verify", dst / "verify")
+            (dst / "SortNet/Net9.lean").write_bytes(b"\xff\xfe\xfd invalid utf8")
+            stub_dir = Path(tmp) / "stub"
+            stub_dir.mkdir()
+            (stub_dir / "sunstead_sandbox.py").write_text(
+                "import json, sys\n"
+                "def emit(ok, summary, stage=None, **kw):\n"
+                "    print(json.dumps({'ok': ok, 'summary': summary, 'stage': stage}))\n"
+                "    sys.exit(0 if ok else 1)\n"
+                "def lean_verify(task_id, **kw):\n"
+                "    emit(True, f'stub:{task_id}')\n",
+                encoding="utf-8",
+            )
+            env = {**audit.os.environ, "PYTHONPATH": str(stub_dir)}
+            for sentinel in ("__prebuild__", "__inspect__"):
+                p = subprocess.run([audit.sys.executable, str(dst / "verify"), sentinel], capture_output=True, text=True, env=env)
+                self.assertEqual(p.returncode, 0)
+                self.assertEqual(json.loads(p.stdout.strip())["summary"], f"stub:{sentinel}")
+            p_utf8 = subprocess.run([audit.sys.executable, str(dst / "verify"), "sort_n9"], capture_output=True, text=True, env=env)
+            self.assertNotEqual(p_utf8.returncode, 0)
+            self.assertIn("UTF-8", json.loads(p_utf8.stdout.strip())["summary"])
+
     def test_archive_ignores_git_and_rejects_paths(self):
         self.assertEqual(audit.archive_files(bundle([(".git/config", b"untrusted"), ("Spec.lean", b"x")])),
                          {"Spec.lean": (b"x", False)})

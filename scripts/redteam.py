@@ -41,6 +41,7 @@ IMAGES = {
     "matrix-rank444-f2": DEFAULT_IMAGE,
     "matrix-rank-alphatensor-f2": DEFAULT_IMAGE,
     "aes-sbox-circuit": DEFAULT_IMAGE,
+    "sorting-networks-opt": DEFAULT_IMAGE,
     "__synthetic_pure_lean__": DEFAULT_IMAGE,
     "__synthetic_mathlib__": DEFAULT_IMAGE,
     "__synthetic_hillclimb__": DEFAULT_IMAGE,
@@ -643,6 +644,10 @@ with open(os.path.join(MISSIONS, "aes-sbox-circuit", "AesSbox", "AndCircuit.lean
           encoding="utf-8") as f:
     AES_AND_BASELINE = f.read()
 
+with open(os.path.join(MISSIONS, "sorting-networks-opt", "SortNet", "Net9.lean"),
+          encoding="utf-8") as f:
+    SORTNET_N9_BASELINE = f.read()
+
 CASES = [
     ("rank444-wrong-score", "matrix-rank444-f2", "reduce_rank",
      {"Rank444/Certificate.lean": RANK_BASELINE.replace("Nat := 47", "Nat := 46", 1)},
@@ -675,6 +680,29 @@ CASES = [
     ("aes-sbox-code-injection", "aes-sbox-circuit", "minimize_total_gates",
      {"AesSbox/TotalCircuit.lean": AES_TOTAL_BASELINE + "\n#eval IO.println \"pwn\"\n"},
      False, None, "non-literal Lean code injection in circuit file must be rejected at lint"),
+    # --- Optimal Sorting Networks hill-climb (`sorting-networks-opt`) ---
+    ("sortnet-n9-baseline", "sorting-networks-opt", "sort_n9",
+     {}, True, 26, "honest Batcher n=9 baseline must kernel-replay at 26 comparators"),
+    ("sortnet-n13-baseline", "sorting-networks-opt", "sort_n13",
+     {}, True, 48, "honest Batcher n=13 baseline must kernel-replay at 48 comparators"),
+    ("sortnet-n9-wrong-score", "sorting-networks-opt", "sort_n9",
+     {"SortNet/Net9.lean": SORTNET_N9_BASELINE.replace("Nat := 26", "Nat := 25", 1)},
+     False, None, "claimed score9 must equal net9.length"),
+    ("sortnet-n9-unsorted-drop-one", "sorting-networks-opt", "sort_n9",
+     {"SortNet/Net9.lean": SORTNET_N9_BASELINE.replace("Nat := 26", "Nat := 25", 1).replace(", (7, 8)", "", 1)},
+     False, None, "dropping comparator (7, 8) leaves inputs unsorted and must fail decide +kernel"),
+    ("sortnet-n9-out-of-bounds-wire", "sorting-networks-opt", "sort_n9",
+     {"SortNet/Net9.lean": SORTNET_N9_BASELINE.replace("(0, 8)", "(0, 9)", 1)},
+     False, None, "out-of-bounds wire index j=9 for n=9 must be rejected by wellFormed"),
+    ("sortnet-n9-inverted-wire", "sorting-networks-opt", "sort_n9",
+     {"SortNet/Net9.lean": SORTNET_N9_BASELINE.replace("(0, 8)", "(8, 0)", 1)},
+     False, None, "inverted comparator (8, 0) violating i < j must be rejected by wellFormed"),
+    ("sortnet-n9-non-literal-sorry", "sorting-networks-opt", "sort_n9",
+     {"SortNet/Net9.lean": "def SortNet.score9 : Nat := 25\ndef SortNet.net9 : List (Nat × Nat) := sorry\n"},
+     False, None, "non-literal / sorry network definition must be rejected at lint"),
+    ("sortnet-n9-code-injection", "sorting-networks-opt", "sort_n9",
+     {"SortNet/Net9.lean": SORTNET_N9_BASELINE + "\n#eval IO.println \"pwn\"\n"},
+     False, None, "Lean code injection in network file must be rejected at lint"),
     # --- Pure Lean 4.36.0 attacks + honest control (`__synthetic_pure_lean__`) ---
     ("lean-honest-control", "__synthetic_pure_lean__", "decoder_injective",
      {"SyntheticPureLean/DecoderInjective.lean": HONEST_DECODER}, True, None,
