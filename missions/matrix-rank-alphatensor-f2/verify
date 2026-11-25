@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+"""Verify explicit binary matrix-multiplication decompositions across AlphaTensor shapes."""
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify
+
+TASKS = {
+    "rank_333": {
+        "module": "RankF2.Bound333",
+        "theorem": "B334.bound333",
+        "score_const": "B334.score333",
+        "statement": "def rank_333 (r : Nat) : Prop := B334.RankLE (B334.mmT 3 3 3) r",
+        "label": "{score} products over F2 (3x3x3)"
+    },
+    "rank_334": {
+        "module": "RankF2.Bound334",
+        "theorem": "B334.bound334",
+        "score_const": "B334.score334",
+        "statement": "def rank_334 (r : Nat) : Prop := B334.RankLE (B334.mmT 3 3 4) r",
+        "label": "{score} products over F2 (3x3x4)"
+    },
+    "rank_344": {
+        "module": "RankF2.Bound344",
+        "theorem": "B334.bound344",
+        "score_const": "B334.score344",
+        "statement": "def rank_344 (r : Nat) : Prop := B334.RankLE (B334.mmT 3 4 4) r",
+        "label": "{score} products over F2 (3x4x4)"
+    },
+    "rank_345": {
+        "module": "RankF2.Bound345",
+        "theorem": "B334.bound345",
+        "score_const": "B334.score345",
+        "statement": "def rank_345 (r : Nat) : Prop := B334.RankLE (B334.mmT 3 4 5) r",
+        "label": "{score} products over F2 (3x4x5)"
+    },
+    "rank_355": {
+        "module": "RankF2.Bound355",
+        "theorem": "B334.bound355",
+        "score_const": "B334.score355",
+        "statement": "def rank_355 (r : Nat) : Prop := B334.RankLE (B334.mmT 3 5 5) r",
+        "label": "{score} products over F2 (3x5x5)"
+    },
+    "rank_445": {
+        "module": "RankF2.Bound445",
+        "theorem": "B334.bound445",
+        "score_const": "B334.score445",
+        "statement": "def rank_445 (r : Nat) : Prop := B334.RankLE (B334.mmT 4 4 5) r",
+        "label": "{score} products over F2 (4x4x5)"
+    }
+}
+
+CERT_SPECS = {
+    "rank_333": {
+        "tag": "333",
+        "file": "RankF2/Cert333.lean",
+        "n": 3,
+        "m": 3,
+        "p": 3,
+        "max_rank": 23
+    },
+    "rank_334": {
+        "tag": "334",
+        "file": "RankF2/Cert334.lean",
+        "n": 3,
+        "m": 3,
+        "p": 4,
+        "max_rank": 29
+    },
+    "rank_344": {
+        "tag": "344",
+        "file": "RankF2/Cert344.lean",
+        "n": 3,
+        "m": 4,
+        "p": 4,
+        "max_rank": 38
+    },
+    "rank_345": {
+        "tag": "345",
+        "file": "RankF2/Cert345.lean",
+        "n": 3,
+        "m": 4,
+        "p": 5,
+        "max_rank": 47
+    },
+    "rank_355": {
+        "tag": "355",
+        "file": "RankF2/Cert355.lean",
+        "n": 3,
+        "m": 5,
+        "p": 5,
+        "max_rank": 58
+    },
+    "rank_445": {
+        "tag": "445",
+        "file": "RankF2/Cert445.lean",
+        "n": 4,
+        "m": 4,
+        "p": 5,
+        "max_rank": 63
+    }
+}
+
+
+def check_certificate(task_id, base_dir):
+    spec = CERT_SPECS.get(task_id)
+    if spec is None:
+        emit(False, f"unknown task id: {task_id}", stage="lint")
+    path = base_dir / spec["file"]
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        emit(False, f"cannot read certificate: {exc}", stage="lint")
+    if len(raw) > 16384:
+        emit(False, "Certificate exceeds 16384 bytes", stage="lint")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        emit(False, "Certificate must be valid UTF-8", stage="lint")
+    tag = spec["tag"]
+    max_r = spec["max_rank"]
+    max_a = (1 << (spec["n"] * spec["m"])) - 1
+    max_b = (1 << (spec["m"] * spec["p"])) - 1
+    max_c = (1 << (spec["p"] * spec["n"])) - 1
+    score_line, _, table = text.partition("\n")
+    sm = re.fullmatch(rf"def B334\.score{tag} : Nat := ([1-9][0-9]{{0,2}})", score_line)
+    if not sm or int(sm[1]) > max_r:
+        emit(False, f"Expected literal natural-number score 1..{max_r}", stage="lint")
+    body = table.strip()
+    mask = r"(0|[1-9][0-9]{0,7})"
+    term = rf"\(\s*{mask}\s*,\s*{mask}\s*,\s*{mask}\s*\)"
+    header = rf"def B334\.cert{tag} : List \(Nat × Nat × Nat\) :=\s*"
+    m = re.fullmatch(header + r"\[\s*(.*?)\s*\]", body, re.DOTALL)
+    if not m or not re.fullmatch(rf"{term}(?:\s*,\s*{term}){{0,{max_r - 1}}}", m[1]):
+        emit(False, f"Expected literal table of 1 to {max_r} decimal mask triples", stage="lint")
+    triples = re.findall(term, m[1])
+    if len(triples) != int(sm[1]):
+        emit(False, f"Score {sm[1]} does not match table length {len(triples)}", stage="lint")
+    for a_s, b_s, c_s in triples:
+        if int(a_s) > max_a or int(b_s) > max_b or int(c_s) > max_c:
+            emit(False, "Bitmask exceeds matrix dimension width", stage="lint")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>", stage="lint")
+    tid = sys.argv[1]
+    if tid in CERT_SPECS:
+        check_certificate(tid, Path(__file__).resolve().parent)
+    lean_verify(
+        tid,
+        lib_root="RankF2",
+        frozen_files=["RankF2/Spec.lean", "RankF2/Common.lean", "UPSTREAM.json", "lakefile.toml", "lean-toolchain"],
+        tasks=TASKS,
+        uses_mathlib=True,
+        timeout_sec=220,
+    )

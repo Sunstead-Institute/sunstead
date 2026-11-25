@@ -338,5 +338,21 @@ diff --git a/Proof.lean b/Proof.lean
                     audit.check_lean_repo_snapshot(image, raw, snap_id, opts, checks, expected_version=version)
 
 
+    def test_alphatensor_rank_tables_verified_and_tampering_rejected(self):
+        at_dir = audit.ROOT / "missions" / "matrix-rank-alphatensor-f2"
+        for (mid, tid), (n, m, p, max_r, cert_path, score_name, cert_name, max_bytes) in audit.RANK_TASK_SPECS.items():
+            if mid != "matrix-rank-alphatensor-f2":
+                continue
+            with self.subTest(task=tid):
+                src = (at_dir / cert_path).read_text(encoding="utf-8")
+                self.assertEqual(
+                    audit.check_rank_table(src, n, m, p, max_r, score_name, cert_name, max_bytes),
+                    max_r,
+                )
+        bad = "def B334.score333 : Nat := 1\ndef B334.cert333 : List (Nat × Nat × Nat) := [(1, 1, 1)]\n"
+        with self.assertRaisesRegex(ValueError, "matrix product differs"):
+            audit.check_rank_table(bad, 3, 3, 3, 23, "B334.score333", "B334.cert333", 16384)
+
+
 if __name__ == "__main__":
     unittest.main()

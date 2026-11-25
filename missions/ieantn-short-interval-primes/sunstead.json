@@ -1,0 +1,89 @@
+{
+  "id": "ieantn-short-interval-primes",
+  "title": "IEANTN (Terence Tao): Explicit Primes in Short Intervals",
+  "description": "Five verbatim open analytic number theory theorems from Terence Tao's Integrated Explicit Analytic Number Theory Network (teorth/IEANTN@cd9c2dd3, Apache-2.0): Kadiri\u2013Lumley (2014) Theorem 1.1 short-interval primes above exp(59), exp(60), and all of Table 2; Ramar\u00e9\u2013Saouter (2003) primes in (x(1 - 1/28314000), x]; and Dusart (2018) Proposition 5.4 primes in (x, x + x/(log x)^3] for x \u2265 89693. Every frozen definition file is SHA-256 identical to upstream.",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/teorth/IEANTN",
+  "upstream": {
+    "repo": "teorth/IEANTN",
+    "commit": "cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3",
+    "license": "Apache-2.0"
+  },
+  "frozen_paths": [
+    "IEANTN/Nodes/Dusart2018/v1/Conclusions.lean",
+    "IEANTN/Nodes/KadiriLumley/v1/Conclusions.lean",
+    "IEANTN/Nodes/RamareSaouter2003/v1/Conclusions.lean",
+    "IEANTN/Vocabulary/PrimeGaps.lean",
+    "IEANTN/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 240,
+    "memory_mb": 6144
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "kadiri_lumley_exp_59",
+      "title": "Kadiri\u2013Lumley (2014): prime in (x(1 - 1/1946282821), x) for x \u2265 exp(59)",
+      "description": "Prove `KadiriLumley.v1.prime_in_interval_above_exp_59` (Table 2 row log x\u2080 = 59, consumed by the odd-Goldbach chain in IEANTN).",
+      "target_files": [
+        "IEANTN/Nodes/KadiriLumley/v1/TaskPrimeExp59.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/KadiriLumley/v1/Challenge.lean#L19-L20"
+    },
+    {
+      "id": "kadiri_lumley_exp_60",
+      "title": "Kadiri\u2013Lumley (2014): prime in (x(1 - 1/1966196911), x) for x \u2265 exp(60)",
+      "description": "Prove `KadiriLumley.v1.prime_in_interval_above_exp_60` (Table 2 row log x\u2080 = 60, sharpest row used by the odd-Goldbach pipeline).",
+      "target_files": [
+        "IEANTN/Nodes/KadiriLumley/v1/TaskPrimeExp60.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/KadiriLumley/v1/Challenge.lean#L22-L23"
+    },
+    {
+      "id": "kadiri_lumley_table_2",
+      "title": "Kadiri\u2013Lumley (2014) Theorem 1.1: all 20 rows of Table 2",
+      "description": "Prove `KadiriLumley.v1.table_2`: short-interval prime guarantees for x \u2265 4\u00b710^18 and every (n, \u0394) row in `table2ExpRows` up to exp(150).",
+      "target_files": [
+        "IEANTN/Nodes/KadiriLumley/v1/TaskTable2.lean"
+      ],
+      "depends_on": [
+        "kadiri_lumley_exp_59",
+        "kadiri_lumley_exp_60"
+      ],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/KadiriLumley/v1/Challenge.lean#L25-L26"
+    },
+    {
+      "id": "ramare_saouter_2003",
+      "title": "Ramar\u00e9\u2013Saouter (2003): prime in (x(1 - 1/28314000), x] for x > 10726905041",
+      "description": "Prove `RamareSaouter2003.v1.prime_in_short_interval`: every x > 10,726,905,041 has a prime in (x(1 - 1/28314000), x].",
+      "target_files": [
+        "IEANTN/Nodes/RamareSaouter2003/v1/TaskShortInterval.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/RamareSaouter2003/v1/Challenge.lean#L19-L20"
+    },
+    {
+      "id": "dusart_2018_prop_5_4",
+      "title": "Dusart (2018) Proposition 5.4: prime in (x, x + x/(log x)^3] for x \u2265 89693",
+      "description": "Prove `Dusart2018.v1.proposition_5_4` (`IEANTN.HasPrimeInInterval.logPower 89693 3`).",
+      "target_files": [
+        "IEANTN/Nodes/Dusart2018/v1/TaskProp54.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/Dusart2018/v1/Challenge.lean#L19-L20"
+    }
+  ]
+}

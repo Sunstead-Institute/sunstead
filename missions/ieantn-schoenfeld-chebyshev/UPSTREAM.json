@@ -1,0 +1,47 @@
+{
+  "repo": "teorth/IEANTN",
+  "commit": "cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3",
+  "license": "Apache-2.0",
+  "checks": [
+    {
+      "local_file": "IEANTN/Nodes/Schoenfeld1976/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/Schoenfeld1976/v1/Conclusions.lean",
+      "exact_sha256": "284eef5da7460c6d7bb1a7af10bff1b4d577497baad2961cb3c1904eaf38a00d"
+    },
+    {
+      "local_file": "IEANTN/Vocabulary/Zeta.lean",
+      "upstream_file": "IEANTN/Vocabulary/Zeta.lean",
+      "exact_sha256": "42e239de4c1151d03ed94ee4c0c51d031f974faa6998f447e85845665bb846ef"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Schoenfeld1976/v1/TaskPsiUpperThm11.lean",
+      "upstream_file": "IEANTN/Nodes/Schoenfeld1976/v1/Challenge.lean",
+      "verbatim_snippet": "theorem Schoenfeld1976.v1.challenge_psi_upper_theorem_11 : Schoenfeld1976.v1.psi_upper_theorem_11 := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Schoenfeld1976/v1/TaskPsiThm11.lean",
+      "upstream_file": "IEANTN/Nodes/Schoenfeld1976/v1/Challenge.lean",
+      "verbatim_snippet": "theorem Schoenfeld1976.v1.challenge_psi_theorem_11 : Schoenfeld1976.v1.psi_theorem_11 := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Schoenfeld1976/v1/TaskThetaThm11.lean",
+      "upstream_file": "IEANTN/Nodes/Schoenfeld1976/v1/Challenge.lean",
+      "verbatim_snippet": "theorem Schoenfeld1976.v1.challenge_theta_theorem_11 : Schoenfeld1976.v1.theta_theorem_11 := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Schoenfeld1976/v1/TaskPsiLog55a.lean",
+      "upstream_file": "IEANTN/Nodes/Schoenfeld1976/v1/Challenge.lean",
+      "verbatim_snippet": "theorem Schoenfeld1976.v1.challenge_psi_log_5_5a : Schoenfeld1976.v1.psi_log_5_5a := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Schoenfeld1976/v1/TaskThetaLog56.lean",
+      "upstream_file": "IEANTN/Nodes/Schoenfeld1976/v1/Challenge.lean",
+      "verbatim_snippet": "theorem Schoenfeld1976.v1.challenge_theta_log_5_6 : Schoenfeld1976.v1.theta_log_5_6 := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Schoenfeld1976/v1/TaskPsiThetaLog56b.lean",
+      "upstream_file": "IEANTN/Nodes/Schoenfeld1976/v1/Challenge.lean",
+      "verbatim_snippet": "theorem Schoenfeld1976.v1.challenge_psi_theta_log_5_6b : Schoenfeld1976.v1.psi_theta_log_5_6b := by\n  sorry"
+    }
+  ]
+}

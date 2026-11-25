@@ -579,46 +579,73 @@ def check_lean_repo_snapshot(image, data, snapshot_id, lean_options, checks, exp
         print(f"  PASS {theorem}: stock Lean {expected_version} + leanchecker + repo-snapshot FrozenTypeDeps check; axioms: {', '.join(actual) or 'none'}")
 
 
-def check_rank_table(source):
+RANK_TASK_SPECS = {
+    ("matrix-rank444-f2", "reduce_rank"): (4, 4, 4, 47, "Rank444/Certificate.lean", "B334.score", "certificate", 8192),
+    ("matrix-rank-alphatensor-f2", "rank_333"): (3, 3, 3, 23, "RankF2/Cert333.lean", "B334.score333", "B334.cert333", 16384),
+    ("matrix-rank-alphatensor-f2", "rank_334"): (3, 3, 4, 29, "RankF2/Cert334.lean", "B334.score334", "B334.cert334", 16384),
+    ("matrix-rank-alphatensor-f2", "rank_344"): (3, 4, 4, 38, "RankF2/Cert344.lean", "B334.score344", "B334.cert344", 16384),
+    ("matrix-rank-alphatensor-f2", "rank_345"): (3, 4, 5, 47, "RankF2/Cert345.lean", "B334.score345", "B334.cert345", 16384),
+    ("matrix-rank-alphatensor-f2", "rank_355"): (3, 5, 5, 58, "RankF2/Cert355.lean", "B334.score355", "B334.cert355", 16384),
+    ("matrix-rank-alphatensor-f2", "rank_445"): (4, 4, 5, 63, "RankF2/Cert445.lean", "B334.score445", "B334.cert445", 16384),
+}
+
+
+def check_rank_table(source, n=4, m=4, p=4, max_rank=47, score_name="B334.score", cert_name="certificate", max_bytes=8192):
     """Read only the literal masks. Compare ordinary elementary-matrix products over F2."""
-    header = "def certificate : List (Nat × Nat × Nat) :="
+    header = f"def {cert_name} : List (Nat × Nat × Nat) :="
     score_line, _, table = source.partition("\n")
-    score_match = re.fullmatch(r"def B334.score : Nat := ([1-9][0-9]?)", score_line)
-    require(score_match and len(source.encode("utf-8")) <= 8192, "unexpected rank certificate")
+    score_match = re.fullmatch(rf"def {re.escape(score_name)} : Nat := ([1-9][0-9]{{0,2}})", score_line)
+    require(score_match and len(source.encode("utf-8")) <= max_bytes, "unexpected rank certificate")
     source = table.strip()
     require(source.startswith(header), "unexpected certificate header")
     literal = source[len(header):].strip()
     require(re.fullmatch(r"[0-9\s(),\[\]]+", literal), "invalid mask table")
     terms = ast.literal_eval(literal)
-    require(type(terms) is list and 1 <= len(terms) <= 47 and len(terms) == int(score_match[1]), "invalid term count")
+    require(type(terms) is list and 1 <= len(terms) <= max_rank and len(terms) == int(score_match[1]), "invalid term count")
+    lim_a, lim_b, lim_c = 1 << (n * m), 1 << (m * p), 1 << (p * n)
     for term in terms:
-        require(type(term) is tuple and len(term) == 3 and
-                all(type(v) is int and 0 <= v < 65536 for v in term), "invalid mask triple")
-    for x in range(16):
-        for y in range(16):
+        require(
+            type(term) is tuple and len(term) == 3
+            and type(term[0]) is int and 0 <= term[0] < lim_a
+            and type(term[1]) is int and 0 <= term[1] < lim_b
+            and type(term[2]) is int and 0 <= term[2] < lim_c,
+            "invalid mask triple",
+        )
+    for x in range(n * m):
+        for y in range(m * p):
             output = 0
             for left, right, product in terms:
                 if left & (1 << x) and right & (1 << y):
                     output ^= product
-            # E_ij times E_jk equals E_ik. Output masks use the transposed index 4k+i.
-            i, j = divmod(x, 4)
-            j2, k = divmod(y, 4)
-            expected = 1 << (4 * k + i) if j == j2 else 0
+            # E_ij times E_jk equals E_ik. Output masks use the transposed index n*k+i.
+            i, j = divmod(x, m)
+            j2, k = divmod(y, p)
+            expected = 1 << (n * k + i) if j == j2 else 0
             require(output == expected, f"matrix product differs at inputs {x}, {y}")
     return len(terms)
 
 
-def audit_rank_history(repo, accepted, best_score):
+def audit_rank_history(repo, mid, accepted, tasks_by_id):
     commits = repo_git(repo, "rev-list", "--reverse", "HEAD").decode().splitlines()
     require(len(commits) == 1 + len(accepted), "unexpected rank history length")
-    previous = None
-    for commit in commits:
-        source = repo_git(repo, "show", commit + ":Rank444/Certificate.lean").decode("utf-8")
-        score = check_rank_table(source)
-        require(score == 47 if previous is None else score < previous, "invalid rank progression")
-        print(f"  PASS {commit[:12]}: all 4096 coefficients correct at {score} products")
-        previous = score
-    require(previous == best_score, "published best score differs from certificate")
+    seed_commit = commits[0]
+    previous = {}
+    for task_id in dict.fromkeys(accepted):
+        n, m, p, max_rank, cert_path, score_name, cert_name, max_bytes = RANK_TASK_SPECS[(mid, task_id)]
+        seed_src = repo_git(repo, "show", seed_commit + ":" + cert_path).decode("utf-8")
+        seed_score = check_rank_table(seed_src, n, m, p, max_rank, score_name, cert_name, max_bytes)
+        require(seed_score == max_rank, "seed rank differs from expected baseline")
+        previous[task_id] = seed_score
+    for commit, task_id in zip(commits[1:], accepted):
+        n, m, p, max_rank, cert_path, score_name, cert_name, max_bytes = RANK_TASK_SPECS[(mid, task_id)]
+        source = repo_git(repo, "show", commit + ":" + cert_path).decode("utf-8")
+        score = check_rank_table(source, n, m, p, max_rank, score_name, cert_name, max_bytes)
+        require(score < previous[task_id], "invalid rank progression")
+        eqs = (n * m) * (m * p) * (p * n)
+        print(f"  PASS {commit[:12]} ({task_id}): all {eqs} coefficients correct at {score} products")
+        previous[task_id] = score
+    for task_id, final_score in previous.items():
+        require(final_score == tasks_by_id[task_id]["best_score"], "published best score differs from certificate")
 
 
 def _fips197_aes_sbox():
@@ -783,14 +810,14 @@ def main():
         detail = snapshot["mission"]
         mission = ROOT / "missions" / mid
         manifest = json.loads((mission / "sunstead.json").read_text(encoding="utf-8"))
-        rank_mission = mid == "matrix-rank444-f2" and manifest["mode"] == "hillclimb"
+        rank_mission = mid in ("matrix-rank444-f2", "matrix-rank-alphatensor-f2") and manifest["mode"] == "hillclimb"
         aes_sbox_mission = mid == "aes-sbox-circuit" and manifest["mode"] == "hillclimb"
         hillclimb_mission = rank_mission or aes_sbox_mission
         require(not manifest.get("demo") and (hillclimb_mission or manifest["mode"] == "dag"), "unsupported audited mission")
         require(manifest == detail["manifest"], "live manifest differs from trusted checkout")
         history = json.loads(download(endpoint + "/history"))["commits"]
-        require(history and (hillclimb_mission or len(history) == item["verified_tasks"]), "history incomplete or changed during audit")
         verified = {t["def"]["id"] for t in snapshot["tasks"] if t["status"] == "verified"}
+        require(history and (hillclimb_mission or len(history) == len(verified)), "history incomplete or changed during audit")
         require(verified == {row["task_id"] for row in history}, "verified tasks and history disagree")
         seed_files = archive_files(download(endpoint + "/bundle.tar.gz?base=seed"))
         live_files = archive_files(download(endpoint + "/bundle.tar.gz"))
@@ -799,8 +826,8 @@ def main():
                                     download(endpoint + "/history.mbox"),
                                     seed_files, live_files, detail["spec_sha256"])
             if rank_mission:
-                task, = snapshot["tasks"]
-                audit_rank_history(Path(tmp) / "repo", accepted, task["best_score"])
+                tasks_by_id = {t["def"]["id"]: t for t in snapshot["tasks"]}
+                audit_rank_history(Path(tmp) / "repo", mid, accepted, tasks_by_id)
                 count += len(accepted)
                 continue
             if aes_sbox_mission:

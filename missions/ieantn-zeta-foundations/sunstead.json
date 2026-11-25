@@ -1,0 +1,125 @@
+{
+  "id": "ieantn-zeta-foundations",
+  "title": "IEANTN (Terence Tao): Riemann Zeta Analytic Machinery & Exponential Sums",
+  "description": "Eight verbatim open analytic number theory theorems from Terence Tao's IEANTN (teorth/IEANTN@cd9c2dd3, Apache-2.0): Patel (2020) corrected Cheng\u2013Graham exponential-sum Lemmas 2 & 3 and explicit |\u03b6(1 + it)| bound; the paired Hadamard partial-fraction expansion of \u03b6'/\u03b6; Rosser's Riemann\u2013von Mangoldt zero-counting bounds; Trudgian (2011) Theorem 2.2 Turing-method integral bound on S(t); and Hiary (2016) critical-line subconvexity |\u03b6(1/2 + it)|.",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/teorth/IEANTN",
+  "upstream": {
+    "repo": "teorth/IEANTN",
+    "commit": "cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3",
+    "license": "Apache-2.0"
+  },
+  "frozen_paths": [
+    "IEANTN/Nodes/Hiary2016/v1/Conclusions.lean",
+    "IEANTN/Nodes/Patel2020/v1/Conclusions.lean",
+    "IEANTN/Nodes/Trudgian2011/v1/Conclusions.lean",
+    "IEANTN/Nodes/ZeroCount/v1/Conclusions.lean",
+    "IEANTN/Nodes/ZetaHadamard/v1/Conclusions.lean",
+    "IEANTN/Vocabulary/Zeta.lean",
+    "IEANTN/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 240,
+    "memory_mb": 6144
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "patel_cheng_graham_lemma_2",
+      "title": "Patel (2020) corrected Cheng\u2013Graham Lemma 2 (1st-derivative exponential sum)",
+      "description": "Prove `Patel2020.v1.cheng_graham_lemma_2`: explicit Kusmin\u2013Landau / van der Corput first-derivative exponential sum bound \u2264 (2/\u03c0) U.",
+      "target_files": [
+        "IEANTN/Nodes/Patel2020/v1/TaskChengGraham2.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/Patel2020/v1/Challenge.lean#L22-L23"
+    },
+    {
+      "id": "patel_cheng_graham_lemma_3",
+      "title": "Patel (2020) corrected Cheng\u2013Graham Lemma 3 (2nd-derivative exponential sum)",
+      "description": "Prove `Patel2020.v1.cheng_graham_lemma_3`: corrected explicit van der Corput second-derivative exponential sum bound.",
+      "target_files": [
+        "IEANTN/Nodes/Patel2020/v1/TaskChengGraham3.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/Patel2020/v1/Challenge.lean#L25-L26"
+    },
+    {
+      "id": "patel_zeta_one_bound",
+      "title": "Patel (2020): explicit |\u03b6(1 + it)| \u2264 min(log t, \u00bd log t + 1.93, \u2155 log t + 44.02)",
+      "description": "Prove `Patel2020.v1.zeta_one_bound` for all t \u2265 3 (may import verified `TaskChengGraham2` and `TaskChengGraham3`).",
+      "target_files": [
+        "IEANTN/Nodes/Patel2020/v1/TaskZetaOneBound.lean"
+      ],
+      "depends_on": [
+        "patel_cheng_graham_lemma_2",
+        "patel_cheng_graham_lemma_3"
+      ],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/Patel2020/v1/Challenge.lean#L19-L20"
+    },
+    {
+      "id": "zeta_hadamard_partial_fractions",
+      "title": "Hadamard partial-fraction expansion of \u03b6'/\u03b6 (unconditional paired HasSum)",
+      "description": "Prove `ZetaHadamard.v1.logDeriv_partial_fractions` (Montgomery\u2013Vaughan Corollary 10.14 / Davenport \u00a712 in paired HasSum form).",
+      "target_files": [
+        "IEANTN/Nodes/ZetaHadamard/v1/TaskLogDerivPartialFractions.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/ZetaHadamard/v1/Challenge.lean#L19-L20"
+    },
+    {
+      "id": "zero_count_rvm_error_small",
+      "title": "Rosser / Chirre\u2013Helfgott Lemma B.1(a): |Q(t)| < 1 for 0 < t \u2264 280",
+      "description": "Prove `ZeroCount.v1.rvm_error_small`: explicit Riemann\u2013von Mangoldt zero-count remainder |N(t) - rvmMain(t)| < 1 on (0, 280].",
+      "target_files": [
+        "IEANTN/Nodes/ZeroCount/v1/TaskRvmErrorSmall.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/ZeroCount/v1/Challenge.lean#L22-L23"
+    },
+    {
+      "id": "zero_count_rvm_error_bound",
+      "title": "Rosser / Chirre\u2013Helfgott Lemma B.1(b): |Q(t)| \u2264 (1/5) log t + 2 for t \u2265 1",
+      "description": "Prove `ZeroCount.v1.rvm_error_bound`: explicit Riemann\u2013von Mangoldt remainder bound for all t \u2265 1.",
+      "target_files": [
+        "IEANTN/Nodes/ZeroCount/v1/TaskRvmErrorBound.lean"
+      ],
+      "depends_on": [
+        "zero_count_rvm_error_small"
+      ],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/ZeroCount/v1/Challenge.lean#L19-L20"
+    },
+    {
+      "id": "trudgian_2011_integral_S_bound",
+      "title": "Trudgian (2011) Theorem 2.2: |\u222b_{t\u2081}^{t\u2082} S(t) dt| \u2264 2.067 + 0.059 log t\u2082",
+      "description": "Prove `Trudgian2011.v1.integral_S_bound` for all t\u2082 > t\u2081 > 168\u03c0 (Turing's method core bound).",
+      "target_files": [
+        "IEANTN/Nodes/Trudgian2011/v1/TaskIntegralSBound.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/Trudgian2011/v1/Challenge.lean#L19-L20"
+    },
+    {
+      "id": "hiary_2016_zeta_half_line_bound",
+      "title": "Hiary (2016) corrected Theorem 1.1: |\u03b6(1/2 + it)| \u2264 0.77 t^{1/6} log t",
+      "description": "Prove `Hiary2016.v1.zeta_half_line_bound` for all t \u2265 3 (explicit Weyl/van der Corput critical-line subconvexity).",
+      "target_files": [
+        "IEANTN/Nodes/Hiary2016/v1/TaskZetaHalfLine.lean"
+      ],
+      "depends_on": [
+        "patel_cheng_graham_lemma_3"
+      ],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/Hiary2016/v1/Challenge.lean#L19-L20"
+    }
+  ]
+}

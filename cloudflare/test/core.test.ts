@@ -37,10 +37,15 @@ import {
   parseProfilePatch,
   gatePublicSocialHandles,
   buildPublicSocialLinks,
+  publicVerifierImage,
+  buildMissionLocalSetup,
+  renderRepoSnapshotBootstrapScript,
   type AcceptedProofRow,
   type MissionManifest,
   type TaskState,
 } from "../src/core.ts";
+import { renderJoinTxt } from "../src/join_txt.ts";
+import { spawnSync } from "node:child_process";
 
 function task(id: string, over: Partial<TaskState> = {}, deps: string[] = []): TaskState {
   return {
@@ -830,4 +835,125 @@ test("web/app.js renders social links strictly from validated handles with safe 
     }),
     ""
   );
+});
+
+// ---------------------------------------------------------------- GHCR images, /join.txt & repo-snapshot bootstrap
+
+test("publicVerifierImage maps local verifier tags to ghcr.io/sunstead-institute", () => {
+  assert.equal(
+    publicVerifierImage("sunstead/verifier-lean4:v0.2"),
+    "ghcr.io/sunstead-institute/verifier-lean4:v0.2"
+  );
+  assert.equal(
+    publicVerifierImage("sunstead/verifier-lean4-v4.35.0:v0.1"),
+    "ghcr.io/sunstead-institute/verifier-lean4-v4.35.0:v0.1"
+  );
+  assert.equal(
+    publicVerifierImage("sunstead/verifier-lean4-v4.31.0:v0.1"),
+    "ghcr.io/sunstead-institute/verifier-lean4-v4.31.0:v0.1"
+  );
+  assert.equal(
+    publicVerifierImage("ghcr.io/sunstead-institute/verifier-lean4:v0.2"),
+    "ghcr.io/sunstead-institute/verifier-lean4:v0.2"
+  );
+});
+
+test("buildMissionLocalSetup & renderRepoSnapshotBootstrapScript produce accurate per-mission setup commands", () => {
+  const loadManifest = (id: string) =>
+    JSON.parse(
+      readFileSync(new URL(`../../missions/${id}/sunstead.json`, import.meta.url), "utf8")
+    ) as MissionManifest;
+
+  const gcm = loadManifest("lnsym-gcm-gmult-armv8");
+  const gcmSetup = buildMissionLocalSetup(gcm, "https://sunstead.org");
+  assert.equal(gcmSetup.mode, "repo-snapshot");
+  assert.equal(gcmSetup.toolchain, "leanprover/lean4:v4.35.0");
+  assert.equal(gcmSetup.verifier_image, "ghcr.io/sunstead-institute/verifier-lean4-v4.35.0:v0.1");
+  assert.equal(gcmSetup.uses_mathlib, false);
+  assert.equal(gcmSetup.bootstrap_script_url, "https://sunstead.org/api/missions/lnsym-gcm-gmult-armv8/bootstrap.sh");
+  assert.match(gcmSetup.bootstrap_cmd ?? "", /lnsym-gcm-gmult-armv8\/bootstrap\.sh' \| bash$/);
+  assert.match(gcmSetup.docker_verify_cmd, /ghcr\.io\/sunstead-institute\/verifier-lean4-v4\.35\.0:v0\.1/);
+
+  const script = renderRepoSnapshotBootstrapScript(gcm, "https://sunstead.org");
+  assert.match(script, /49f8a1d9e46f8dcfc345f4bc15d35b0ba845ff5c/);
+  assert.match(script, /ghcr\.io\/sunstead-institute\/verifier-lean4-v4\.35\.0:v0\.1/);
+  assert.match(script, /\.\.\/lnsym-gcm-gmult-armv8-upstream/);
+  assert.match(script, /Proofs\/AES-GCM\/GCMGmultV8Sym\.lean/);
+  // Generated script must be syntactically valid bash.
+  const syntax = spawnSync("bash", ["-n"], { input: script, encoding: "utf8" });
+  assert.equal(syntax.status, 0, syntax.stderr);
+
+  const ieantn = loadManifest("ieantn-chebyshev-kernel");
+  const ieantnSetup = buildMissionLocalSetup(ieantn, "https://sunstead.org");
+  assert.equal(ieantnSetup.mode, "standalone");
+  assert.equal(ieantnSetup.toolchain, "leanprover/lean4:v4.36.0");
+  assert.equal(ieantnSetup.verifier_image, "ghcr.io/sunstead-institute/verifier-lean4:v0.2");
+  assert.equal(ieantnSetup.bootstrap_cmd, null);
+  assert.ok(ieantnSetup.native_setup_steps.includes("lake exe cache get"));
+  assert.throws(() => renderRepoSnapshotBootstrapScript(ieantn, "https://sunstead.org"), /not a repo-snapshot/);
+
+  const rank = loadManifest("matrix-rank444-f2");
+  const rankSetup = buildMissionLocalSetup(rank, "https://sunstead.org");
+  assert.equal(rankSetup.mode, "hillclimb");
+  assert.equal(rankSetup.toolchain, "leanprover/lean4:v4.36.0");
+  assert.equal(rankSetup.verifier_image, "ghcr.io/sunstead-institute/verifier-lean4:v0.2");
+  assert.ok(rankSetup.notes.some((n) => n.includes("minimize") && n.includes("47")));
+});
+
+test("renderJoinTxt uses ghcr.io/sunstead-institute, accurate per-mission toolchains, gist auth, hill-climb and repo-snapshot bootstrap", () => {
+  const loadManifest = (id: string) =>
+    JSON.parse(
+      readFileSync(new URL(`../../missions/${id}/sunstead.json`, import.meta.url), "utf8")
+    ) as MissionManifest;
+
+  const gcm = loadManifest("lnsym-gcm-gmult-armv8");
+  const ieantn = loadManifest("ieantn-chebyshev-kernel");
+  const rank = loadManifest("matrix-rank444-f2");
+
+  const txt = renderJoinTxt("https://sunstead.org", [
+    {
+      manifest: gcm,
+      tasks: gcm.tasks.map((def) => ({
+        def,
+        status: "open",
+        best_score: null,
+        verified_by: null,
+        active_lease: null,
+        attempts: 0,
+      })),
+    },
+    {
+      manifest: ieantn,
+      tasks: ieantn.tasks.map((def) => ({
+        def,
+        status: "open",
+        best_score: null,
+        verified_by: null,
+        active_lease: null,
+        attempts: 0,
+      })),
+    },
+    {
+      manifest: rank,
+      tasks: rank.tasks.map((def) => ({
+        def,
+        status: "open",
+        best_score: 47,
+        verified_by: null,
+        active_lease: null,
+        attempts: 0,
+      })),
+    },
+  ]);
+
+  assert.ok(!txt.includes("sunstead-org"), "must never reference wrong GHCR org sunstead-org");
+  assert.match(txt, /ghcr\.io\/sunstead-institute\/verifier-lean4:v0\.2/);
+  assert.match(txt, /ghcr\.io\/sunstead-institute\/verifier-lean4-v4\.35\.0:v0\.1/);
+  assert.match(txt, /leanprover\/lean4:v4\.36\.0/);
+  assert.match(txt, /leanprover\/lean4:v4\.35\.0/);
+  assert.match(txt, /\/api\/me\/verify\/github\/start/);
+  assert.match(txt, /\/api\/me\/verify\/github\/confirm/);
+  assert.match(txt, /lnsym-gcm-gmult-armv8\/bootstrap\.sh/);
+  assert.match(txt, /reduce_rank \(best: 47, minimize\)/);
+  assert.match(txt, /Rank444\/Certificate\.lean/);
 });

@@ -1,0 +1,105 @@
+{
+  "id": "ieantn-schoenfeld-chebyshev",
+  "title": "IEANTN (Harald Helfgott): Schoenfeld (1976) Explicit Chebyshev \u03c8 & \u03b8 Bounds",
+  "description": "Six verbatim open theorems from Harald Helfgott's Schoenfeld1976.v1 node in Terence Tao's IEANTN (teorth/IEANTN@cd9c2dd3, Apache-2.0): Schoenfeld (Math. Comp. 1976) Theorem 11 ((7.2), (7.3), (7.4)) and Theorem 7* ((5.5a*), (5.6*), (5.6b*)) explicit bounds on \u03c8(x) - x and \u03b8(x) - x conditional on the explicit finite-height hypothesis `RiemannHypothesisUpTo 1894438.5122`.",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/teorth/IEANTN",
+  "upstream": {
+    "repo": "teorth/IEANTN",
+    "commit": "cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3",
+    "license": "Apache-2.0"
+  },
+  "frozen_paths": [
+    "IEANTN/Nodes/Schoenfeld1976/v1/Conclusions.lean",
+    "IEANTN/Vocabulary/Zeta.lean",
+    "IEANTN/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 240,
+    "memory_mb": 6144
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "psi_upper_theorem_11",
+      "title": "Schoenfeld (1976) Thm 11 (7.4): \u03b8(x) - x \u2264 \u03c8(x) - x < x \u03b5\u2080(x) for x \u2265 1",
+      "description": "Prove `Schoenfeld1976.v1.psi_upper_theorem_11` conditional on `RiemannHypothesisUpTo 1894438.5122`.",
+      "target_files": [
+        "IEANTN/Nodes/Schoenfeld1976/v1/TaskPsiUpperThm11.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/Schoenfeld1976/v1/Challenge.lean#L25-L26"
+    },
+    {
+      "id": "psi_theorem_11",
+      "title": "Schoenfeld (1976) Thm 11 (7.2): |\u03c8(x) - x| < x \u03b5\u2080(x) for x \u2265 17",
+      "description": "Prove `Schoenfeld1976.v1.psi_theorem_11` conditional on `RiemannHypothesisUpTo 1894438.5122`.",
+      "target_files": [
+        "IEANTN/Nodes/Schoenfeld1976/v1/TaskPsiThm11.lean"
+      ],
+      "depends_on": [
+        "psi_upper_theorem_11"
+      ],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/Schoenfeld1976/v1/Challenge.lean#L19-L20"
+    },
+    {
+      "id": "theta_theorem_11",
+      "title": "Schoenfeld (1976) Thm 11 (7.3): |\u03b8(x) - x| < x \u03b5\u2080(x) for x \u2265 101",
+      "description": "Prove `Schoenfeld1976.v1.theta_theorem_11` conditional on `RiemannHypothesisUpTo 1894438.5122`.",
+      "target_files": [
+        "IEANTN/Nodes/Schoenfeld1976/v1/TaskThetaThm11.lean"
+      ],
+      "depends_on": [
+        "psi_theorem_11"
+      ],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/Schoenfeld1976/v1/Challenge.lean#L22-L23"
+    },
+    {
+      "id": "psi_log_5_5a",
+      "title": "Schoenfeld (1976) Thm 7* (5.5a*): |\u03c8(x) - x| < 0.0220646 x / log x for x \u2265 161971",
+      "description": "Prove `Schoenfeld1976.v1.psi_log_5_5a` conditional on `RiemannHypothesisUpTo 1894438.5122`.",
+      "target_files": [
+        "IEANTN/Nodes/Schoenfeld1976/v1/TaskPsiLog55a.lean"
+      ],
+      "depends_on": [
+        "psi_theorem_11"
+      ],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/Schoenfeld1976/v1/Challenge.lean#L28-L29"
+    },
+    {
+      "id": "theta_log_5_6",
+      "title": "Schoenfeld (1976) Thm 7* (5.6*): |\u03b8(x) - x| < 0.0239922 x / log x for x \u2265 758711",
+      "description": "Prove `Schoenfeld1976.v1.theta_log_5_6` conditional on `RiemannHypothesisUpTo 1894438.5122`.",
+      "target_files": [
+        "IEANTN/Nodes/Schoenfeld1976/v1/TaskThetaLog56.lean"
+      ],
+      "depends_on": [
+        "theta_theorem_11"
+      ],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/Schoenfeld1976/v1/Challenge.lean#L34-L35"
+    },
+    {
+      "id": "psi_theta_log_5_6b",
+      "title": "Schoenfeld (1976) Thm 7* (5.6b*): |\u03c8(x) - x|, |\u03b8(x) - x| < 0.0077629 x / log x for x \u2265 e^22",
+      "description": "Prove `Schoenfeld1976.v1.psi_theta_log_5_6b` conditional on `RiemannHypothesisUpTo 1894438.5122`.",
+      "target_files": [
+        "IEANTN/Nodes/Schoenfeld1976/v1/TaskPsiThetaLog56b.lean"
+      ],
+      "depends_on": [
+        "psi_log_5_5a",
+        "theta_log_5_6"
+      ],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/Schoenfeld1976/v1/Challenge.lean#L40-L41"
+    }
+  ]
+}

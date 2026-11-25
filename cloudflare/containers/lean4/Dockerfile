@@ -30,8 +30,13 @@ RUN mkdir -p /opt/mathlib \
 
 COPY missions/arklib-near-capacity-primes /missions/arklib-near-capacity-primes
 COPY missions/ieantn-chebyshev-kernel /missions/ieantn-chebyshev-kernel
+COPY missions/ieantn-chebyshev-pipeline /missions/ieantn-chebyshev-pipeline
+COPY missions/ieantn-schoenfeld-chebyshev /missions/ieantn-schoenfeld-chebyshev
+COPY missions/ieantn-short-interval-primes /missions/ieantn-short-interval-primes
+COPY missions/ieantn-zeta-foundations /missions/ieantn-zeta-foundations
 COPY missions/pnt-analytic-foundations /missions/pnt-analytic-foundations
 COPY missions/matrix-rank444-f2 /missions/matrix-rank444-f2
+COPY missions/matrix-rank-alphatensor-f2 /missions/matrix-rank-alphatensor-f2
 COPY missions/aes-sbox-circuit /missions/aes-sbox-circuit
 COPY missions/onboarding-sandbox /missions/onboarding-sandbox
 COPY missions/verifier-common/sunstead_sandbox.py missions/verifier-common/SunsteadCheck.lean missions/verifier-common/prebuild_cache.py missions/verifier-common/prebuild_snapshot.py /opt/sunstead/
