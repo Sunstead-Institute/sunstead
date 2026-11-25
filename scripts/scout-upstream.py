@@ -470,11 +470,21 @@ def name_pattern(name):
     return re.compile(r"(?<![\w.'])" + re.escape(short(name)) + r"(?![\w'])")
 
 
+def declares(lines, sign, name):
+    """Whether a diff line with this sign (+/-) starts the declaration `name`."""
+    for l in lines:
+        m = DECL_RE.match(l[1:]) if l.startswith(sign) else None
+        if m and short(m.group("name")) == short(name):
+            return True
+    return False
+
+
 def match_open_work(c, work):
     """Open PRs/issues that may already address candidate `c`.
 
-    "solves":   a PR hunk touching c.file removes a `sorry` and either covers
-                c.line in the old file or names the declaration;
+    "deletes":  a PR removes the declaration itself (not a proof: flag it);
+    "solves":   a PR hunk touching c.file removes more `sorry`s than it adds
+                and either covers c.line in the old file or names the declaration;
     "edits":    a PR changes lines naming the declaration in c.file;
     "file":     a PR touches c.file;
     "mentions": a PR or issue title/body names the declaration."""
@@ -492,7 +502,11 @@ def match_open_work(c, work):
                 added = sum(1 for l in lines if l.startswith("+") and SORRY_RE.search(l))
                 covers = start <= c.line < start + max(length, 1)
                 named = pat.search(ctx) or any(pat.search(l) for l in lines)
-                if removed > added and (covers or named):
+                if declares(lines, "-", c.name) and not declares(lines, "+", c.name):
+                    kind = "deletes"  # the PR drops the declaration: flag it, it was not proved
+                elif kind == "deletes":
+                    pass
+                elif removed > added and (covers or named):
                     kind = "solves"  # net fewer sorries: the PR fills it
                 elif kind != "solves" and (
                     (removed and (covers or named))  # proof rewritten but still admitted

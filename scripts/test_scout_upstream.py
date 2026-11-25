@@ -246,6 +246,21 @@ class CheckPrsTests(unittest.TestCase):
         scout.apply_open_work([c], work)
         self.assertEqual(c.status, "candidate")
 
+    def test_pr_that_deletes_the_theorem_is_flagged_not_solved(self):
+        patch = (
+            "@@ -293,9 +370,4 @@ theorem test_2 {val : BitVec _}\n"
+            "-theorem test_write_zero (h : True) :\n"
+            "-    True := by\n"
+            "-  sorry\n"
+            "-\n"
+            " end ReadOverlappingWrite\n"
+        )
+        work = {"prs": [{"number": 197, "url": "u", "text": "", "files": [{"filename": "F.lean", "patch": patch}]}], "issues": []}
+        c = cand("ReadOverlappingWrite.test_write_zero", file="F.lean", line=585)
+        self.assertEqual(scout.match_open_work(c, work)[0]["match"], "deletes")
+        scout.apply_open_work([c], work)
+        self.assertEqual(c.status, "candidate")
+
     def test_pagination(self):
         calls = []
 
