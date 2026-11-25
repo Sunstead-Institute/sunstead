@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+"""Frozen repo-snapshot verifier for `lnsym-aes-gcm-armv8`.
+
+Uses the shared trusted harness baked into `/opt/sunstead/sunstead_sandbox.py`
+with Lean 4.35.0 and the read-only prebuilt upstream `.olean` snapshot of
+`leanprover/LNSym@49f8a1d9e46f8dcfc345f4bc15d35b0ba845ff5c`.
+"""
+import sys
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_repo_snapshot_verify  # noqa: E402
+
+SNAPSHOT_ID = "lnsym-aes-gcm-armv8"
+FROZEN_FILES = [
+    "UPSTREAM.json",
+    "lean-toolchain",
+]
+ALLOWED_IMPORT_PREFIXES = [
+    "Arm",
+    "Correctness",
+    "Specs",
+    "Tactics",
+    "Proofs",
+    "Tests",
+    "Std",
+    "Init",
+]
+LEAN_OPTIONS = ["linter.unusedSimpArgs=false"]
+
+TASKS = {
+    "aes_gcm_enc_kernel_run_139": {
+        "module": "Proofs.«AES-GCM».AESGCMEncKernelSym",
+        "theorem": "AESGCMEncKernelProgram.aes_gcm_enc_kernel_program_run_xx",
+        "target_files": ["Proofs/AES-GCM/AESGCMEncKernelSym.lean"],
+    },
+}
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>")
+    lean_repo_snapshot_verify(
+        sys.argv[1],
+        snapshot_id=SNAPSHOT_ID,
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        allowed_import_prefixes=ALLOWED_IMPORT_PREFIXES,
+        uses_mathlib=False,
+        lean_options=LEAN_OPTIONS,
+        timeout_sec=230,
+    )

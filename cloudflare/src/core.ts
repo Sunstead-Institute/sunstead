@@ -6,12 +6,55 @@
 export type MissionMode = "dag" | "hillclimb";
 export type ScoreDirection = "maximize" | "minimize";
 export type TaskStatus = "open" | "leased" | "verified";
+export type VerifierKind = "lean4" | "lean4-v4.35.0";
 
 export interface VerifierConfig {
   image: string;
+  toolchain?: string;
   command: string[];
   timeout_sec?: number;
   memory_mb?: number;
+}
+
+export interface RepoSnapshotConfig {
+  mode: "repo-snapshot";
+  snapshot_id: string;
+  lean_options?: string[];
+  allowed_import_prefixes?: string[];
+}
+
+export const SUPPORTED_VERIFIER_TOOLCHAINS: Record<
+  VerifierKind,
+  { toolchain: string; container_app: string; default_image: string }
+> = {
+  lean4: {
+    toolchain: "leanprover/lean4:v4.36.0",
+    container_app: "sunstead-verifier-lean4",
+    default_image: "sunstead/verifier-lean4:v0.2",
+  },
+  "lean4-v4.35.0": {
+    toolchain: "leanprover/lean4:v4.35.0",
+    container_app: "sunstead-verifier-lean4-v435",
+    default_image: "sunstead/verifier-lean4-v4.35.0:v0.1",
+  },
+};
+
+/**
+ * Resolve a mission's verifier configuration (`toolchain` and/or `image`) to the
+ * matching Cloudflare Container routing key. Fails closed on unsupported
+ * toolchains or non-Lean images so missions can never route to the wrong kernel.
+ */
+export function resolveVerifierKind(verifier: Pick<VerifierConfig, "image" | "toolchain">): VerifierKind {
+  const tc = (verifier.toolchain ?? "").trim();
+  const img = (verifier.image ?? "").trim();
+  if (tc) {
+    if (tc === "leanprover/lean4:v4.36.0") return "lean4";
+    if (tc === "leanprover/lean4:v4.35.0") return "lean4-v4.35.0";
+    throw new Error(`unsupported verifier toolchain: ${tc}`);
+  }
+  if (img.includes("lean4-v4.35.0")) return "lean4-v4.35.0";
+  if (img.includes("lean4")) return "lean4";
+  throw new Error(`unsupported verifier image: ${img}`);
 }
 
 export interface UpstreamProvenance {
@@ -39,6 +82,7 @@ export interface MissionManifest {
   mode: MissionMode;
   repo?: string;
   upstream?: UpstreamProvenance;
+  snapshot?: RepoSnapshotConfig;
   frozen_paths: string[];
   verifier: VerifierConfig;
   score_direction?: ScoreDirection;

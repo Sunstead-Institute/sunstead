@@ -22,12 +22,15 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MISSIONS = os.path.join(ROOT, "missions")
 DEFAULT_IMAGE = "sunstead/verifier-lean4:v0.2"
+V435_IMAGE = "sunstead/verifier-lean4-v4.35.0:v0.1"
 IMAGES = {
     "onboarding-sandbox": DEFAULT_IMAGE,
     "arklib-near-capacity-primes": DEFAULT_IMAGE,
     "pnt-analytic-foundations": DEFAULT_IMAGE,
+    "lnsym-aes-gcm-armv8": V435_IMAGE,
     "__synthetic_mathlib__": DEFAULT_IMAGE,
     "__synthetic_hillclimb__": DEFAULT_IMAGE,
+    "__synthetic_repo_snapshot__": DEFAULT_IMAGE,
 }
 
 HONEST_DECODER = """import OnboardingSandbox.Spec
@@ -123,9 +126,78 @@ SYNTHETIC_HILLCLIMB_TREE = {
     ),
 }
 
+# Synthetic repo-snapshot fixture exercising full upstream-snapshot verification
+# (frozen sibling module `SnapLib/Core.lean`, local `abbrev` type dependency
+# inside writable `SnapLib/Target.lean`, and kernel-type check against the
+# pinned upstream `.olean` without any manual `SunsteadStatements` copy).
+_SNAP_CORE = """namespace SnapLib
+def secretFactor : Nat := 7
+def scale (n : Nat) : Nat := secretFactor * n
+theorem scale_zero : scale 0 = 0 := by
+  simp [scale]
+end SnapLib
+"""
+
+_SNAP_TARGET_SEED = """import SnapLib.Core
+
+namespace SnapLib
+
+abbrev targetScale (n : Nat) : Nat := scale n
+
+theorem target_add (a b : Nat) : targetScale (a + b) = targetScale a + targetScale b := by
+  sorry
+
+end SnapLib
+"""
+
+_SNAP_TARGET_HONEST = """import SnapLib.Core
+
+namespace SnapLib
+
+abbrev targetScale (n : Nat) : Nat := scale n
+
+theorem target_add (a b : Nat) : targetScale (a + b) = targetScale a + targetScale b := by
+  unfold targetScale scale secretFactor
+  omega
+
+end SnapLib
+"""
+
+SYNTHETIC_REPO_SNAPSHOT_TREE = {
+    "lean-toolchain": "leanprover/lean4:v4.36.0\n",
+    ".sunstead-frozen-snapshot/SnapLib/Core.lean": _SNAP_CORE,
+    ".sunstead-frozen-snapshot/SnapLib/Target.lean": _SNAP_TARGET_SEED,
+    "SnapLib/Core.lean": _SNAP_CORE,
+    "SnapLib/Target.lean": _SNAP_TARGET_HONEST,
+    "verify": (
+        "#!/usr/bin/env python3\n"
+        "import sys\n"
+        "sys.path.insert(0, '/opt/sunstead')\n"
+        "from sunstead_sandbox import emit, lean_repo_snapshot_verify\n"
+        "TASKS = {\n"
+        "  'target_add': {\n"
+        "    'module': 'SnapLib.Target',\n"
+        "    'theorem': 'SnapLib.target_add',\n"
+        "    'target_files': ['SnapLib/Target.lean'],\n"
+        "  }\n"
+        "}\n"
+        "lean_repo_snapshot_verify(\n"
+        "  sys.argv[1],\n"
+        "  snapshot_id='__synthetic_repo_snapshot__',\n"
+        "  frozen_files=['lean-toolchain'],\n"
+        "  tasks=TASKS,\n"
+        "  allowed_import_prefixes=['SnapLib', 'Init'],\n"
+        "  uses_mathlib=False,\n"
+        "  snapshot_source_dir='.sunstead-frozen-snapshot',\n"
+        "  timeout_sec=120,\n"
+        ")\n"
+    ),
+}
+
 SYNTHETIC_TREES = {
     "__synthetic_mathlib__": SYNTHETIC_MATHLIB_TREE,
     "__synthetic_hillclimb__": SYNTHETIC_HILLCLIMB_TREE,
+    "__synthetic_repo_snapshot__": SYNTHETIC_REPO_SNAPSHOT_TREE,
 }
 
 # Each case: (name, mission, task, {path: content}, expect_ok, expect_score_or_None, why)
@@ -286,6 +358,171 @@ public lemma isCompletelyMultiplicative_liouville :
 end PntFoundations
 """},
      False, None, "Mathlib missions must reject Lean 4.36 `module` headers"),
+
+    # --- Repo-Snapshot honest control + tampering attacks (`v4.36.0`) ---
+    ("repo-snapshot-honest-control", "__synthetic_repo_snapshot__", "target_add",
+     {}, True, None, "honest repo-snapshot proof against frozen sibling module must pass"),
+    ("repo-snapshot-sorry", "__synthetic_repo_snapshot__", "target_add",
+     {"SnapLib/Target.lean": _SNAP_TARGET_SEED}, False, None,
+     "unproved repo-snapshot seed with `sorry` must be rejected"),
+    ("repo-snapshot-sorryax", "__synthetic_repo_snapshot__", "target_add",
+     {"SnapLib/Target.lean": _SNAP_TARGET_SEED.replace("sorry", "exact sorryAx _ false")},
+     False, None, "repo-snapshot `sorryAx` bypass must be rejected by kernel axiom check"),
+    ("repo-snapshot-weakened-statement", "__synthetic_repo_snapshot__", "target_add",
+     {"SnapLib/Target.lean": """import SnapLib.Core
+namespace SnapLib
+abbrev targetScale (n : Nat) : Nat := scale n
+theorem target_add (a b : Nat) : True := trivial
+end SnapLib
+"""},
+     False, None, "weakened target theorem must be rejected against pinned upstream `.olean`"),
+    ("repo-snapshot-weakened-local-abbrev", "__synthetic_repo_snapshot__", "target_add",
+     {"SnapLib/Target.lean": """import SnapLib.Core
+namespace SnapLib
+abbrev targetScale (_n : Nat) : Nat := 0
+theorem target_add (a b : Nat) : targetScale (a + b) = targetScale a + targetScale b := rfl
+end SnapLib
+"""},
+     False, None, "mutating a local `abbrev` used in the target theorem type must be rejected by FrozenTypeDeps"),
+    ("repo-snapshot-tampered-sibling-module", "__synthetic_repo_snapshot__", "target_add",
+     {"SnapLib/Core.lean": """namespace SnapLib
+def secretFactor : Nat := 0
+def scale (_n : Nat) : Nat := 0
+theorem scale_zero : scale 0 = 0 := rfl
+end SnapLib
+"""},
+     False, None, "editing a frozen sibling module must be rejected"),
+    ("repo-snapshot-forged-olean", "__synthetic_repo_snapshot__", "target_add",
+     {".lake/build/lib/lean/SnapLib/Core.olean": "FORGED_OLEAN_BYTES"},
+     False, None, "forged `.olean` dropped into workspace must be rejected"),
+    ("repo-snapshot-elab-rules-spoof", "__synthetic_repo_snapshot__", "target_add",
+     {"SnapLib/Target.lean": """import SnapLib.Core
+import Lean
+open Lean Elab Command
+namespace SnapLib
+abbrev targetScale (n : Nat) : Nat := scale n
+theorem target_add (a b : Nat) : targetScale (a + b) = targetScale a + targetScale b := sorryAx _ false
+end SnapLib
+elab_rules : command
+  | `(#print axioms $_) => logInfo "'_sunstead_check' does not depend on any axioms"
+"""},
+     False, None, "`elab_rules` spoofing + `import Lean` must be rejected in repo-snapshot mode"),
+    ("repo-snapshot-module-header", "__synthetic_repo_snapshot__", "target_add",
+     {"SnapLib/Target.lean": "module\npublic " + _SNAP_TARGET_HONEST},
+     False, None, "Lean 4 `module` / `.olean.private` output must be rejected in repo-snapshot mode"),
+
+    # --- Real full-repo upstream Cryptography mission (`leanprover/LNSym`, Lean v4.35.0) ---
+    ("lnsym-unproved-seed", "lnsym-aes-gcm-armv8", "aes_gcm_enc_kernel_run_139",
+     {}, False, None, "unmodified upstream LNSym AES-GCM seed with `sorry` must be rejected"),
+    ("lnsym-sorryax", "lnsym-aes-gcm-armv8", "aes_gcm_enc_kernel_run_139",
+     {"Proofs/AES-GCM/AESGCMEncKernelSym.lean": """import Arm.Memory.Separate
+import Proofs.«AES-GCM».AESGCMEncKernelPre
+import Tactics.Sym
+
+namespace AESGCMEncKernelProgram
+
+abbrev in_addr (s : ArmState) : BitVec 64 := r (StateField.GPR 0#5) s
+abbrev in_bits_addr (s : ArmState) : BitVec 64 := r (StateField.GPR 1#5) s
+abbrev Xi_addr (s : ArmState) : BitVec 64 := r (StateField.GPR 3#5) s
+abbrev ivec_addr (s : ArmState) : BitVec 64 := r (StateField.GPR 4#5) s
+abbrev key_addr (s : ArmState) : BitVec 64 := r (StateField.GPR 5#5) s
+abbrev rounds_addr (s : ArmState) : BitVec 64 := (r (StateField.GPR 5#5) s) + 240#64
+abbrev Htable_addr (s : ArmState) : BitVec 64 := r (StateField.GPR 6#5) s
+abbrev out_addr (s : ArmState) : BitVec 64 := r (StateField.GPR 2#5) s
+
+set_option maxRecDepth 1000000 in
+theorem aes_gcm_enc_kernel_program_run_xx (s0 sf : ArmState)
+    (h_s0_program : s0.program = aes_gcm_enc_kernel_program)
+    (h_s0_err : read_err s0 = .None)
+    (h_s0_pc : read_pc s0 = aes_gcm_enc_kernel_program.min)
+    (h_s0_sp_aligned : CheckSPAlignment s0)
+    (h_run : sf = run 139 s0)
+    (h_rounds : 14#32 = read_mem_bytes 4 (rounds_addr s0) s0)
+    (h_mem : Memory.Region.pairwiseSeparate
+      [⟨(in_addr s0), 128⟩, ⟨(in_bits_addr s0), 64⟩,
+       ⟨(Xi_addr s0), 128⟩, ⟨(ivec_addr s0), 128⟩,
+       ⟨(key_addr s0), 1984⟩,
+       ⟨(Htable_addr s0), 2048⟩,
+       ⟨(out_addr s0), 128⟩ ])
+    : read_err sf = .None :=
+  sorryAx _ false
+
+end AESGCMEncKernelProgram
+"""},
+     False, None, "LNSym AES-GCM `sorryAx` bypass must be rejected by v4.35.0 kernel axiom check"),
+    ("lnsym-weakened-statement", "lnsym-aes-gcm-armv8", "aes_gcm_enc_kernel_run_139",
+     {"Proofs/AES-GCM/AESGCMEncKernelSym.lean": """import Arm.Memory.Separate
+import Proofs.«AES-GCM».AESGCMEncKernelPre
+import Tactics.Sym
+
+namespace AESGCMEncKernelProgram
+
+abbrev in_addr (s : ArmState) : BitVec 64 := r (StateField.GPR 0#5) s
+abbrev in_bits_addr (s : ArmState) : BitVec 64 := r (StateField.GPR 1#5) s
+abbrev Xi_addr (s : ArmState) : BitVec 64 := r (StateField.GPR 3#5) s
+abbrev ivec_addr (s : ArmState) : BitVec 64 := r (StateField.GPR 4#5) s
+abbrev key_addr (s : ArmState) : BitVec 64 := r (StateField.GPR 5#5) s
+abbrev rounds_addr (s : ArmState) : BitVec 64 := (r (StateField.GPR 5#5) s) + 240#64
+abbrev Htable_addr (s : ArmState) : BitVec 64 := r (StateField.GPR 6#5) s
+abbrev out_addr (s : ArmState) : BitVec 64 := r (StateField.GPR 2#5) s
+
+theorem aes_gcm_enc_kernel_program_run_xx : True := trivial
+
+end AESGCMEncKernelProgram
+"""},
+     False, None, "LNSym AES-GCM weakened statement must be rejected against pinned upstream `.olean`"),
+    ("lnsym-weakened-local-abbrev", "lnsym-aes-gcm-armv8", "aes_gcm_enc_kernel_run_139",
+     {"Proofs/AES-GCM/AESGCMEncKernelSym.lean": """import Arm.Memory.Separate
+import Proofs.«AES-GCM».AESGCMEncKernelPre
+import Tactics.Sym
+
+namespace AESGCMEncKernelProgram
+
+abbrev in_addr (s : ArmState) : BitVec 64 := r (StateField.GPR 0#5) s
+abbrev in_bits_addr (s : ArmState) : BitVec 64 := r (StateField.GPR 1#5) s
+abbrev Xi_addr (s : ArmState) : BitVec 64 := r (StateField.GPR 3#5) s
+abbrev ivec_addr (s : ArmState) : BitVec 64 := r (StateField.GPR 4#5) s
+abbrev key_addr (s : ArmState) : BitVec 64 := r (StateField.GPR 5#5) s
+abbrev rounds_addr (_s : ArmState) : BitVec 64 := 0#64
+abbrev Htable_addr (s : ArmState) : BitVec 64 := r (StateField.GPR 6#5) s
+abbrev out_addr (s : ArmState) : BitVec 64 := r (StateField.GPR 2#5) s
+
+set_option maxRecDepth 1000000 in
+theorem aes_gcm_enc_kernel_program_run_xx (s0 sf : ArmState)
+    (h_s0_program : s0.program = aes_gcm_enc_kernel_program)
+    (h_s0_err : read_err s0 = .None)
+    (h_s0_pc : read_pc s0 = aes_gcm_enc_kernel_program.min)
+    (h_s0_sp_aligned : CheckSPAlignment s0)
+    (h_run : sf = run 139 s0)
+    (h_rounds : 14#32 = read_mem_bytes 4 (rounds_addr s0) s0)
+    (h_mem : Memory.Region.pairwiseSeparate
+      [⟨(in_addr s0), 128⟩, ⟨(in_bits_addr s0), 64⟩,
+       ⟨(Xi_addr s0), 128⟩, ⟨(ivec_addr s0), 128⟩,
+       ⟨(key_addr s0), 1984⟩,
+       ⟨(Htable_addr s0), 2048⟩,
+       ⟨(out_addr s0), 128⟩ ])
+    : read_err sf = .None :=
+  sorryAx _ false
+
+end AESGCMEncKernelProgram
+"""},
+     False, None, "LNSym mutating local `rounds_addr` abbrev must be rejected by FrozenTypeDeps"),
+    ("lnsym-tampered-sibling-module", "lnsym-aes-gcm-armv8", "aes_gcm_enc_kernel_run_139",
+     {"Proofs/AES-GCM/AESGCMEncKernelPre.lean": "namespace AESGCMEncKernelProgram\nend AESGCMEncKernelProgram\n"},
+     False, None, "LNSym tampered frozen sibling module must be rejected"),
+    ("lnsym-elab-rules-spoof", "lnsym-aes-gcm-armv8", "aes_gcm_enc_kernel_run_139",
+     {"Proofs/AES-GCM/AESGCMEncKernelSym.lean": """import Arm.Memory.Separate
+import Proofs.«AES-GCM».AESGCMEncKernelPre
+import Tactics.Sym
+import Lean
+open Lean Elab Command
+namespace AESGCMEncKernelProgram
+theorem aes_gcm_enc_kernel_program_run_xx : True := trivial
+end AESGCMEncKernelProgram
+elab_rules : command
+  | `(#print axioms $_) => logInfo "clean"
+"""},
+     False, None, "LNSym `elab_rules` + `import Lean` spoofing must be rejected"),
 ]
 
 

@@ -31,7 +31,7 @@ RUN mkdir -p /opt/mathlib \
     && chmod -R a-w,a+rX /opt/mathlib
 
 # Trusted harness + native kernel-replay checker, read-only to everyone but root.
-COPY verifier-common/sunstead_sandbox.py verifier-common/SunsteadCheck.lean verifier-common/prebuild_cache.py /opt/sunstead/
+COPY verifier-common/sunstead_sandbox.py verifier-common/SunsteadCheck.lean verifier-common/prebuild_cache.py verifier-common/prebuild_snapshot.py /opt/sunstead/
 RUN SYSROOT="$(lean --print-prefix)" \
     && mkdir -p /tmp/scbuild \
     && lean -c /tmp/scbuild/SunsteadCheck.c /opt/sunstead/SunsteadCheck.lean \

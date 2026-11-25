@@ -35,6 +35,7 @@ def inside(task_id):
     import sunstead_sandbox
 
     sunstead_sandbox.lean_verify = sunstead_sandbox.check_seed_statement
+    sunstead_sandbox.lean_repo_snapshot_verify = sunstead_sandbox.check_seed_repo_snapshot
     sys.argv = ["./verify", task_id]
     runpy.run_path("/work/verify", run_name="__main__")
     sunstead_sandbox.emit(False, "verify exited without a verdict")

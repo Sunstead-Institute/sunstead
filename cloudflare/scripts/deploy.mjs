@@ -28,8 +28,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CF_ROOT = path.resolve(__dirname, "..");
 const REPO_ROOT = path.resolve(CF_ROOT, "..");
 const DOCKERFILE = path.join(CF_ROOT, "containers", "lean4", "Dockerfile");
+const DOCKERFILE_V435 = path.join(CF_ROOT, "containers", "lean4-v4.35.0", "Dockerfile");
 const RECORD = path.join(CF_ROOT, ".cloudflare", "verifier-image.json");
 const APP_NAME = "sunstead-verifier-lean4";
+export const VERIFIER_APPS = [
+  { name: "sunstead-verifier-lean4", envVar: "SUNSTEAD_VERIFIER_IMAGE", dockerfile: DOCKERFILE },
+  { name: "sunstead-verifier-lean4-v435", envVar: "SUNSTEAD_VERIFIER_V435_IMAGE", dockerfile: DOCKERFILE_V435 },
+];
 export const IMAGE_RE = /^registry\.cloudflare\.com\/[A-Za-z0-9._\/-]+@sha256:[0-9a-f]{64}$/;
 
 /** Repo-relative COPY/ADD sources of the verifier image (multi-stage `--from=` copies excluded). */
@@ -65,11 +70,20 @@ function listFiles(abs) {
   return out;
 }
 
-/** SHA-256 over the Dockerfile and every file it copies into the image, by repo-relative path. */
-export function verifierInputsHash(repoRoot = REPO_ROOT, dockerfile = DOCKERFILE) {
-  const files = new Set([dockerfile]);
-  for (const src of dockerfileInputs(fs.readFileSync(dockerfile, "utf8"))) {
-    for (const f of listFiles(path.join(repoRoot, src))) files.add(f);
+/** SHA-256 over the verifier Dockerfile(s) and every file they copy into the image(s), by repo-relative path. */
+export function verifierInputsHash(repoRoot = REPO_ROOT, dockerfile = null) {
+  const dockerfiles =
+    dockerfile === null
+      ? VERIFIER_APPS.map((a) => a.dockerfile)
+      : Array.isArray(dockerfile)
+        ? dockerfile
+        : [dockerfile];
+  const files = new Set();
+  for (const df of dockerfiles) {
+    files.add(df);
+    for (const src of dockerfileInputs(fs.readFileSync(df, "utf8"))) {
+      for (const f of listFiles(path.join(repoRoot, src))) files.add(f);
+    }
   }
   const h = crypto.createHash("sha256");
   for (const f of [...files].map((f) => path.relative(repoRoot, f).split(path.sep).join("/")).sort()) {
@@ -86,8 +100,8 @@ function run(cmd, args, opts = {}) {
   return r.status ?? 1;
 }
 
-/** Find `configuration.image` of the live verifier application. */
-export function imageFromApplications(stdout) {
+/** Find `configuration.image` of a live verifier application. */
+export function imageFromApplications(stdout, appName = APP_NAME) {
   let parsed;
   const re = /^[ \t]*[[{]/gm;
   for (const m of stdout.matchAll(re)) {
@@ -103,10 +117,10 @@ export function imageFromApplications(stdout) {
     throw new Error("no JSON in `cf containers applications list` output");
   }
   const apps = Array.isArray(parsed) ? parsed : parsed.result ?? parsed.applications ?? parsed.items ?? [];
-  const app = apps.find((a) => a?.name === APP_NAME);
-  if (!app) throw new Error(`no container application named ${APP_NAME} (has a full deploy run yet?)`);
+  const app = apps.find((a) => a?.name === appName);
+  if (!app) throw new Error(`no container application named ${appName} (has a full deploy run yet?)`);
   const image = app.configuration?.image ?? app.image;
-  if (typeof image !== "string") throw new Error(`${APP_NAME} has no configuration.image`);
+  if (typeof image !== "string") throw new Error(`${appName} has no configuration.image`);
   return image;
 }
 
@@ -120,14 +134,14 @@ export function buildCfDeployArgs(cfArgs) {
     : ["cf", "deploy", "--containers-rollout", "immediate", ...cfArgs];
 }
 
-function liveImage() {
-  const r = spawnSync("npx", ["cf", "containers", "applications", "list", "--name", APP_NAME], {
+function liveImage(appName = APP_NAME) {
+  const r = spawnSync("npx", ["cf", "containers", "applications", "list", "--name", appName], {
     cwd: CF_ROOT,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "inherit"],
   });
   if (r.status !== 0) throw new Error("`cf containers applications list` failed (are you logged in?)");
-  return imageFromApplications(r.stdout);
+  return imageFromApplications(r.stdout, appName);
 }
 
 function main(argv) {
@@ -153,7 +167,7 @@ function main(argv) {
 
   if (mode === "full") {
     const env = { ...process.env };
-    delete env.SUNSTEAD_VERIFIER_IMAGE; // a full deploy always builds from the Dockerfile
+    for (const app of VERIFIER_APPS) delete env[app.envVar]; // a full deploy always builds from Dockerfiles
     const status = run("npx", deployArgs, { env });
     if (status === 0 && !dryRun) {
       fs.mkdirSync(path.dirname(RECORD), { recursive: true });
@@ -178,13 +192,17 @@ function main(argv) {
     );
     return 1;
   }
-  const image = process.env.SUNSTEAD_VERIFIER_IMAGE || liveImage();
-  if (!IMAGE_RE.test(image)) {
-    console.error(`Refusing image ${JSON.stringify(image)}: expected registry.cloudflare.com/...@sha256:<64 hex>.`);
-    return 1;
+  const env = { ...process.env };
+  for (const app of VERIFIER_APPS) {
+    const image = process.env[app.envVar] || liveImage(app.name);
+    if (!IMAGE_RE.test(image)) {
+      console.error(`Refusing ${app.name} image ${JSON.stringify(image)}: expected registry.cloudflare.com/...@sha256:<64 hex>.`);
+      return 1;
+    }
+    env[app.envVar] = image;
+    console.log(`Worker-only deploy reusing ${app.name}: ${image}`);
   }
-  console.log(`Worker-only deploy reusing ${image}`);
-  return run("npx", deployArgs, { env: { ...process.env, SUNSTEAD_VERIFIER_IMAGE: image } });
+  return run("npx", deployArgs, { env });
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

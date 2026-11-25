@@ -1,0 +1,19 @@
+{
+  "mode": "repo-snapshot",
+  "repo": "leanprover/LNSym",
+  "commit": "49f8a1d9e46f8dcfc345f4bc15d35b0ba845ff5c",
+  "license": "Apache-2.0",
+  "checks": [
+    {
+      "local_file": "lean-toolchain",
+      "upstream_file": "lean-toolchain",
+      "exact_sha256": "ca5f1f601d34c49079e38d7e7041eb0f2a9c227fbc1df0f404820069a052330c"
+    },
+    {
+      "local_file": "Proofs/AES-GCM/AESGCMEncKernelSym.lean",
+      "upstream_file": "Proofs/AES-GCM/AESGCMEncKernelSym.lean",
+      "exact_sha256": "b5bb0daaa5c73da18c709121a1ee0bb88c0e3afdcdb917dabebfd423f303a0c6",
+      "upstream_anchor": "theorem aes_gcm_enc_kernel_program_run_xx (s0 sf : ArmState)"
+    }
+  ]
+}

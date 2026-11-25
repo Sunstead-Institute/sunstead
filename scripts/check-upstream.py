@@ -12,6 +12,7 @@ For every `missions/*/sunstead.json`:
 """
 import argparse
 import glob
+import hashlib
 import json
 import os
 import re
@@ -23,14 +24,18 @@ UA = {"User-Agent": "sunstead-check-upstream/0.2"}
 _CACHE = {}
 
 
-def fetch_upstream(repo: str, commit: str, path: str) -> str:
+def fetch_upstream_bytes(repo: str, commit: str, path: str) -> bytes:
     key = (repo, commit, path)
     if key not in _CACHE:
         url = f"https://raw.githubusercontent.com/{repo}/{commit}/{path}"
         req = urllib.request.Request(url, headers=UA)
         with urllib.request.urlopen(req, timeout=30) as r:
-            _CACHE[key] = r.read().decode("utf-8")
+            _CACHE[key] = r.read()
     return _CACHE[key]
+
+
+def fetch_upstream(repo: str, commit: str, path: str) -> str:
+    return fetch_upstream_bytes(repo, commit, path).decode("utf-8")
 
 
 def main():
@@ -88,12 +93,30 @@ def main():
                 if not os.path.isfile(local_path):
                     problems.append(f"check #{idx}: missing local file {local_rel}")
                     continue
-                local_txt = open(local_path, encoding="utf-8").read()
+                local_bytes = open(local_path, "rb").read()
+                local_txt = local_bytes.decode("utf-8")
                 try:
-                    up_txt = fetch_upstream(repo, commit, up_rel)
+                    up_bytes = fetch_upstream_bytes(repo, commit, up_rel)
+                    up_txt = up_bytes.decode("utf-8")
                 except Exception as e:
                     problems.append(f"check #{idx}: failed to fetch {repo}@{commit[:7]}/{up_rel}: {e}")
                     continue
+                exact_sha = chk.get("exact_sha256")
+                if exact_sha:
+                    local_sha = hashlib.sha256(local_bytes).hexdigest()
+                    up_sha = hashlib.sha256(up_bytes).hexdigest()
+                    if local_sha != exact_sha:
+                        problems.append(
+                            f"check #{idx}: local {local_rel} sha256 {local_sha} != expected {exact_sha}"
+                        )
+                    if up_sha != exact_sha:
+                        problems.append(
+                            f"check #{idx}: upstream {up_rel} sha256 {up_sha} != expected {exact_sha}"
+                        )
+                    if local_bytes != up_bytes:
+                        problems.append(
+                            f"check #{idx}: local {local_rel} differs from upstream {repo}@{commit[:7]}/{up_rel}"
+                        )
                 snippet = chk.get("verbatim_snippet")
                 if snippet:
                     if snippet not in up_txt:
@@ -109,6 +132,22 @@ def main():
                 anchor = chk.get("upstream_anchor")
                 if anchor and anchor not in up_txt:
                     problems.append(f"check #{idx}: upstream_anchor not found in {up_rel}: {anchor!r}")
+                if not exact_sha and not snippet and not anchor:
+                    problems.append(f"check #{idx}: must specify exact_sha256, verbatim_snippet, or upstream_anchor")
+
+            if up.get("mode") == "repo-snapshot":
+                snap_meta = manifest.get("snapshot") or {}
+                if snap_meta.get("mode") != "repo-snapshot":
+                    problems.append("UPSTREAM.json mode=repo-snapshot requires sunstead.json snapshot.mode=repo-snapshot")
+                checked_locals = {c.get("local_file") for c in checks if c.get("exact_sha256")}
+                if "lean-toolchain" not in checked_locals:
+                    problems.append("repo-snapshot UPSTREAM.json must include an exact_sha256 check for lean-toolchain")
+                for t in manifest.get("tasks", []):
+                    for tf in t.get("target_files", []):
+                        if tf not in checked_locals:
+                            problems.append(
+                                f"repo-snapshot UPSTREAM.json missing exact_sha256 check for target_file {tf}"
+                            )
 
         status = "OK" if not problems else "FAIL"
         print(f"[{status}] {mid} ({up_meta.get('repo') if up_meta else '?'}@{(up_meta or {}).get('commit', '')[:7]})")

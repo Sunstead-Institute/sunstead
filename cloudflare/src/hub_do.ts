@@ -28,14 +28,16 @@ import {
 } from "./core";
 import { SEED_MISSIONS, type SeedMission } from "./generated/missions";
 import { renderJoinTxt } from "./join_txt";
-import type { Lean4Verifier } from "./containers";
+import type { Lean4Verifier, Lean4V435Verifier } from "./containers";
 
 export interface HubEnv {
   HUB: DurableObjectNamespace<SunsteadHub>;
   LEAN4_VERIFIER: DurableObjectNamespace<Lean4Verifier>;
+  LEAN4_V435_VERIFIER: DurableObjectNamespace<Lean4V435Verifier>;
 }
 
-function parseVerifierKind(_kind: string): SeedMission["verifier_kind"] {
+function parseVerifierKind(kind: string): SeedMission["verifier_kind"] {
+  if (kind === "lean4-v4.35.0") return "lean4-v4.35.0";
   return "lean4";
 }
 
@@ -672,11 +674,13 @@ export class SunsteadHub extends DurableObject<HubEnv> {
   }
 
   private getVerifierStub(mission: SeedMission) {
-    // Include the verifier image tag so bumping the verifier image always routes
-    // to a fresh container DO instead of a pre-rollout container instance.
-    return this.env.LEAN4_VERIFIER.getByName(
-      `lean4:${mission.manifest.verifier.image}:${mission.manifest.id}`
-    );
+    // Route each mission to its pinned Lean toolchain container, keying by image
+    // tag so bumping the verifier image always routes to a fresh container DO.
+    const key = `${mission.verifier_kind}:${mission.manifest.verifier.image}:${mission.manifest.id}`;
+    if (mission.verifier_kind === "lean4-v4.35.0") {
+      return this.env.LEAN4_V435_VERIFIER.getByName(key);
+    }
+    return this.env.LEAN4_VERIFIER.getByName(key);
   }
 
   private computeLeaderboard(limit = 30) {
@@ -809,6 +813,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
           score_direction: m.manifest.score_direction ?? "maximize",
           spec_sha256: m.spec_sha256,
           verifier_image: m.manifest.verifier.image,
+          verifier_toolchain: m.manifest.verifier.toolchain ?? "leanprover/lean4:v4.36.0",
+          snapshot: m.manifest.snapshot ?? null,
           frozen_paths: m.manifest.frozen_paths,
           total_tasks: tasks.length,
           verified_tasks: tasks.filter((t) => t.status === "verified").length,

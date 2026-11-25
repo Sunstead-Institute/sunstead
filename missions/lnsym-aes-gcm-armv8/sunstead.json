@@ -1,0 +1,43 @@
+{
+  "id": "lnsym-aes-gcm-armv8",
+  "title": "LNSym ARMv8 AES-256-GCM: Complete Encryption Kernel Symbolic Proof",
+  "description": "Full-repository upstream cryptography snapshot from AWS Automated Reasoning's leanprover/LNSym (commit 49f8a1d9, Lean v4.35.0, Apache-2.0). Closes the sole open `sorry` in `Proofs/AES-GCM/AESGCMEncKernelSym.lean` (`AESGCMEncKernelProgram.aes_gcm_enc_kernel_program_run_xx`), proving error-freedom across 139 ARMv8 instructions of AWS-LC's AES-256-GCM encryption kernel against LNSym's 80 prebuilt sorry-free ISA, memory-separation, and symbolic-simulation dependency modules.",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/leanprover/LNSym",
+  "upstream": {
+    "repo": "leanprover/LNSym",
+    "commit": "49f8a1d9e46f8dcfc345f4bc15d35b0ba845ff5c",
+    "license": "Apache-2.0"
+  },
+  "snapshot": {
+    "mode": "repo-snapshot",
+    "snapshot_id": "lnsym-aes-gcm-armv8",
+    "lean_options": ["linter.unusedSimpArgs=false"],
+    "allowed_import_prefixes": ["Arm", "Correctness", "Specs", "Tactics", "Proofs", "Tests", "Std", "Init"]
+  },
+  "frozen_paths": [
+    "UPSTREAM.json",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4-v4.35.0:v0.1",
+    "toolchain": "leanprover/lean4:v4.35.0",
+    "command": ["./verify"],
+    "timeout_sec": 240,
+    "memory_mb": 4096
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "aes_gcm_enc_kernel_run_139",
+      "title": "Prove error-freedom of 139-step AWS-LC ARMv8 AES-256-GCM encryption kernel",
+      "description": "Closes the sole remaining `sorry` at `Proofs/AES-GCM/AESGCMEncKernelSym.lean:52` (`AESGCMEncKernelProgram.aes_gcm_enc_kernel_program_run_xx`): discharge step 139 (the AES-256 round-count branch at pc `0x7cf79c` / `0x7cf838`) so `read_err sf = .None` holds with 0 sorry and standard axioms only. Accepted patches apply directly upstream to `leanprover/LNSym@49f8a1d9`.",
+      "target_files": ["Proofs/AES-GCM/AESGCMEncKernelSym.lean"],
+      "depends_on": [],
+      "upstream_url": "https://github.com/leanprover/LNSym/blob/49f8a1d9e46f8dcfc345f4bc15d35b0ba845ff5c/Proofs/AES-GCM/AESGCMEncKernelSym.lean#L22-L52"
+    }
+  ]
+}

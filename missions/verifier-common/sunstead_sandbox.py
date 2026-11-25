@@ -39,6 +39,7 @@ SUNSTEAD_HOME = os.path.dirname(os.path.abspath(__file__))
 LEAN_CHECKER = os.path.join(SUNSTEAD_HOME, "SunsteadCheck.lean")
 LEAN_CHECKER_BIN = os.path.join(SUNSTEAD_HOME, "sunstead-check")
 MISSION_CACHE_DIR = os.environ.get("SUNSTEAD_MISSION_CACHE", "/opt/sunstead/mission-cache")
+SNAPSHOT_CACHE_DIR = os.environ.get("SUNSTEAD_SNAPSHOT_CACHE", "/opt/sunstead/snapshots")
 MATHLIB_CACHE_DIR = os.environ.get("SUNSTEAD_MATHLIB_DIR", "/opt/mathlib")
 ALLOWED_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
 
@@ -311,7 +312,7 @@ def require_root():
 
 _LEAN_CHAR_RE = re.compile(r"'(?:\\(?:x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|.)|[^'\\\n])'")
 _LEAN_RAW_STR_RE = re.compile(r'r(#+)"')
-_MOD_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_MOD_IDENT_RE = re.compile(r"^(?:[A-Za-z_][A-Za-z0-9_]*|«[A-Za-z0-9_-]+»)$")
 
 
 def _is_lean_id_char(ch):
@@ -427,7 +428,7 @@ def _extract_imports(code):
         if m:
             for tok in m.group(1).split():
                 mods.append(tok)
-    for mod in re.findall(r"(?<![\w.])import\s+([\w.]+)", code):
+    for mod in re.findall(r"(?<![\w.])import\s+((?:[\w]|«[^»\s]+»)(?:[\w.]|«[^»\s]+»)*)", code):
         if mod not in mods:
             mods.append(mod)
     return mods
@@ -476,7 +477,10 @@ def _validate_mod_name(mod):
     segs = mod.split(".")
     if not segs or not all(_MOD_IDENT_RE.match(s) for s in segs):
         emit(False, f"invalid Lean module name: {mod}")
-    return segs
+    clean = [s[1:-1] if s.startswith("«") and s.endswith("»") else s for s in segs]
+    if any(s in ("", ".", "..") or "/" in s or "\\" in s for s in clean):
+        emit(False, f"invalid Lean module name: {mod}")
+    return clean
 
 
 def _resolve_local_build_order(project_dir, lib_root, root_modules, skip_modules=None):
@@ -822,6 +826,328 @@ def _lean_check(task_id, *, lib_root, frozen_files, tasks,
             emit(True, f"Lean 4 kernel-replayed: {label} (0 sorry, standard axioms only, {elapsed} ms)",
                  score=float(score))
         emit(True, f"Lean 4 kernel-replayed `{task_id}` (0 sorry, standard axioms only, {elapsed} ms)",
+             score=1.0)
+    finally:
+        job.cleanup()
+
+
+# ---------------------------------------------------------------------------
+# Repo-snapshot Lean missions (pinned upstream `.olean` dependencies + frozen
+# upstream target `.olean` kernel type verification)
+# ---------------------------------------------------------------------------
+
+def _sha256_file(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        while True:
+            chunk = f.read(65536)
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _mod_to_rel_lean(mod):
+    return "/".join(_validate_mod_name(mod)) + ".lean"
+
+
+def _build_live_snapshot(job, snap_src_abs, target_modules, extra_lib_paths,
+                         lean_options, deadline_fn, fsize_mb):
+    """Build a synthetic/uncached repo-snapshot as `sunstead-checker` into
+    `job.checker_dir/snapshot/{deps,frozen-targets}` (used by red-team fixtures)."""
+    snap_out = os.path.join(job.checker_dir, "snapshot")
+    deps_dir = os.path.join(snap_out, "deps")
+    frozen_dir = os.path.join(snap_out, "frozen-targets")
+    for d in (deps_dir, frozen_dir):
+        p = run_as(CHECKER_USER, ["mkdir", "-p", d], cwd="/", timeout=30)
+        if p.returncode != 0:
+            emit(False, f"sandbox error: mkdir snapshot dir failed: {tail(p.stderr)}", stage="sandbox")
+
+    # Trace local modules inside snap_src_abs.
+    visited, order = set(), []
+
+    def dfs(mod):
+        if mod in visited:
+            return
+        visited.add(mod)
+        segs = _validate_mod_name(mod)
+        p_src = os.path.join(snap_src_abs, *segs) + ".lean"
+        if not os.path.isfile(p_src):
+            return
+        with open(p_src, "r", encoding="utf-8") as f:
+            code = _strip_lean_comments(f.read())
+        for imp in _extract_imports(code):
+            try:
+                imp_segs = _validate_mod_name(imp)
+            except SystemExit:
+                continue
+            if os.path.isfile(os.path.join(snap_src_abs, *imp_segs) + ".lean"):
+                dfs(imp)
+        order.append(mod)
+
+    for tm in target_modules:
+        dfs(tm)
+
+    target_set = set(target_modules)
+    opt_flags = []
+    for opt in (lean_options or []):
+        opt_flags.extend(["-D", opt])
+    lean_path = ":".join([deps_dir] + list(extra_lib_paths))
+
+    for mod in order:
+        segs = _validate_mod_name(mod)
+        rel_src = os.path.join(*segs) + ".lean"
+        base_out = frozen_dir if mod in target_set else deps_dir
+        out_olean = os.path.join(base_out, *segs) + ".olean"
+        run_as(CHECKER_USER, ["mkdir", "-p", os.path.dirname(out_olean)], cwd="/", timeout=30)
+        p = run_as(
+            CHECKER_USER,
+            ["lean", f"--root={snap_src_abs}"] + opt_flags + ["-o", out_olean, rel_src],
+            cwd=snap_src_abs,
+            timeout=deadline_fn(),
+            env_extra={"HOME": job.checker_dir, "LEAN_PATH": lean_path},
+            fsize_mb=fsize_mb,
+        )
+        ensure_no_processes(CHECKER_USER)
+        if p.returncode != 0:
+            combined = (p.stdout + "\n" + p.stderr).strip()
+            st = "timeout" if p.returncode == -9 else "sandbox"
+            emit(False, f"trusted snapshot build failed ({mod}): {tail(combined)}",
+                 stage=st, diagnostics=combined)
+    return deps_dir, frozen_dir
+
+
+def lean_repo_snapshot_verify(task_id, *, snapshot_id, frozen_files, tasks,
+                              allowed_import_prefixes, uses_mathlib=False,
+                              lean_options=None, snapshot_source_dir=None,
+                              timeout_sec=170):
+    """Verify a Lean 4 repo-snapshot task against a pinned upstream `.olean` snapshot."""
+    _lean_repo_snapshot_check(
+        task_id,
+        snapshot_id=snapshot_id,
+        frozen_files=frozen_files,
+        tasks=tasks,
+        allowed_import_prefixes=allowed_import_prefixes,
+        uses_mathlib=uses_mathlib,
+        lean_options=lean_options,
+        snapshot_source_dir=snapshot_source_dir,
+        timeout_sec=timeout_sec,
+        allow_sorry=False,
+    )
+
+
+def check_seed_repo_snapshot(task_id, *, snapshot_id, frozen_files, tasks,
+                             allowed_import_prefixes, uses_mathlib=False,
+                             lean_options=None, snapshot_source_dir=None,
+                             timeout_sec=170):
+    """CI only (scripts/check-statements.py): check unmodified repo-snapshot seed."""
+    _lean_repo_snapshot_check(
+        task_id,
+        snapshot_id=snapshot_id,
+        frozen_files=frozen_files,
+        tasks=tasks,
+        allowed_import_prefixes=allowed_import_prefixes,
+        uses_mathlib=uses_mathlib,
+        lean_options=lean_options,
+        snapshot_source_dir=snapshot_source_dir,
+        timeout_sec=timeout_sec,
+        allow_sorry=True,
+    )
+
+
+def _lean_repo_snapshot_check(task_id, *, snapshot_id, frozen_files, tasks,
+                              allowed_import_prefixes, uses_mathlib,
+                              lean_options, snapshot_source_dir,
+                              timeout_sec, allow_sorry):
+    require_root()
+    task = tasks.get(task_id)
+    if task is None:
+        emit(False, f"unknown task id: {task_id}")
+    started = time.monotonic()
+    deadline = lambda: max(5, int(timeout_sec - (time.monotonic() - started)))
+
+    work = os.getcwd()
+    target_mod = task["module"]
+    target_segs = _validate_mod_name(target_mod)
+    target_rel = "/".join(target_segs) + ".lean"
+    target_files = set(
+        rel.replace("\\", "/") for rel in (task.get("target_files") or [target_rel])
+    )
+    if target_rel not in target_files:
+        target_files.add(target_rel)
+
+    extra_lib_paths = _mathlib_lib_paths() if uses_mathlib else []
+    fsize_mb = 1024 if uses_mathlib else 512
+    allowed_imports = tuple(allowed_import_prefixes)
+    lean_opts = list(lean_options or [])
+    for opt in lean_opts:
+        if "=" not in opt or not re.fullmatch(r"[A-Za-z0-9_.]+=[A-Za-z0-9_.-]+", opt):
+            emit(False, f"invalid lean option: {opt}", stage="sandbox")
+
+    # 0. Inspect prebuilt snapshot metadata (if baked) and reject tampered
+    #    sibling `.lean` files or forged binary artifacts dropped into `/work`.
+    snap_root = os.path.join(SNAPSHOT_CACHE_DIR, snapshot_id)
+    snap_manifest_path = os.path.join(snap_root, "manifest.json")
+    snap_manifest = None
+    if os.path.isfile(snap_manifest_path):
+        with open(snap_manifest_path, "r", encoding="utf-8") as f:
+            snap_manifest = json.load(f)
+        up_json_path = os.path.join(work, "UPSTREAM.json")
+        if os.path.isfile(up_json_path):
+            with open(up_json_path, "r", encoding="utf-8") as f:
+                up = json.load(f)
+            if (up.get("repo") != snap_manifest.get("repo")
+                    or up.get("commit") != snap_manifest.get("commit")):
+                emit(False, "UPSTREAM.json pin does not match prebuilt snapshot manifest",
+                     stage="sandbox")
+
+    snap_src_abs = (
+        os.path.normpath(os.path.join(work, snapshot_source_dir))
+        if snapshot_source_dir else None
+    )
+    snap_src_prefix = (
+        os.path.relpath(snap_src_abs, work).replace("\\", "/") + "/"
+        if snap_src_abs and snap_src_abs.startswith(work + os.sep) else None
+    )
+
+    for dirpath, dirs, files in os.walk(work):
+        dirs[:] = [d for d in dirs if d != ".git"]
+        for fn in sorted(files):
+            abs_p = os.path.join(dirpath, fn)
+            rel = os.path.relpath(abs_p, work).replace("\\", "/")
+            if snap_src_prefix and rel.startswith(snap_src_prefix):
+                continue
+            if (fn.endswith(".olean") or fn.endswith(".olean.private")
+                    or fn.endswith(".ilean") or fn.endswith(".c")
+                    or rel.startswith(".lake/")):
+                msg = f"{rel}: prebuilt binary/build artifacts are forbidden in submissions"
+                emit(False, msg, stage="lint", diagnostics=msg)
+            if fn.endswith(".lean") and rel not in target_files:
+                if snap_manifest is not None:
+                    expected = (snap_manifest.get("frozen_file_hashes") or {}).get(rel)
+                    if expected is None or _sha256_file(abs_p) != expected:
+                        msg = f"{rel}: frozen sibling module modified or unauthorized"
+                        emit(False, msg, stage="lint", diagnostics=msg)
+                elif snap_src_abs is not None:
+                    ref_p = os.path.join(snap_src_abs, rel)
+                    if (not os.path.isfile(ref_p)
+                            or _sha256_file(abs_p) != _sha256_file(ref_p)):
+                        msg = f"{rel}: frozen sibling module modified or unauthorized"
+                        emit(False, msg, stage="lint", diagnostics=msg)
+                else:
+                    msg = f"{rel}: non-target Lean file not allowed in submission"
+                    emit(False, msg, stage="lint", diagnostics=msg)
+
+    # 1. Lint every target file.
+    for rel in sorted(target_files):
+        abs_p = os.path.join(work, rel)
+        if not os.path.isfile(abs_p):
+            emit(False, f"missing target file: {rel}", stage="lint", diagnostics=f"missing target file: {rel}")
+        problem = lint_lean_file(abs_p, rel, target_segs[0], allowed_imports)
+        if problem and not (allow_sorry and "`sorry`" in problem):
+            emit(False, f"hygiene check failed: {problem}", stage="lint", diagnostics=problem)
+
+    job = Job()
+    try:
+        # 2. Resolve read-only trusted snapshot (`deps/` + `frozen-targets/`).
+        if snap_manifest is not None:
+            deps_dir = os.path.join(snap_root, "deps")
+            frozen_target_olean = os.path.join(snap_root, "frozen-targets", *target_segs) + ".olean"
+            if not (os.path.isdir(deps_dir) and os.path.isfile(frozen_target_olean)):
+                emit(False, f"sandbox error: incomplete prebuilt snapshot `{snapshot_id}`", stage="sandbox")
+        elif snap_src_abs and os.path.isdir(snap_src_abs):
+            all_target_mods = list(dict.fromkeys(t["module"] for t in tasks.values()))
+            deps_dir, frozen_dir = _build_live_snapshot(
+                job, snap_src_abs, all_target_mods, extra_lib_paths,
+                lean_opts, deadline, fsize_mb,
+            )
+            frozen_target_olean = os.path.join(frozen_dir, *target_segs) + ".olean"
+        else:
+            emit(False, f"sandbox error: prebuilt snapshot `{snapshot_id}` not found at {snap_root}",
+                 stage="sandbox")
+
+        # 3. Untrusted build of ONLY the writable target file(s) as `sunstead-runner`.
+        src_dir = os.path.join(job.runner_dir, "src")
+        out_lib = os.path.join(src_dir, ".lake", "build", "lib", "lean")
+        out_olean = os.path.join(out_lib, *target_segs) + ".olean"
+        for rel in sorted(target_files):
+            dst = os.path.join(src_dir, rel)
+            run_as(RUNNER_USER, ["mkdir", "-p", os.path.dirname(dst)], cwd="/", timeout=30)
+            with open(os.path.join(work, rel), "r", encoding="utf-8") as f:
+                job.write_as(RUNNER_USER, dst, f.read())
+        run_as(RUNNER_USER, ["mkdir", "-p", os.path.dirname(out_olean)], cwd="/", timeout=30)
+
+        opt_flags = []
+        for opt in lean_opts:
+            opt_flags.extend(["-D", opt])
+        # Keep `out_lib` off `LEAN_PATH` when building a single target module:
+        # Lean's single-root package lookup stops at the first `LEAN_PATH` entry
+        # containing a package directory (e.g. `Proofs/`), so placing `out_lib`
+        # before `deps_dir` would shadow sibling modules in `deps_dir`.
+        runner_lean_path = ":".join([deps_dir] + extra_lib_paths)
+        runner_cpu = max(timeout_sec * 4, 240)
+        p = run_as(
+            RUNNER_USER,
+            ["lean", f"--root={src_dir}"] + opt_flags + ["-o", out_olean, target_rel],
+            cwd=src_dir,
+            timeout=deadline(),
+            env_extra={"HOME": job.runner_dir, "LEAN_PATH": runner_lean_path},
+            fsize_mb=fsize_mb,
+            cpu_sec=runner_cpu,
+        )
+        ensure_no_processes(RUNNER_USER)
+        if p.returncode != 0:
+            combined = (p.stdout + "\n" + p.stderr).strip()
+            st = "timeout" if p.returncode == -9 else "compile"
+            emit(False, f"lean build {target_mod} failed: {tail(combined)}",
+                 stage=st, diagnostics=combined)
+
+        # 4. Trusted kernel replay against pinned upstream `.olean` (`sunstead-checker`).
+        if os.path.isfile(LEAN_CHECKER_BIN) and os.access(LEAN_CHECKER_BIN, os.X_OK):
+            checker_cmd = [LEAN_CHECKER_BIN]
+        else:
+            checker_cmd = ["lean", "--run", LEAN_CHECKER]
+        trusted_lib_paths = [deps_dir] + extra_lib_paths
+        argv = checker_cmd + [
+            "trusted-lib=" + ":".join(trusted_lib_paths),
+            "untrusted-lib=" + out_lib,
+            "untrusted-modules=" + target_mod,
+            "frozen-target-olean=" + frozen_target_olean,
+            "target-module=" + target_mod,
+            "target-const=" + task["theorem"],
+        ]
+        p = run_as(CHECKER_USER, argv, cwd=job.checker_dir, timeout=deadline(),
+                   env_extra={"HOME": job.checker_dir}, fsize_mb=fsize_mb)
+        ensure_no_processes(CHECKER_USER)
+        result = None
+        for line in reversed(p.stdout.splitlines()):
+            line = line.strip()
+            if line.startswith("{"):
+                try:
+                    result = json.loads(line)
+                    break
+                except ValueError:
+                    pass
+        if result is None:
+            combined = (p.stdout + "\n" + p.stderr).strip()
+            st = "timeout" if p.returncode == -9 else "kernel"
+            emit(False, f"trusted checker produced no result: {tail(combined)}",
+                 stage=st, diagnostics=combined)
+        if not result.get("ok"):
+            err_msg = str(result.get("error", "unknown error"))
+            emit(False, f"kernel check failed: {err_msg[:400]}",
+                 stage="kernel", diagnostics=err_msg)
+        allowed_axioms = set(ALLOWED_AXIOMS) | ({"sorryAx"} if allow_sorry else set())
+        bad = [a for a in result.get("axioms", []) if a not in allowed_axioms]
+        if bad:
+            msg = f"forbidden axioms: {', '.join(bad)}"
+            emit(False, msg, stage="axioms",
+                 diagnostics=f"{msg} (allowed: {', '.join(sorted(allowed_axioms))})")
+        elapsed = int((time.monotonic() - started) * 1000)
+        if allow_sorry:
+            emit(True, f"repo-snapshot seed `{task['theorem']}` matches pinned upstream `.olean` "
+                       f"(axioms: {', '.join(result.get('axioms', [])) or 'none'}, {elapsed} ms)")
+        emit(True, f"Lean 4 repo-snapshot kernel-replayed `{task_id}` (0 sorry, standard axioms only, {elapsed} ms)",
              score=1.0)
     finally:
         job.cleanup()
