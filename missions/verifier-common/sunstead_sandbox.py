@@ -399,17 +399,20 @@ def _strip_lean_comments(src):
     return "".join(out)
 
 
-LEAN_FORBIDDEN_ALWAYS = [
+LEAN_MODULE_SYSTEM_FORBIDDEN = [
     (r"(?m)^\s*module\b",
      "Lean 4 `module` files are not allowed in target files"),
     (r"(?<![\w.])(?:public|private|meta|all)\s+import\b",
      "module-system import modifiers are not allowed"),
+]
+LEAN_FORBIDDEN_ALWAYS_CORE = [
     (r"(?<![\w.])(elab|elab_rules|macro|macro_rules|syntax|declare_syntax_cat|notation|infix|infixl|infixr|prefix|postfix)\b",
      "custom syntax, macros and elaborators are not allowed in target files"),
     (r"(?<![\w.])(initialize|builtin_initialize)\b", "`initialize` blocks are not allowed"),
     (r"(?<![\w.])(implemented_by|extern|unsafe|opaque|axiom)\b",
      "`axiom`, `opaque`, `unsafe`, `extern` and `implemented_by` are not allowed"),
 ]
+LEAN_FORBIDDEN_ALWAYS = LEAN_MODULE_SYSTEM_FORBIDDEN + LEAN_FORBIDDEN_ALWAYS_CORE
 LEAN_BASELINE_ELIGIBLE = [
     (r"#(eval|exit|reduce)\b|(?<![\w.])(run_cmd|run_elab|run_meta)\b",
      "build-time code execution (`#eval`, `run_cmd`, ...) is not allowed"),
@@ -448,25 +451,34 @@ def _import_allowed(mod, allowed_prefixes):
     return any(mod == p or mod.startswith(p + ".") for p in allowed_prefixes)
 
 
+_IMPORT_MODIFIERS_RE = r"(?:(?:public|private|meta|all)\s+)*"
+
+
 def _extract_imports(code):
     mods = []
     for line in code.splitlines():
-        m = re.match(r"\s*import\s+(.+)$", line)
+        m = re.match(rf"\s*{_IMPORT_MODIFIERS_RE}import\s+(?:all\s+)?(.+)$", line)
         if m:
             for tok in m.group(1).split():
-                mods.append(tok)
-    for mod in re.findall(r"(?<![\w.])import\s+((?:[\w]|«[^»\s]+»)(?:[\w.]|«[^»\s]+»)*)", code):
-        if mod not in mods:
+                if tok not in ("all", "meta", "public", "private"):
+                    mods.append(tok)
+    for mod in re.findall(
+        rf"(?<![\w.]){_IMPORT_MODIFIERS_RE}import\s+(?:all\s+)?((?:[\w]|«[^»\s]+»)(?:[\w.]|«[^»\s]+»)*)",
+        code,
+    ):
+        if mod not in mods and mod not in ("all", "meta", "public", "private"):
             mods.append(mod)
     return mods
 
 
 def lint_lean_file(path, rel, lib_root, allowed_import_prefixes=None,
-                   allow_sorry=False, allowed_seed_lines=None):
+                   allow_sorry=False, allowed_seed_lines=None,
+                   allow_module_system=False):
     allowed = tuple(allowed_import_prefixes) if allowed_import_prefixes else (lib_root,)
     with open(path, "r", encoding="utf-8") as f:
         code = _strip_lean_comments(f.read())
-    for pat, reason in LEAN_FORBIDDEN_ALWAYS:
+    always_rules = LEAN_FORBIDDEN_ALWAYS_CORE if allow_module_system else LEAN_FORBIDDEN_ALWAYS
+    for pat, reason in always_rules:
         if re.search(pat, code):
             return f"{rel}: {reason}"
     budget = dict(allowed_seed_lines or {})
@@ -1034,7 +1046,7 @@ def _build_live_snapshot(job, snap_src_abs, target_modules, extra_lib_paths,
         rel_src = os.path.join(*segs) + ".lean"
         ov_olean = os.path.join(overlay_dir, *segs) + ".olean"
         run_as(CHECKER_USER, ["mkdir", "-p", os.path.dirname(ov_olean)], cwd="/", timeout=30)
-        run_as(CHECKER_USER, ["rm", "-f", ov_olean], cwd="/", timeout=30)
+        run_as(CHECKER_USER, ["rm", "-f", ov_olean, ov_olean + ".server", ov_olean + ".private"], cwd="/", timeout=30)
         p = run_as(
             CHECKER_USER,
             ["lean", f"--root={snap_src_abs}"] + opt_flags + ["-o", ov_olean, rel_src],
@@ -1052,9 +1064,13 @@ def _build_live_snapshot(job, snap_src_abs, target_modules, extra_lib_paths,
         if mod in target_set:
             dst_frozen = os.path.join(frozen_dir, *segs) + ".olean"
             run_as(CHECKER_USER, ["mkdir", "-p", os.path.dirname(dst_frozen)], cwd="/", timeout=30)
-            p_cp = run_as(CHECKER_USER, ["cp", ov_olean, dst_frozen], cwd="/", timeout=30)
-            if p_cp.returncode != 0:
-                emit(False, f"sandbox error: copy frozen target {mod} failed: {tail(p_cp.stderr)}", stage="sandbox")
+            for suffix in ("", ".server", ".private"):
+                src_part = ov_olean + suffix
+                if suffix and not os.path.isfile(src_part):
+                    continue
+                p_cp = run_as(CHECKER_USER, ["cp", src_part, dst_frozen + suffix], cwd="/", timeout=30)
+                if p_cp.returncode != 0:
+                    emit(False, f"sandbox error: copy frozen target {mod}{suffix} failed: {tail(p_cp.stderr)}", stage="sandbox")
         else:
             dst_src = os.path.join(frozen_sources_dir, *segs) + ".lean"
             run_as(CHECKER_USER, ["mkdir", "-p", os.path.dirname(dst_src)], cwd="/", timeout=30)
@@ -1066,7 +1082,8 @@ def _build_live_snapshot(job, snap_src_abs, target_modules, extra_lib_paths,
 def lean_repo_snapshot_verify(task_id, *, snapshot_id, frozen_files, tasks,
                               allowed_import_prefixes, uses_mathlib=False,
                               lean_options=None, snapshot_source_dir=None,
-                              allow_other_sorries=False, timeout_sec=170):
+                              allow_other_sorries=False, allow_module_system=False,
+                              timeout_sec=170):
     """Verify a Lean 4 repo-snapshot task against a pinned upstream `.olean` snapshot."""
     _lean_repo_snapshot_check(
         task_id,
@@ -1078,6 +1095,7 @@ def lean_repo_snapshot_verify(task_id, *, snapshot_id, frozen_files, tasks,
         lean_options=lean_options,
         snapshot_source_dir=snapshot_source_dir,
         allow_other_sorries=allow_other_sorries,
+        allow_module_system=allow_module_system,
         timeout_sec=timeout_sec,
         allow_sorry=False,
     )
@@ -1086,7 +1104,8 @@ def lean_repo_snapshot_verify(task_id, *, snapshot_id, frozen_files, tasks,
 def check_seed_repo_snapshot(task_id, *, snapshot_id, frozen_files, tasks,
                              allowed_import_prefixes, uses_mathlib=False,
                              lean_options=None, snapshot_source_dir=None,
-                             allow_other_sorries=False, timeout_sec=170):
+                             allow_other_sorries=False, allow_module_system=False,
+                             timeout_sec=170):
     """CI only (scripts/check-statements.py): check unmodified repo-snapshot seed."""
     _lean_repo_snapshot_check(
         task_id,
@@ -1098,6 +1117,7 @@ def check_seed_repo_snapshot(task_id, *, snapshot_id, frozen_files, tasks,
         lean_options=lean_options,
         snapshot_source_dir=snapshot_source_dir,
         allow_other_sorries=allow_other_sorries,
+        allow_module_system=allow_module_system,
         timeout_sec=timeout_sec,
         allow_sorry=True,
     )
@@ -1106,7 +1126,8 @@ def check_seed_repo_snapshot(task_id, *, snapshot_id, frozen_files, tasks,
 def _lean_repo_snapshot_check(task_id, *, snapshot_id, frozen_files, tasks,
                               allowed_import_prefixes, uses_mathlib,
                               lean_options, snapshot_source_dir,
-                              allow_other_sorries, timeout_sec, allow_sorry):
+                              allow_other_sorries, allow_module_system,
+                              timeout_sec, allow_sorry):
     require_root()
     task = tasks.get(task_id)
     if task is None:
@@ -1182,8 +1203,9 @@ def _lean_repo_snapshot_check(task_id, *, snapshot_id, frozen_files, tasks,
             if snap_src_prefix and rel.startswith(snap_src_prefix):
                 continue
             if (fn.endswith(".olean") or fn.endswith(".olean.private")
-                    or fn.endswith(".ilean") or fn.endswith(".c")
-                    or rel.startswith(".lake/")):
+                    or fn.endswith(".olean.server") or fn.endswith(".ir")
+                    or fn.endswith(".ir.sig") or fn.endswith(".ilean")
+                    or fn.endswith(".c") or rel.startswith(".lake/")):
                 msg = f"{rel}: prebuilt binary/build artifacts are forbidden in submissions"
                 emit(False, msg, stage="lint", diagnostics=msg)
             if fn.endswith(".lean") and rel not in target_files and rel not in prereq_files:
@@ -1233,6 +1255,7 @@ def _lean_repo_snapshot_check(task_id, *, snapshot_id, frozen_files, tasks,
             abs_p, rel, target_segs[0], allowed_imports,
             allow_sorry=(allow_sorry or allow_other_sorries),
             allowed_seed_lines=allowed_lines,
+            allow_module_system=allow_module_system,
         )
         if problem:
             emit(False, f"hygiene check failed: {problem}", stage="lint", diagnostics=problem)
@@ -1328,7 +1351,8 @@ def _lean_repo_snapshot_check(task_id, *, snapshot_id, frozen_files, tasks,
                 ov_olean = os.path.join(overlay_lib, *segs) + ".olean"
                 run_as(RUNNER_USER, ["mkdir", "-p", os.path.dirname(out_olean)], cwd="/", timeout=30)
                 run_as(RUNNER_USER, ["mkdir", "-p", os.path.dirname(ov_olean)], cwd="/", timeout=30)
-                run_as(RUNNER_USER, ["rm", "-f", ov_olean], cwd="/", timeout=30)
+                run_as(RUNNER_USER, ["rm", "-f", ov_olean, ov_olean + ".server", ov_olean + ".private"],
+                       cwd="/", timeout=30)
                 p = run_as(
                     RUNNER_USER,
                     ["lean", f"--root={src_dir}"] + opt_flags + ["-o", out_olean, rel_src],
@@ -1344,10 +1368,14 @@ def _lean_repo_snapshot_check(task_id, *, snapshot_id, frozen_files, tasks,
                     st = "timeout" if p.returncode == -9 else "compile"
                     emit(False, f"lean build {mod} failed: {tail(combined)}",
                          stage=st, diagnostics=combined)
-                p_ln = run_as(RUNNER_USER, ["ln", "-sf", out_olean, ov_olean], cwd="/", timeout=30)
-                if p_ln.returncode != 0:
-                    emit(False, f"sandbox error: overlay link for {mod} failed: {tail(p_ln.stderr)}",
-                         stage="sandbox")
+                for suffix in ("", ".server", ".private"):
+                    if suffix and not os.path.isfile(out_olean + suffix):
+                        continue
+                    p_ln = run_as(RUNNER_USER, ["ln", "-sf", out_olean + suffix, ov_olean + suffix],
+                                  cwd="/", timeout=30)
+                    if p_ln.returncode != 0:
+                        emit(False, f"sandbox error: overlay link for {mod}{suffix} failed: {tail(p_ln.stderr)}",
+                             stage="sandbox")
 
         # 4. Trusted kernel replay against pinned upstream `.olean` (`sunstead-checker`).
         if os.path.isfile(LEAN_CHECKER_BIN) and os.access(LEAN_CHECKER_BIN, os.X_OK):
@@ -1385,6 +1413,8 @@ def _lean_repo_snapshot_check(task_id, *, snapshot_id, frozen_files, tasks,
                 "target-module=" + check_mod,
                 "target-const=" + check_thm,
             ]
+            if allow_module_system:
+                argv.append("allow-module-system=1")
             p = run_as(CHECKER_USER, argv, cwd=job.checker_dir, timeout=deadline(),
                        env_extra={"HOME": job.checker_dir}, fsize_mb=fsize_mb)
             ensure_no_processes(CHECKER_USER)

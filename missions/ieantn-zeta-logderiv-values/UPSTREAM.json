@@ -1,0 +1,62 @@
+{
+  "repo": "teorth/IEANTN",
+  "commit": "cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3",
+  "license": "Apache-2.0",
+  "checks": [
+    {
+      "local_file": "IEANTN/Nodes/LowZeroes/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/LowZeroes/v1/Conclusions.lean",
+      "exact_sha256": "8dd7f5a5657bf01bd67cf36bd9264fe1d2a58a88664660bfc40886bd946881ea"
+    },
+    {
+      "local_file": "IEANTN/Nodes/ZetaLogDerivValues/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/ZetaLogDerivValues/v1/Conclusions.lean",
+      "exact_sha256": "bf7ef8d1a7f84c7f7fdd4b4ac4d1594536cec172f68188fe7b7c80f7d25a89e1"
+    },
+    {
+      "local_file": "IEANTN/Vocabulary/Numerics.lean",
+      "upstream_file": "IEANTN/Vocabulary/Numerics.lean",
+      "exact_sha256": "6dda8dda76515740e4ebb87af352f5eb4712f3b0038e84d2138b445d3be5b736"
+    },
+    {
+      "local_file": "IEANTN/Vocabulary/Zeta.lean",
+      "upstream_file": "IEANTN/Vocabulary/Zeta.lean",
+      "exact_sha256": "42e239de4c1151d03ed94ee4c0c51d031f974faa6998f447e85845665bb846ef"
+    },
+    {
+      "local_file": "IEANTN/Nodes/ZetaLogDerivValues/v1/TaskLogDerivTwo.lean",
+      "upstream_file": "IEANTN/Nodes/ZetaLogDerivValues/v1/Challenge.lean",
+      "verbatim_snippet": "theorem ZetaLogDerivValues.v1.challenge_logDeriv_two : ZetaLogDerivValues.v1.logDeriv_two := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/ZetaLogDerivValues/v1/TaskLogDerivThreeHalves.lean",
+      "upstream_file": "IEANTN/Nodes/ZetaLogDerivValues/v1/Challenge.lean",
+      "verbatim_snippet": "theorem ZetaLogDerivValues.v1.challenge_logDeriv_three_halves : ZetaLogDerivValues.v1.logDeriv_three_halves := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/ZetaLogDerivValues/v1/TaskLogDerivNegOne.lean",
+      "upstream_file": "IEANTN/Nodes/ZetaLogDerivValues/v1/Challenge.lean",
+      "verbatim_snippet": "theorem ZetaLogDerivValues.v1.challenge_logDeriv_neg_one : ZetaLogDerivValues.v1.logDeriv_neg_one := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/ZetaLogDerivValues/v1/TaskDerivLogDerivNegOne.lean",
+      "upstream_file": "IEANTN/Nodes/ZetaLogDerivValues/v1/Challenge.lean",
+      "verbatim_snippet": "theorem ZetaLogDerivValues.v1.challenge_deriv_logDeriv_neg_one : ZetaLogDerivValues.v1.deriv_logDeriv_neg_one := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/ZetaLogDerivValues/v1/TaskLaurentAlternating.lean",
+      "upstream_file": "IEANTN/Nodes/ZetaLogDerivValues/v1/Challenge.lean",
+      "verbatim_snippet": "theorem ZetaLogDerivValues.v1.challenge_logDeriv_laurent_alternating : ZetaLogDerivValues.v1.logDeriv_laurent_alternating := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/LowZeroes/v1/TaskNoZeroesBelowFirst.lean",
+      "upstream_file": "IEANTN/Nodes/LowZeroes/v1/Challenge.lean",
+      "verbatim_snippet": "theorem LowZeroes.v1.challenge_no_zeroes_below_first_ordinate : LowZeroes.v1.no_zeroes_below_first_ordinate := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/LowZeroes/v1/TaskSumInvOrdinates.lean",
+      "upstream_file": "IEANTN/Nodes/LowZeroes/v1/Challenge.lean",
+      "verbatim_snippet": "theorem LowZeroes.v1.challenge_sum_inv_ordinates_below_2e4 : LowZeroes.v1.sum_inv_ordinates_below_2e4 := by\n  sorry"
+    }
+  ]
+}

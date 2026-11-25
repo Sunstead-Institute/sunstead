@@ -1,0 +1,111 @@
+{
+  "id": "ieantn-zero-free-regions",
+  "title": "IEANTN (Terence Tao): Explicit Zero-Free Regions of \u03b6(s) (Rosser\u2013Schoenfeld \u2192 Kadiri \u2192 MTY)",
+  "description": "Six verbatim open explicit zero-free region theorems from Terence Tao's IEANTN (teorth/IEANTN@cd9c2dd3, Apache-2.0): Rosser\u2013Schoenfeld (1975) classical & general zero-free regions, Kadiri (2005) improved constant R = 5.69693 conditional on Rosser\u2013Schoenfeld & Wedeniwski's RH height, and Mossinghoff\u2013Trudgian\u2013Yang (2024) classical, intermediate, and Korobov\u2013Vinogradov zero-free regions. Every frozen definition file is SHA-256 identical to upstream.",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/teorth/IEANTN",
+  "upstream": {
+    "repo": "teorth/IEANTN",
+    "commit": "cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3",
+    "license": "Apache-2.0"
+  },
+  "frozen_paths": [
+    "IEANTN/Nodes/Kadiri2005/v1/Conclusions.lean",
+    "IEANTN/Nodes/MTY/v1/Conclusions.lean",
+    "IEANTN/Nodes/RosserSchoenfeld/v1/Conclusions.lean",
+    "IEANTN/Nodes/Wedeniwski/v1/Conclusions.lean",
+    "IEANTN/Vocabulary.lean",
+    "IEANTN/Vocabulary/ErrorTerms.lean",
+    "IEANTN/Vocabulary/Goldbach.lean",
+    "IEANTN/Vocabulary/Numerics.lean",
+    "IEANTN/Vocabulary/PrimeCounting.lean",
+    "IEANTN/Vocabulary/PrimeGaps.lean",
+    "IEANTN/Vocabulary/Zeta.lean",
+    "IEANTN/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 240,
+    "memory_mb": 6144
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "rosser_schoenfeld_zfr",
+      "title": "Rosser\u2013Schoenfeld (1975): explicit zero-free region of \u03b6(s)",
+      "description": "Prove `RosserSchoenfeld.v1.challenge_zero_free_region`: explicit zero-free region of the Riemann zeta function.",
+      "target_files": [
+        "IEANTN/Nodes/RosserSchoenfeld/v1/TaskZeroFreeRegion.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/RosserSchoenfeld/v1/Challenge.lean#L19-L20"
+    },
+    {
+      "id": "rosser_schoenfeld_zfr_classical",
+      "title": "Rosser\u2013Schoenfeld (1975): classical zero-free region constant R = 9.645908801",
+      "description": "Prove `RosserSchoenfeld.v1.challenge_zero_free_region_classical`: classical de la Vall\u00e9e Poussin zero-free region with Rosser\u2013Schoenfeld constant.",
+      "target_files": [
+        "IEANTN/Nodes/RosserSchoenfeld/v1/TaskZeroFreeClassical.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/RosserSchoenfeld/v1/Challenge.lean#L22-L23"
+    },
+    {
+      "id": "kadiri_2005_zfr",
+      "title": "Kadiri (2005): improved zero-free region R = 5.69693 above height 2",
+      "description": "Prove `Kadiri2005.v1.challenge_zero_free_region`: `ClassicalZeroFreeRegion 5.69693 2` from `RosserSchoenfeld.v1.zero_free_region_classical` and `Wedeniwski.v1.rh_up_to`.",
+      "target_files": [
+        "IEANTN/Nodes/Kadiri2005/v1/TaskZeroFreeRegion.lean"
+      ],
+      "depends_on": [
+        "rosser_schoenfeld_zfr_classical"
+      ],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/Kadiri2005/v1/Challenge.lean#L21-L25"
+    },
+    {
+      "id": "mty_classical_zfr",
+      "title": "Mossinghoff\u2013Trudgian\u2013Yang (2024): state-of-the-art classical zero-free region",
+      "description": "Prove `MTY.v1.challenge_classical_zero_free_region`: explicit classical zero-free region of \u03b6(s) with Mossinghoff\u2013Trudgian\u2013Yang constant.",
+      "target_files": [
+        "IEANTN/Nodes/MTY/v1/TaskClassicalZFR.lean"
+      ],
+      "depends_on": [
+        "kadiri_2005_zfr"
+      ],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/MTY/v1/Challenge.lean#L19-L20"
+    },
+    {
+      "id": "mty_intermediate_zfr",
+      "title": "Mossinghoff\u2013Trudgian\u2013Yang (2024): intermediate zero-free region",
+      "description": "Prove `MTY.v1.challenge_intermediate_zero_free_region`: explicit intermediate-height zero-free region of \u03b6(s).",
+      "target_files": [
+        "IEANTN/Nodes/MTY/v1/TaskIntermediateZFR.lean"
+      ],
+      "depends_on": [
+        "mty_classical_zfr"
+      ],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/MTY/v1/Challenge.lean#L25-L26"
+    },
+    {
+      "id": "mty_korobov_vinogradov_zfr",
+      "title": "Mossinghoff\u2013Trudgian\u2013Yang (2024): explicit Korobov\u2013Vinogradov zero-free region",
+      "description": "Prove `MTY.v1.challenge_korobov_vinogradov_region`: explicit Korobov\u2013Vinogradov zero-free region of \u03b6(s).",
+      "target_files": [
+        "IEANTN/Nodes/MTY/v1/TaskKorobovVinogradovZFR.lean"
+      ],
+      "depends_on": [
+        "mty_intermediate_zfr"
+      ],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/MTY/v1/Challenge.lean#L22-L23"
+    }
+  ]
+}

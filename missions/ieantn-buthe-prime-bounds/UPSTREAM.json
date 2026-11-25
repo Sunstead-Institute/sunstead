@@ -1,0 +1,87 @@
+{
+  "repo": "teorth/IEANTN",
+  "commit": "cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3",
+  "license": "Apache-2.0",
+  "checks": [
+    {
+      "local_file": "IEANTN/Nodes/Buthe/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/Buthe/v1/Conclusions.lean",
+      "exact_sha256": "06118da7c74732c2c063c0d7b6e8ea9eaf4249faed3207df4601ae4022831244"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Buthe/v1/Tables.lean",
+      "upstream_file": "IEANTN/Nodes/Buthe/v1/Tables.lean",
+      "exact_sha256": "a5e96d99d74c6bb472792ac8cd689d09015e4de760d797659a4ceac7ddc79e92"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Buthe/v2/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/Buthe/v2/Conclusions.lean",
+      "exact_sha256": "8ac1da78d7810b0aa13f245ffa950f4cbaf7daf0447e0cffcb4e9a623f153720"
+    },
+    {
+      "local_file": "IEANTN/Nodes/ButheNumerics/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/ButheNumerics/v1/Conclusions.lean",
+      "exact_sha256": "5d36915d0d8aca0f4dffef3f5513eab818608ba57b6533364d3838709af67bc4"
+    },
+    {
+      "local_file": "IEANTN/Nodes/FKBJ/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/FKBJ/v1/Conclusions.lean",
+      "exact_sha256": "fc3164eb4aadbde39e82c65d11d01f39a6a44320d003c657c9ba2a5112cc62ac"
+    },
+    {
+      "local_file": "IEANTN/Vocabulary/ErrorTerms.lean",
+      "upstream_file": "IEANTN/Vocabulary/ErrorTerms.lean",
+      "exact_sha256": "8027fc677653f3d86229a586404f9d4ab2ca6c8404d8ccc18df056b22c2e01bc"
+    },
+    {
+      "local_file": "IEANTN/Vocabulary/Numerics.lean",
+      "upstream_file": "IEANTN/Vocabulary/Numerics.lean",
+      "exact_sha256": "6dda8dda76515740e4ebb87af352f5eb4712f3b0038e84d2138b445d3be5b736"
+    },
+    {
+      "local_file": "IEANTN/Vocabulary/PrimeCounting.lean",
+      "upstream_file": "IEANTN/Vocabulary/PrimeCounting.lean",
+      "exact_sha256": "ff46c70252ac31f5f33aae9940bf029c36c2d466ff60a8615198b31b319a84c5"
+    },
+    {
+      "local_file": "IEANTN/Vocabulary/Zeta.lean",
+      "upstream_file": "IEANTN/Vocabulary/Zeta.lean",
+      "exact_sha256": "42e239de4c1151d03ed94ee4c0c51d031f974faa6998f447e85845665bb846ef"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Buthe/v2/TaskLemma3Bounds.lean",
+      "upstream_file": "IEANTN/Nodes/Buthe/v2/Challenge.lean",
+      "verbatim_snippet": "theorem Buthe.v2.challenge_lemma_3_bounds : Buthe.v2.lemma_3_bounds := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Buthe/v2/TaskLemma3Positivity.lean",
+      "upstream_file": "IEANTN/Nodes/Buthe/v2/Challenge.lean",
+      "verbatim_snippet": "theorem Buthe.v2.challenge_lemma_3_positivity : Buthe.v2.lemma_3_positivity := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Buthe/v1/TaskTheorem2Psi.lean",
+      "upstream_file": "IEANTN/Nodes/Buthe/v1/Challenge.lean",
+      "verbatim_snippet": "theorem Buthe.v1.challenge_theorem_2_psi\n    (fkbj_v1_rh_up_to : FKBJ.v1.rh_up_to) :\n    Buthe.v1.theorem_2_psi := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Buthe/v1/TaskTheorem2Theta.lean",
+      "upstream_file": "IEANTN/Nodes/Buthe/v1/Challenge.lean",
+      "verbatim_snippet": "theorem Buthe.v1.challenge_theorem_2_theta\n    (fkbj_v1_rh_up_to : FKBJ.v1.rh_up_to) :\n    Buthe.v1.theorem_2_theta := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Buthe/v1/TaskTheorem2ThetaLower.lean",
+      "upstream_file": "IEANTN/Nodes/Buthe/v1/Challenge.lean",
+      "verbatim_snippet": "theorem Buthe.v1.challenge_theorem_2_theta_lower\n    (fkbj_v1_rh_up_to : FKBJ.v1.rh_up_to) :\n    Buthe.v1.theorem_2_theta_lower := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Buthe/v1/TaskTheorem2LiMinusPi.lean",
+      "upstream_file": "IEANTN/Nodes/Buthe/v1/Challenge.lean",
+      "verbatim_snippet": "theorem Buthe.v1.challenge_theorem_2_li_minus_pi\n    (fkbj_v1_rh_up_to : FKBJ.v1.rh_up_to)\n    (buthe_v1_theorem_2_theta : Buthe.v1.theorem_2_theta)\n    (buthenumerics_v1_lemma_3_constant_nonpos : ButheNumerics.v1.lemma_3_constant_nonpos)\n    (buthenumerics_v1_li_minus_pi_below_1e7 : ButheNumerics.v1.li_minus_pi_below_1e7)\n    (buthe_v2_lemma_3_bounds : Buthe.v2.lemma_3_bounds) :\n    Buthe.v1.theorem_2_li_minus_pi := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Buthe/v1/TaskTheorem2LiGtPi.lean",
+      "upstream_file": "IEANTN/Nodes/Buthe/v1/Challenge.lean",
+      "verbatim_snippet": "theorem Buthe.v1.challenge_theorem_2_li_gt_pi\n    (fkbj_v1_rh_up_to : FKBJ.v1.rh_up_to)\n    (buthe_v1_theorem_2_theta_lower : Buthe.v1.theorem_2_theta_lower)\n    (buthe_v2_lemma_3_positivity : Buthe.v2.lemma_3_positivity)\n    (buthenumerics_v1_lemma_3_constant_gt_at_10 : ButheNumerics.v1.lemma_3_constant_gt_at_10) :\n    Buthe.v1.theorem_2_li_gt_pi := by\n  sorry"
+    }
+  ]
+}

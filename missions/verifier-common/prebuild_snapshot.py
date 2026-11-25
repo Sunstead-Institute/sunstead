@@ -54,7 +54,8 @@ def _extract_snapshot_config(mission_dir):
     def _capture(task_id, *, snapshot_id, frozen_files, tasks,
                  allowed_import_prefixes, uses_mathlib=False,
                  lean_options=None, snapshot_source_dir=None,
-                 allow_other_sorries=False, timeout_sec=170):
+                 allow_other_sorries=False, allow_module_system=False,
+                 timeout_sec=170):
         captured.update(
             snapshot_id=snapshot_id,
             frozen_files=list(frozen_files),
@@ -64,6 +65,7 @@ def _extract_snapshot_config(mission_dir):
             lean_options=list(lean_options or []),
             snapshot_source_dir=snapshot_source_dir,
             allow_other_sorries=bool(allow_other_sorries),
+            allow_module_system=bool(allow_module_system),
         )
 
     orig_verify = sb.lean_repo_snapshot_verify
@@ -137,7 +139,8 @@ def _trace_dependency_graph(upstream_dir, target_modules):
     return deps
 
 
-def _compile_module(upstream_dir, mod, out_dir, lean_path, lean_options):
+def _compile_module(upstream_dir, mod, out_dir, lean_path, lean_options,
+                    allow_module_system=False):
     segs = sb._validate_mod_name(mod)
     rel_src = os.path.join(*segs) + ".lean"
     out_olean = os.path.join(out_dir, *segs) + ".olean"
@@ -155,15 +158,16 @@ def _compile_module(upstream_dir, mod, out_dir, lean_path, lean_options):
         )
     if not os.path.isfile(out_olean):
         raise RuntimeError(f"expected .olean not written: {out_olean}")
-    if os.path.exists(out_olean + ".private"):
+    if not allow_module_system and os.path.exists(out_olean + ".private"):
         raise RuntimeError(f"unsupported `.olean.private` produced for {mod}")
     return out_olean
 
 
 def _reuse_compatible_deps(snapshot_base, snapshot_id, repo, commit, toolchain,
-                           uses_mathlib, lean_options, dep_graph, deps_dir):
+                           uses_mathlib, lean_options, dep_graph, deps_dir,
+                           allow_module_system=False):
     """Hardlink prebuilt `.olean`s from an existing snapshot in `snapshot_base`
-    with identical `(repo, commit, toolchain, uses_mathlib, lean_options)`.
+    with identical `(repo, commit, toolchain, uses_mathlib, lean_options, allow_module_system)`.
 
     Avoids recompiling and duplicating identical dependency `.olean`s across
     multiple missions pinned to the same upstream commit (e.g. LNSym missions).
@@ -187,6 +191,7 @@ def _reuse_compatible_deps(snapshot_base, snapshot_id, repo, commit, toolchain,
         if (other.get("repo") != repo or other.get("commit") != commit
                 or other.get("toolchain") != toolchain
                 or bool(other.get("uses_mathlib")) != bool(uses_mathlib)
+                or bool(other.get("allow_module_system")) != bool(allow_module_system)
                 or list(other.get("lean_options") or []) != list(lean_options or [])):
             continue
         other_hashes = other.get("dep_olean_hashes") or {}
@@ -202,10 +207,15 @@ def _reuse_compatible_deps(snapshot_base, snapshot_id, repo, commit, toolchain,
                 continue
             dst_olean = os.path.join(deps_dir, *segs) + ".olean"
             os.makedirs(os.path.dirname(dst_olean), exist_ok=True)
-            try:
-                os.link(src_olean, dst_olean)
-            except OSError:
-                shutil.copy2(src_olean, dst_olean)
+            for suffix in ("", ".server", ".private"):
+                src_p = src_olean + suffix
+                if suffix and not os.path.isfile(src_p):
+                    continue
+                dst_p = dst_olean + suffix
+                try:
+                    os.link(src_p, dst_p)
+                except OSError:
+                    shutil.copy2(src_p, dst_p)
             reused[mod] = actual_hash
     return reused
 
@@ -272,6 +282,7 @@ def prebuild_snapshot_mission(mission_dir, snapshot_base, upstream_dir=None, job
     snapshot_id = cfg["snapshot_id"]
     lean_options = cfg["lean_options"]
     uses_mathlib = cfg["uses_mathlib"]
+    allow_module_system = cfg["allow_module_system"]
     tasks = cfg["tasks"]
     toolchain = open(os.path.join(mission_dir, "lean-toolchain"), encoding="utf-8").read().strip()
 
@@ -382,6 +393,7 @@ def prebuild_snapshot_mission(mission_dir, snapshot_base, upstream_dir=None, job
         dep_olean_hashes = _reuse_compatible_deps(
             snapshot_base, snapshot_id, repo, commit, toolchain,
             uses_mathlib, lean_options, dep_graph, deps_dir,
+            allow_module_system=allow_module_system,
         )
         built = set(dep_olean_hashes.keys())
         to_build = len(dep_graph) - len(built)
@@ -404,7 +416,8 @@ def prebuild_snapshot_mission(mission_dir, snapshot_base, upstream_dir=None, job
                     remaining = sorted(set(dep_graph) - built)
                     raise RuntimeError(f"dependency cycle among: {remaining[:5]}")
                 futs = {
-                    ex.submit(_compile_module, src_root, m, deps_dir, deps_lean_path, lean_options): m
+                    ex.submit(_compile_module, src_root, m, deps_dir, deps_lean_path,
+                              lean_options, allow_module_system): m
                     for m in wave
                 }
                 for fut in concurrent.futures.as_completed(futs):
@@ -427,7 +440,8 @@ def prebuild_snapshot_mission(mission_dir, snapshot_base, upstream_dir=None, job
         if not has_cross_target_deps:
             for mod in target_modules:
                 out_olean = _compile_module(
-                    src_root, mod, frozen_targets_dir, deps_lean_path, lean_options
+                    src_root, mod, frozen_targets_dir, deps_lean_path, lean_options,
+                    allow_module_system=allow_module_system,
                 )
                 frozen_target_hashes[mod] = _sha256_file(out_olean)
         else:
@@ -439,15 +453,21 @@ def prebuild_snapshot_mission(mission_dir, snapshot_base, upstream_dir=None, job
             for mod in _topo_sort_subset(graph, dynamic_mods):
                 segs = sb._validate_mod_name(mod)
                 overlay_olean = os.path.join(tmp_overlay, *segs) + ".olean"
-                if os.path.lexists(overlay_olean):
-                    os.unlink(overlay_olean)
+                for suffix in ("", ".server", ".private"):
+                    if os.path.lexists(overlay_olean + suffix):
+                        os.unlink(overlay_olean + suffix)
                 out_olean = _compile_module(
-                    src_root, mod, tmp_overlay, overlay_lean_path, lean_options
+                    src_root, mod, tmp_overlay, overlay_lean_path, lean_options,
+                    allow_module_system=allow_module_system,
                 )
                 if mod in target_mod_set:
                     dst_frozen = os.path.join(frozen_targets_dir, *segs) + ".olean"
                     os.makedirs(os.path.dirname(dst_frozen), exist_ok=True)
-                    shutil.copy2(out_olean, dst_frozen)
+                    for suffix in ("", ".server", ".private"):
+                        src_p = out_olean + suffix
+                        if suffix and not os.path.isfile(src_p):
+                            continue
+                        shutil.copy2(src_p, dst_frozen + suffix)
                     frozen_target_hashes[mod] = _sha256_file(dst_frozen)
                 else:
                     src_lean = os.path.join(src_root, *segs) + ".lean"
@@ -464,6 +484,7 @@ def prebuild_snapshot_mission(mission_dir, snapshot_base, upstream_dir=None, job
             "commit": commit,
             "toolchain": toolchain,
             "uses_mathlib": uses_mathlib,
+            "allow_module_system": allow_module_system,
             "lean_options": lean_options,
             "target_modules": target_modules,
             "target_files": sorted(target_rels),

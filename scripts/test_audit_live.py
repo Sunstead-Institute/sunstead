@@ -412,6 +412,100 @@ diff --git a/Proof.lean b/Proof.lean
         with self.assertRaisesRegex(ValueError, "non-standard axiom.*Snap431.cheat"):
             audit.check_lean_repo_snapshot(IMAGE_V431, raw, snap_id, opts, checks, expected_version="4.31.0")
 
+    @unittest.skipUnless(has_verifier_image(IMAGE), f"requires local {IMAGE} container image")
+    def test_container_module_system_honest_and_hidden_private_attacks(self):
+        manifest = {
+            "snapshot": {
+                "mode": "repo-snapshot",
+                "snapshot_id": "synthetic-no-deps",
+                "allow_module_system": True,
+                "lean_options": [],
+            },
+            "tasks": [{"id": "t1", "depends_on": [], "target_files": ["ModAudit/Target.lean"]}],
+        }
+        contracts = {"t1": {"module": "ModAudit.Target", "theorem": "ModAudit.ok"}}
+        seed_src = (
+            b"module\n"
+            b"namespace ModAudit\n"
+            b"@[expose] public def targetVal : Nat := 42\n"
+            b"public theorem ok : targetVal = 42 := by\n"
+            b"  sorry\n"
+            b"end ModAudit\n"
+        )
+        honest_src = (
+            b"module\n"
+            b"namespace ModAudit\n"
+            b"@[expose] public def targetVal : Nat := 42\n"
+            b"private theorem helper : 42 = 42 := rfl\n"
+            b"public theorem ok : targetVal = 42 := helper\n"
+            b"end ModAudit\n"
+        )
+        seed_tree = {"ModAudit/Target.lean": (seed_src, False)}
+
+        # Honest module-system proof passes when opted in, and is rejected when opt-in is false.
+        raw, snap_id, opts, checks = audit.repo_snapshot_input(
+            seed_tree, {"ModAudit/Target.lean": (honest_src, False)}, manifest, ["t1"], contracts
+        )
+        audit.check_lean_repo_snapshot(
+            IMAGE, raw, snap_id, opts, checks, expected_version="4.36.0", allow_module_system=True
+        )
+        with self.assertRaises(subprocess.CalledProcessError):
+            audit.check_lean_repo_snapshot(
+                IMAGE, raw, snap_id, opts, checks, expected_version="4.36.0", allow_module_system=False
+            )
+
+        # Attack 1: hidden `sorryAx` inside a `private theorem` in `.olean.private`.
+        hidden_sorry = (
+            b"module\n"
+            b"namespace ModAudit\n"
+            b"@[expose] public def targetVal : Nat := 42\n"
+            b"private theorem helper : targetVal = 42 := sorryAx _ false\n"
+            b"public theorem ok : targetVal = 42 := helper\n"
+            b"end ModAudit\n"
+        )
+        raw, snap_id, opts, checks = audit.repo_snapshot_input(
+            seed_tree, {"ModAudit/Target.lean": (hidden_sorry, False)}, manifest, ["t1"], contracts
+        )
+        with self.assertRaisesRegex(ValueError, "non-standard axiom.*sorryAx"):
+            audit.check_lean_repo_snapshot(
+                IMAGE, raw, snap_id, opts, checks, expected_version="4.36.0", allow_module_system=True
+            )
+
+        # Attack 2: custom `private axiom` hidden in `.olean.private`.
+        hidden_axiom = (
+            b"module\n"
+            b"namespace ModAudit\n"
+            b"@[expose] public def targetVal : Nat := 42\n"
+            b"private axiom cheat : targetVal = 42\n"
+            b"public theorem ok : targetVal = 42 := cheat\n"
+            b"end ModAudit\n"
+        )
+        raw, snap_id, opts, checks = audit.repo_snapshot_input(
+            seed_tree, {"ModAudit/Target.lean": (hidden_axiom, False)}, manifest, ["t1"], contracts
+        )
+        with self.assertRaisesRegex(ValueError, "non-standard axiom.*cheat"):
+            audit.check_lean_repo_snapshot(
+                IMAGE, raw, snap_id, opts, checks, expected_version="4.36.0", allow_module_system=True
+            )
+
+        # Attack 3: mutate frozen local `targetVal` definition inside module-system target file.
+        mutated_def = (
+            b"module\n"
+            b"namespace ModAudit\n"
+            b"@[expose] public def targetVal : Nat := 99\n"
+            b"private axiom cheat : targetVal = 42\n"
+            b"public theorem ok : targetVal = 42 := cheat\n"
+            b"end ModAudit\n"
+        )
+        raw, snap_id, opts, checks = audit.repo_snapshot_input(
+            seed_tree, {"ModAudit/Target.lean": (mutated_def, False)}, manifest, ["t1"], contracts
+        )
+        with self.assertRaises(subprocess.CalledProcessError) as ctx:
+            audit.check_lean_repo_snapshot(
+                IMAGE, raw, snap_id, opts, checks, expected_version="4.36.0", allow_module_system=True
+            )
+        self.assertIn(b"FROZEN_DEP_MODIFIED ModAudit.targetVal", ctx.exception.output)
+
     @unittest.skipUnless(has_verifier_image(IMAGE_V431), f"requires local {IMAGE_V431} container image")
     def test_container_curve25519_real_seed_detects_sorry_axiom(self):
         c_dir = audit.ROOT / "missions" / "curve25519-dalek"

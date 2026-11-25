@@ -31,6 +31,9 @@ IMAGES = {
     "ieantn-zeta-foundations": DEFAULT_IMAGE,
     "ieantn-chebyshev-pipeline": DEFAULT_IMAGE,
     "ieantn-schoenfeld-chebyshev": DEFAULT_IMAGE,
+    "ieantn-zero-free-regions": DEFAULT_IMAGE,
+    "ieantn-zeta-logderiv-values": DEFAULT_IMAGE,
+    "ieantn-buthe-prime-bounds": DEFAULT_IMAGE,
     "pnt-analytic-foundations": DEFAULT_IMAGE,
     "lnsym-aes-gcm-armv8": V435_IMAGE,
     "lnsym-gcm-gmult-armv8": V435_IMAGE,
@@ -43,6 +46,7 @@ IMAGES = {
     "__synthetic_hillclimb__": DEFAULT_IMAGE,
     "__synthetic_repo_snapshot__": DEFAULT_IMAGE,
     "__synthetic_cross_file_dag__": DEFAULT_IMAGE,
+    "__synthetic_module_snapshot__": DEFAULT_IMAGE,
 }
 
 HONEST_DECODER = """import SyntheticPureLean.Spec
@@ -388,12 +392,86 @@ SYNTHETIC_CROSS_FILE_DAG_TREE = {
     ),
 }
 
+# Synthetic Lean 4.36 `module`-system (`.olean.private`) repo-snapshot fixture
+# exercising opt-in `allow_module_system=True` replay across a module-system
+# dependency + target file, proving honest proofs pass while hidden private
+# `sorryAx`, `private axiom`, `private import Lean`, and mutated local defs fail.
+_MOD_CORE = """module
+
+namespace ModSnap
+@[expose] public def baseFactor : Nat := 11
+@[expose] public def scaled (n : Nat) : Nat := baseFactor * n
+public theorem scaled_zero : scaled 0 = 0 := by
+  simp [scaled]
+end ModSnap
+"""
+
+_MOD_TARGET_SEED = """module
+public import ModSnap.Core
+
+namespace ModSnap
+@[expose] public def localScale (n : Nat) : Nat := scaled n
+
+public theorem mod_add (a b : Nat) : localScale (a + b) = localScale a + localScale b := by
+  sorry
+end ModSnap
+"""
+
+_MOD_TARGET_HONEST = """module
+public import ModSnap.Core
+
+namespace ModSnap
+@[expose] public def localScale (n : Nat) : Nat := scaled n
+
+private theorem helper_add (a b : Nat) : baseFactor * (a + b) = baseFactor * a + baseFactor * b := by
+  unfold baseFactor
+  omega
+
+public theorem mod_add (a b : Nat) : localScale (a + b) = localScale a + localScale b := by
+  unfold localScale scaled
+  exact helper_add a b
+end ModSnap
+"""
+
+SYNTHETIC_MODULE_SNAPSHOT_TREE = {
+    "lean-toolchain": "leanprover/lean4:v4.36.0\n",
+    ".sunstead-frozen-snapshot/ModSnap/Core.lean": _MOD_CORE,
+    ".sunstead-frozen-snapshot/ModSnap/Target.lean": _MOD_TARGET_SEED,
+    "ModSnap/Core.lean": _MOD_CORE,
+    "ModSnap/Target.lean": _MOD_TARGET_HONEST,
+    "verify": (
+        "#!/usr/bin/env python3\n"
+        "import sys\n"
+        "sys.path.insert(0, '/opt/sunstead')\n"
+        "from sunstead_sandbox import emit, lean_repo_snapshot_verify\n"
+        "TASKS = {\n"
+        "  'mod_add': {\n"
+        "    'module': 'ModSnap.Target',\n"
+        "    'theorem': 'ModSnap.mod_add',\n"
+        "    'target_files': ['ModSnap/Target.lean'],\n"
+        "  },\n"
+        "}\n"
+        "lean_repo_snapshot_verify(\n"
+        "  sys.argv[1],\n"
+        "  snapshot_id='__synthetic_module_snapshot__',\n"
+        "  frozen_files=['lean-toolchain'],\n"
+        "  tasks=TASKS,\n"
+        "  allowed_import_prefixes=['ModSnap', 'Init'],\n"
+        "  uses_mathlib=False,\n"
+        "  snapshot_source_dir='.sunstead-frozen-snapshot',\n"
+        "  allow_module_system=True,\n"
+        "  timeout_sec=120,\n"
+        ")\n"
+    ),
+}
+
 SYNTHETIC_TREES = {
     "__synthetic_pure_lean__": SYNTHETIC_PURE_LEAN_TREE,
     "__synthetic_mathlib__": SYNTHETIC_MATHLIB_TREE,
     "__synthetic_hillclimb__": SYNTHETIC_HILLCLIMB_TREE,
     "__synthetic_repo_snapshot__": SYNTHETIC_REPO_SNAPSHOT_TREE,
     "__synthetic_cross_file_dag__": SYNTHETIC_CROSS_FILE_DAG_TREE,
+    "__synthetic_module_snapshot__": SYNTHETIC_MODULE_SNAPSHOT_TREE,
 }
 
 # Each case: (name, mission, task, {path: content}, expect_ok, expect_score_or_None, why)
@@ -848,6 +926,40 @@ theorem BKLNW.v2.challenge_table8_psi_bound_above : True := trivial
      {},
      False, None, "unmodified IEANTN Schoenfeld seed still has sorry and must be rejected"),
 
+    # --- IEANTN Wave 2 multi-node DAG missions (zero-free regions, zeta logderiv, Buthe) ---
+    ("ieantn-zfr-seed-sorry", "ieantn-zero-free-regions", "rosser_schoenfeld_zfr",
+     {},
+     False, None, "unmodified IEANTN zero-free-regions seed still has sorry and must be rejected"),
+    ("ieantn-zfr-weakened", "ieantn-zero-free-regions", "kadiri_2005_zfr",
+     {"IEANTN/Nodes/Kadiri2005/v1/TaskZeroFreeRegion.lean": """import IEANTN.Nodes.Kadiri2005.v1.Conclusions
+import IEANTN.Nodes.RosserSchoenfeld.v1.Conclusions
+import IEANTN.Nodes.Wedeniwski.v1.Conclusions
+
+theorem Kadiri2005.v1.challenge_zero_free_region : True := trivial
+"""},
+     False, None, "weakened Kadiri2005 theorem must be rejected by kernel"),
+    ("ieantn-logderiv-seed-sorry", "ieantn-zeta-logderiv-values", "logderiv_two",
+     {},
+     False, None, "unmodified IEANTN zeta-logderiv-values seed still has sorry and must be rejected"),
+    ("ieantn-logderiv-weakened", "ieantn-zeta-logderiv-values", "no_zeroes_below_first_ordinate",
+     {"IEANTN/Nodes/LowZeroes/v1/TaskNoZeroesBelowFirst.lean": """import IEANTN.Nodes.LowZeroes.v1.Conclusions
+
+theorem LowZeroes.v1.challenge_no_zeroes_below_first_ordinate : True := trivial
+"""},
+     False, None, "weakened LowZeroes theorem must be rejected by kernel"),
+    ("ieantn-buthe-seed-sorry", "ieantn-buthe-prime-bounds", "buthe_lemma_3_bounds",
+     {},
+     False, None, "unmodified IEANTN Buthe seed still has sorry and must be rejected"),
+    ("ieantn-buthe-weakened", "ieantn-buthe-prime-bounds", "buthe_theorem_2_li_minus_pi",
+     {"IEANTN/Nodes/Buthe/v1/TaskTheorem2LiMinusPi.lean": """import IEANTN.Nodes.Buthe.v1.Conclusions
+import IEANTN.Nodes.Buthe.v2.Conclusions
+import IEANTN.Nodes.ButheNumerics.v1.Conclusions
+import IEANTN.Nodes.FKBJ.v1.Conclusions
+
+theorem Buthe.v1.challenge_theorem_2_li_minus_pi : True := trivial
+"""},
+     False, None, "weakened Buthe Theorem 2 theorem must be rejected by kernel"),
+
     # --- AlphaTensor F2 matrix-rank suite (6 shapes) ---
     ("alphatensor-333-baseline", "matrix-rank-alphatensor-f2", "rank_333",
      {},
@@ -943,6 +1055,65 @@ theorem IsEven_iff_in_doubling_image_right (P : Point Ed25519) :
 end curve25519_dalek.ristretto
 """},
      False, None, "weakening local `IsEven` definition to `False` so `IsEven_iff_in_doubling_image_right` holds vacuously must be rejected by FrozenTypeDeps"),
+
+    # --- Opt-in Lean 4.36 `module`-system (`.olean.private`) repo-snapshot controls & attacks ---
+    ("module-snapshot-honest-control", "__synthetic_module_snapshot__", "mod_add",
+     {}, True, None, "honest opt-in Lean 4.36 `module` proof using a private helper must pass kernel replay"),
+    ("module-snapshot-private-sorryax", "__synthetic_module_snapshot__", "mod_add",
+     {"ModSnap/Target.lean": """module
+public import ModSnap.Core
+
+namespace ModSnap
+@[expose] public def localScale (n : Nat) : Nat := scaled n
+
+private theorem hidden_cheat (a b : Nat) : localScale (a + b) = localScale a + localScale b :=
+  sorryAx _ false
+
+public theorem mod_add (a b : Nat) : localScale (a + b) = localScale a + localScale b :=
+  hidden_cheat a b
+end ModSnap
+"""},
+     False, None, "hidden `sorryAx` inside a `private theorem` in `.olean.private` must be caught by kernel replay"),
+    ("module-snapshot-private-axiom", "__synthetic_module_snapshot__", "mod_add",
+     {"ModSnap/Target.lean": """module
+public import ModSnap.Core
+
+namespace ModSnap
+@[expose] public def localScale (n : Nat) : Nat := scaled n
+
+private axiom hidden_ax (a b : Nat) : localScale (a + b) = localScale a + localScale b
+
+public theorem mod_add (a b : Nat) : localScale (a + b) = localScale a + localScale b :=
+  hidden_ax a b
+end ModSnap
+"""},
+     False, None, "`private axiom` in a `module` file must be rejected"),
+    ("module-snapshot-private-import-lean", "__synthetic_module_snapshot__", "mod_add",
+     {"ModSnap/Target.lean": """module
+public import ModSnap.Core
+private import Lean
+
+namespace ModSnap
+@[expose] public def localScale (n : Nat) : Nat := scaled n
+public theorem mod_add (a b : Nat) : localScale (a + b) = localScale a + localScale b := by
+  unfold localScale scaled baseFactor
+  omega
+end ModSnap
+"""},
+     False, None, "`private import Lean` in a `module` file must still be blocked by allowed_import_prefixes lint"),
+    ("module-snapshot-weakened-local-def", "__synthetic_module_snapshot__", "mod_add",
+     {"ModSnap/Target.lean": """module
+public import ModSnap.Core
+
+namespace ModSnap
+@[expose] public def localScale (_n : Nat) : Nat := 0
+public theorem mod_add (a b : Nat) : localScale (a + b) = localScale a + localScale b := rfl
+end ModSnap
+"""},
+     False, None, "mutating frozen local `localScale` in a `module` file must be rejected by FrozenTypeDeps"),
+    ("module-snapshot-forged-private-olean", "__synthetic_module_snapshot__", "mod_add",
+     {".lake/build/lib/lean/ModSnap/Core.olean.private": "FORGED_PRIVATE_OLEAN"},
+     False, None, "forged `.olean.private` dropped into workspace must be rejected at lint"),
 ]
 
 

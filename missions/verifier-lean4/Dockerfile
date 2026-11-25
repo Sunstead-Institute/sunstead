@@ -50,6 +50,9 @@ COPY ieantn-chebyshev-pipeline /tmp/prebuild-missions/ieantn-chebyshev-pipeline
 COPY ieantn-schoenfeld-chebyshev /tmp/prebuild-missions/ieantn-schoenfeld-chebyshev
 COPY ieantn-short-interval-primes /tmp/prebuild-missions/ieantn-short-interval-primes
 COPY ieantn-zeta-foundations /tmp/prebuild-missions/ieantn-zeta-foundations
+COPY ieantn-zero-free-regions /tmp/prebuild-missions/ieantn-zero-free-regions
+COPY ieantn-zeta-logderiv-values /tmp/prebuild-missions/ieantn-zeta-logderiv-values
+COPY ieantn-buthe-prime-bounds /tmp/prebuild-missions/ieantn-buthe-prime-bounds
 COPY pnt-analytic-foundations /tmp/prebuild-missions/pnt-analytic-foundations
 COPY matrix-rank444-f2 /tmp/prebuild-missions/matrix-rank444-f2
 COPY matrix-rank-alphatensor-f2 /tmp/prebuild-missions/matrix-rank-alphatensor-f2
