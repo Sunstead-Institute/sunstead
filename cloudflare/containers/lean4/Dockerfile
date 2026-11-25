@@ -37,6 +37,7 @@ COPY missions/ieantn-zeta-foundations /missions/ieantn-zeta-foundations
 COPY missions/pnt-analytic-foundations /missions/pnt-analytic-foundations
 COPY missions/matrix-rank444-f2 /missions/matrix-rank444-f2
 COPY missions/matrix-rank-alphatensor-f2 /missions/matrix-rank-alphatensor-f2
+COPY missions/aes-sbox-circuit /missions/aes-sbox-circuit
 COPY missions/onboarding-sandbox /missions/onboarding-sandbox
 COPY missions/verifier-common/sunstead_sandbox.py missions/verifier-common/SunsteadCheck.lean missions/verifier-common/prebuild_cache.py missions/verifier-common/prebuild_snapshot.py /opt/sunstead/
 COPY cloudflare/containers/verifier_server.py /opt/verifier_server.py

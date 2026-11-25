@@ -42,6 +42,44 @@ class AuditTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "matrix product differs"):
             audit.check_rank_table(source.replace("(256,", "(257,", 1))
 
+    def test_aes_sbox_baseline_and_corrupt_circuits(self):
+        total_src = (audit.ROOT / "missions/aes-sbox-circuit/AesSbox/TotalCircuit.lean").read_text(encoding="utf-8")
+        and_src = (audit.ROOT / "missions/aes-sbox-circuit/AesSbox/AndCircuit.lean").read_text(encoding="utf-8")
+        self.assertEqual(audit.check_aes_sbox_circuit(total_src, "minimize_total_gates"), 130)
+        self.assertEqual(audit.check_aes_sbox_circuit(and_src, "minimize_and_gates"), 36)
+        with self.assertRaisesRegex(ValueError, "circuit score"):
+            audit.check_aes_sbox_circuit(total_src.replace("Nat := 130", "Nat := 129", 1), "minimize_total_gates")
+        with self.assertRaisesRegex(ValueError, "circuit score"):
+            audit.check_aes_sbox_circuit(and_src.replace("Nat := 36", "Nat := 35", 1), "minimize_and_gates")
+        with self.assertRaisesRegex(ValueError, "non-causal wire index"):
+            bad_wire = total_src.replace("[\n  (", "[\n  (0, 8, 0),\n  (", 1).replace("Nat := 130", "Nat := 131", 1)
+            audit.check_aes_sbox_circuit(bad_wire, "minimize_total_gates")
+        with self.assertRaisesRegex(ValueError, "AES S-box differs"):
+            audit.check_aes_sbox_circuit(total_src.replace("[132,", "[131,", 1), "minimize_total_gates")
+        with self.assertRaisesRegex(ValueError, "circuit format"):
+            audit.check_aes_sbox_circuit(total_src + "\n#eval 1\n", "minimize_total_gates")
+
+        # Verify audit_aes_sbox_history rejects non-improving progression and validates seed baselines.
+        manifest = json.loads((audit.ROOT / "missions/aes-sbox-circuit/sunstead.json").read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            (repo / "AesSbox").mkdir(parents=True)
+            (repo / "AesSbox/TotalCircuit.lean").write_text(total_src, encoding="utf-8")
+            (repo / "AesSbox/AndCircuit.lean").write_text(and_src, encoding="utf-8")
+            audit.repo_git(repo, "init", "--quiet", "--template=")
+            audit.repo_git(repo, "add", ".")
+            audit.repo_git(repo, "commit", "--quiet", "-m", "seed")
+            # Commit a non-improving duplicate total circuit: must be rejected.
+            (repo / "AesSbox/TotalCircuit.lean").write_text(total_src + "\n", encoding="utf-8")
+            audit.repo_git(repo, "add", ".")
+            audit.repo_git(repo, "commit", "--quiet", "-m", "no improvement")
+            snap_tasks = [
+                {"def": {"id": "minimize_total_gates"}, "status": "verified", "best_score": 130},
+                {"def": {"id": "minimize_and_gates"}, "status": "open", "best_score": 36},
+            ]
+            with self.assertRaisesRegex(ValueError, "progression"):
+                audit.audit_aes_sbox_history(repo, ["minimize_total_gates"], snap_tasks, manifest)
+
     def test_archive_ignores_git_and_rejects_paths(self):
         self.assertEqual(audit.archive_files(bundle([(".git/config", b"untrusted"), ("Spec.lean", b"x")])),
                          {"Spec.lean": (b"x", False)})

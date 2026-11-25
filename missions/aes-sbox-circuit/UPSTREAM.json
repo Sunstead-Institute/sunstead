@@ -1,0 +1,13 @@
+{
+  "repo": "leanprover/LNSym",
+  "commit": "49f8a1d9e46f8dcfc345f4bc15d35b0ba845ff5c",
+  "license": "Apache-2.0",
+  "specialization": "Sunstead pins LNSym's verbatim NIST FIPS 197 AES S-box table (`SBOX`), kernel-proves byte-for-byte equivalence with the algebraic GF(2^8) formula on all 256 inputs, and challenges contributors to minimize straight-line Boolean circuit total gate count and multiplicative complexity (AND gate count).",
+  "checks": [
+    {
+      "local_file": "AesSbox/Spec.lean",
+      "upstream_file": "Specs/AESCommon.lean",
+      "verbatim_snippet": "def SBOX :=\n  --   F E D C B A 9 8 7 6 5 4 3 2 1 0\n  [ 0x16bb54b00f2d99416842e6bf0d89a18c#128, -- F\n    0xdf2855cee9871e9b948ed9691198f8e1#128, -- E\n    0x9e1dc186b95735610ef6034866b53e70#128, -- D\n    0x8a8bbd4b1f74dde8c6b4a61c2e2578ba#128, -- C\n    0x08ae7a65eaf4566ca94ed58d6d37c8e7#128, -- B\n    0x79e4959162acd3c25c2406490a3a32e0#128, -- A\n    0xdb0b5ede14b8ee4688902a22dc4f8160#128, -- 9\n    0x73195d643d7ea7c41744975fec130ccd#128, -- 8\n    0xd2f3ff1021dab6bcf5389d928f40a351#128, -- 7\n    0xa89f3c507f02f94585334d43fbaaefd0#128, -- 6\n    0xcf584c4a39becb6a5bb1fc20ed00d153#128, -- 5\n    0x842fe329b3d63b52a05a6e1b1a2c8309#128, -- 4\n    0x75b227ebe28012079a059618c323c704#128, -- 3\n    0x1531d871f1e5a534ccf73f362693fdb7#128, -- 2\n    0xc072a49cafa2d4adf04759fa7dc982ca#128, -- 1\n    0x76abd7fe2b670130c56f6bf27b777c63#128  -- 0\n  ]"
+    }
+  ]
+}
