@@ -16,17 +16,27 @@ For each watched repository it reports:
   declaration that itself contains a `sorry` (possible vacuity), and whether
   it is already a live Sunstead task;
 - dependency edges between candidates (a proof that names another open
-  candidate), for DAG missions.
+  candidate), for DAG missions;
+- packaging: `standalone-mathlib` when the file imports only Mathlib and its
+  dependencies, else `repo-snapshot` (it imports project modules and needs the
+  repo-snapshot verifier), and whether it is packageable now (standalone, on
+  the verifier's toolchain, permissive license). Repos on every Lean 4
+  toolchain are reported, grouped by toolchain and license class.
+
+The watchlist covers math, cryptography and optimization repos (--domain).
 
 This is a static scan. It does not compile anything, so "compiles cleanly with
 only this sorry" (criterion 2) still needs a `lake build` and an axiom audit
-before a task ships. A candidate is also not proof the work is free: check
-upstream main, open PRs and issue comments for an existing claim first.
+before a task ships. A candidate is also not proof the work is free: with
+--check-prs, open upstream PRs (changed files and patches) and open issues are
+fetched with read-only `gh api` GETs, and a candidate an open PR likely solves
+is excluded; issue comments and forks are still worth a manual look.
 Licenses are reported as permissive, or copyleft/unknown needing review.
 
 Usage:
   python3 scripts/scout-upstream.py                       # whole watchlist, HEAD
   python3 scripts/scout-upstream.py --toolchain v4.36.0   # pin to a matching commit
+  python3 scripts/scout-upstream.py --domain cryptography --domain optimization --check-prs
   python3 scripts/scout-upstream.py --repo AlexKontorovich/PrimeNumberTheoremAnd --format json
 """
 import argparse
@@ -40,15 +50,64 @@ from dataclasses import asdict, dataclass, field
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-WATCHLIST = [
-    "AlexKontorovich/PrimeNumberTheoremAnd",
-    "Verified-zkEVM/ArkLib",
-    "ImperialCollegeLondon/FLT",
-    "fpvandoorn/carleson",
-    "thefundamentaltheor3m/Sphere-Packing-Lean",
-    "google-deepmind/formal-conjectures",
-    "Beneficial-AI-Foundation/curve25519-dalek-lean-verify",
+# (repo, domain). Domains group the report and can be selected with --domain.
+WATCHLIST_DOMAINS = [
+    ("AlexKontorovich/PrimeNumberTheoremAnd", "math"),
+    ("ImperialCollegeLondon/FLT", "math"),
+    ("fpvandoorn/carleson", "math"),
+    ("thefundamentaltheor3m/Sphere-Packing-Lean", "math"),
+    ("google-deepmind/formal-conjectures", "math"),
+    ("Verified-zkEVM/ArkLib", "cryptography"),
+    ("Verified-zkEVM/VCVio", "cryptography"),
+    ("Verified-zkEVM/CompPoly", "cryptography"),
+    ("Verified-zkEVM/clean", "cryptography"),
+    ("leanprover/LNSym", "cryptography"),
+    ("Beneficial-AI-Foundation/curve25519-dalek-lean-verify", "cryptography"),
+    ("BobDyLean/dylean", "cryptography"),
+    ("reilabs/proven-zk", "cryptography"),
+    ("k3nfalt/longtails", "optimization"),
+    ("optsuite/optlib", "optimization"),
+    ("verified-optimization/CvxLean", "optimization"),
+    ("lean-dojo/FloatLib", "optimization"),
 ]
+WATCHLIST = [r for r, _ in WATCHLIST_DOMAINS]
+DOMAIN_OF = dict(WATCHLIST_DOMAINS)
+DOMAINS = sorted(set(DOMAIN_OF.values()))
+
+# The toolchain the production verifier image runs (cloudflare/containers/lean4).
+# Only standalone-mathlib candidates pinned to it can be packaged without new
+# verifier work; everything else needs the repo-snapshot / multi-toolchain verifier.
+SUPPORTED_TOOLCHAIN = "leanprover/lean4:v4.36.0"
+
+# Import roots available in a standalone Mathlib checkout (Mathlib and its own
+# dependencies). A file importing anything else needs its project's modules.
+STANDALONE_IMPORT_ROOTS = {
+    "Mathlib", "Batteries", "Std", "Lean", "Init", "Aesop", "Qq", "ProofWidgets",
+    "Plausible", "ImportGraph", "LeanSearchClient",
+}
+IMPORT_RE = re.compile(r"^(?:public\s+|private\s+)?(?:meta\s+)?import\s+(?P<mods>.+)$")
+
+
+def file_imports(src: str):
+    """Module names imported in a Lean file's header (comments ignored)."""
+    mods = []
+    for line in mask_comments_and_strings(src).split("\n"):
+        t = line.strip()
+        if not t or t == "prelude" or re.match(r"^module\b", t):
+            continue
+        m = IMPORT_RE.match(t)
+        if not m:
+            break
+        mods.extend(w for w in m.group("mods").split() if w not in ("all",))
+    return mods
+
+
+def classify_packaging(imports):
+    """("standalone-mathlib", []) when every import resolves in a plain Mathlib
+    checkout, else ("repo-snapshot", [the imports that need the project])."""
+    extra = sorted({m for m in imports if m.split(".", 1)[0] not in STANDALONE_IMPORT_ROOTS})
+    return ("repo-snapshot", extra) if extra else ("standalone-mathlib", [])
+
 
 # DESIGN.md Section 4, criterion 4. Permissive licenses can be mirrored as-is;
 # copyleft ones (which DESIGN.md allows, e.g. AGPL-3.0) need a license review first.
@@ -231,6 +290,12 @@ class Candidate:
     depends_on: list = field(default_factory=list)
     statement: str = ""
     hints: list = field(default_factory=list)
+    domain: str = ""
+    toolchain: str = ""
+    packaging: str = ""  # "standalone-mathlib" or "repo-snapshot"
+    project_imports: list = field(default_factory=list)
+    packageable_now: bool = False
+    open_work: list = field(default_factory=list)  # [{"kind", "number", "url", "match"}] from --check-prs
 
 
 def analyze_file(rel: str, src: str):
@@ -341,6 +406,136 @@ def link_dependencies(cands, proof_text_by_key):
         c.depends_on = sorted(deps)
 
 
+# ------------------------------------------------- open upstream PRs/issues
+
+def run_gh(args):
+    """Run a read-only `gh api` GET and return parsed JSON."""
+    r = subprocess.run(["gh", *args], capture_output=True, text=True, env={**os.environ, "GH_PROMPT_DISABLED": "1"})
+    if r.returncode != 0:
+        raise RuntimeError(f"gh {' '.join(args)}: {(r.stderr or '').strip().splitlines()[-1:] or r.returncode}")
+    return json.loads(r.stdout or "null")
+
+
+def gh_get(path, gh=run_gh):
+    # Always an explicit GET: this tool never writes to GitHub.
+    return gh(["api", "-X", "GET", "-H", "Accept: application/vnd.github+json", path])
+
+
+def gh_paginate(path, gh=run_gh, max_items=200):
+    items, page = [], 1
+    sep = "&" if "?" in path else "?"
+    while len(items) < max_items:
+        batch = gh_get(f"{path}{sep}per_page=100&page={page}", gh) or []
+        items.extend(batch)
+        if len(batch) < 100:
+            break
+        page += 1
+    return items[:max_items]
+
+
+def fetch_open_work(repo, gh=run_gh, max_prs=100, max_issues=300):
+    """Open PRs (with changed files and patches) and open issues of `repo`."""
+    prs = []
+    for pr in gh_paginate(f"repos/{repo}/pulls?state=open", gh, max_prs):
+        files = gh_paginate(f"repos/{repo}/pulls/{pr['number']}/files", gh, 300)
+        prs.append({
+            "number": pr["number"], "url": pr.get("html_url", ""),
+            "text": f"{pr.get('title') or ''}\n{pr.get('body') or ''}",
+            "files": [{"filename": f.get("filename", ""), "patch": f.get("patch") or ""} for f in files],
+        })
+    issues = [
+        {"number": i["number"], "url": i.get("html_url", ""), "text": f"{i.get('title') or ''}\n{i.get('body') or ''}"}
+        for i in gh_paginate(f"repos/{repo}/issues?state=open", gh, max_issues)
+        if "pull_request" not in i  # the issues endpoint lists PRs too
+    ]
+    return {"prs": prs, "issues": issues}
+
+
+HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+\d+(?:,\d+)? @@(.*)$")
+
+
+def hunks(patch):
+    """[(old_start, old_len, header_context, lines)] of a unified diff."""
+    out = []
+    for line in patch.split("\n"):
+        m = HUNK_RE.match(line)
+        if m:
+            out.append((int(m.group(1)), int(m.group(2) or 1), m.group(3), []))
+        elif out:
+            out[-1][3].append(line)
+    return out
+
+
+def name_pattern(name):
+    return re.compile(r"(?<![\w.'])" + re.escape(short(name)) + r"(?![\w'])")
+
+
+def declares(lines, sign, name):
+    """Whether a diff line with this sign (+/-) starts the declaration `name`."""
+    for l in lines:
+        m = DECL_RE.match(l[1:]) if l.startswith(sign) else None
+        if m and short(m.group("name")) == short(name):
+            return True
+    return False
+
+
+def match_open_work(c, work):
+    """Open PRs/issues that may already address candidate `c`.
+
+    "deletes":  a PR removes the declaration itself (not a proof: flag it);
+    "solves":   a PR hunk touching c.file removes more `sorry`s than it adds
+                and either covers c.line in the old file or names the declaration;
+    "edits":    a PR changes lines naming the declaration in c.file;
+    "file":     a PR touches c.file;
+    "mentions": a PR or issue title/body names the declaration."""
+    pat = name_pattern(c.name)
+    text_ok = len(short(c.name)) >= 4  # very short names give noisy text matches
+    found = []
+    for pr in work.get("prs", []):
+        kind = None
+        for f in pr["files"]:
+            if f["filename"] != c.file:
+                continue
+            kind = kind or "file"
+            for start, length, ctx, lines in hunks(f["patch"]):
+                removed = sum(1 for l in lines if l.startswith("-") and SORRY_RE.search(l))
+                added = sum(1 for l in lines if l.startswith("+") and SORRY_RE.search(l))
+                covers = start <= c.line < start + max(length, 1)
+                named = pat.search(ctx) or any(pat.search(l) for l in lines)
+                if declares(lines, "-", c.name) and not declares(lines, "+", c.name):
+                    kind = "deletes"  # the PR drops the declaration: flag it, it was not proved
+                elif kind == "deletes":
+                    pass
+                elif removed > added and (covers or named):
+                    kind = "solves"  # net fewer sorries: the PR fills it
+                elif kind != "solves" and (
+                    (removed and (covers or named))  # proof rewritten but still admitted
+                    or any(l[:1] in "+-" and pat.search(l) for l in lines)
+                ):
+                    kind = "edits"
+        if kind is None and text_ok and pat.search(pr["text"]):
+            kind = "mentions"
+        if kind:
+            found.append({"kind": "pr", "number": pr["number"], "url": pr["url"], "match": kind})
+    for iss in work.get("issues", []):
+        if text_ok and pat.search(iss["text"]):
+            found.append({"kind": "issue", "number": iss["number"], "url": iss["url"], "match": "mentions"})
+    return found
+
+
+def apply_open_work(cands, work):
+    """Record open-work matches; a candidate a PR likely solves is excluded."""
+    for c in cands:
+        if c.status != "candidate":
+            continue
+        c.open_work = match_open_work(c, work)
+        solving = [w for w in c.open_work if w["match"] == "solves"]
+        if solving:
+            c.status = "excluded"
+            c.packageable_now = False
+            c.reasons.append("likely solved in open PR " + ", ".join(f"#{w['number']}" for w in solving))
+
+
 # ---------------------------------------------------------------------- git
 
 def git(repo_dir, *args, check=True):
@@ -400,8 +595,8 @@ def mathlib_rev(manifest_text):
     return None
 
 
-def scout_repo(repo, workdir, toolchain, live):
-    info = {"repo": repo, "error": None}
+def scout_repo(repo, workdir, toolchain, live, check_prs=False, gh=run_gh):
+    info = {"repo": repo, "domain": DOMAIN_OF.get(repo, "other"), "error": None}
     try:
         d = ensure_clone(repo, workdir)
         commit = pick_commit(d, toolchain)
@@ -441,6 +636,7 @@ def scout_repo(repo, workdir, toolchain, live):
             contents[f] = show(d, commit, f) or ""
         if not SORRY_RE.search(contents[f]):
             continue
+        packaging, project_imports = classify_packaging(file_imports(contents[f]))
         for decl, line, status, reasons in analyze_file(f, contents[f]):
             sorry_decls.setdefault(decl.name, decl)
             stmt_end = statement_end(decl.code)
@@ -454,6 +650,8 @@ def scout_repo(repo, workdir, toolchain, live):
                 status=status, reasons=reasons, blueprint=has_bp, statement_uses_sorry_decl=[],
                 already_live=is_live, statement=" ".join(stmt.split())[:300],
                 hints=feasibility_hints(decl.attr_text, stmt, contents[f]),
+                domain=info["domain"], toolchain=info["toolchain"],
+                packaging=packaging, project_imports=project_imports,
             ))
     # Vacuity hint: statement mentions a definition that itself has a sorry.
     sorry_defs = {n for n, dcl in sorry_decls.items() if dcl.kind not in PROOF_KINDS}
@@ -472,44 +670,104 @@ def scout_repo(repo, workdir, toolchain, live):
             continue
         seen.add(key)
         uniq.append(c)
+    for c in uniq:
+        c.packageable_now = (
+            c.status == "candidate" and c.packaging == "standalone-mathlib"
+            and c.toolchain == SUPPORTED_TOOLCHAIN and info["license_status"] == "permissive"
+        )
+    if check_prs and any(c.status == "candidate" for c in uniq):
+        try:
+            apply_open_work(uniq, fetch_open_work(repo, gh))
+            info["open_work_checked"] = True
+        except (RuntimeError, ValueError, KeyError, TypeError) as e:
+            info["open_work_checked"] = False
+            info["open_work_error"] = str(e)
     open_cands = [c for c in uniq if c.status == "candidate"]
     link_dependencies(open_cands, proof_text)
     return info, uniq
 
 
+def license_class(spdx):
+    return license_status(spdx).split(":", 1)[0]
+
+
+def group_by_toolchain(results):
+    """{(toolchain, license_class): counts} over repos that scanned cleanly."""
+    groups = {}
+    for info, cands in results:
+        if info.get("error"):
+            continue
+        g = groups.setdefault((info["toolchain"] or "unknown", license_class(info["license"])), {
+            "repos": [], "standalone-mathlib": 0, "repo-snapshot": 0, "packageable_now": 0,
+        })
+        g["repos"].append(info["repo"])
+        for c in cands:
+            if c.status == "candidate":
+                g[c.packaging] = g.get(c.packaging, 0) + 1
+                g["packageable_now"] += c.packageable_now
+    return dict(sorted(groups.items()))
+
+
 # ------------------------------------------------------------------- output
 
-def render_markdown(results, toolchain):
+def open_work_cell(c, checked):
+    if not checked:
+        return "not checked"
+    if not c.open_work:
+        return "clear"
+    return ", ".join(f"[{'PR' if w['kind'] == 'pr' else 'issue'} #{w['number']}]({w['url']}) {w['match']}" for w in c.open_work)
+
+
+def render_markdown(results, toolchain, check_prs=False):
     out = [
         f"# Upstream sorry scout{f' (toolchain {toolchain})' if toolchain else ''}",
         "",
         "> A candidate here passed a static scan only. Before packaging one, check that it is still open on",
         "> upstream main and not claimed in an open upstream PR or issue thread, then `lake build` it at the",
         "> pin and audit its axioms (DESIGN.md Section 4, criteria 2 and 3).",
+        ">",
+        f"> `standalone-mathlib`: the file imports only Mathlib and its dependencies. `repo-snapshot`: it imports",
+        f"> project modules and needs the repo-snapshot verifier. Packageable now = standalone-mathlib on",
+        f"> `{SUPPORTED_TOOLCHAIN}` with a permissive license.",
         "",
     ]
-    out.append("| Repo | Commit | Toolchain | Mathlib | License | Candidates | Excluded |")
-    out.append("|---|---|---|---|---|---|---|")
+    out.append("| Repo | Domain | Commit | Toolchain | Mathlib | License | Candidates | Excluded |")
+    out.append("|---|---|---|---|---|---|---|---|")
     for info, cands in results:
         if info.get("error"):
-            out.append(f"| {info['repo']} | — | {info.get('head_toolchain', '—')} | — | — | error: {info['error']} | — |")
+            out.append(f"| {info['repo']} | {info.get('domain', '')} | — | {info.get('head_toolchain', '—')} | — | — | error: {info['error']} | — |")
             continue
         n_c = sum(1 for c in cands if c.status == "candidate")
-        out.append(f"| {info['repo']} | `{info['commit'][:12]}` | {info['toolchain']} | {info['mathlib'] or '—'} | {info['license']} | {n_c} | {len(cands) - n_c} |")
+        out.append(
+            f"| {info['repo']} | {info.get('domain', '')} | `{info['commit'][:12]}` | {info['toolchain']} | "
+            f"{info['mathlib'] or '—'} | {info['license']} | {n_c} | {len(cands) - n_c} |"
+        )
+    out.append("")
+    out.append("## Candidates by toolchain and license")
+    out.append("")
+    out.append("| Toolchain | License | Repos | standalone-mathlib | repo-snapshot | Packageable now |")
+    out.append("|---|---|---|---|---|---|")
+    for (tc, lic), g in group_by_toolchain(results).items():
+        out.append(f"| {tc} | {lic} | {', '.join(g['repos'])} | {g['standalone-mathlib']} | {g['repo-snapshot']} | {g['packageable_now']} |")
     out.append("")
     for info, cands in results:
         open_c = [c for c in cands if c.status == "candidate"]
+        if info.get("open_work_error"):
+            out.append(f"> {info['repo']}: open PR/issue check failed: {info['open_work_error']}")
+            out.append("")
         if not open_c:
             continue
-        out.append(f"## {info['repo']}@{info['commit']} ({info['license']}, {license_status(info['license'])})")
+        checked = check_prs and info.get("open_work_checked")
+        out.append(f"## {info['repo']}@{info['commit']} ({info['toolchain']}, {info['license']}, {license_status(info['license'])})")
         out.append("")
-        out.append("| Declaration | Location | Blueprint | Live | Depends on | Hints |")
-        out.append("|---|---|---|---|---|---|")
-        for c in sorted(open_c, key=lambda c: (c.already_live, bool(c.hints), not c.blueprint, c.file, c.line)):
+        out.append("| Declaration | Location | Packaging | Blueprint | Live | Depends on | Open PRs/issues | Hints |")
+        out.append("|---|---|---|---|---|---|---|---|")
+        for c in sorted(open_c, key=lambda c: (c.already_live, not c.packageable_now, bool(c.open_work), bool(c.hints), not c.blueprint, c.file, c.line)):
+            pkg = c.packaging + (" (packageable now)" if c.packageable_now else "")
             out.append(
-                f"| `{c.name}` ({c.kind}) | [{c.file}:{c.line}]({c.url}) | {'yes' if c.blueprint else 'no'} | "
+                f"| `{c.name}` ({c.kind}) | [{c.file}:{c.line}]({c.url}) | {pkg} | {'yes' if c.blueprint else 'no'} | "
                 f"{'already live' if c.already_live else ''} | {', '.join(f'`{short(d)}`' for d in c.depends_on)} | "
-                f"{'; '.join(c.hints)} |"
+                f"{open_work_cell(c, checked)} | {'; '.join(c.hints)} |"
             )
         out.append("")
     return "\n".join(out)
@@ -518,24 +776,31 @@ def render_markdown(results, toolchain):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--repo", action="append", help="owner/name to scan (repeatable; default: the watchlist)")
+    ap.add_argument("--domain", action="append", choices=DOMAINS, help="only watchlist repos in this domain (repeatable)")
     ap.add_argument("--toolchain", help="pin each repo to its newest commit with this lean-toolchain, e.g. v4.36.0")
     ap.add_argument("--workdir", default=os.path.join(os.environ.get("TMPDIR", "/tmp"), "sunstead-scout"))
     ap.add_argument("--format", choices=["md", "json"], default="md")
     ap.add_argument("--include-excluded", action="store_true", help="list excluded sorries too (json only)")
+    ap.add_argument(
+        "--check-prs", action="store_true",
+        help="cross-check candidates against open upstream PRs and issues via `gh api` (read-only GETs); "
+             "a candidate an open PR likely solves is excluded",
+    )
     args = ap.parse_args(argv)
 
+    repos = args.repo or [r for r, d in WATCHLIST_DOMAINS if not args.domain or d in args.domain]
     live = live_task_lines()
     results = []
-    for repo in args.repo or WATCHLIST:
+    for repo in repos:
         print(f"scouting {repo} ...", file=sys.stderr)
-        results.append(scout_repo(repo, args.workdir, args.toolchain, live))
+        results.append(scout_repo(repo, args.workdir, args.toolchain, live, check_prs=args.check_prs))
     if args.format == "json":
         print(json.dumps([
             {**info, "sorries": [asdict(c) for c in cands if args.include_excluded or c.status == "candidate"]}
             for info, cands in results
         ], indent=2, ensure_ascii=False))
     else:
-        print(render_markdown(results, args.toolchain))
+        print(render_markdown(results, args.toolchain, args.check_prs))
     return 0
 
 
