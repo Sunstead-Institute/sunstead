@@ -24,12 +24,14 @@ import http.server
 import io
 import json
 import os
+import re
 import shutil
 import signal
 import struct
 import subprocess
 import sys
 import tarfile
+import tempfile
 import time
 
 sys.path.insert(0, "/opt/sunstead")
@@ -37,9 +39,11 @@ from sunstead_sandbox import CHECKER_USER, RUNNER_USER, kill_all_processes  # no
 
 MISSIONS_ROOT = "/missions"
 WORK_DIR = "/work"
+SANDBOX_SCRIPT = "/opt/sunstead/sunstead_sandbox.py"
 MAX_PAYLOAD_BYTES = 16 * 1024 * 1024
 MAX_DIAGNOSTICS_CHARS = 2000
 VALID_STAGES = {"patch", "lint", "compile", "kernel", "axioms", "timeout", "sandbox"}
+_RESERVED_STATEMENTS_RE = re.compile(r"^[^/]+/(?:SunsteadStatements|DecompStatements_[A-Za-z0-9_]+)\.lean$")
 
 
 def segment_matches(pat: str, seg: str) -> bool:
@@ -268,7 +272,23 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
         if self.path == "/bundle":
             self.handle_bundle(req)
         elif self.path == "/verify":
-            self.handle_verify(req)
+            action = req.get("action", "verify")
+            if action == "verify":
+                self.handle_verify(req)
+            elif action == "decompose":
+                self.handle_v2_action("decompose", req)
+            elif action == "subgoal":
+                self.handle_v2_action("subgoal", req)
+            elif action == "refute":
+                self.handle_v2_action("refute", req)
+            else:
+                self.send_json(400, {"ok": False, "summary": f"unknown action: {action}"})
+        elif self.path == "/decompose":
+            self.handle_v2_action("decompose", req)
+        elif self.path == "/subgoal":
+            self.handle_v2_action("subgoal", req)
+        elif self.path == "/refute":
+            self.handle_v2_action("refute", req)
         else:
             self.send_json(404, {"error": "not found"})
 
@@ -486,6 +506,268 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
             self.send_json(409, {"need_files": True})
         except Exception as e:
             self.send_json(500, {"error": f"verifier container error: {e}"})
+
+    def handle_v2_action(self, action: str, req: dict):
+        """Handle v2 `decompose`, `subgoal`, and `refute` actions via `sunstead_sandbox.py`."""
+        started = time.monotonic()
+        spec_path = None
+        try:
+            mission_id = req["mission_id"]
+            task_id = req["task_id"]
+            patch = req["patch"]
+            seed_frozen_paths = list(req.get("frozen_paths", []))
+            frozen_paths = list(seed_frozen_paths)
+            target_files = list(req.get("target_files", []))
+            current_files = resolve_current_files(req)
+            timeout_sec = max(5, min(int(req.get("timeout_sec", 90)), 240))
+
+            # Freeze decomposition reduction file(s) during subgoal verification so a
+            # subgoal solver cannot tamper with the reduction glue (RFC §7 Attack #5).
+            # Keep `seed_frozen_paths` separate when resetting `/work` so existing
+            # reduction files in `current_files` are still overlaid before applying `patch`.
+            frozen_extra = req.get("frozen_extra_files") or {}
+            if action == "subgoal" and isinstance(frozen_extra, dict):
+                for rel in frozen_extra.keys():
+                    if isinstance(rel, str) and rel not in frozen_paths:
+                        frozen_paths.append(rel)
+
+            # Default `target_files` to the action's declared Lean module path when omitted.
+            if not target_files:
+                mod_key = {
+                    "decompose": "reduction_module",
+                    "subgoal": "subgoal_module",
+                    "refute": "refute_module",
+                }[action]
+                mod_name = req.get(mod_key)
+                if isinstance(mod_name, str) and mod_name:
+                    target_files = [mod_name.replace(".", "/") + ".lean"]
+
+            reset_work_from_seed(mission_id, current_files, seed_frozen_paths)
+
+            patch_file = "/tmp/incoming.patch"
+            with open(patch_file, "w", encoding="utf-8") as f:
+                f.write(patch)
+
+            ap = subprocess.run(
+                ["git", "apply", "--whitespace=nowarn", patch_file],
+                cwd=WORK_DIR,
+                capture_output=True,
+                text=True,
+            )
+            if os.path.exists(patch_file):
+                os.unlink(patch_file)
+
+            if ap.returncode != 0:
+                ms = int((time.monotonic() - started) * 1000)
+                err_txt = ap.stderr.strip()
+                self.send_json(200, {
+                    "ok": False,
+                    "score": None,
+                    "summary": f"git apply failed: {err_txt[:400]}",
+                    "stage": "patch",
+                    "diagnostics": err_txt[:MAX_DIAGNOSTICS_CHARS],
+                    "spec_sha256": "",
+                    "updated_files": {},
+                    "normalized_patch": "",
+                    "verify_ms": ms,
+                })
+                return
+
+            st = subprocess.run(
+                ["git", "status", "--porcelain", "-uall", "-z"],
+                cwd=WORK_DIR,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            touched = parse_porcelain_z(st.stdout)
+            if not touched:
+                ms = int((time.monotonic() - started) * 1000)
+                self.send_json(200, {
+                    "ok": False,
+                    "score": None,
+                    "summary": "patch modified no files",
+                    "stage": "patch",
+                    "diagnostics": "patch modified no files",
+                    "spec_sha256": "",
+                    "updated_files": {},
+                    "normalized_patch": "",
+                    "verify_ms": ms,
+                })
+                return
+
+            for rel in touched:
+                if _RESERVED_STATEMENTS_RE.match(rel):
+                    ms = int((time.monotonic() - started) * 1000)
+                    msg = f"reserved statements module cannot be modified: {rel}"
+                    self.send_json(200, {
+                        "ok": False,
+                        "score": None,
+                        "summary": msg,
+                        "stage": "patch",
+                        "diagnostics": msg,
+                        "spec_sha256": "",
+                        "updated_files": {},
+                        "normalized_patch": "",
+                        "verify_ms": ms,
+                    })
+                    return
+                for fp in frozen_paths:
+                    if glob_matches(fp, rel):
+                        ms = int((time.monotonic() - started) * 1000)
+                        msg = f"post-apply frozen path violation: {rel}"
+                        self.send_json(200, {
+                            "ok": False,
+                            "score": None,
+                            "summary": msg,
+                            "stage": "patch",
+                            "diagnostics": msg,
+                            "spec_sha256": "",
+                            "updated_files": {},
+                            "normalized_patch": "",
+                            "verify_ms": ms,
+                        })
+                        return
+                if target_files and not any(glob_matches(tf, rel) for tf in target_files):
+                    ms = int((time.monotonic() - started) * 1000)
+                    msg = f"post-apply outside target_files: {rel}"
+                    self.send_json(200, {
+                        "ok": False,
+                        "score": None,
+                        "summary": msg,
+                        "stage": "patch",
+                        "diagnostics": msg,
+                        "spec_sha256": "",
+                        "updated_files": {},
+                        "normalized_patch": "",
+                        "verify_ms": ms,
+                    })
+                    return
+
+            post_spec_sha256 = compute_spec_sha256(WORK_DIR, req.get("frozen_paths", []))
+
+            subprocess.run(["git", "add", "-A"], cwd=WORK_DIR, check=True, capture_output=True)
+            diff_proc = subprocess.run(
+                ["git", "diff", "--cached"],
+                cwd=WORK_DIR,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            normalized_patch = diff_proc.stdout
+            shutil.rmtree(os.path.join(WORK_DIR, ".git"), ignore_errors=True)
+
+            action_spec = {
+                "task_id": task_id,
+                "timeout_sec": timeout_sec,
+            }
+            for key in (
+                "decomp_id", "subgoals", "subgoal_id",
+                "reduction_module", "reduction_theorem", "parent_decomp",
+                "subgoal_module", "subgoal_theorem", "frozen_extra_files",
+                "refute_module", "refute_theorem", "target_files",
+            ):
+                if key in req and req[key] is not None:
+                    action_spec[key] = req[key]
+
+            fd, spec_path = tempfile.mkstemp(prefix="sunstead-v2-", suffix=".json", dir="/tmp")
+            with os.fdopen(fd, "w", encoding="utf-8") as sf:
+                json.dump(action_spec, sf)
+            os.chmod(spec_path, 0o600)
+
+            seed_verify = os.path.join(MISSIONS_ROOT, mission_id, "verify")
+            try:
+                proc = subprocess.run(
+                    [
+                        sys.executable, "-I", SANDBOX_SCRIPT,
+                        "--action", action,
+                        "--spec", spec_path,
+                        "--verify-path", seed_verify,
+                    ],
+                    cwd=WORK_DIR,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout_sec,
+                )
+            except subprocess.TimeoutExpired:
+                kill_sandbox_processes()
+                ms = int((time.monotonic() - started) * 1000)
+                msg = f"verification timed out after {timeout_sec}s"
+                self.send_json(200, {
+                    "ok": False,
+                    "score": None,
+                    "summary": msg,
+                    "stage": "timeout",
+                    "diagnostics": msg,
+                    "spec_sha256": post_spec_sha256,
+                    "updated_files": {},
+                    "normalized_patch": "",
+                    "verify_ms": ms,
+                })
+                return
+
+            kill_sandbox_processes()
+            ms = int((time.monotonic() - started) * 1000)
+            verdict = parse_verdict(proc.stdout)
+            if verdict is None:
+                combined = (proc.stdout + "\n" + proc.stderr).strip()
+                self.send_json(200, {
+                    "ok": False,
+                    "score": None,
+                    "summary": f"verifier did not emit JSON verdict: {combined[-350:]}",
+                    "stage": "sandbox",
+                    "diagnostics": combined[-MAX_DIAGNOSTICS_CHARS:],
+                    "spec_sha256": post_spec_sha256,
+                    "updated_files": {},
+                    "normalized_patch": "",
+                    "verify_ms": ms,
+                })
+                return
+
+            ok = bool(verdict.get("ok")) and proc.returncode == 0
+            updated_files = {}
+            if ok:
+                for rel in touched:
+                    abs_f = os.path.join(WORK_DIR, rel)
+                    if os.path.isfile(abs_f):
+                        with open(abs_f, "r", encoding="utf-8") as f:
+                            updated_files[rel] = f.read()
+
+            resp_body = {
+                "ok": ok,
+                "score": verdict.get("score"),
+                "summary": str(verdict.get("summary", "")),
+                "spec_sha256": post_spec_sha256,
+                "updated_files": updated_files,
+                "normalized_patch": normalized_patch if ok else "",
+                "verify_ms": ms,
+            }
+            for extra_key in (
+                "decomp_statements_module",
+                "decomp_statements_namespace",
+                "decomp_statements_source",
+                "subgoal_spec_sha256s",
+            ):
+                if extra_key in verdict:
+                    resp_body[extra_key] = verdict[extra_key]
+            if not ok:
+                stage = verdict.get("stage")
+                if isinstance(stage, str) and stage in VALID_STAGES:
+                    resp_body["stage"] = stage
+                diag = verdict.get("diagnostics")
+                if isinstance(diag, str) and diag.strip():
+                    resp_body["diagnostics"] = diag.strip()[:MAX_DIAGNOSTICS_CHARS]
+            self.send_json(200, resp_body)
+        except NeedFiles:
+            self.send_json(409, {"need_files": True})
+        except Exception as e:
+            self.send_json(500, {"error": f"verifier container error: {e}"})
+        finally:
+            if spec_path and os.path.exists(spec_path):
+                try:
+                    os.unlink(spec_path)
+                except OSError:
+                    pass
 
 
 if __name__ == "__main__":

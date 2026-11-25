@@ -43,6 +43,7 @@ IMAGES = {
     "__synthetic_hillclimb__": DEFAULT_IMAGE,
     "__synthetic_repo_snapshot__": DEFAULT_IMAGE,
     "__synthetic_cross_file_dag__": DEFAULT_IMAGE,
+    "__synthetic_decompose__": DEFAULT_IMAGE,
 }
 
 HONEST_DECODER = """import SyntheticPureLean.Spec
@@ -388,12 +389,167 @@ SYNTHETIC_CROSS_FILE_DAG_TREE = {
     ),
 }
 
+# Synthetic v2 `decompose` & `refute` fixture exercising all 7 attacks from
+# `docs/RFC-DECOMPOSE.md` §7 plus honest decompose, subgoal, refute, and
+# untouched `./verify <T>` final assembly controls.
+_DECOMP_SPEC = """namespace DecompLib
+
+def quad (n : Nat) : Nat := (n + 1) * (n + 1)
+
+def targetGoal : Prop :=
+  (∀ n : Nat, quad n = n * n + 2 * n + 1) ∧ (∀ n : Nat, 0 < quad n)
+
+def falseGoal : Prop :=
+  ∀ n : Nat, quad n = 0
+
+end DecompLib
+"""
+
+_DECOMP_TARGET_SEED = """import DecompLib.Spec
+
+namespace DecompLib
+
+theorem target_goal : targetGoal := by
+  sorry
+
+end DecompLib
+"""
+
+_DECOMP_FALSE_TARGET_SEED = """import DecompLib.Spec
+
+namespace DecompLib
+
+theorem false_goal : falseGoal := by
+  sorry
+
+end DecompLib
+"""
+
+_DECOMP_SUBGOALS_HONEST = [
+    {
+        "id": "quad_expand",
+        "statement": "def quad_expand : Prop := ∀ n : Nat, DecompLib.quad n = n * n + 2 * n + 1",
+    },
+    {
+        "id": "quad_pos",
+        "statement": "def quad_pos : Prop := ∀ n : Nat, 0 < DecompLib.quad n",
+    },
+]
+
+_DECOMP_REDUCTION_HONEST = """import DecompLib.Spec
+import DecompLib.DecompStatements_target_goal_d1
+
+namespace DecompLib
+
+theorem decomp_reduction
+    (h1 : SunsteadDecomp_target_goal_d1.quad_expand)
+    (h2 : SunsteadDecomp_target_goal_d1.quad_pos) :
+    targetGoal :=
+  ⟨h1, h2⟩
+
+end DecompLib
+"""
+
+_DECOMP_SUBGOAL1_HONEST = """import DecompLib.Spec
+import DecompLib.DecompStatements_target_goal_d1
+
+namespace DecompLib
+
+theorem prove_quad_expand : SunsteadDecomp_target_goal_d1.quad_expand := by
+  intro n
+  unfold quad
+  have h1 : (n + 1) * (n + 1) = n * n + n + n + 1 := by
+    rw [Nat.add_mul, Nat.mul_add, Nat.mul_one, Nat.one_mul]
+    omega
+  omega
+
+end DecompLib
+"""
+
+_DECOMP_SUBGOAL2_HONEST = """import DecompLib.Spec
+import DecompLib.DecompStatements_target_goal_d1
+
+namespace DecompLib
+
+theorem prove_quad_pos : SunsteadDecomp_target_goal_d1.quad_pos := by
+  intro n
+  unfold quad
+  exact Nat.mul_pos (Nat.succ_pos n) (Nat.succ_pos n)
+
+end DecompLib
+"""
+
+_DECOMP_STATEMENTS_ASSEMBLED = """import DecompLib.Spec
+
+namespace SunsteadDecomp_target_goal_d1
+
+def quad_expand : Prop := (
+  ∀ n : Nat, DecompLib.quad n = n * n + 2 * n + 1
+)
+
+def quad_pos : Prop := (
+  ∀ n : Nat, 0 < DecompLib.quad n
+)
+
+end SunsteadDecomp_target_goal_d1
+"""
+
+_DECOMP_TARGET_ASSEMBLED = """import DecompLib.Spec
+import DecompLib.Decomp_target_goal_d1
+import DecompLib.Decomp_target_goal_d1_quad_expand
+import DecompLib.Decomp_target_goal_d1_quad_pos
+
+namespace DecompLib
+
+theorem target_goal : targetGoal :=
+  decomp_reduction prove_quad_expand prove_quad_pos
+
+end DecompLib
+"""
+
+import hashlib as _hashlib
+
+_DECOMP_REDUCTION_HONEST_SHA = (
+    "sha256:" + _hashlib.sha256(_DECOMP_REDUCTION_HONEST.encode("utf-8")).hexdigest()
+)
+
+SYNTHETIC_DECOMPOSE_TREE = {
+    "lean-toolchain": "leanprover/lean4:v4.36.0\n",
+    "lakefile.toml": (
+        'name = "DecompLib"\nversion = "0.1.0"\n\n'
+        '[[lean_lib]]\nname = "DecompLib"\n'
+    ),
+    "DecompLib/Spec.lean": _DECOMP_SPEC,
+    "DecompLib/Target.lean": _DECOMP_TARGET_SEED,
+    "DecompLib/FalseTarget.lean": _DECOMP_FALSE_TARGET_SEED,
+    "verify": (
+        "#!/usr/bin/env python3\n"
+        "import sys\n"
+        "sys.path.insert(0, '/opt/sunstead')\n"
+        "from sunstead_sandbox import emit, lean_verify\n"
+        "TASKS = {\n"
+        "  'target_goal': {\n"
+        "    'module': 'DecompLib.Target',\n"
+        "    'theorem': 'DecompLib.target_goal',\n"
+        "    'statement': 'def target_goal : Prop := DecompLib.targetGoal',\n"
+        "  },\n"
+        "  'false_goal': {\n"
+        "    'module': 'DecompLib.FalseTarget',\n"
+        "    'theorem': 'DecompLib.false_goal',\n"
+        "    'statement': 'def false_goal : Prop := DecompLib.falseGoal',\n"
+        "  },\n"
+        "}\n"
+        "lean_verify(sys.argv[1], lib_root='DecompLib', frozen_files=['DecompLib/Spec.lean', 'lakefile.toml', 'lean-toolchain'], tasks=TASKS, uses_mathlib=False, timeout_sec=120)\n"
+    ),
+}
+
 SYNTHETIC_TREES = {
     "__synthetic_pure_lean__": SYNTHETIC_PURE_LEAN_TREE,
     "__synthetic_mathlib__": SYNTHETIC_MATHLIB_TREE,
     "__synthetic_hillclimb__": SYNTHETIC_HILLCLIMB_TREE,
     "__synthetic_repo_snapshot__": SYNTHETIC_REPO_SNAPSHOT_TREE,
     "__synthetic_cross_file_dag__": SYNTHETIC_CROSS_FILE_DAG_TREE,
+    "__synthetic_decompose__": SYNTHETIC_DECOMPOSE_TREE,
 }
 
 # Each case: (name, mission, task, {path: content}, expect_ok, expect_score_or_None, why)
@@ -943,6 +1099,543 @@ theorem IsEven_iff_in_doubling_image_right (P : Point Ed25519) :
 end curve25519_dalek.ristretto
 """},
      False, None, "weakening local `IsEven` definition to `False` so `IsEven_iff_in_doubling_image_right` holds vacuously must be rejected by FrozenTypeDeps"),
+
+    # --- v2 `decompose`, `subgoal`, `refute` & final assembly (RFC-DECOMPOSE.md §7) ---
+    # Tuple format supports optional 8th item `(action, action_spec)` to invoke
+    # `/opt/sunstead/sunstead_sandbox.py --action <action> --spec <spec>`.
+    ("v2-decomp-honest-control", "__synthetic_decompose__", "target_goal",
+     {"DecompLib/Decomp_target_goal_d1.lean": _DECOMP_REDUCTION_HONEST},
+     True, None, "honest 2-subgoal decomposition `L1 -> L2 -> T` must pass kernel replay",
+     ("decompose", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": _DECOMP_SUBGOALS_HONEST,
+         "reduction_module": "DecompLib.Decomp_target_goal_d1",
+         "reduction_theorem": "DecompLib.decomp_reduction",
+     })),
+    ("v2-decomp-mathlib-honest", "__synthetic_mathlib__", "sq_sum_expand",
+     {"SyntheticMathlib/Decomp_sq_sum_expand_d1.lean": """import SyntheticMathlib.Spec
+import SyntheticMathlib.DecompStatements_sq_sum_expand_d1
+import Mathlib.Tactic
+
+namespace SyntheticMathlib
+
+theorem decomp_reduction
+    (h1 : SunsteadDecomp_sq_sum_expand_d1.step_mul)
+    (h2 : SunsteadDecomp_sq_sum_expand_d1.step_comm) :
+    ∀ (a b : ℝ), sqSum a b = a ^ 2 + 2 * a * b + b ^ 2 := by
+  intro a b
+  rw [h1 a b, h2 a b]
+
+end SyntheticMathlib
+"""},
+     True, None, "honest Mathlib v4.36.0 decomposition must pass kernel replay with cached Spec",
+     ("decompose", {
+         "task_id": "sq_sum_expand",
+         "decomp_id": "d1",
+         "subgoals": [
+             {
+                 "id": "step_mul",
+                 "statement": "def step_mul : Prop := ∀ (a b : ℝ), SyntheticMathlib.sqSum a b = a ^ 2 + (a * b + b * a) + b ^ 2",
+             },
+             {
+                 "id": "step_comm",
+                 "statement": "def step_comm : Prop := ∀ (a b : ℝ), a ^ 2 + (a * b + b * a) + b ^ 2 = a ^ 2 + 2 * a * b + b ^ 2",
+             },
+         ],
+         "reduction_module": "SyntheticMathlib.Decomp_sq_sum_expand_d1",
+         "reduction_theorem": "SyntheticMathlib.decomp_reduction",
+     })),
+    ("v2-decomp-subgoal1-honest", "__synthetic_decompose__", "target_goal",
+     {
+         "DecompLib/Decomp_target_goal_d1.lean": _DECOMP_REDUCTION_HONEST,
+         "DecompLib/Decomp_target_goal_d1_quad_expand.lean": _DECOMP_SUBGOAL1_HONEST,
+     },
+     True, None, "honest subgoal L1 proof with intact frozen reduction file must pass",
+     ("subgoal", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": _DECOMP_SUBGOALS_HONEST,
+         "subgoal_id": "quad_expand",
+         "subgoal_module": "DecompLib.Decomp_target_goal_d1_quad_expand",
+         "subgoal_theorem": "DecompLib.prove_quad_expand",
+         "frozen_extra_files": {"DecompLib/Decomp_target_goal_d1.lean": _DECOMP_REDUCTION_HONEST_SHA},
+     })),
+    ("v2-decomp-subgoal2-honest", "__synthetic_decompose__", "target_goal",
+     {
+         "DecompLib/Decomp_target_goal_d1.lean": _DECOMP_REDUCTION_HONEST,
+         "DecompLib/Decomp_target_goal_d1_quad_pos.lean": _DECOMP_SUBGOAL2_HONEST,
+     },
+     True, None, "honest subgoal L2 proof with intact frozen reduction file must pass",
+     ("subgoal", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": _DECOMP_SUBGOALS_HONEST,
+         "subgoal_id": "quad_pos",
+         "subgoal_module": "DecompLib.Decomp_target_goal_d1_quad_pos",
+         "subgoal_theorem": "DecompLib.prove_quad_pos",
+         "frozen_extra_files": {"DecompLib/Decomp_target_goal_d1.lean": _DECOMP_REDUCTION_HONEST_SHA},
+     })),
+    ("v2-decomp-final-assembly-untouched-v1", "__synthetic_decompose__", "target_goal",
+     {
+         "DecompLib/DecompStatements_target_goal_d1.lean": _DECOMP_STATEMENTS_ASSEMBLED,
+         "DecompLib/Decomp_target_goal_d1.lean": _DECOMP_REDUCTION_HONEST,
+         "DecompLib/Decomp_target_goal_d1_quad_expand.lean": _DECOMP_SUBGOAL1_HONEST,
+         "DecompLib/Decomp_target_goal_d1_quad_pos.lean": _DECOMP_SUBGOAL2_HONEST,
+         "DecompLib/Target.lean": _DECOMP_TARGET_ASSEMBLED,
+     },
+     True, None, "assembled proof from verified subgoals + reduction must pass untouched v1 `./verify target_goal`"),
+    ("v2-decomp-attack1-vacuous-false", "__synthetic_decompose__", "target_goal",
+     {"DecompLib/Decomp_target_goal_d1.lean": """import DecompLib.Spec
+import DecompLib.DecompStatements_target_goal_d1
+
+namespace DecompLib
+
+theorem decomp_reduction
+    (h1 : SunsteadDecomp_target_goal_d1.bad_false)
+    (_h2 : SunsteadDecomp_target_goal_d1.quad_pos) :
+    targetGoal :=
+  False.elim h1
+
+end DecompLib
+"""},
+     False, None, "RFC §7 Attack #1: vacuous `L1 := False` split must be rejected by kernel anti-vacuity",
+     ("decompose", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": [
+             {"id": "bad_false", "statement": "def bad_false : Prop := False"},
+             _DECOMP_SUBGOALS_HONEST[1],
+         ],
+         "reduction_module": "DecompLib.Decomp_target_goal_d1",
+         "reduction_theorem": "DecompLib.decomp_reduction",
+     })),
+    ("v2-decomp-attack1b-single-subgoal", "__synthetic_decompose__", "target_goal",
+     {"DecompLib/Decomp_target_goal_d1.lean": _DECOMP_REDUCTION_HONEST},
+     False, None, "RFC §2.1: 1-subgoal split must be rejected before verifier execution",
+     ("decompose", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": [_DECOMP_SUBGOALS_HONEST[0]],
+         "reduction_module": "DecompLib.Decomp_target_goal_d1",
+         "reduction_theorem": "DecompLib.decomp_reduction",
+     })),
+    ("v2-decomp-attack2-hidden-def-smuggle", "__synthetic_decompose__", "target_goal",
+     {"DecompLib/Decomp_target_goal_d1.lean": """import DecompLib.Spec
+import DecompLib.DecompStatements_target_goal_d1
+
+namespace DecompLib
+def smuggledProp : Prop := ∀ n : Nat, n = n
+
+theorem decomp_reduction
+    (h1 : SunsteadDecomp_target_goal_d1.uses_smuggled)
+    (h2 : SunsteadDecomp_target_goal_d1.quad_pos) :
+    targetGoal := sorryAx _ false
+end DecompLib
+"""},
+     False, None, "RFC §7 Attack #2: hidden `def` smuggling from contributor file must fail because DecompStatements imports only frozen Spec",
+     ("decompose", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": [
+             {"id": "uses_smuggled", "statement": "def uses_smuggled : Prop := DecompLib.smuggledProp"},
+             _DECOMP_SUBGOALS_HONEST[1],
+         ],
+         "reduction_module": "DecompLib.Decomp_target_goal_d1",
+         "reduction_theorem": "DecompLib.decomp_reduction",
+     })),
+    ("v2-decomp-attack2b-inline-def-in-statement", "__synthetic_decompose__", "target_goal",
+     {"DecompLib/Decomp_target_goal_d1.lean": _DECOMP_REDUCTION_HONEST},
+     False, None, "RFC §7 Attack #2b: smuggling an extra `def` or command inside subgoal statement text must be rejected at lint",
+     ("decompose", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": [
+             {
+                 "id": "quad_expand",
+                 "statement": "def quad_expand : Prop := (∀ n : Nat, n = n)\ndef evil : Prop := True",
+             },
+             _DECOMP_SUBGOALS_HONEST[1],
+         ],
+         "reduction_module": "DecompLib.Decomp_target_goal_d1",
+         "reduction_theorem": "DecompLib.decomp_reduction",
+     })),
+    ("v2-decomp-attack3a-passthrough-parent", "__synthetic_decompose__", "target_goal",
+     {"DecompLib/Decomp_target_goal_d1.lean": """import DecompLib.Spec
+import DecompLib.DecompStatements_target_goal_d1
+
+namespace DecompLib
+
+theorem decomp_reduction
+    (h1 : SunsteadDecomp_target_goal_d1.copy_parent)
+    (_h2 : SunsteadDecomp_target_goal_d1.quad_pos) :
+    targetGoal :=
+  h1
+
+end DecompLib
+"""},
+     False, None, "RFC §7 Attack #3: trivial pass-through `L1 := T` must be rejected as def-eq to parent statement",
+     ("decompose", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": [
+             {"id": "copy_parent", "statement": "def copy_parent : Prop := DecompLib.targetGoal"},
+             _DECOMP_SUBGOALS_HONEST[1],
+         ],
+         "reduction_module": "DecompLib.Decomp_target_goal_d1",
+         "reduction_theorem": "DecompLib.decomp_reduction",
+     })),
+    ("v2-decomp-attack3b-trivial-true", "__synthetic_decompose__", "target_goal",
+     {"DecompLib/Decomp_target_goal_d1.lean": """import DecompLib.Spec
+import DecompLib.DecompStatements_target_goal_d1
+
+namespace DecompLib
+
+theorem decomp_reduction
+    (h1 : SunsteadDecomp_target_goal_d1.quad_expand)
+    (_h2 : SunsteadDecomp_target_goal_d1.trivial_true) :
+    targetGoal :=
+  ⟨h1, fun n => Nat.mul_pos (Nat.succ_pos n) (Nat.succ_pos n)⟩
+
+end DecompLib
+"""},
+     False, None, "RFC §7 Attack #3b: trivial `L2 := True` subgoal must be rejected by kernel def-eq check",
+     ("decompose", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": [
+             _DECOMP_SUBGOALS_HONEST[0],
+             {"id": "trivial_true", "statement": "def trivial_true : Prop := id True"},
+         ],
+         "reduction_module": "DecompLib.Decomp_target_goal_d1",
+         "reduction_theorem": "DecompLib.decomp_reduction",
+     })),
+    ("v2-decomp-attack3c-unused-hypothesis", "__synthetic_decompose__", "target_goal",
+     {"DecompLib/Decomp_target_goal_d1.lean": """import DecompLib.Spec
+import DecompLib.DecompStatements_target_goal_d1
+
+namespace DecompLib
+
+theorem decomp_reduction
+    (h1 : SunsteadDecomp_target_goal_d1.quad_expand)
+    (_h2 : SunsteadDecomp_target_goal_d1.quad_pos) :
+    targetGoal :=
+  ⟨h1, fun n => Nat.mul_pos (Nat.succ_pos n) (Nat.succ_pos n)⟩
+
+end DecompLib
+"""},
+     False, None, "RFC §7 Attack #3c: dead-weight unused subgoal hypothesis `h2` must be rejected by kernel binder check",
+     ("decompose", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": _DECOMP_SUBGOALS_HONEST,
+         "reduction_module": "DecompLib.Decomp_target_goal_d1",
+         "reduction_theorem": "DecompLib.decomp_reduction",
+     })),
+    ("v2-decomp-attack3d-dummy-use-let-and-eta", "__synthetic_decompose__", "target_goal",
+     {"DecompLib/Decomp_target_goal_d1.lean": """import DecompLib.Spec
+import DecompLib.DecompStatements_target_goal_d1
+
+namespace DecompLib
+
+private theorem ignoreSecond
+    (h1 : SunsteadDecomp_target_goal_d1.quad_expand)
+    (h2 : SunsteadDecomp_target_goal_d1.quad_pos) :
+    targetGoal := by
+  let _ := h2
+  have _ := (And.intro h1 h2).1
+  exact (And.intro ⟨h1, fun n => Nat.mul_pos (Nat.succ_pos n) (Nat.succ_pos n)⟩ h2).1
+
+theorem decomp_reduction :
+    SunsteadDecomp_target_goal_d1.quad_expand →
+    SunsteadDecomp_target_goal_d1.quad_pos →
+    targetGoal :=
+  ignoreSecond
+
+end DecompLib
+"""},
+     False, None, "RFC §7 Attack #3d: dummy `let`/`And.intro.1`/eta-wrapper hiding unused `h2` must be rejected by usage reduction",
+     ("decompose", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": _DECOMP_SUBGOALS_HONEST,
+         "reduction_module": "DecompLib.Decomp_target_goal_d1",
+         "reduction_theorem": "DecompLib.decomp_reduction",
+     })),
+    ("v2-decomp-attack3e-duplicate-subgoals", "__synthetic_decompose__", "target_goal",
+     {"DecompLib/Decomp_target_goal_d1.lean": """import DecompLib.Spec
+import DecompLib.DecompStatements_target_goal_d1
+
+namespace DecompLib
+
+theorem decomp_reduction
+    (h1 : SunsteadDecomp_target_goal_d1.dup1)
+    (_h2 : SunsteadDecomp_target_goal_d1.dup2) :
+    targetGoal :=
+  ⟨h1, fun n => Nat.mul_pos (Nat.succ_pos n) (Nat.succ_pos n)⟩
+
+end DecompLib
+"""},
+     False, None, "duplicate definitionally-equal subgoals `L1 ≡ L2` must be rejected by kernel anti-triviality",
+     ("decompose", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": [
+             {"id": "dup1", "statement": "def dup1 : Prop := ∀ n : Nat, DecompLib.quad n = n * n + 2 * n + 1"},
+             {"id": "dup2", "statement": "def dup2 : Prop := ∀ m : Nat, DecompLib.quad m = m * m + 2 * m + 1"},
+         ],
+         "reduction_module": "DecompLib.Decomp_target_goal_d1",
+         "reduction_theorem": "DecompLib.decomp_reduction",
+     })),
+    ("v2-decomp-attack4d-sorryax-in-subgoal-stmt", "__synthetic_decompose__", "target_goal",
+     {"DecompLib/Decomp_target_goal_d1.lean": _DECOMP_REDUCTION_HONEST},
+     False, None, "`sorryAx` hidden inside a subgoal statement must be rejected at lint and kernel",
+     ("decompose", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": [
+             {"id": "quad_expand", "statement": "def quad_expand : Prop := sorryAx Prop false"},
+             _DECOMP_SUBGOALS_HONEST[1],
+         ],
+         "reduction_module": "DecompLib.Decomp_target_goal_d1",
+         "reduction_theorem": "DecompLib.decomp_reduction",
+     })),
+    ("v2-decomp-depth2-honest", "__synthetic_decompose__", "target_goal",
+     {"DecompLib/Decomp_target_goal_d2.lean": """import DecompLib.Spec
+import DecompLib.DecompStatements_target_goal_d1
+import DecompLib.DecompStatements_target_goal_d2
+
+namespace DecompLib
+
+theorem decomp_d2_reduction
+    (h1 : SunsteadDecomp_target_goal_d2.step_a)
+    (h2 : SunsteadDecomp_target_goal_d2.step_b) :
+    SunsteadDecomp_target_goal_d1.quad_expand := by
+  intro n
+  exact Eq.trans (h1 n) (h2 n)
+
+end DecompLib
+"""},
+     True, None, "honest depth-2 nested decomposition of a spawned subgoal must pass kernel replay",
+     ("decompose", {
+         "task_id": "target_goal",
+         "decomp_id": "d2",
+         "subgoals": [
+             {"id": "step_a", "statement": "def step_a : Prop := ∀ n : Nat, DecompLib.quad n = n * n + n + n + 1"},
+             {"id": "step_b", "statement": "def step_b : Prop := ∀ n : Nat, n * n + n + n + 1 = n * n + 2 * n + 1"},
+         ],
+         "reduction_module": "DecompLib.Decomp_target_goal_d2",
+         "reduction_theorem": "DecompLib.decomp_d2_reduction",
+         "parent_decomp": {
+             "decomp_id": "d1",
+             "subgoals": _DECOMP_SUBGOALS_HONEST,
+             "subgoal_id": "quad_expand",
+         },
+     })),
+    ("v2-decomp-attack4a-glue-sorryax", "__synthetic_decompose__", "target_goal",
+     {"DecompLib/Decomp_target_goal_d1.lean": """import DecompLib.Spec
+import DecompLib.DecompStatements_target_goal_d1
+
+namespace DecompLib
+
+theorem decomp_reduction
+    (h1 : SunsteadDecomp_target_goal_d1.quad_expand)
+    (h2 : SunsteadDecomp_target_goal_d1.quad_pos) :
+    targetGoal :=
+  ⟨fun n => Eq.trans (h1 n) (sorryAx _ false),
+   fun n => Eq.mp (sorryAx _ false) (h2 n)⟩
+
+end DecompLib
+"""},
+     False, None, "RFC §7 Attack #4a: `sorryAx` in glue proof (even when referencing h1 & h2) must be rejected by kernel axiom check",
+     ("decompose", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": _DECOMP_SUBGOALS_HONEST,
+         "reduction_module": "DecompLib.Decomp_target_goal_d1",
+         "reduction_theorem": "DecompLib.decomp_reduction",
+     })),
+    ("v2-decomp-attack4b-glue-axiom", "__synthetic_decompose__", "target_goal",
+     {"DecompLib/Decomp_target_goal_d1.lean": """import DecompLib.Spec
+import DecompLib.DecompStatements_target_goal_d1
+
+namespace DecompLib
+
+axiom cheatGlue :
+  SunsteadDecomp_target_goal_d1.quad_expand →
+  SunsteadDecomp_target_goal_d1.quad_pos →
+  targetGoal
+
+theorem decomp_reduction := cheatGlue
+
+end DecompLib
+"""},
+     False, None, "RFC §7 Attack #4b: custom `axiom` in glue proof must be rejected",
+     ("decompose", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": _DECOMP_SUBGOALS_HONEST,
+         "reduction_module": "DecompLib.Decomp_target_goal_d1",
+         "reduction_theorem": "DecompLib.decomp_reduction",
+     })),
+    ("v2-decomp-attack4c-glue-macro", "__synthetic_decompose__", "target_goal",
+     {"DecompLib/Decomp_target_goal_d1.lean": """import DecompLib.Spec
+import DecompLib.DecompStatements_target_goal_d1
+
+namespace DecompLib
+
+macro_rules | `(targetGoal) => `(True)
+
+theorem decomp_reduction
+    (h1 : SunsteadDecomp_target_goal_d1.quad_expand)
+    (h2 : SunsteadDecomp_target_goal_d1.quad_pos) :
+    targetGoal := trivial
+
+end DecompLib
+"""},
+     False, None, "RFC §7 Attack #4c: `macro_rules` hijack in glue proof must be rejected",
+     ("decompose", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": _DECOMP_SUBGOALS_HONEST,
+         "reduction_module": "DecompLib.Decomp_target_goal_d1",
+         "reduction_theorem": "DecompLib.decomp_reduction",
+     })),
+    ("v2-decomp-attack5-subgoal-edits-reduction", "__synthetic_decompose__", "target_goal",
+     {
+         "DecompLib/Decomp_target_goal_d1.lean": _DECOMP_REDUCTION_HONEST + "\n-- tampered reduction!\n",
+         "DecompLib/Decomp_target_goal_d1_quad_expand.lean": _DECOMP_SUBGOAL1_HONEST,
+     },
+     False, None, "RFC §7 Attack #5: subgoal solver tampering with frozen reduction file must be rejected",
+     ("subgoal", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": _DECOMP_SUBGOALS_HONEST,
+         "subgoal_id": "quad_expand",
+         "subgoal_module": "DecompLib.Decomp_target_goal_d1_quad_expand",
+         "subgoal_theorem": "DecompLib.prove_quad_expand",
+         "frozen_extra_files": {"DecompLib/Decomp_target_goal_d1.lean": _DECOMP_REDUCTION_HONEST_SHA},
+     })),
+    ("v2-decomp-attack6-shadow-decomp-statements", "__synthetic_decompose__", "target_goal",
+     {
+         "DecompLib/DecompStatements_target_goal_d1.lean": "namespace SunsteadDecomp_target_goal_d1\ndef quad_expand : Prop := True\nend SunsteadDecomp_target_goal_d1\n",
+         "DecompLib/Decomp_target_goal_d1_quad_expand.lean": _DECOMP_SUBGOAL1_HONEST,
+     },
+     False, None, "contributor dropping a fake `DecompStatements_*.lean` file in `/work` must be rejected at lint",
+     ("subgoal", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": _DECOMP_SUBGOALS_HONEST,
+         "subgoal_id": "quad_expand",
+         "subgoal_module": "DecompLib.Decomp_target_goal_d1_quad_expand",
+         "subgoal_theorem": "DecompLib.prove_quad_expand",
+     })),
+    ("v2-refute-subgoal-honest-control", "__synthetic_decompose__", "target_goal",
+     {"DecompLib/Refute_bad_subgoal.lean": """import DecompLib.Spec
+import DecompLib.DecompStatements_target_goal_d2
+
+namespace DecompLib
+
+theorem refute_bad_subgoal : ¬ SunsteadDecomp_target_goal_d2.all_zero := by
+  intro h
+  have h0 := h 0
+  unfold quad at h0
+  omega
+
+end DecompLib
+"""},
+     True, None, "honest kernel-verified refutation `¬ L_i` of a false subgoal must pass",
+     ("refute", {
+         "task_id": "target_goal",
+         "decomp_id": "d2",
+         "subgoals": [
+             {"id": "all_zero", "statement": "def all_zero : Prop := ∀ n : Nat, DecompLib.quad n = 0"},
+             _DECOMP_SUBGOALS_HONEST[1],
+         ],
+         "subgoal_id": "all_zero",
+         "refute_module": "DecompLib.Refute_bad_subgoal",
+         "refute_theorem": "DecompLib.refute_bad_subgoal",
+     })),
+    ("v2-refute-root-honest-control", "__synthetic_decompose__", "false_goal",
+     {"DecompLib/Refute_root.lean": """import DecompLib.Spec
+
+namespace DecompLib
+
+theorem refute_false_goal : ¬ falseGoal := by
+  intro h
+  have h0 := h 0
+  unfold quad at h0
+  omega
+
+end DecompLib
+"""},
+     True, None, "honest kernel-verified refutation `¬ T` of a false root statement must pass",
+     ("refute", {
+         "task_id": "false_goal",
+         "refute_module": "DecompLib.Refute_root",
+         "refute_theorem": "DecompLib.refute_false_goal",
+     })),
+    ("v2-refute-attack7a-sorryax-spoof", "__synthetic_decompose__", "target_goal",
+     {"DecompLib/Refute_spoof.lean": """import DecompLib.Spec
+import DecompLib.DecompStatements_target_goal_d1
+
+namespace DecompLib
+
+theorem refute_spoof : ¬ SunsteadDecomp_target_goal_d1.quad_pos :=
+  sorryAx _ false
+
+end DecompLib
+"""},
+     False, None, "RFC §7 Attack #7a: spoofing `¬ L_i` with `sorryAx` must be rejected by kernel axiom check",
+     ("refute", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": _DECOMP_SUBGOALS_HONEST,
+         "subgoal_id": "quad_pos",
+         "refute_module": "DecompLib.Refute_spoof",
+         "refute_theorem": "DecompLib.refute_spoof",
+     })),
+    ("v2-refute-attack7b-wrong-statement-spoof", "__synthetic_decompose__", "target_goal",
+     {"DecompLib/Refute_wrong.lean": """import DecompLib.Spec
+import DecompLib.DecompStatements_target_goal_d1
+
+namespace DecompLib
+
+theorem refute_wrong : True := trivial
+
+end DecompLib
+"""},
+     False, None, "RFC §7 Attack #7b: proving `True` instead of `¬ L_i` must be rejected by kernel type check",
+     ("refute", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": _DECOMP_SUBGOALS_HONEST,
+         "subgoal_id": "quad_pos",
+         "refute_module": "DecompLib.Refute_wrong",
+         "refute_theorem": "DecompLib.refute_wrong",
+     })),
+    ("v2-refute-attack7c-snapshot-tampered-abbrev", "__synthetic_repo_snapshot__", "target_add",
+     {"SnapLib/Target.lean": """import SnapLib.Core
+
+namespace SnapLib
+
+abbrev targetScale (n : Nat) : Nat := scale n + 1
+
+theorem refute_target_add : ¬ (∀ a b : Nat, targetScale (a + b) = targetScale a + targetScale b) := by
+  intro h
+  have h0 := h 0 0
+  unfold targetScale scale secretFactor at h0
+  omega
+
+end SnapLib
+"""},
+     False, None, "RFC §7 Attack #7c: mutating local `targetScale` abbrev to falsely refute a true repo-snapshot theorem must be rejected by FrozenTypeDeps",
+     ("refute", {
+         "task_id": "target_add",
+         "refute_module": "SnapLib.Target",
+         "refute_theorem": "SnapLib.refute_target_add",
+         "target_files": ["SnapLib/Target.lean"],
+     })),
 ]
 
 
@@ -984,24 +1677,63 @@ def parse_verdict(stdout):
     return None
 
 
-def run_docker(mission, task, work, timeout):
+def run_docker(mission, task, work, timeout, action_info=None):
     image = IMAGES[mission]
+    spec_host = None
+    if action_info is not None:
+        action, action_spec = action_info
+        cmd = [
+            "python3", "-I", "/opt/sunstead/sunstead_sandbox.py",
+            "--action", action,
+            "--spec", "/tmp/sunstead-action.json",
+            "--verify-path", "/work/verify",
+        ]
+        fd, spec_host = tempfile.mkstemp(prefix="sunstead-rt-spec-", suffix=".json")
+        with os.fdopen(fd, "w", encoding="utf-8") as sf:
+            json.dump(action_spec, sf)
+        os.chmod(spec_host, 0o644)
+    else:
+        cmd = ["./verify", task]
     create = ["docker", "create", "--network=none", "--cpus=2", "--memory=6144m",
               "--pids-limit=512", "--user=0:0", "--cap-drop=ALL",
               "--cap-add=SETUID", "--cap-add=SETGID",
-              "--security-opt=no-new-privileges", "-w", "/work", image, "./verify", task]
+              "--security-opt=no-new-privileges", "-w", "/work", image] + cmd
     cid = subprocess.run(create, capture_output=True, text=True, check=True).stdout.strip()
     try:
         subprocess.run(["docker", "cp", f"{work}/.", f"{cid}:/work"], check=True,
                        capture_output=True)
+        if spec_host is not None:
+            subprocess.run(["docker", "cp", spec_host, f"{cid}:/tmp/sunstead-action.json"],
+                           check=True, capture_output=True)
         p = subprocess.run(["docker", "start", "-a", cid], capture_output=True, text=True,
                            timeout=timeout)
         return p.returncode, p.stdout, p.stderr
     finally:
         subprocess.run(["docker", "rm", "-f", cid], capture_output=True)
+        if spec_host is not None and os.path.exists(spec_host):
+            os.unlink(spec_host)
 
 
-def run_local(mission, task, work, timeout):
+def run_local(mission, task, work, timeout, action_info=None):
+    if action_info is not None:
+        action, action_spec = action_info
+        fd, spec_host = tempfile.mkstemp(prefix="sunstead-rt-spec-", suffix=".json")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as sf:
+                json.dump(action_spec, sf)
+            p = subprocess.run(
+                [
+                    "python3", "-I", "/opt/sunstead/sunstead_sandbox.py",
+                    "--action", action,
+                    "--spec", spec_host,
+                    "--verify-path", os.path.join(work, "verify"),
+                ],
+                cwd=work, capture_output=True, text=True, timeout=timeout,
+            )
+            return p.returncode, p.stdout, p.stderr
+        finally:
+            if os.path.exists(spec_host):
+                os.unlink(spec_host)
     p = subprocess.run(["./verify", task], cwd=work, capture_output=True, text=True,
                        timeout=timeout)
     return p.returncode, p.stdout, p.stderr
@@ -1017,7 +1749,12 @@ def main():
     args = ap.parse_args()
 
     failures = 0
-    for name, mission, task, files, expect_ok, expect_score, why in CASES:
+    for entry in CASES:
+        if len(entry) == 8:
+            name, mission, task, files, expect_ok, expect_score, why, action_info = entry
+        else:
+            name, mission, task, files, expect_ok, expect_score, why = entry
+            action_info = None
         if args.mission and mission not in args.mission:
             continue
         if args.exclude_mission and mission in args.exclude_mission:
@@ -1027,19 +1764,22 @@ def main():
         tmp, work = make_work_tree(mission, files)
         try:
             runner = run_local if args.local else run_docker
-            rc, out, err = runner(mission, task, work, args.timeout)
+            rc, out, err = runner(mission, task, work, args.timeout, action_info=action_info)
         except subprocess.TimeoutExpired:
             rc, out, err = -1, "", "timeout"
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
-        verdict = parse_verdict(out) or {}
-        ok = bool(verdict.get("ok")) and rc == 0
-        good = ok == expect_ok and (expect_score is None or verdict.get("score") == expect_score)
+        verdict = parse_verdict(out)
+        ok = bool(verdict and verdict.get("ok")) and rc == 0
+        good = (verdict is not None) and (ok == expect_ok) and (
+            expect_score is None or verdict.get("score") == expect_score
+        )
         failures += 0 if good else 1
         status = "PASS" if good else "FAIL"
         want = "accept" if expect_ok else "reject"
-        print(f"[{status}] {name}: expected {want}, got {'accept' if ok else 'reject'}"
-              f" - {verdict.get('summary', (err or out).strip()[-200:])}")
+        got = "no-verdict" if verdict is None else ("accept" if ok else "reject")
+        summary = (verdict or {}).get("summary", (err or out).strip()[-200:])
+        print(f"[{status}] {name}: expected {want}, got {got} - {summary}")
         if not good:
             print(f"         why this case exists: {why}")
     print(f"\n{failures} failure(s)")
