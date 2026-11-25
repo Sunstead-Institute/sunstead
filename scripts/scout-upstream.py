@@ -1,0 +1,523 @@
+#!/usr/bin/env python3
+"""
+Scout curated upstream Lean 4 repositories for open `sorry`s that could become
+Sunstead tasks, applying the intake criteria in docs/DESIGN.md Section 4.
+
+For each watched repository it reports:
+- a pinned 40-char commit (HEAD, or with --toolchain the newest commit whose
+  `lean-toolchain` matches), its `lean-toolchain`, Mathlib rev, and license SPDX id;
+- every `sorry` found, classified. Only a `sorry` inside the proof of a
+  `theorem`/`lemma` (after its top-level `:=`) is a candidate. Definition,
+  instance, structure, statement-level and `example` sorries are excluded, as
+  are those whose file, declaration or comments are marked upstreamed / WIP /
+  do-not-touch / deprecated, and files under test/example/scratch paths;
+- audit hints per candidate: blueprint backing (`@[blueprint ...]` or a
+  `\\lean{...}` entry in blueprint/*.tex), whether its statement mentions a
+  declaration that itself contains a `sorry` (possible vacuity), and whether
+  it is already a live Sunstead task;
+- dependency edges between candidates (a proof that names another open
+  candidate), for DAG missions.
+
+This is a static scan. It does not compile anything, so "compiles cleanly with
+only this sorry" (criterion 2) still needs a `lake build` before a task ships.
+
+Usage:
+  python3 scripts/scout-upstream.py                       # whole watchlist, HEAD
+  python3 scripts/scout-upstream.py --toolchain v4.36.0   # pin to a matching commit
+  python3 scripts/scout-upstream.py --repo AlexKontorovich/PrimeNumberTheoremAnd --format json
+"""
+import argparse
+import glob
+import json
+import os
+import re
+import subprocess
+import sys
+from dataclasses import asdict, dataclass, field
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+WATCHLIST = [
+    "AlexKontorovich/PrimeNumberTheoremAnd",
+    "Verified-zkEVM/ArkLib",
+    "ImperialCollegeLondon/FLT",
+    "fpvandoorn/carleson",
+    "thefundamentaltheor3m/Sphere-Packing-Lean",
+    "google-deepmind/formal-conjectures",
+    "Beneficial-AI-Foundation/curve25519-dalek-lean-verify",
+]
+
+# Licenses that permit mirroring (DESIGN.md Section 4, criterion 4).
+PERMISSIVE_SPDX = {"Apache-2.0", "MIT", "BSD-2-Clause", "BSD-3-Clause", "AGPL-3.0", "GPL-3.0", "LGPL-3.0", "MPL-2.0", "ISC"}
+
+DECL_KINDS = (
+    "theorem", "lemma", "def", "instance", "structure", "class", "abbrev",
+    "example", "opaque", "inductive", "axiom",
+)
+PROOF_KINDS = {"theorem", "lemma"}
+MODIFIERS = ("private", "protected", "noncomputable", "nonrec", "partial", "unsafe", "scoped", "local")
+DECL_RE = re.compile(
+    r"^(?:@\[[^\n]*?\]\s*)?(?:(?:" + "|".join(MODIFIERS) + r")\s+)*"
+    r"(?P<kind>" + "|".join(DECL_KINDS) + r")\b\s*(?P<name>[^\s:({\[⦃]*)"
+)
+MARKER_RE = re.compile(
+    r"\b(upstreamed|upstreaming|wip|work[- ]in[- ]progress|do[- ]not[- ]touch|don'?t touch|deprecated|"
+    r"not intended to be proved|false as stated|this is false|from mathlib|mathlib pr|in mathlib now)\b",
+    re.IGNORECASE,
+)
+SKIP_PATH_RE = re.compile(r"(^|/)(test|tests|examples?|scratch|archive|\.lake|lake-packages)(/|$)", re.IGNORECASE)
+SORRY_RE = re.compile(r"(?<![\w.'])sorry(?![\w'])")
+IDENT_RE = re.compile(r"[A-Za-z_][\w'.]*")
+
+
+# ---------------------------------------------------------------- Lean lexing
+
+def mask_comments_and_strings(src: str) -> str:
+    """Replace comment and string contents with spaces (newlines kept), so code
+    positions line up with the original text. Handles nested block comments,
+    line comments, string literals with escapes, and char literals."""
+    out = list(src)
+    i, n = 0, len(src)
+    while i < n:
+        c = src[i]
+        if src.startswith("--", i):
+            j = src.find("\n", i)
+            j = n if j < 0 else j
+            for k in range(i, j):
+                out[k] = " "
+            i = j
+        elif src.startswith("/-", i):
+            depth, j = 1, i + 2
+            while j < n and depth:
+                if src.startswith("/-", j):
+                    depth, j = depth + 1, j + 2
+                elif src.startswith("-/", j):
+                    depth, j = depth - 1, j + 2
+                else:
+                    j += 1
+            for k in range(i, j):
+                if src[k] != "\n":
+                    out[k] = " "
+            i = j
+        elif c == '"':
+            j = i + 1
+            while j < n and src[j] != '"':
+                j += 2 if src[j] == "\\" else 1
+            for k in range(i + 1, min(j, n)):
+                if src[k] != "\n":
+                    out[k] = " "
+            i = j + 1
+        elif c == "'" and i + 2 < n and (src[i + 2] == "'" or (src[i + 1] == "\\" and i + 3 < n and src[i + 3] == "'")):
+            # char literal 'a' or '\n' (identifiers like h' are not touched: a quote after a word char)
+            if i > 0 and (src[i - 1].isalnum() or src[i - 1] in "_'"):
+                i += 1
+                continue
+            j = i + (3 if src[i + 1] != "\\" else 4)
+            for k in range(i + 1, j - 1):
+                out[k] = " "
+            i = j
+        else:
+            i += 1
+    return "".join(out)
+
+
+@dataclass
+class Decl:
+    kind: str
+    name: str
+    start_line: int  # 1-based, line of the keyword
+    end_line: int
+    attr_text: str  # attributes / doc comment lines just above the keyword (raw)
+    raw: str  # raw source of the declaration (with comments)
+    code: str  # masked source of the declaration
+    sorry_lines: list = field(default_factory=list)
+
+
+def split_declarations(src: str):
+    """Split a Lean file into top-level declarations. A declaration starts at a
+    column-0 line matching DECL_RE (attributes allowed on the same line) and
+    ends where the next column-0 declaration, `namespace`, `section`, `end`,
+    `open`, `variable` or attribute line starts."""
+    masked = mask_comments_and_strings(src)
+    raw_lines = src.split("\n")
+    lines = masked.split("\n")
+    starts = []
+    ns_stack = []
+    boundary = re.compile(r"^(namespace|section|end|open|variable|universe|set_option|@\[|#|noncomputable section|mutual)\b")
+    ns_at = {}
+    for idx, line in enumerate(lines):
+        m = re.match(r"^namespace\s+([\w'.]+)", line)
+        if m:
+            ns_stack.append(m.group(1))
+        elif re.match(r"^end\s+([\w'.]+)\s*$", line):
+            name = re.match(r"^end\s+([\w'.]+)", line).group(1)
+            if ns_stack and ns_stack[-1] == name:
+                ns_stack.pop()
+        ns_at[idx] = ".".join(ns_stack)
+        dm = DECL_RE.match(line)
+        if dm and not line.startswith(" "):
+            starts.append((idx, dm.group("kind"), dm.group("name")))
+    ends = []
+    for k, (idx, kind, name) in enumerate(starts):
+        nxt = starts[k + 1][0] if k + 1 < len(starts) else len(lines)
+        end = nxt
+        for j in range(idx + 1, nxt):
+            if lines[j] and not lines[j][0].isspace() and boundary.match(lines[j]):
+                end = j
+                break
+        while end > idx + 1 and not lines[end - 1].strip():
+            end -= 1  # trailing blank / comment-only lines belong to the next declaration
+        ends.append(end)
+    decls = []
+    for k, (idx, kind, name) in enumerate(starts):
+        end = ends[k]
+        # Attributes and doc comment between the previous declaration and this one.
+        a = max(ends[k - 1] if k else 0, idx - 60)
+        full_name = f"{ns_at[idx]}.{name}" if ns_at.get(idx) and name and not name.startswith("_root_.") else name.replace("_root_.", "")
+        code = "\n".join(lines[idx:end])
+        decl = Decl(kind, full_name, idx + 1, end, "\n".join(raw_lines[a:idx + 1]), "\n".join(raw_lines[idx:end]), code)
+        for off, cl in enumerate(lines[idx:end]):
+            if SORRY_RE.search(cl):
+                decl.sorry_lines.append(idx + 1 + off)
+        decls.append(decl)
+    return decls
+
+
+def statement_end(code: str) -> int:
+    """Offset of the top-level `:=` (or ` where`/`|` for pattern-matching
+    definitions) ending a declaration's signature; -1 if absent."""
+    depth = 0
+    for i, ch in enumerate(code):
+        if ch in "([{⦃⟨":
+            depth += 1
+        elif ch in ")]}⦄⟩":
+            depth = max(0, depth - 1)
+        elif depth == 0 and code.startswith(":=", i):
+            return i
+        elif depth == 0 and ch == "\n" and i + 1 < len(code) and code[i + 1] == "|":
+            return i
+    return -1
+
+
+# ------------------------------------------------------------------ analysis
+
+@dataclass
+class Candidate:
+    repo: str
+    commit: str
+    file: str
+    line: int
+    kind: str
+    name: str
+    url: str
+    status: str  # "candidate" or "excluded"
+    reasons: list
+    blueprint: bool
+    statement_uses_sorry_decl: list
+    already_live: bool
+    depends_on: list = field(default_factory=list)
+    statement: str = ""
+    hints: list = field(default_factory=list)
+
+
+def analyze_file(rel: str, src: str):
+    """Return [(decl, sorry_line, status, reasons)] for every sorry in a file."""
+    out = []
+    first_decl = next((i for i, l in enumerate(src.split("\n")) if DECL_RE.match(l)), 40)
+    file_marked = bool(MARKER_RE.search("\n".join(src.split("\n")[: min(first_decl, 40)])))
+    for d in split_declarations(src):
+        if not d.sorry_lines:
+            continue
+        stmt_end = statement_end(d.code)
+        stmt_line_end = d.start_line + d.code[: max(stmt_end, 0)].count("\n")
+        for sl in d.sorry_lines:
+            reasons = []
+            if d.kind not in PROOF_KINDS:
+                reasons.append(f"{d.kind} sorry (not a theorem/lemma proof)")
+            elif stmt_end < 0 or sl < stmt_line_end or (sl == stmt_line_end and SORRY_RE.search(d.code[:stmt_end] or "")):
+                reasons.append("sorry in the statement, not the proof")
+            if SKIP_PATH_RE.search(rel):
+                reasons.append("test/example/scratch path")
+            if file_marked:
+                reasons.append("file header marked upstreamed/WIP/do-not-touch")
+            m = MARKER_RE.search(d.attr_text + "\n" + d.raw)
+            if m:
+                reasons.append(f"marked '{m.group(0)}'")
+            out.append((d, sl, "excluded" if reasons else "candidate", reasons))
+    return out
+
+
+LITERATURE_RE = re.compile(r"\\cite\{|\btitle\s*:=\s*\"[A-Z][\w-]+(?: et al\.?)? (?:\(\d{4}\) )?(?:Theorem|Lemma|Corollary|Proposition|Equation|Table)\b")
+NUMERIC_RE = re.compile(
+    r"10\s*\^\s*\(?\s*\d{2,}|\b\d+\.\d{3,}\b|\be\s*\^\s*\d{2,}|\b\d{7,}\b|\b\d+(?:\.\d+)?[eE]\d+\b|\bexp\s+\d{2,}\b|RH_up_to"
+)
+TRUSTED_FILE_RE = re.compile(r"trusted numerical|numerical (?:data|datum)|results? (?:are )?taken from|we record the results", re.IGNORECASE)
+
+
+def feasibility_hints(attr_text: str, statement: str, file_text: str):
+    """Soft signals for the human audit; they never exclude a candidate."""
+    hints = []
+    if LITERATURE_RE.search(attr_text):
+        hints.append("cites a published result (may be a literature import, not meant to be proved here)")
+    if NUMERIC_RE.search(statement):
+        hints.append("explicit numerical constants (may need large verified computation)")
+    if TRUSTED_FILE_RE.search("\n".join(file_text.split("\n")[:80])):
+        hints.append("file collects trusted/literature results")
+    if re.search(r"\bTODO\b", attr_text):
+        hints.append("TODO near declaration")
+    return hints
+
+
+def detect_spdx(text: str) -> str:
+    t = text[:4000]
+    if re.search(r"Apache License\s*\n?\s*Version 2\.0", t, re.I):
+        return "Apache-2.0"
+    if re.search(r"GNU AFFERO GENERAL PUBLIC LICENSE", t, re.I):
+        return "AGPL-3.0"
+    if re.search(r"GNU LESSER GENERAL PUBLIC LICENSE", t, re.I):
+        return "LGPL-3.0"
+    if re.search(r"GNU GENERAL PUBLIC LICENSE", t, re.I):
+        return "GPL-3.0"
+    if re.search(r"Mozilla Public License", t, re.I):
+        return "MPL-2.0"
+    if re.search(r"Permission is hereby granted, free of charge", t, re.I):
+        return "MIT"
+    if re.search(r"Redistribution and use in source and binary forms", t, re.I):
+        return "BSD-3-Clause" if re.search(r"Neither the name", t, re.I) else "BSD-2-Clause"
+    return "UNKNOWN"
+
+
+def live_task_lines(root: str = ROOT):
+    """{(repo, path): [(lo, hi)]} for tasks already live in missions/*."""
+    live = {}
+    for mpath in glob.glob(os.path.join(root, "missions", "*", "sunstead.json")):
+        try:
+            manifest = json.load(open(mpath, encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        for t in manifest.get("tasks", []):
+            m = re.match(r"https://github\.com/([^/]+/[^/]+)/blob/[0-9a-f]{40}/([^#]+)#L(\d+)(?:-L(\d+))?", t.get("upstream_url") or "")
+            if m:
+                lo, hi = int(m.group(3)), int(m.group(4) or m.group(3))
+                live.setdefault((m.group(1), m.group(2)), []).append((lo, hi))
+    return live
+
+
+def short(name: str) -> str:
+    return name.rsplit(".", 1)[-1]
+
+
+def link_dependencies(cands, proof_text_by_key):
+    """Add `depends_on` edges: candidate A's proof text names candidate B
+    (by full name, or by short name when that short name is unique)."""
+    by_short = {}
+    for c in cands:
+        by_short.setdefault(short(c.name), []).append(c)
+    for c in cands:
+        idents = set(IDENT_RE.findall(proof_text_by_key.get((c.file, c.name), "")))
+        deps = set()
+        for other in cands:
+            if other is c or other.name == c.name:
+                continue
+            s = short(other.name)
+            hit = other.name in idents or any(i.endswith("." + s) and other.name.endswith(i) for i in idents)
+            if not hit and s in idents and len(by_short[s]) == 1:
+                hit = True
+            if hit:
+                deps.add(other.name)
+        c.depends_on = sorted(deps)
+
+
+# ---------------------------------------------------------------------- git
+
+def git(repo_dir, *args, check=True):
+    r = subprocess.run(["git", "-C", repo_dir, *args], capture_output=True, text=True)
+    if check and r.returncode != 0:
+        raise RuntimeError(f"git {' '.join(args)}: {r.stderr.strip()}")
+    return r.stdout
+
+
+def ensure_clone(repo: str, workdir: str) -> str:
+    d = os.path.join(workdir, repo.replace("/", "__"))
+    if not os.path.isdir(os.path.join(d, ".git")):
+        os.makedirs(workdir, exist_ok=True)
+        r = subprocess.run(
+            ["git", "clone", "-q", "--filter=blob:none", "--no-checkout", f"https://github.com/{repo}", d],
+            capture_output=True, text=True, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+        )
+        if r.returncode != 0:
+            raise RuntimeError(f"clone failed: {r.stderr.strip().splitlines()[-1] if r.stderr.strip() else r.returncode}")
+    else:
+        git(d, "fetch", "-q", "origin", check=False)
+    return d
+
+
+def show(repo_dir, commit, path):
+    r = subprocess.run(["git", "-C", repo_dir, "show", f"{commit}:{path}"], capture_output=True)
+    return r.stdout.decode("utf-8", "replace") if r.returncode == 0 else None
+
+
+def pick_commit(repo_dir, toolchain):
+    head = git(repo_dir, "rev-parse", "origin/HEAD" if git(repo_dir, "rev-parse", "--verify", "-q", "origin/HEAD", check=False).strip() else "HEAD").strip()
+    if not toolchain:
+        return head
+    want = toolchain if toolchain.startswith("leanprover/") else f"leanprover/lean4:{toolchain}"
+    if (show(repo_dir, head, "lean-toolchain") or "").strip() == want:
+        return head
+    for c in git(repo_dir, "log", "--format=%H", head, "--", "lean-toolchain").split():
+        if (show(repo_dir, c, "lean-toolchain") or "").strip() == want:
+            # newest commit *with* that toolchain: walk forward to the last one before it changed
+            later = git(repo_dir, "rev-list", "--ancestry-path", "--reverse", f"{c}..{head}").split()
+            last = c
+            for nc in later:
+                if (show(repo_dir, nc, "lean-toolchain") or "").strip() != want:
+                    break
+                last = nc
+            return last
+    return None
+
+
+def mathlib_rev(manifest_text):
+    try:
+        for p in json.loads(manifest_text or "{}").get("packages", []):
+            if p.get("name") == "mathlib":
+                return p.get("inputRev") or p.get("rev")
+    except ValueError:
+        pass
+    return None
+
+
+def scout_repo(repo, workdir, toolchain, live):
+    info = {"repo": repo, "error": None}
+    try:
+        d = ensure_clone(repo, workdir)
+        commit = pick_commit(d, toolchain)
+        if not commit:
+            info["error"] = f"no commit with lean-toolchain {toolchain}"
+            info["head_toolchain"] = (show(d, git(d, "rev-parse", "HEAD").strip(), "lean-toolchain") or "").strip()
+            return info, []
+    except RuntimeError as e:
+        info["error"] = str(e)
+        return info, []
+    lic_text = next((t for t in (show(d, commit, p) for p in ("LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING")) if t), "")
+    info.update(
+        commit=commit,
+        toolchain=(show(d, commit, "lean-toolchain") or "").strip(),
+        mathlib=mathlib_rev(show(d, commit, "lake-manifest.json")),
+        license=detect_spdx(lic_text),
+    )
+    files = [f for f in git(d, "ls-tree", "-r", "--name-only", commit).split("\n") if f.endswith(".lean")]
+    blueprint_tex = "\n".join(
+        show(d, commit, f) or "" for f in git(d, "ls-tree", "-r", "--name-only", commit).split("\n")
+        if f.startswith("blueprint/") and f.endswith(".tex")
+    )
+    blueprint_names = set(re.findall(r"\\lean\{([^}]*)\}", blueprint_tex))
+    blueprint_names = {n.strip() for group in blueprint_names for n in group.split(",")}
+
+    # Fetch every .lean blob in one batch (partial clone), then read them.
+    cands, proof_text, sorry_decls = [], {}, {}
+    contents = {}
+    if files:
+        subprocess.run(["git", "-C", d, "checkout", "-q", "--force", commit, "--", *files], capture_output=True)
+    for f in files:
+        p = os.path.join(d, f)
+        try:
+            contents[f] = open(p, encoding="utf-8", errors="replace").read()
+        except OSError:
+            contents[f] = show(d, commit, f) or ""
+        if not SORRY_RE.search(contents[f]):
+            continue
+        for decl, line, status, reasons in analyze_file(f, contents[f]):
+            sorry_decls.setdefault(decl.name, decl)
+            stmt_end = statement_end(decl.code)
+            stmt = decl.code[: stmt_end if stmt_end > 0 else len(decl.code)]
+            proof_text[(f, decl.name)] = decl.code[stmt_end:] if stmt_end > 0 else ""
+            has_bp = "@[blueprint" in decl.attr_text or "blueprint" in decl.attr_text.split("\n")[-1] or decl.name in blueprint_names or short(decl.name) in {short(n) for n in blueprint_names}
+            is_live = any(lo <= line <= hi for lo, hi in live.get((repo, f), []))
+            cands.append(Candidate(
+                repo=repo, commit=commit, file=f, line=line, kind=decl.kind, name=decl.name,
+                url=f"https://github.com/{repo}/blob/{commit}/{f}#L{decl.start_line}-L{line}",
+                status=status, reasons=reasons, blueprint=has_bp, statement_uses_sorry_decl=[],
+                already_live=is_live, statement=" ".join(stmt.split())[:300],
+                hints=feasibility_hints(decl.attr_text, stmt, contents[f]),
+            ))
+    # Vacuity hint: statement mentions a definition that itself has a sorry.
+    sorry_defs = {n for n, dcl in sorry_decls.items() if dcl.kind not in PROOF_KINDS}
+    sorry_def_short = {short(n): n for n in sorry_defs}
+    for c in cands:
+        idents = set(IDENT_RE.findall(c.statement.split(" ", 2)[-1]))
+        c.statement_uses_sorry_decl = sorted({sorry_def_short[short(i)] for i in idents if short(i) in sorry_def_short and short(i) != short(c.name)})
+        if c.status == "candidate" and c.statement_uses_sorry_decl:
+            c.status = "excluded"
+            c.reasons.append("statement uses a sorry'd definition: " + ", ".join(c.statement_uses_sorry_decl))
+    # One entry per declaration for candidates (several sorries in one proof are one task).
+    seen, uniq = set(), []
+    for c in cands:
+        key = (c.file, c.name, c.status)
+        if key in seen:
+            continue
+        seen.add(key)
+        uniq.append(c)
+    open_cands = [c for c in uniq if c.status == "candidate"]
+    link_dependencies(open_cands, proof_text)
+    return info, uniq
+
+
+# ------------------------------------------------------------------- output
+
+def render_markdown(results, toolchain):
+    out = [f"# Upstream sorry scout{f' (toolchain {toolchain})' if toolchain else ''}", ""]
+    out.append("| Repo | Commit | Toolchain | Mathlib | License | Candidates | Excluded |")
+    out.append("|---|---|---|---|---|---|---|")
+    for info, cands in results:
+        if info.get("error"):
+            out.append(f"| {info['repo']} | — | {info.get('head_toolchain', '—')} | — | — | error: {info['error']} | — |")
+            continue
+        n_c = sum(1 for c in cands if c.status == "candidate")
+        out.append(f"| {info['repo']} | `{info['commit'][:12]}` | {info['toolchain']} | {info['mathlib'] or '—'} | {info['license']} | {n_c} | {len(cands) - n_c} |")
+    out.append("")
+    for info, cands in results:
+        open_c = [c for c in cands if c.status == "candidate"]
+        if not open_c:
+            continue
+        lic_ok = info["license"] in PERMISSIVE_SPDX
+        out.append(f"## {info['repo']}@{info['commit']} ({info['license']}{'' if lic_ok else ', LICENSE NOT CONFIRMED PERMISSIVE'})")
+        out.append("")
+        out.append("| Declaration | Location | Blueprint | Live | Depends on | Hints |")
+        out.append("|---|---|---|---|---|---|")
+        for c in sorted(open_c, key=lambda c: (c.already_live, bool(c.hints), not c.blueprint, c.file, c.line)):
+            out.append(
+                f"| `{c.name}` ({c.kind}) | [{c.file}:{c.line}]({c.url}) | {'yes' if c.blueprint else 'no'} | "
+                f"{'already live' if c.already_live else ''} | {', '.join(f'`{short(d)}`' for d in c.depends_on)} | "
+                f"{'; '.join(c.hints)} |"
+            )
+        out.append("")
+    return "\n".join(out)
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--repo", action="append", help="owner/name to scan (repeatable; default: the watchlist)")
+    ap.add_argument("--toolchain", help="pin each repo to its newest commit with this lean-toolchain, e.g. v4.36.0")
+    ap.add_argument("--workdir", default=os.path.join(os.environ.get("TMPDIR", "/tmp"), "sunstead-scout"))
+    ap.add_argument("--format", choices=["md", "json"], default="md")
+    ap.add_argument("--include-excluded", action="store_true", help="list excluded sorries too (json only)")
+    args = ap.parse_args(argv)
+
+    live = live_task_lines()
+    results = []
+    for repo in args.repo or WATCHLIST:
+        print(f"scouting {repo} ...", file=sys.stderr)
+        results.append(scout_repo(repo, args.workdir, args.toolchain, live))
+    if args.format == "json":
+        print(json.dumps([
+            {**info, "sorries": [asdict(c) for c in cands if args.include_excluded or c.status == "candidate"]}
+            for info, cands in results
+        ], indent=2, ensure_ascii=False))
+    else:
+        print(render_markdown(results, args.toolchain))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
