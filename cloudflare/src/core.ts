@@ -550,3 +550,13 @@ export function buildProofView(
     how_to_rebuild: howToRebuild(opts.hubOrigin, row.mission_id),
   };
 }
+
+// Reconnect delay sent at the start of every /api/events stream. A deploy resets
+// the hub Durable Object (code_update_strategy in cloudflare.config.ts), which
+// drops every stream; EventSource clients reconnect after this many ms.
+export const SSE_RETRY_MS = 2_000;
+
+/** First bytes of every /api/events stream: the reconnect delay and a comment. */
+export function sseHello(): string {
+  return `retry: ${SSE_RETRY_MS}\n: connected\n\n`;
+}

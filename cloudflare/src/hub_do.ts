@@ -15,6 +15,7 @@ import {
   type AcceptedPatch,
   buildProofView,
   type AcceptedProofRow,
+  sseHello,
 } from "./core";
 import { SEED_MISSIONS, type SeedMission } from "./generated/missions";
 import { renderJoinTxt } from "./join_txt";
@@ -74,6 +75,7 @@ interface ContainerVerifyResponse {
 const MAX_BODY_BYTES = 512 * 1024;
 const MAX_SSE_CLIENTS = 200;
 const SSE_KEEPALIVE_MS = 25_000;
+
 const MAX_ACTIVE_LEASES_PER_IDENTITY = 2;
 const MAX_ACTIVE_LEASES_PER_IP = 3;
 const RATE_LIMITS = {
@@ -835,7 +837,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       this.sseClients.add(writer);
       request.signal.addEventListener("abort", cleanup, { once: true });
       writer.closed.then(cleanup, cleanup);
-      writer.write(this.encoder.encode(": connected\n\n")).catch(cleanup);
+      writer.write(this.encoder.encode(sseHello())).catch(cleanup);
       pingTimer = setInterval(() => {
         if (closed) return;
         writer.write(this.encoder.encode(": ping\n\n")).catch(cleanup);

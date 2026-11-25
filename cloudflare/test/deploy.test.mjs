@@ -105,3 +105,12 @@ test("cloudflare.config.ts and deploy.mjs use the same image pattern", () => {
   const config = fs.readFileSync(path.join(CF_ROOT, "cloudflare.config.ts"), "utf8");
   assert.ok(config.includes(`const VERIFIER_IMAGE_RE = ${IMAGE_RE.toString()};`));
 });
+
+test("cloudflare.config.ts caps the Durable Object code-update delay", () => {
+  // Without this, open /api/events streams keep SunsteadHub from hibernating and
+  // every deploy waits Cloudflare's 300 s default before the new hub code runs.
+  const src = fs.readFileSync(path.join(CF_ROOT, "cloudflare.config.ts"), "utf8");
+  assert.match(src, /code_update_strategy:\s*\{\s*mode:\s*"deferred",\s*max_delay:\s*DO_CODE_UPDATE_MAX_DELAY_SEC\s*\}/);
+  const delay = Number(src.match(/const DO_CODE_UPDATE_MAX_DELAY_SEC = (\d+);/)?.[1]);
+  assert.ok(delay > 0 && delay <= 60, `max_delay ${delay}s should be short`);
+});
