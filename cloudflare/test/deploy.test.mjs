@@ -73,6 +73,73 @@ test("imageFromApplications finds the live digest in common output shapes", () =
   assert.throws(() => imageFromApplications(JSON.stringify([{ name: "other" }])), /no container application/);
 });
 
+test("imageFromApplications handles active container rollouts safely", () => {
+  const nextDigest = "b".repeat(64);
+  const nextImage = `registry.cloudflare.com/0adabb27c28d2e046f74e8af29c6b211/sunstead-verifier-lean4@sha256:${nextDigest}`;
+
+  // When Cloudflare exposes target.configuration.image during a rollout, prefer it over the stale configuration.image.
+  assert.equal(
+    imageFromApplications(
+      JSON.stringify([
+        {
+          name: "sunstead-verifier-lean4",
+          active_rollout_id: "ec4844b6-f275-4604-b5bf-3f13145eb375",
+          configuration: { image: IMAGE },
+          target: { configuration: { image: nextImage } },
+        },
+      ])
+    ),
+    nextImage
+  );
+
+  // Also support rollout.target_configuration.image.
+  assert.equal(
+    imageFromApplications(
+      JSON.stringify([
+        {
+          name: "sunstead-verifier-lean4",
+          active_rollout_id: "ec4844b6-f275-4604-b5bf-3f13145eb375",
+          configuration: { image: IMAGE },
+          rollout: { target_configuration: { image: nextImage } },
+        },
+      ])
+    ),
+    nextImage
+  );
+
+  // When active_rollout_id is set without a target image, fail closed instead of pinning the stale pre-rollout digest.
+  assert.throws(
+    () =>
+      imageFromApplications(
+        JSON.stringify([
+          {
+            name: "sunstead-verifier-lean4",
+            active_rollout_id: "ec4844b6-f275-4604-b5bf-3f13145eb375",
+            configuration: { image: IMAGE },
+          },
+        ])
+      ),
+    /active container rollout.*SUNSTEAD_VERIFIER_IMAGE/
+  );
+
+  // Verify the v4.35.0 app reports its own env var name on fail-closed.
+  const v435Img = IMAGE.replace("sunstead-verifier-lean4", "sunstead-verifier-lean4-v435");
+  assert.throws(
+    () =>
+      imageFromApplications(
+        JSON.stringify([
+          {
+            name: "sunstead-verifier-lean4-v435",
+            active_rollout_id: "11111111-2222-3333-4444-555555555555",
+            configuration: { image: v435Img },
+          },
+        ]),
+        "sunstead-verifier-lean4-v435"
+      ),
+    /active container rollout.*SUNSTEAD_VERIFIER_V435_IMAGE/
+  );
+});
+
 test("buildCfDeployArgs defaults to immediate rollout without duplicating caller flags", () => {
   assert.deepEqual(buildCfDeployArgs(["--dry-run"]), [
     "cf",

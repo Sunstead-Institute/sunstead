@@ -100,7 +100,7 @@ function run(cmd, args, opts = {}) {
   return r.status ?? 1;
 }
 
-/** Find `configuration.image` of a live verifier application. */
+/** Find the live (or active rollout target) image digest of a verifier application. */
 export function imageFromApplications(stdout, appName = APP_NAME) {
   let parsed;
   const re = /^[ \t]*[[{]/gm;
@@ -119,6 +119,19 @@ export function imageFromApplications(stdout, appName = APP_NAME) {
   const apps = Array.isArray(parsed) ? parsed : parsed.result ?? parsed.applications ?? parsed.items ?? [];
   const app = apps.find((a) => a?.name === appName);
   if (!app) throw new Error(`no container application named ${appName} (has a full deploy run yet?)`);
+  const targetImage =
+    app.target?.configuration?.image ?? app.rollout?.target_configuration?.image;
+  if (typeof targetImage === "string" && targetImage.length > 0) {
+    return targetImage;
+  }
+  if (typeof app.active_rollout_id === "string" && app.active_rollout_id.length > 0) {
+    const envVar = VERIFIER_APPS.find((a) => a.name === appName)?.envVar ?? "SUNSTEAD_VERIFIER_IMAGE";
+    throw new Error(
+      `${appName} has an active container rollout (${app.active_rollout_id}) and its target image is not in ` +
+        "`cf containers applications list` yet (configuration.image may still report the pre-rollout digest). " +
+        `Wait for the rollout to finish or pass ${envVar}=<registry.cloudflare.com/...@sha256:...> explicitly.`,
+    );
+  }
   const image = app.configuration?.image ?? app.image;
   if (typeof image !== "string") throw new Error(`${appName} has no configuration.image`);
   return image;
