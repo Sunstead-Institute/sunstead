@@ -709,6 +709,251 @@ function shellQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
+export const GHCR_REGISTRY_PREFIX = "ghcr.io/sunstead-institute";
+
+/**
+ * Map a local Sunstead verifier image tag (`sunstead/verifier-lean4:v0.2`) to
+ * its public GHCR reference (`ghcr.io/sunstead-institute/verifier-lean4:v0.2`).
+ */
+export function publicVerifierImage(image: string): string {
+  const trimmed = image.trim();
+  if (
+    trimmed.startsWith("ghcr.io/") ||
+    trimmed.startsWith("registry.cloudflare.com/")
+  ) {
+    return trimmed;
+  }
+  const stripped = trimmed.replace(/^sunstead\//, "");
+  return `${GHCR_REGISTRY_PREFIX}/${stripped}`;
+}
+
+export interface MissionLocalSetup {
+  mode: "repo-snapshot" | "hillclimb" | "standalone";
+  toolchain: string;
+  verifier_image: string;
+  local_verifier_image: string;
+  uses_mathlib: boolean;
+  bundle_url: string;
+  bootstrap_script_url: string | null;
+  bootstrap_cmd: string | null;
+  docker_verify_cmd: string;
+  native_setup_steps: string[];
+  notes: string[];
+}
+
+function missionUsesMathlib(manifest: MissionManifest): boolean {
+  if (manifest.snapshot?.mode === "repo-snapshot") {
+    return (manifest.snapshot.allowed_import_prefixes ?? []).includes("Mathlib");
+  }
+  return !manifest.demo;
+}
+
+/**
+ * Per-mission local iteration and offline Docker verification instructions,
+ * surfaced by both `GET /api/missions/:id` (`local_setup`) and `/join.txt`.
+ */
+export function buildMissionLocalSetup(
+  manifest: MissionManifest,
+  hubOrigin: string
+): MissionLocalSetup {
+  const base = hubOrigin.replace(/\/+$/, "");
+  const toolchain = (manifest.verifier.toolchain ?? "leanprover/lean4:v4.36.0").trim();
+  const localImage = manifest.verifier.image.trim();
+  const publicImage = publicVerifierImage(localImage);
+  const isSnapshot = manifest.snapshot?.mode === "repo-snapshot";
+  const usesMathlib = missionUsesMathlib(manifest);
+  const mode: MissionLocalSetup["mode"] = isSnapshot
+    ? "repo-snapshot"
+    : manifest.mode === "hillclimb"
+      ? "hillclimb"
+      : "standalone";
+  const bundleUrl = `${base}/api/missions/${encodeURIComponent(manifest.id)}/bundle.tar.gz`;
+  const bootstrapScriptUrl = isSnapshot
+    ? `${base}/api/missions/${encodeURIComponent(manifest.id)}/bootstrap.sh`
+    : null;
+  const bootstrapCmd = bootstrapScriptUrl
+    ? `curl -fsSL ${shellQuote(bootstrapScriptUrl)} | bash`
+    : null;
+  const firstTask = manifest.tasks[0]?.id ?? "<TASK_ID>";
+  const firstTarget = manifest.tasks[0]?.target_files[0] ?? "<TARGET_FILE>";
+  const dockerVerifyCmd = [
+    `IMAGE=${shellQuote(publicImage)}   # or local ${localImage}`,
+    `CID=$(docker create --network=none -w /work "$IMAGE" ./verify ${shellQuote(firstTask)})`,
+    `docker cp . "$CID:/work" && docker start -a "$CID"`,
+    `docker rm -f "$CID" >/dev/null`,
+  ].join("\n");
+
+  const nativeSteps: string[] = [
+    `mkdir -p ${shellQuote(`work-${manifest.id}`)} && cd ${shellQuote(`work-${manifest.id}`)}`,
+    `curl -fsSL ${shellQuote(bundleUrl)} | tar xz`,
+  ];
+  const notes: string[] = [];
+
+  if (isSnapshot && manifest.upstream) {
+    const upDir = `../${manifest.id}-upstream`;
+    nativeSteps.push(
+      `# Repo-snapshot bundle contains only target file(s) & metadata (not upstream lakefile/deps).`,
+      `# Bootstrap the pinned upstream checkout outside this dir so git diff & docker cp stay clean:`,
+      bootstrapCmd!
+    );
+    notes.push(
+      `Repo-snapshot mission pinned to ${manifest.upstream.repo}@${manifest.upstream.commit.slice(0, 12)} (${toolchain}).`,
+      `Edit and build inside ${upDir} with \`lake build\`, then copy modified target file(s) back into this bundle directory before running \`git diff -- ${firstTarget}\` or Docker verification.`,
+      `Docker image ${publicImage} already embeds all prebuilt upstream .olean dependencies offline.`
+    );
+  } else if (manifest.mode === "hillclimb") {
+    const dir = manifest.score_direction === "minimize" ? "minimize" : "maximize";
+    const baseline = manifest.tasks[0]?.baseline_score;
+    if (usesMathlib) {
+      nativeSteps.push("lake exe cache get");
+    }
+    nativeSteps.push("lake build");
+    notes.push(
+      `Hill-climb mission (${dir}${baseline !== null && baseline !== undefined ? `, baseline: ${baseline}` : ""}): only strict improvements over the live best_score are accepted.`,
+      `Edit only the task's certificate target file(s) (e.g. ${firstTarget}); never touch frozen Spec/Bound/verify files.`
+    );
+  } else {
+    if (usesMathlib) {
+      nativeSteps.push("lake exe cache get");
+    }
+    nativeSteps.push("lake build");
+    notes.push(
+      `Standalone Lean 4 mission (${toolchain}${usesMathlib ? ", Mathlib" : ", zero Mathlib"}).`
+    );
+  }
+
+  return {
+    mode,
+    toolchain,
+    verifier_image: publicImage,
+    local_verifier_image: localImage,
+    uses_mathlib: usesMathlib,
+    bundle_url: bundleUrl,
+    bootstrap_script_url: bootstrapScriptUrl,
+    bootstrap_cmd: bootstrapCmd,
+    docker_verify_cmd: dockerVerifyCmd,
+    native_setup_steps: nativeSteps,
+    notes,
+  };
+}
+
+const UPSTREAM_REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const COMMIT_SHA_RE = /^[0-9a-f]{40}$/;
+
+/**
+ * Render a ready-to-run bash bootstrap script (`GET /api/missions/:id/bootstrap.sh`)
+ * for a repo-snapshot mission. Shallow-clones the exact pinned 40-char upstream
+ * commit outside the bundle directory, overlays the live target `.lean` file(s)
+ * from the bundle, optionally fetches Mathlib cache, and prints exact build/sync
+ * commands while keeping the bundle directory clean for `git diff` and Docker.
+ */
+export function renderRepoSnapshotBootstrapScript(
+  manifest: MissionManifest,
+  hubOrigin: string
+): string {
+  if (manifest.snapshot?.mode !== "repo-snapshot") {
+    throw new Error(`mission '${manifest.id}' is not a repo-snapshot mission`);
+  }
+  const up = manifest.upstream;
+  if (!up || !UPSTREAM_REPO_RE.test(up.repo) || !COMMIT_SHA_RE.test(up.commit)) {
+    throw new Error(`mission '${manifest.id}' has missing or malformed upstream pin`);
+  }
+  const allTargets = Array.from(
+    new Set(manifest.tasks.flatMap((t) => t.target_files))
+  ).sort();
+  if (allTargets.length === 0) {
+    throw new Error(`mission '${manifest.id}' has no target_files`);
+  }
+  for (const tf of allTargets) {
+    normalizeRelPath(tf);
+  }
+  const setup = buildMissionLocalSetup(manifest, hubOrigin);
+  const quotedTargets = allTargets.map(shellQuote).join(" ");
+  const defaultUpstreamDir = `../${manifest.id}-upstream`;
+  const repoUrl = `https://github.com/${up.repo}.git`;
+
+  return `#!/usr/bin/env bash
+# Sunstead local bootstrap for repo-snapshot mission: ${manifest.id}
+# Upstream: https://github.com/${up.repo}@${up.commit} (${up.license})
+# Toolchain: ${setup.toolchain}
+# Public verifier image: ${setup.verifier_image}
+set -euo pipefail
+
+MISSION_ID=${shellQuote(manifest.id)}
+UPSTREAM_URL="\${SUNSTEAD_UPSTREAM_URL:-${repoUrl}}"
+UPSTREAM_COMMIT=${shellQuote(up.commit)}
+USES_MATHLIB=${setup.uses_mathlib ? "1" : "0"}
+BUNDLE_DIR="\${SUNSTEAD_BUNDLE_DIR:-$PWD}"
+UPSTREAM_DIR="\${SUNSTEAD_UPSTREAM_DIR:-$BUNDLE_DIR/${defaultUpstreamDir}}"
+TARGETS=(${quotedTargets})
+
+if [ ! -f "$BUNDLE_DIR/UPSTREAM.json" ] || [ ! -f "$BUNDLE_DIR/sunstead.json" ]; then
+  echo "Run this script from your extracted bundle directory (containing UPSTREAM.json and sunstead.json)," >&2
+  echo "or set SUNSTEAD_BUNDLE_DIR=/path/to/work-$MISSION_ID." >&2
+  echo "To download the live bundle first:" >&2
+  echo "  mkdir -p work-$MISSION_ID && cd work-$MISSION_ID && curl -fsSL ${shellQuote(setup.bundle_url)} | tar xz" >&2
+  exit 1
+fi
+
+case "$UPSTREAM_DIR" in
+  "$BUNDLE_DIR"|"$BUNDLE_DIR"/*)
+    echo "Refusing SUNSTEAD_UPSTREAM_DIR inside BUNDLE_DIR ($UPSTREAM_DIR): keep it outside so git diff and docker cp stay clean." >&2
+    exit 1
+    ;;
+esac
+
+if [ ! -d "$UPSTREAM_DIR/.git" ]; then
+  echo "==> Shallow-cloning $UPSTREAM_URL at pinned commit \${UPSTREAM_COMMIT:0:12} into $UPSTREAM_DIR..."
+  mkdir -p "$UPSTREAM_DIR"
+  git -C "$UPSTREAM_DIR" init -q
+  git -C "$UPSTREAM_DIR" remote add origin "$UPSTREAM_URL"
+  git -C "$UPSTREAM_DIR" fetch --quiet --depth=1 origin "$UPSTREAM_COMMIT"
+  git -C "$UPSTREAM_DIR" -c advice.detachedHead=false checkout --quiet FETCH_HEAD
+fi
+
+ACTUAL_SHA="$(git -C "$UPSTREAM_DIR" rev-parse HEAD)"
+if [ "$ACTUAL_SHA" != "$UPSTREAM_COMMIT" ]; then
+  echo "Upstream checkout at $UPSTREAM_DIR is at $ACTUAL_SHA, expected pinned $UPSTREAM_COMMIT" >&2
+  exit 1
+fi
+
+echo "==> Overlaying live target file(s) from $BUNDLE_DIR into $UPSTREAM_DIR..."
+for rel in "\${TARGETS[@]}"; do
+  if [ ! -f "$BUNDLE_DIR/$rel" ]; then
+    echo "Missing target file in bundle: $BUNDLE_DIR/$rel" >&2
+    exit 1
+  fi
+  mkdir -p "$(dirname "$UPSTREAM_DIR/$rel")"
+  cp "$BUNDLE_DIR/$rel" "$UPSTREAM_DIR/$rel"
+done
+
+if [ "$USES_MATHLIB" = "1" ] && [ "\${SUNSTEAD_SKIP_CACHE:-0}" != "1" ] && command -v lake >/dev/null 2>&1; then
+  echo "==> Fetching prebuilt Mathlib oleans (lake exe cache get)..."
+  (cd "$UPSTREAM_DIR" && lake exe cache get) || true
+fi
+
+cat <<EOF
+
+Ready! Local upstream workspace: $UPSTREAM_DIR
+Bundle directory (clean for git diff & Docker): $BUNDLE_DIR
+
+Next steps:
+  1. Edit target file(s) and iterate with native Lean (${setup.toolchain}) in $UPSTREAM_DIR:
+       cd $(printf '%q' "$UPSTREAM_DIR")
+       lake build
+  2. Copy your proved target file(s) back into the bundle directory:
+       $(for t in ${quotedTargets}; do printf 'cp %q/%s %q/%s && ' "$UPSTREAM_DIR" "$t" "$BUNDLE_DIR" "$t"; done | sed 's/ && $//')
+  3. Verify offline in the exact Hub verifier container:
+       cd $(printf '%q' "$BUNDLE_DIR")
+       IMAGE=${shellQuote(setup.verifier_image)}
+       CID=\\$(docker create --network=none -w /work "\\$IMAGE" ./verify ${shellQuote(manifest.tasks[0]?.id ?? "<TASK_ID>")})
+       docker cp . "\\$CID:/work" && docker start -a "\\$CID" && docker rm -f "\\$CID" >/dev/null
+  4. Generate a strictly scoped patch from the bundle directory:
+       git diff -- ${quotedTargets}
+EOF
+`;
+}
+
 /**
  * Commands that rebuild the mission's live state, including this proof, from
  * the public seed bundle and history (URLs quoted so zsh does not glob `?`).

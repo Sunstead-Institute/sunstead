@@ -33,6 +33,9 @@ import {
   parseProfilePatch,
   gatePublicSocialHandles,
   buildSocialLinksFromHandles,
+  publicVerifierImage,
+  buildMissionLocalSetup,
+  renderRepoSnapshotBootstrapScript,
 } from "./core";
 import { SEED_MISSIONS, type SeedMission } from "./generated/missions";
 import { renderJoinTxt } from "./join_txt";
@@ -916,6 +919,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
           score_direction: m.manifest.score_direction ?? "maximize",
           spec_sha256: m.spec_sha256,
           verifier_image: m.manifest.verifier.image,
+          verifier_public_image: publicVerifierImage(m.manifest.verifier.image),
           verifier_toolchain: m.manifest.verifier.toolchain ?? "leanprover/lean4:v4.36.0",
           snapshot: m.manifest.snapshot ?? null,
           frozen_paths: m.manifest.frozen_paths,
@@ -1021,6 +1025,27 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       return jsonResp(this.computeStats());
     }
 
+    const bootstrapMatch = path.match(/^\/api\/missions\/([^/]+)\/bootstrap\.sh$/);
+    if (method === "GET" && bootstrapMatch) {
+      const missionId = decodeURIComponent(bootstrapMatch[1]);
+      const mission = this.getMissionRow(missionId);
+      if (!mission) return jsonResp({ error: `unknown mission: ${missionId}` }, 404);
+      if (mission.manifest.snapshot?.mode !== "repo-snapshot") {
+        return jsonResp(
+          { error: `mission '${missionId}' is not a repo-snapshot mission; use bundle.tar.gz directly` },
+          400
+        );
+      }
+      const script = renderRepoSnapshotBootstrapScript(mission.manifest, url.origin);
+      return new Response(script, {
+        headers: {
+          "Content-Type": "text/x-shellscript; charset=utf-8",
+          "Content-Disposition": `inline; filename="${missionId}-bootstrap.sh"`,
+          "Access-Control-Allow-Origin": "*",
+        },
+      });
+    }
+
     const missionMatch = path.match(/^\/api\/missions\/([^/]+)$/);
     if (method === "GET" && missionMatch) {
       const missionId = decodeURIComponent(missionMatch[1]);
@@ -1034,6 +1059,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
           spec_sha256: mission.spec_sha256,
           repo_dir: `cloudflare://missions/${missionId}`,
         },
+        local_setup: buildMissionLocalSetup(mission.manifest, url.origin),
         frontier,
         tasks: tasks.map((t) => ({ ...t, unlocked: isTaskUnlocked(t, tasks) })),
         recent_submissions: this.getRecentSubmissions(missionId, 25),
