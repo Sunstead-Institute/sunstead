@@ -1516,6 +1516,19 @@ end DecompLib
          "subgoal_theorem": "DecompLib.prove_quad_expand",
          "frozen_extra_files": {"DecompLib/Decomp_target_goal_d1.lean": _DECOMP_REDUCTION_HONEST_SHA},
      })),
+    ("v2-decomp-coexists-with-completed-sibling-statements", "__synthetic_decompose__", "target_goal",
+     {
+         "DecompLib/DecompStatements_earlier_task_d0.lean": "import DecompLib.Spec\nnamespace SunsteadDecomp_earlier_task_d0\ndef prev_sub : Prop := ∀ n : Nat, n = n\nend SunsteadDecomp_earlier_task_d0\n",
+         "DecompLib/Decomp_target_goal_d1.lean": _DECOMP_REDUCTION_HONEST,
+     },
+     True, None, "a committed `DecompStatements_<other>_<d0>.lean` from a previously assembled sibling task must not block new decompositions",
+     ("decompose", {
+         "task_id": "target_goal",
+         "decomp_id": "d1",
+         "subgoals": _DECOMP_SUBGOALS_HONEST,
+         "reduction_module": "DecompLib.Decomp_target_goal_d1",
+         "reduction_theorem": "DecompLib.decomp_reduction",
+     })),
     ("v2-decomp-attack6-shadow-decomp-statements", "__synthetic_decompose__", "target_goal",
      {
          "DecompLib/DecompStatements_target_goal_d1.lean": "namespace SunsteadDecomp_target_goal_d1\ndef quad_expand : Prop := True\nend SunsteadDecomp_target_goal_d1\n",

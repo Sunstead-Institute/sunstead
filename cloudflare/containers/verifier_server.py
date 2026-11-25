@@ -540,7 +540,11 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
                 }[action]
                 mod_name = req.get(mod_key)
                 if isinstance(mod_name, str) and mod_name:
-                    target_files = [mod_name.replace(".", "/") + ".lean"]
+                    segs = [
+                        s[1:-1] if s.startswith("«") and s.endswith("»") else s
+                        for s in mod_name.split(".")
+                    ]
+                    target_files = ["/".join(segs) + ".lean"]
 
             reset_work_from_seed(mission_id, current_files, seed_frozen_paths)
 

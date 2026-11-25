@@ -1809,7 +1809,11 @@ def _run_sunstead_check(job, argv, cwd, deadline, fsize_mb):
     return result
 
 
-def _lint_workspace_for_v2(work, lib_root, frozen_set, target_rel, allowed_imports):
+def _lint_workspace_for_v2(work, lib_root, frozen_set, target_rel, allowed_imports,
+                           reserved_rels=None):
+    reserved = {f"{lib_root}/SunsteadStatements.lean"}
+    if reserved_rels:
+        reserved.update(r.replace("\\", "/") for r in reserved_rels if r)
     lib_dir = os.path.join(work, lib_root)
     if os.path.isdir(lib_dir):
         for dirpath, _, files in os.walk(lib_dir):
@@ -1819,7 +1823,7 @@ def _lint_workspace_for_v2(work, lib_root, frozen_set, target_rel, allowed_impor
                 rel = os.path.relpath(os.path.join(dirpath, fn), work).replace("\\", "/")
                 if rel in frozen_set:
                     continue
-                if _is_reserved_decomp_rel(rel, lib_root):
+                if rel in reserved:
                     msg = f"{rel}: reserved statements module name"
                     emit(False, msg, stage="lint", diagnostics=msg)
                 problem = lint_lean_file(os.path.join(dirpath, fn), rel, lib_root, allowed_imports)
@@ -1864,16 +1868,6 @@ def lean_decompose_verify(task_id, *, lib_root, frozen_files, tasks,
         msg = f"invalid reduction module path: {reduction_rel}"
         emit(False, msg, stage="lint", diagnostics=msg)
 
-    work = os.getcwd()
-    allowed_imports = (
-        (lib_root, "Mathlib", "Std", "Init", "Batteries")
-        if uses_mathlib else (lib_root,)
-    )
-    extra_lib_paths = _mathlib_lib_paths() if uses_mathlib else []
-    fsize_mb = 1024 if uses_mathlib else 512
-
-    _lint_workspace_for_v2(work, lib_root, frozen_set, reduction_rel, allowed_imports)
-
     # Optional depth-2 parent decomposition validation.
     parent_parsed = None
     parent_mod = None
@@ -1891,6 +1885,22 @@ def lean_decompose_verify(task_id, *, lib_root, frozen_files, tasks,
             emit(False, f"unknown parent subgoal id `{parent_sub_id}`", stage="lint")
         if parent_mod == decomp_mod:
             emit(False, "nested decomposition must use a distinct decomp_id", stage="lint")
+
+    work = os.getcwd()
+    allowed_imports = (
+        (lib_root, "Mathlib", "Std", "Init", "Batteries")
+        if uses_mathlib else (lib_root,)
+    )
+    extra_lib_paths = _mathlib_lib_paths() if uses_mathlib else []
+    fsize_mb = 1024 if uses_mathlib else 512
+
+    reserved_rels = [_mod_to_rel_lean(decomp_mod)]
+    if parent_mod:
+        reserved_rels.append(_mod_to_rel_lean(parent_mod))
+    _lint_workspace_for_v2(
+        work, lib_root, frozen_set, reduction_rel, allowed_imports,
+        reserved_rels=reserved_rels,
+    )
 
     job = Job()
     try:
@@ -2056,7 +2066,10 @@ def lean_subgoal_verify(task_id, *, lib_root, frozen_files, tasks,
     extra_lib_paths = _mathlib_lib_paths() if uses_mathlib else []
     fsize_mb = 1024 if uses_mathlib else 512
 
-    _lint_workspace_for_v2(work, lib_root, frozen_set, sub_rel, allowed_imports)
+    _lint_workspace_for_v2(
+        work, lib_root, frozen_set, sub_rel, allowed_imports,
+        reserved_rels=[_mod_to_rel_lean(decomp_mod)],
+    )
 
     job = Job()
     try:
@@ -2176,7 +2189,10 @@ def lean_refute_verify(task_id, *, lib_root, frozen_files, tasks,
     extra_lib_paths = _mathlib_lib_paths() if uses_mathlib else []
     fsize_mb = 1024 if uses_mathlib else 512
 
-    _lint_workspace_for_v2(work, lib_root, frozen_set, ref_rel, allowed_imports)
+    _lint_workspace_for_v2(
+        work, lib_root, frozen_set, ref_rel, allowed_imports,
+        reserved_rels=[_mod_to_rel_lean(decomp_mod)] if decomp_mod else [],
+    )
 
     job = Job()
     try:
