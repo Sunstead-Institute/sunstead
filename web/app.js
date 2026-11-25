@@ -5,6 +5,7 @@ const state = {
   selectedTaskId: null,
   events: [],
   proofCache: new Map(), // "mission/task" -> accepted proof JSON
+  collapsedDecomps: new Set(), // "mission:parent:decomp_id"
 };
 
 const $ = (id) => document.getElementById(id);
@@ -245,16 +246,35 @@ async function loadMissionDetail(missionId) {
 
 function computeLayers(tasks) {
   const byId = new Map(tasks.map((t) => [t.def.id, t]));
+  const childIdsByParent = new Map();
+  for (const t of tasks) {
+    if (t.def.parent_task_id && byId.has(t.def.parent_task_id)) {
+      const list = childIdsByParent.get(t.def.parent_task_id) || [];
+      list.push(t.def.id);
+      childIdsByParent.set(t.def.parent_task_id, list);
+    }
+  }
   const memo = new Map();
+  const visiting = new Set();
 
   function depth(id) {
     if (memo.has(id)) return memo.get(id);
+    if (visiting.has(id)) return 0;
+    visiting.add(id);
     const t = byId.get(id);
-    if (!t || !t.def.depends_on || t.def.depends_on.length === 0) {
+    if (!t) {
+      visiting.delete(id);
       memo.set(id, 0);
       return 0;
     }
-    const d = 1 + Math.max(...t.def.depends_on.map(depth));
+    const prereqs = [...(t.def.depends_on || []), ...(childIdsByParent.get(id) || [])].filter((p) =>
+      byId.has(p)
+    );
+    let d = 0;
+    if (prereqs.length > 0) {
+      d = 1 + Math.max(...prereqs.map(depth));
+    }
+    visiting.delete(id);
     memo.set(id, d);
     return d;
   }
@@ -270,6 +290,15 @@ function computeLayers(tasks) {
 }
 
 function nodePalette(task, mode) {
+  if (task.disputed_counterexample) {
+    return {
+      fill: "#FDF3F3",
+      stroke: "#B44343",
+      badge: "DISPUTED ¬T",
+      badgeColor: "#9B2C2C",
+      titleColor: "#6B1B1B",
+    };
+  }
   if (!task.unlocked) {
     return {
       fill: "#F2EFE7",
@@ -333,26 +362,46 @@ function nodePalette(task, mode) {
   };
 }
 
+function decompClusterKey(missionId, parentTaskId, decompId) {
+  return `${missionId}:${parentTaskId}:${decompId}`;
+}
+
 function renderDag(detail) {
   const svg = $("dag-svg");
-  const tasks = detail.tasks;
+  const allTasks = detail.tasks;
   const manifest = detail.mission.manifest;
+  const activeDecomps = (detail.decompositions || []).filter((d) => d.status === "active");
+  const activeDecompByParent = new Map(activeDecomps.map((d) => [d.parent_task_id, d]));
+
+  // Hide descendants of collapsed decomposition sub-clusters.
+  const allById = new Map(allTasks.map((t) => [t.def.id, t]));
+  const isHiddenByCollapse = (t) => {
+    let cur = t;
+    while (cur && cur.def.parent_task_id && cur.def.decomp_id) {
+      if (state.collapsedDecomps.has(decompClusterKey(manifest.id, cur.def.parent_task_id, cur.def.decomp_id))) {
+        return true;
+      }
+      cur = allById.get(cur.def.parent_task_id);
+    }
+    return false;
+  };
+  const tasks = allTasks.filter((t) => !isHiddenByCollapse(t));
   const layers = computeLayers(tasks);
 
   const nodeW = 262;
   const nodeH = 92;
-  const colGap = 86;
-  const rowGap = 22;
-  const padX = 32;
-  const padY = 28;
+  const colGap = 94;
+  const rowGap = 24;
+  const padX = 36;
+  const padY = 44;
 
   const numCols = Math.max(1, layers.size);
   const maxRows = Math.max(1, ...Array.from(layers.values()).map((col) => col.length));
   const width = Math.max(780, padX * 2 + numCols * nodeW + (numCols - 1) * colGap);
-  const height = Math.max(330, padY * 2 + maxRows * nodeH + (maxRows - 1) * rowGap);
+  const height = Math.max(350, padY * 2 + maxRows * nodeH + (maxRows - 1) * rowGap);
 
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-  svg.style.minHeight = `${Math.min(height, 640)}px`;
+  svg.style.minHeight = `${Math.min(height, 680)}px`;
 
   const pos = new Map();
   let colPosIdx = 0;
@@ -367,18 +416,60 @@ function renderDag(detail) {
     colPosIdx += 1;
   }
 
-  let edgesHtml = `<defs>
+  let defsHtml = `<defs>
     <marker id="arrow-muted" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
       <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#B5AC9A" />
     </marker>
     <marker id="arrow-teal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
       <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#2A7D7F" />
     </marker>
+    <marker id="arrow-gold" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#C6A15A" />
+    </marker>
   </defs>`;
 
+  // Render collapsible dashed sub-cluster frames around each expanded active decomposition.
+  let clustersHtml = "";
+  for (const d of activeDecomps) {
+    const key = decompClusterKey(manifest.id, d.parent_task_id, d.decomp_id);
+    if (state.collapsedDecomps.has(key)) continue;
+    const members = tasks.filter(
+      (t) => t.def.parent_task_id === d.parent_task_id && t.def.decomp_id === d.decomp_id
+    );
+    if (members.length === 0) continue;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const m of members) {
+      const p = pos.get(m.def.id);
+      if (!p) continue;
+      minX = Math.min(minX, p.x);
+      minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x + nodeW);
+      maxY = Math.max(maxY, p.y + nodeH);
+    }
+    if (!Number.isFinite(minX)) continue;
+    const fx = minX - 14;
+    const fy = minY - 30;
+    const fw = maxX - minX + 28;
+    const fh = maxY - minY + 44;
+    const label = `▾ DECOMP ${d.decomp_id} · ${d.verified_subgoals}/${d.total_subgoals} · by ${d.proposer}`;
+    clustersHtml += `
+      <g class="decomp-cluster" data-decomp-key="${escapeHtml(key)}">
+        <rect x="${fx}" y="${fy}" width="${fw}" height="${fh}" rx="7"
+              fill="rgba(198, 161, 90, 0.06)" stroke="#C6A15A" stroke-width="1.25" stroke-dasharray="5 4" />
+        <g class="decomp-toggle" data-decomp-key="${escapeHtml(key)}" style="cursor:pointer">
+          <rect x="${fx + 8}" y="${fy + 5}" width="${Math.min(fw - 16, 252)}" height="19" rx="3"
+                fill="rgba(253, 251, 245, 0.94)" stroke="rgba(198, 161, 90, 0.55)" stroke-width="0.9" />
+          <text x="${fx + 14}" y="${fy + 18}" fill="#8B6926" font-size="9.5" font-weight="600" font-family="JetBrains Mono, monospace">${escapeHtml(label.slice(0, 38))}</text>
+        </g>
+      </g>
+    `;
+  }
+
+  let edgesHtml = "";
   const byId = new Map(tasks.map((t) => [t.def.id, t]));
   for (const t of tasks) {
     const dst = pos.get(t.def.id);
+    // 1. Standard DAG dependency edges.
     for (const depId of t.def.depends_on || []) {
       const src = pos.get(depId);
       const depTask = byId.get(depId);
@@ -396,6 +487,25 @@ function renderDag(detail) {
         stroke-dasharray="${satisfied ? "" : "4 4"}" marker-end="${marker}" />`;
       edgesHtml += `<circle cx="${x1}" cy="${y1}" r="2.8" fill="${stroke}" />`;
     }
+    // 2. Dashed decomposition reduction edges (subgoal L_i ---▸ parent T).
+    if (t.def.parent_task_id && byId.has(t.def.parent_task_id)) {
+      const src = pos.get(t.def.id);
+      const parentPos = pos.get(t.def.parent_task_id);
+      if (src && parentPos) {
+        const x1 = src.x + nodeW;
+        const y1 = src.y + nodeH / 2;
+        const x2 = parentPos.x;
+        const y2 = parentPos.y + nodeH / 2;
+        const mx = (x1 + x2) / 2;
+        const solved = t.status === "verified";
+        const stroke = solved ? "#2A7D7F" : "#C6A15A";
+        const marker = solved ? "url(#arrow-teal)" : "url(#arrow-gold)";
+        edgesHtml += `<path class="decomp-edge" d="M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}"
+          fill="none" stroke="${stroke}" stroke-width="${solved ? 2 : 1.6}"
+          stroke-dasharray="6 4" marker-end="${marker}" />`;
+        edgesHtml += `<circle cx="${x1}" cy="${y1}" r="2.8" fill="${stroke}" />`;
+      }
+    }
   }
 
   let nodesHtml = "";
@@ -403,12 +513,18 @@ function renderDag(detail) {
     const p = pos.get(t.def.id);
     const c = nodePalette(t, manifest.mode);
     const sel = t.def.id === state.selectedTaskId ? "selected" : "";
+    const isSub = Boolean(t.def.decomp_id);
+    const activeChildDecomp = activeDecompByParent.get(t.def.id);
+    const badgeLabel = isSub ? `${c.badge} · SUBGOAL` : c.badge;
     const shortTitle =
       t.def.title.length > 33 ? t.def.title.slice(0, 32) + "…" : t.def.title;
+    const rawIdLabel = isSub && t.def.subgoal_id ? t.def.subgoal_id : t.def.id;
     const shortId =
-      t.def.id.length > 23 ? t.def.id.slice(0, 22) + "…" : t.def.id;
+      rawIdLabel.length > 20 ? rawIdLabel.slice(0, 19) + "…" : rawIdLabel;
     let footer = `${t.attempts} run${t.attempts === 1 ? "" : "s"}`;
-    if (manifest.mode === "hillclimb" && t.best_score !== null && t.best_score !== undefined) {
+    if (t.disputed_counterexample) {
+      footer = `disputed ¬T by ${t.disputed_counterexample.refuter}`;
+    } else if (manifest.mode === "hillclimb" && t.best_score !== null && t.best_score !== undefined) {
       if (t.active_lease) {
         footer = `best: ${t.best_score} · claimed: ${t.active_lease.contributor}`;
       } else if (t.verified_by) {
@@ -420,25 +536,53 @@ function renderDag(detail) {
       footer = `verified by ${t.verified_by}`;
     } else if (t.active_lease) {
       footer = `claimed: ${t.active_lease.contributor}`;
+    } else if (activeChildDecomp) {
+      footer = `split ${activeChildDecomp.decomp_id}: ${activeChildDecomp.verified_subgoals}/${activeChildDecomp.total_subgoals} subgoals`;
+    }
+
+    let collapsedPillHtml = "";
+    if (activeChildDecomp) {
+      const key = decompClusterKey(manifest.id, activeChildDecomp.parent_task_id, activeChildDecomp.decomp_id);
+      if (state.collapsedDecomps.has(key)) {
+        const pillText = `▸ ${activeChildDecomp.total_subgoals} subgoals (${activeChildDecomp.verified_subgoals}/${activeChildDecomp.total_subgoals})`;
+        collapsedPillHtml = `
+          <g class="decomp-toggle" data-decomp-key="${escapeHtml(key)}" transform="translate(${p.x + 12},${p.y + nodeH + 4})" style="cursor:pointer">
+            <rect width="176" height="19" rx="3" fill="#FDFBF5" stroke="#C6A15A" stroke-width="1" stroke-dasharray="3 2" />
+            <text x="8" y="13" fill="#8B6926" font-size="9.5" font-weight="600" font-family="JetBrains Mono, monospace">${escapeHtml(pillText)}</text>
+          </g>
+        `;
+      }
     }
 
     nodesHtml += `
-      <g class="dag-node ${sel}" data-task-id="${escapeHtml(t.def.id)}" transform="translate(${p.x},${p.y})">
+      <g class="dag-node ${sel} ${isSub ? "dag-node-subgoal" : ""}" data-task-id="${escapeHtml(t.def.id)}" transform="translate(${p.x},${p.y})">
         <rect class="node-box" width="${nodeW}" height="${nodeH}" rx="5"
-              fill="${c.fill}" stroke="${c.stroke}" stroke-width="1.5" />
+              fill="${c.fill}" stroke="${c.stroke}" stroke-width="1.5"
+              ${isSub ? 'stroke-dasharray="4 2"' : ""} />
         <line x1="12" y1="29" x2="${nodeW - 12}" y2="29" stroke="${c.stroke}" stroke-opacity="0.24" stroke-width="1" />
-        <text x="12" y="20" fill="${c.badgeColor}" font-size="9.5" font-weight="700" letter-spacing="0.08em" font-family="Inter, sans-serif">${c.badge}</text>
+        <text x="12" y="20" fill="${c.badgeColor}" font-size="9.5" font-weight="700" letter-spacing="0.08em" font-family="Inter, sans-serif">${escapeHtml(badgeLabel)}</text>
         <text x="${nodeW - 12}" y="20" text-anchor="end" fill="#6F747D" font-size="10" font-family="JetBrains Mono, monospace">${escapeHtml(shortId)}</text>
         <text x="12" y="51" fill="${c.titleColor}" font-size="15.5" font-weight="600" font-family="Cormorant Garamond, Georgia, serif">${escapeHtml(shortTitle)}</text>
         <text x="12" y="75" fill="#5A5E66" font-size="10.8" font-family="JetBrains Mono, monospace">${escapeHtml(footer)}</text>
       </g>
+      ${collapsedPillHtml}
     `;
   }
 
-  svg.innerHTML = edgesHtml + nodesHtml;
+  svg.innerHTML = defsHtml + clustersHtml + edgesHtml + nodesHtml;
   svg.querySelectorAll(".dag-node").forEach((g) => {
     g.addEventListener("click", () => {
       state.selectedTaskId = g.dataset.taskId;
+      renderDag(detail);
+      renderInspector(detail);
+    });
+  });
+  svg.querySelectorAll(".decomp-toggle").forEach((g) => {
+    g.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const key = g.dataset.decompKey;
+      if (state.collapsedDecomps.has(key)) state.collapsedDecomps.delete(key);
+      else state.collapsedDecomps.add(key);
       renderDag(detail);
       renderInspector(detail);
     });
@@ -462,6 +606,51 @@ function renderInspector(detail) {
     ? `<div class="kv"><div class="kv-label">Upstream Statement</div><div class="kv-val"><a href="${escapeHtml(task.def.upstream_url)}" target="_blank" rel="noopener" style="color:var(--teal);text-decoration:none">${escapeHtml(task.def.upstream_url.replace(/^https:\/\/github\.com\//, ""))} ↗</a></div></div>`
     : "";
 
+  const activeDecomp = (detail.decompositions || []).find(
+    (d) => d.parent_task_id === task.def.id && d.status === "active"
+  );
+  const subgoalBannerHtml = task.def.decomp_id
+    ? `<div class="decomp-banner">
+        <div class="decomp-banner-head">
+          <span class="ledger-badge ledger-badge-decomp">v2 Subgoal · depth ${escapeHtml(task.def.decomp_depth || 1)}</span>
+          <button type="button" class="btn-outline-ink decomp-jump" data-jump-task="${escapeHtml(task.def.parent_task_id || "")}">Parent: ${escapeHtml(task.def.parent_task_id || "")}</button>
+        </div>
+        ${task.def.subgoal_statement ? `<pre class="decomp-stmt">${escapeHtml(task.def.subgoal_statement)}</pre>` : ""}
+        <div class="muted small">
+          Frozen reduction: <code>${escapeHtml(task.def.reduction_file || "")}</code> ·
+          Subgoal spec: <code>${escapeHtml((task.def.subgoal_spec_sha256 || "").slice(0, 23))}…</code> ·
+          Open refutation endpoint: <code>POST /api/missions/${escapeHtml(m.id)}/tasks/${escapeHtml(task.def.id)}/refute</code>
+        </div>
+      </div>`
+    : "";
+
+  const parentDecompBannerHtml = activeDecomp
+    ? (() => {
+        const key = decompClusterKey(m.id, activeDecomp.parent_task_id, activeDecomp.decomp_id);
+        const collapsed = state.collapsedDecomps.has(key);
+        return `<div class="decomp-banner">
+          <div class="decomp-banner-head">
+            <span class="ledger-badge ledger-badge-decomp">Active Decomposition · ${escapeHtml(activeDecomp.decomp_id)} (${activeDecomp.verified_subgoals}/${activeDecomp.total_subgoals} verified)</span>
+            <button type="button" class="btn-outline-ink decomp-toggle-btn" data-decomp-key="${escapeHtml(key)}">${collapsed ? "Expand sub-cluster ▸" : "Collapse sub-cluster ▾"}</button>
+          </div>
+          <div class="muted small">
+            Proposed by <strong>${escapeHtml(activeDecomp.proposer)}</strong> ·
+            Economics: <code>${activeDecomp.solver_points_per_subgoal} pts</code>/subgoal, <code>${activeDecomp.architect_points} pts</code> architect share (vests on untouched <code>./verify</code> closure) ·
+            Direct proof bypass: <strong>${m.decomposition?.allow_direct_bypass === false ? "disabled" : "enabled"}</strong>
+          </div>
+        </div>`;
+      })()
+    : "";
+
+  const disputedBannerHtml = task.disputed_counterexample
+    ? `<div class="dispute-banner">
+        <strong>Disputed Counterexample (¬ T):</strong>
+        Kernel-verified refutation by <code>${escapeHtml(task.disputed_counterexample.refuter)}</code>
+        (${escapeHtml(fmtUtc(task.disputed_counterexample.created_at))})
+        ${task.disputed_counterexample.proof_id ? ` · <a class="proof-link" href="/proofs/${escapeHtml(task.disputed_counterexample.proof_id)}">inspect counterexample ↗</a>` : ""}
+      </div>`
+    : "";
+
   el.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">
       <div>
@@ -471,6 +660,9 @@ function renderInspector(detail) {
       <a class="small" style="color:var(--teal);font-weight:500;text-decoration:none" href="/api/missions/${encodeURIComponent(m.id)}/bundle.tar.gz">Download live bundle (.tar.gz) ↓</a>
     </div>
     ${task.def.description ? `<p class="muted small" style="margin:6px 0 0">${escapeHtml(task.def.description)}</p>` : ""}
+    ${disputedBannerHtml}
+    ${subgoalBannerHtml}
+    ${parentDecompBannerHtml}
     <div class="inspector-grid">
       <div class="kv">
         <div class="kv-label">Allowed target_files</div>
@@ -486,9 +678,28 @@ function renderInspector(detail) {
         <div class="kv-label">Submit Endpoint</div>
         <div class="kv-val">POST ${escapeHtml(origin)}/api/missions/${escapeHtml(m.id)}/tasks/${escapeHtml(task.def.id)}/submit</div>
       </div>
+      ${m.decomposition?.enabled && !task.def.decomp_id ? `<div class="kv"><div class="kv-label">v2 Decompose / Refute</div><div class="kv-val">POST .../tasks/${escapeHtml(task.def.id)}/decompose (allowlist) · /refute (open)</div></div>` : ""}
     </div>
     ${task.status === "verified" ? `<div class="proof-panel" id="proof-panel" aria-live="polite"><div class="muted small">Loading verified proof…</div></div>` : ""}
   `;
+  el.querySelectorAll(".decomp-jump").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.dataset.jumpTask) {
+        state.selectedTaskId = btn.dataset.jumpTask;
+        renderDag(detail);
+        renderInspector(detail);
+      }
+    });
+  });
+  el.querySelectorAll(".decomp-toggle-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.decompKey;
+      if (state.collapsedDecomps.has(key)) state.collapsedDecomps.delete(key);
+      else state.collapsedDecomps.add(key);
+      renderDag(detail);
+      renderInspector(detail);
+    });
+  });
   if (task.status === "verified") loadProof(m.id, task.def.id);
 }
 
@@ -680,6 +891,13 @@ function renderProofPanel(proof) {
 
 function ledgerBadges(p) {
   const out = [];
+  if (p.entry_kind === "refutation") {
+    out.push(`<span class="ledger-badge ledger-badge-refute" title="Kernel-verified disproof (¬ statement)">refutation ¬</span>`);
+  } else if (p.entry_kind === "subgoal") {
+    out.push(`<span class="ledger-badge ledger-badge-decomp" title="Verified v2 decomposition subgoal">subgoal</span>`);
+  } else if (p.entry_kind === "assembled") {
+    out.push(`<span class="ledger-badge ledger-badge-ok" title="Auto-assembled decomposition proof verified via untouched ./verify">assembled ✓</span>`);
+  }
   if (p.audit && p.audit.status === "passed") {
     out.push(`<span class="ledger-badge ledger-badge-ok" title="Independently replayed with stock Lean and leanchecker">audited ✓</span>`);
   } else if (p.audit && p.audit.status === "failed") {
@@ -687,8 +905,30 @@ function ledgerBadges(p) {
   }
   if (p.mission_retired) out.push(`<span class="ledger-badge ledger-badge-muted">retired mission</span>`);
   if (p.mission_demo) out.push(`<span class="ledger-badge ledger-badge-muted">demo · 0 pts</span>`);
-  if (!p.spec_is_current && !p.mission_retired) out.push(`<span class="ledger-badge ledger-badge-warn">earlier spec</span>`);
+  if (!p.spec_is_current && !p.mission_retired && p.entry_kind !== "subgoal" && p.entry_kind !== "refutation") {
+    out.push(`<span class="ledger-badge ledger-badge-warn">earlier spec</span>`);
+  }
   return out.join(" ");
+}
+
+function renderDecompProvenanceHtml(p) {
+  const parts = [];
+  const d = p.decomposition;
+  if (d && typeof d === "object") {
+    if (d.decomp_id) parts.push(`decomp <code>${escapeHtml(d.decomp_id)}</code>`);
+    if (d.parent_task_id && d.parent_task_id !== p.task_id) {
+      parts.push(`parent <code>${escapeHtml(d.parent_task_id)}</code>`);
+    }
+    if (d.proposer) parts.push(`proposer <code>${escapeHtml(d.proposer)}</code>`);
+    if (d.target_kind === "root") parts.push(`root counterexample`);
+  }
+  if (Array.isArray(p.co_authors) && p.co_authors.length > 0) {
+    const names = p.co_authors
+      .map((ca) => `${escapeHtml(ca.display_name || ca.handle)}${ca.role ? ` (${escapeHtml(ca.role)})` : ""}`)
+      .join(", ");
+    parts.push(`co-authors: ${names}`);
+  }
+  return parts.length > 0 ? `<div class="muted small decomp-prov">${parts.join(" · ")}</div>` : "";
 }
 
 function renderAuditHtml(audit) {
@@ -715,6 +955,7 @@ function ledgerRowHtml(p) {
       <div class="ledger-main">
         <div class="ledger-title">${link ? `<a href="${link}">${title}</a>` : title} ${ledgerBadges(p)}</div>
         <div class="muted small">${escapeHtml(p.mission_title || p.mission_id)} · <code>${escapeHtml(p.task_id)}</code></div>
+        ${renderDecompProvenanceHtml(p)}
         <div class="small">Upstream: ${upstreamHtml(p.upstream)}</div>
       </div>
       <div class="ledger-side small">
@@ -780,6 +1021,7 @@ async function loadLedgerProof(root, hash) {
       <a class="btn-outline-ink" href="${escapeHtml(proof.history_mbox)}">history.mbox ↓</a>
     </div>
     <div class="small ledger-upstream">Upstream: ${upstreamHtml(proof.upstream)}</div>
+    ${renderDecompProvenanceHtml(proof)}
     <div class="small muted">Independent audit: ${renderAuditHtml(proof.audit)}</div>
     ${proofDetailHtml(proof)}
     ${also ? `<div class="small ledger-also"><div class="kv-label">The same patch was also accepted as</div><ul>${also}</ul></div>` : ""}
@@ -832,6 +1074,8 @@ function renderEvents() {
       let icon = "✦";
       if (ev.kind === "submission_accepted") { cls = "accepted"; icon = "✓"; }
       else if (ev.kind === "submission_rejected") { cls = "rejected"; icon = "✕"; }
+      else if (ev.kind === "task_decomposed") { cls = "accepted"; icon = "◇"; }
+      else if (ev.kind === "decomposition_refuted" || ev.kind === "task_refuted") { cls = "rejected"; icon = "¬"; }
       else if (ev.kind === "lease_claimed") { cls = "claimed"; icon = "●"; }
       else if (ev.kind === "lease_released") { cls = "claimed"; icon = "○"; }
       const scoreBadge =
@@ -941,9 +1185,16 @@ function connectSse() {
     }
   };
 
-  ["lease_claimed", "lease_released", "verification_started", "submission_accepted", "submission_rejected"].forEach(
-    (name) => es.addEventListener(name, handle)
-  );
+  [
+    "lease_claimed",
+    "lease_released",
+    "verification_started",
+    "submission_accepted",
+    "submission_rejected",
+    "task_decomposed",
+    "decomposition_refuted",
+    "task_refuted",
+  ].forEach((name) => es.addEventListener(name, handle));
 }
 
 function setupJoinModal() {
