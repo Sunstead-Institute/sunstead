@@ -496,12 +496,164 @@ export type AcceptedProofRow = {
   contributor: string;
   display_name: string;
   github: string | null;
+  x?: string | null;
+  linkedin?: string | null;
   summary: string;
   patch: string;
   spec_sha256: string;
   created_at: number;
   verify_ms: number | null;
 };
+
+// ---------------------------------------------------------------------------
+// Contributor social handles (strict handle-only validation + proof-gated display)
+
+export const GITHUB_HANDLE_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
+export const X_HANDLE_RE = /^[A-Za-z0-9_]{1,15}$/;
+export const LINKEDIN_HANDLE_RE = /^[A-Za-z0-9-]{3,100}$/;
+
+export interface ContributorSocialHandles {
+  github: string | null;
+  x: string | null;
+  linkedin: string | null;
+}
+
+export interface SocialLink {
+  platform: "github" | "x" | "linkedin";
+  handle: string;
+  url: string;
+}
+
+function rejectRawUrlOrBadType(field: string, raw: unknown): string | null {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw !== "string") {
+    throw new Error(`${field} must be a handle string or null`);
+  }
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed) || trimmed.includes("://") || /[?#\s]/.test(trimmed)) {
+    throw new Error(`${field} must be a handle only (not a URL)`);
+  }
+  return trimmed;
+}
+
+export function normalizeGithubHandle(raw: unknown): string | null {
+  const val = rejectRawUrlOrBadType("github", raw);
+  if (val === null) return null;
+  const cleaned = val.startsWith("@") ? val.slice(1) : val;
+  if (!GITHUB_HANDLE_RE.test(cleaned)) {
+    throw new Error(
+      "invalid github handle: use 1-39 alphanumeric characters or single hyphens, no leading/trailing hyphen or URL"
+    );
+  }
+  return cleaned;
+}
+
+export function normalizeXHandle(raw: unknown): string | null {
+  const val = rejectRawUrlOrBadType("x", raw);
+  if (val === null) return null;
+  const cleaned = val.startsWith("@") ? val.slice(1) : val;
+  if (!X_HANDLE_RE.test(cleaned)) {
+    throw new Error(
+      "invalid x handle: use 1-15 letters, digits, or underscores (no URL)"
+    );
+  }
+  return cleaned;
+}
+
+export function normalizeLinkedinHandle(raw: unknown): string | null {
+  const val = rejectRawUrlOrBadType("linkedin", raw);
+  if (val === null) return null;
+  let cleaned = val;
+  if (cleaned.startsWith("/in/")) cleaned = cleaned.slice(4);
+  else if (cleaned.startsWith("in/")) cleaned = cleaned.slice(3);
+  if (!LINKEDIN_HANDLE_RE.test(cleaned)) {
+    throw new Error(
+      "invalid linkedin handle: use 3-100 letters, digits, or hyphens (optional leading in/, no URL)"
+    );
+  }
+  return cleaned;
+}
+
+export interface ParsedProfilePatch {
+  hasUpdates: boolean;
+  display_name?: string | null;
+  github?: string | null;
+  x?: string | null;
+  linkedin?: string | null;
+}
+
+/** Validate a `PATCH /api/me` payload; null or "" clears a field, omitted fields stay unchanged. */
+export function parseProfilePatch(body: Record<string, unknown>): ParsedProfilePatch {
+  const out: ParsedProfilePatch = { hasUpdates: false };
+  if ("display_name" in body && body.display_name !== undefined) {
+    out.hasUpdates = true;
+    if (body.display_name === null) {
+      out.display_name = null;
+    } else if (typeof body.display_name === "string") {
+      const cleaned = body.display_name.trim().replace(/[\r\n\t]+/g, " ").slice(0, 64);
+      out.display_name = cleaned || null;
+    } else {
+      throw new Error("display_name must be a string or null");
+    }
+  }
+  if ("github" in body && body.github !== undefined) {
+    out.hasUpdates = true;
+    out.github = normalizeGithubHandle(body.github);
+  }
+  if ("x" in body && body.x !== undefined) {
+    out.hasUpdates = true;
+    out.x = normalizeXHandle(body.x);
+  }
+  if ("linkedin" in body && body.linkedin !== undefined) {
+    out.hasUpdates = true;
+    out.linkedin = normalizeLinkedinHandle(body.linkedin);
+  }
+  return out;
+}
+
+function safeStoredHandle(val: string | null | undefined, re: RegExp): string | null {
+  if (typeof val !== "string") return null;
+  const trimmed = val.trim();
+  return re.test(trimmed) ? trimmed : null;
+}
+
+/**
+ * Anti-spam proof gate for public contributor links: outbound links are only
+ * surfaced publicly once the contributor has at least one accepted non-demo proof.
+ */
+export function gatePublicSocialHandles(
+  handles: Partial<ContributorSocialHandles>,
+  nonDemoVerifiedCount: number
+): ContributorSocialHandles {
+  if (!Number.isFinite(nonDemoVerifiedCount) || nonDemoVerifiedCount < 1) {
+    return { github: null, x: null, linkedin: null };
+  }
+  return {
+    github: safeStoredHandle(handles.github, GITHUB_HANDLE_RE),
+    x: safeStoredHandle(handles.x, X_HANDLE_RE),
+    linkedin: safeStoredHandle(handles.linkedin, LINKEDIN_HANDLE_RE),
+  };
+}
+
+/** Construct canonical https:// links strictly from validated handles. */
+export function buildSocialLinksFromHandles(handles: Partial<ContributorSocialHandles>): SocialLink[] {
+  const links: SocialLink[] = [];
+  const gh = safeStoredHandle(handles.github, GITHUB_HANDLE_RE);
+  if (gh) links.push({ platform: "github", handle: gh, url: `https://github.com/${gh}` });
+  const x = safeStoredHandle(handles.x, X_HANDLE_RE);
+  if (x) links.push({ platform: "x", handle: x, url: `https://x.com/${x}` });
+  const li = safeStoredHandle(handles.linkedin, LINKEDIN_HANDLE_RE);
+  if (li) links.push({ platform: "linkedin", handle: li, url: `https://www.linkedin.com/in/${li}` });
+  return links;
+}
+
+export function buildPublicSocialLinks(
+  handles: Partial<ContributorSocialHandles>,
+  nonDemoVerifiedCount: number
+): SocialLink[] {
+  return buildSocialLinksFromHandles(gatePublicSocialHandles(handles, nonDemoVerifiedCount));
+}
 
 /** Shell-safe single-quoted argument. */
 function shellQuote(s: string): string {
@@ -528,8 +680,18 @@ export function howToRebuild(hubOrigin: string, missionId: string): string {
  */
 export function buildProofView(
   row: AcceptedProofRow,
-  opts: { hubOrigin: string; currentSpecSha256: string; patchSha256: string }
+  opts: {
+    hubOrigin: string;
+    currentSpecSha256: string;
+    patchSha256: string;
+    nonDemoVerifiedCount?: number;
+  }
 ) {
+  const nonDemoCount = opts.nonDemoVerifiedCount ?? 1;
+  const social = gatePublicSocialHandles(
+    { github: row.github, x: row.x ?? null, linkedin: row.linkedin ?? null },
+    nonDemoCount
+  );
   return {
     mission_id: row.mission_id,
     task_id: row.task_id,
@@ -537,7 +699,10 @@ export function buildProofView(
     submission_id: row.submission_id,
     contributor: row.contributor,
     display_name: row.display_name || row.contributor,
-    github: row.github || null,
+    github: social.github,
+    x: social.x,
+    linkedin: social.linkedin,
+    social_links: buildSocialLinksFromHandles(social),
     summary: row.summary,
     accepted_at: row.created_at,
     verify_ms: row.verify_ms,
@@ -606,10 +771,20 @@ export function parseLedgerQuery(params: URLSearchParams): {
  * One ledger entry. Mission and task titles and upstream provenance come from the
  * live manifest; a proof from a retired mission keeps its record but has none.
  */
-export function buildLedgerEntry(row: LedgerRow, mission: LedgerMissionInfo, hubOrigin: string) {
+export function buildLedgerEntry(
+  row: LedgerRow,
+  mission: LedgerMissionInfo,
+  hubOrigin: string,
+  nonDemoVerifiedCount?: number
+) {
   const manifest = mission?.manifest ?? null;
   const taskDef = manifest?.tasks.find((t) => t.id === row.task_id) ?? null;
   const upstream = manifest?.upstream ?? null;
+  const effectiveNonDemo = nonDemoVerifiedCount ?? (manifest?.demo ? 0 : 1);
+  const social = gatePublicSocialHandles(
+    { github: row.github, x: row.x ?? null, linkedin: row.linkedin ?? null },
+    effectiveNonDemo
+  );
   return {
     proof_id: proofIdFromPatchSha(row.patch_sha256),
     patch_sha256: row.patch_sha256,
@@ -631,7 +806,10 @@ export function buildLedgerEntry(row: LedgerRow, mission: LedgerMissionInfo, hub
       : null,
     contributor: row.contributor,
     display_name: row.display_name || row.contributor,
-    github: row.github || null,
+    github: social.github,
+    x: social.x,
+    linkedin: social.linkedin,
+    social_links: buildSocialLinksFromHandles(social),
     accepted_at: row.created_at,
     verify_ms: row.verify_ms,
     spec_sha256: row.spec_sha256,
@@ -644,9 +822,14 @@ export function buildLedgerEntry(row: LedgerRow, mission: LedgerMissionInfo, hub
 }
 
 /** Full permalink view: ledger entry plus the patch and how to reproduce it. */
-export function buildLedgerProof(row: LedgerRow, mission: LedgerMissionInfo, hubOrigin: string) {
+export function buildLedgerProof(
+  row: LedgerRow,
+  mission: LedgerMissionInfo,
+  hubOrigin: string,
+  nonDemoVerifiedCount?: number
+) {
   return {
-    ...buildLedgerEntry(row, mission, hubOrigin),
+    ...buildLedgerEntry(row, mission, hubOrigin, nonDemoVerifiedCount),
     submission_id: row.submission_id,
     summary: row.summary,
     patch: row.patch,

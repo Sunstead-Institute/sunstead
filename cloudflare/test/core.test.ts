@@ -28,6 +28,12 @@ import {
   buildTaskFilesView,
   sanitizeFailureDiagnostics,
   MAX_DIAGNOSTICS_CHARS,
+  normalizeGithubHandle,
+  normalizeXHandle,
+  normalizeLinkedinHandle,
+  parseProfilePatch,
+  gatePublicSocialHandles,
+  buildPublicSocialLinks,
   type AcceptedProofRow,
   type MissionManifest,
   type TaskState,
@@ -575,4 +581,175 @@ test("buildTaskFilesView overlays mutable target files while keeping frozen file
     "PntFoundations/Spec.lean": "def spec := 1\n",
     "lakefile.toml": "name = \"Pnt\"\n",
   });
+});
+
+// ---------------------------------------------------------------- contributor social links
+
+test("social handle validators normalize strict handles, clear empty/null, and reject raw URLs or XSS", () => {
+  assert.equal(normalizeGithubHandle("@octocat-42"), "octocat-42");
+  assert.equal(normalizeGithubHandle("a"), "a");
+  assert.equal(normalizeGithubHandle(null), null);
+  assert.equal(normalizeGithubHandle("   "), null);
+
+  assert.equal(normalizeXHandle("@Alice_99"), "Alice_99");
+  assert.equal(normalizeXHandle("x"), "x");
+  assert.equal(normalizeXHandle(""), null);
+
+  assert.equal(normalizeLinkedinHandle("in/ada-lovelace"), "ada-lovelace");
+  assert.equal(normalizeLinkedinHandle("/in/ada-lovelace-1"), "ada-lovelace-1");
+  assert.equal(normalizeLinkedinHandle("ada-lovelace"), "ada-lovelace");
+  assert.equal(normalizeLinkedinHandle(null), null);
+
+  for (const bad of [
+    "https://github.com/octocat",
+    "http://evil.example/x",
+    "javascript:alert(1)",
+    "data:text/html,<script>",
+    "-leading",
+    "trailing-",
+    "octocat?tab=stars",
+    "octocat/repo",
+    "<script>alert(1)</script>",
+    "a".repeat(40),
+    123 as unknown,
+    {} as unknown,
+  ]) {
+    assert.throws(() => normalizeGithubHandle(bad), /github/, String(bad));
+  }
+
+  for (const bad of [
+    "https://x.com/alice",
+    "javascript:alert(1)",
+    "alice-dash",
+    "a".repeat(16),
+    "alice?foo=bar",
+    "alice/status/1",
+    42 as unknown,
+  ]) {
+    assert.throws(() => normalizeXHandle(bad), /x/, String(bad));
+  }
+
+  for (const bad of [
+    "https://www.linkedin.com/in/ada-lovelace",
+    "linkedin.com/in/ada",
+    "javascript:alert(1)",
+    "ab",
+    "ada_underscore",
+    "in/ada?trk=spam",
+    "a".repeat(101),
+    true as unknown,
+  ]) {
+    assert.throws(() => normalizeLinkedinHandle(bad), /linkedin/, String(bad));
+  }
+});
+
+test("parseProfilePatch supports partial updates, explicit clearing, and rejects invalid fields", () => {
+  assert.deepEqual(parseProfilePatch({}), { hasUpdates: false });
+  assert.deepEqual(
+    parseProfilePatch({
+      display_name: "  Ada\nLovelace  ",
+      github: "@ada-gh",
+      x: "@ada_x",
+      linkedin: "/in/ada-lovelace",
+    }),
+    {
+      hasUpdates: true,
+      display_name: "Ada Lovelace",
+      github: "ada-gh",
+      x: "ada_x",
+      linkedin: "ada-lovelace",
+    }
+  );
+  assert.deepEqual(
+    parseProfilePatch({ github: null, x: "", linkedin: "   ", display_name: "" }),
+    { hasUpdates: true, display_name: null, github: null, x: null, linkedin: null }
+  );
+  assert.throws(() => parseProfilePatch({ github: "https://github.com/ada" }), /handle only/);
+  assert.throws(() => parseProfilePatch({ display_name: 99 }), /display_name/);
+});
+
+test("proof-gated public social links hide 0-proof and demo-only contributors and emit canonical URLs for >= 1 non-demo proof", () => {
+  const handles = { github: "codex-dirichlet", x: "dirichlet_x", linkedin: "codex-dirichlet" };
+  assert.deepEqual(gatePublicSocialHandles(handles, 0), { github: null, x: null, linkedin: null });
+  assert.deepEqual(buildPublicSocialLinks(handles, 0), []);
+
+  assert.deepEqual(gatePublicSocialHandles(handles, 1), handles);
+  assert.deepEqual(buildPublicSocialLinks(handles, 1), [
+    { platform: "github", handle: "codex-dirichlet", url: "https://github.com/codex-dirichlet" },
+    { platform: "x", handle: "dirichlet_x", url: "https://x.com/dirichlet_x" },
+    { platform: "linkedin", handle: "codex-dirichlet", url: "https://www.linkedin.com/in/codex-dirichlet" },
+  ]);
+
+  // Defense-in-depth: malformed legacy handles are dropped even if nonDemoVerifiedCount >= 1.
+  assert.deepEqual(
+    gatePublicSocialHandles(
+      { github: "javascript:alert(1)", x: "ok_user", linkedin: "../etc/passwd" },
+      5
+    ),
+    { github: null, x: "ok_user", linkedin: null }
+  );
+
+  // Ledger & task proof views apply the non-demo proof gate.
+  const rowWithLinks = {
+    ...proofRow({ github: "ada", x: "ada_x", linkedin: "ada-lovelace" }),
+    patch_sha256: `sha256:${LEDGER_SHA}`,
+  };
+  const demoEntry = buildLedgerEntry(rowWithLinks, ledgerMission({ demo: true }), "https://sunstead.org", 0);
+  assert.equal(demoEntry.github, null);
+  assert.equal(demoEntry.x, null);
+  assert.equal(demoEntry.linkedin, null);
+  assert.deepEqual(demoEntry.social_links, []);
+
+  const realEntry = buildLedgerEntry(rowWithLinks, ledgerMission(), "https://sunstead.org", 1);
+  assert.equal(realEntry.github, "ada");
+  assert.equal(realEntry.x, "ada_x");
+  assert.equal(realEntry.linkedin, "ada-lovelace");
+  assert.equal(realEntry.social_links.length, 3);
+
+  const gatedProof = buildProofView(rowWithLinks, {
+    hubOrigin: "https://sunstead.org",
+    currentSpecSha256: "sha256:aaa",
+    patchSha256: `sha256:${LEDGER_SHA}`,
+    nonDemoVerifiedCount: 0,
+  });
+  assert.equal(gatedProof.github, null);
+  assert.equal(gatedProof.x, null);
+  assert.equal(gatedProof.linkedin, null);
+  assert.deepEqual(gatedProof.social_links, []);
+});
+
+test("web/app.js renders social links strictly from validated handles with safe rel attributes and no XSS", async () => {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const vm = await import("node:vm");
+  const appSrc = fs.readFileSync(
+    path.resolve(path.dirname(new URL(import.meta.url).pathname), "../../web/app.js"),
+    "utf8"
+  );
+  // Extract escapeHtml + handle regexes + SOCIAL_ICONS + renderSocialLinksHtml into an isolated VM context.
+  const sandbox: Record<string, unknown> = {};
+  const escapeMatch = appSrc.match(/function escapeHtml\(s\)[\s\S]*?\n\}/);
+  const socialMatch = appSrc.match(
+    /const GITHUB_HANDLE_RE =[\s\S]*?function renderSocialLinksHtml\(entry\)[\s\S]*?\n\}/
+  );
+  assert.ok(escapeMatch && socialMatch, "expected social rendering helpers in web/app.js");
+  vm.runInNewContext(`${escapeMatch[0]}\n${socialMatch[0]}\nthis.renderSocialLinksHtml = renderSocialLinksHtml;`, sandbox);
+  const render = sandbox.renderSocialLinksHtml as (e: Record<string, unknown>) => string;
+
+  const clean = render({ github: "octocat", x: "octo_x", linkedin: "octo-cat" });
+  assert.match(clean, /href="https:\/\/github\.com\/octocat"/);
+  assert.match(clean, /href="https:\/\/x\.com\/octo_x"/);
+  assert.match(clean, /href="https:\/\/www\.linkedin\.com\/in\/octo-cat"/);
+  assert.equal((clean.match(/rel="noopener noreferrer nofollow ugc"/g) || []).length, 3);
+  assert.equal((clean.match(/target="_blank"/g) || []).length, 3);
+
+  // Adversarial handles / raw URLs / XSS payloads must render nothing.
+  assert.equal(
+    render({
+      github: 'javascript:alert(1)" onclick="x',
+      x: "<script>alert(1)</script>",
+      linkedin: "https://evil.example/in/x",
+    }),
+    ""
+  );
 });
