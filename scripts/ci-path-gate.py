@@ -14,7 +14,7 @@ Fail-closed guarantees:
   toolchain (e.g. a deleted mission or unknown verifier image), all three
   toolchains are enabled.
 - Any change to `missions/verifier-common/**`, shared verification/red-team/
-  audit scripts, `cloudflare/containers/verifier_server.py`, or workflow files
+  scripts, `cloudflare/containers/verifier_server.py`, or workflow files
   enables all affected toolchains.
 """
 import argparse
@@ -40,8 +40,6 @@ ALL_VERIFIER_SHARED_FILES = {
     "scripts/redteam.py",
     "scripts/check-statements.py",
     "scripts/build-verifiers.sh",
-    "scripts/audit-live.py",
-    "scripts/test_audit_live.py",
     "scripts/ci-path-gate.py",
     "scripts/test_ci_path_gate.py",
     ".github/workflows/ci.yml",

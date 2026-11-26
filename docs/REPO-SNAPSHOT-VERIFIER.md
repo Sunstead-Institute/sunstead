@@ -126,13 +126,12 @@ Repo-snapshot verification preserves the full three-principal trust boundary (`r
 
 ### Opt-In Lean 4 `module` System / `.olean.private` Support (e.g. `ArkLib`)
 
-Classic and non-`module` missions keep `allow_module_system = false` by default (`sunstead_sandbox.py`, `SunsteadCheck.lean`, `prebuild_snapshot.py`, and `scripts/audit-live.py` all fail closed on `module` headers and `.olean.private` artifacts).
+Classic and non-`module` missions keep `allow_module_system = false` by default (`sunstead_sandbox.py`, `SunsteadCheck.lean`, and `prebuild_snapshot.py` all fail closed on `module` headers and `.olean.private` artifacts).
 
 For upstream repositories that set `requiresModuleSystem = true` in `lakefile.toml` (e.g. `Verified-zkEVM/ArkLib` on Lean 4.36+, where Lean splits public interfaces into `.olean` / `.olean.server` and private proof terms + unexposed defs + `private import`s into `.olean.private`), a repo-snapshot mission can explicitly opt in via `"allow_module_system": true` in `sunstead.json` (`snapshot`) and `allow_module_system=True` in `verify`:
 
 1. **`SunsteadCheck.lean` (`allow-module-system=1`):** Loads chained `#[.olean, .olean.server, .olean.private]` regions via `Lean.readModuleDataParts` (keeping all `CompactedRegion`s alive through kernel replay), walks imports across all parts (catching `private import`s), merges per-module parts in order (`.olean` → `.olean.server` → `.olean.private`) so private proof terms (`.thmInfo`) overwrite public `.axiomInfo` stubs while still rejecting cross-module duplicate constants, loads trusted modules with `importAll := true` and `loadExts := false`, fails closed if a `module` file is missing `.olean.private`, replays all merged constants through `Kernel.Environment.replay`, enforces `FrozenTypeDeps(M, T)` over the merged frozen map, and checks `collectAxioms ⊆ {propext, Classical.choice, Quot.sound}`.
 2. **`sunstead_sandbox.py` & `prebuild_snapshot.py`:** Preserves `.olean`, `.olean.server`, and `.olean.private` in prebuilt deps, frozen targets, and multi-module overlays; continues blocking `.olean`, `.olean.server`, `.olean.private`, `.ir`, and `.ir.sig` inside contributor `/work`; extracts `public`/`private`/`meta`/`all` imports so `private import Lean` is still rejected by `allowed_import_prefixes`.
-3. **Independent Auditor (`scripts/audit-live.py`):** Passes `--allow-module-system` to `SunsteadAuditCheck.lean` when `manifest.snapshot.allow_module_system` is `true`, running stock `leanchecker`, reading frozen parts via `readModuleDataParts`, importing the target with `importAll := true, loadExts := false`, and checking `FrozenTypeDeps` + `collectAxioms`.
 
 ---
 

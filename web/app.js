@@ -914,11 +914,6 @@ function ledgerBadges(p) {
   } else if (p.entry_kind === "assembled") {
     out.push(`<span class="ledger-badge ledger-badge-ok" title="Auto-assembled decomposition proof verified via untouched ./verify">assembled ✓</span>`);
   }
-  if (p.audit && p.audit.status === "passed") {
-    out.push(`<span class="ledger-badge ledger-badge-ok" title="Independently replayed with stock Lean and leanchecker">audited ✓</span>`);
-  } else if (p.audit && p.audit.status === "failed") {
-    out.push(`<span class="ledger-badge ledger-badge-warn" title="Independent audit reported a failure">audit failed</span>`);
-  }
   if (p.mission_retired) out.push(`<span class="ledger-badge ledger-badge-muted">retired mission</span>`);
   if (p.mission_demo) out.push(`<span class="ledger-badge ledger-badge-muted">demo · 0 pts</span>`);
   if (!p.spec_is_current && !p.mission_retired && p.entry_kind !== "subgoal" && p.entry_kind !== "refutation") {
@@ -945,21 +940,6 @@ function renderDecompProvenanceHtml(p) {
     parts.push(`co-authors: ${names}`);
   }
   return parts.length > 0 ? `<div class="muted small decomp-prov">${parts.join(" · ")}</div>` : "";
-}
-
-function renderAuditHtml(audit) {
-  if (!audit) return "not run yet";
-  const parts = [`<strong>${escapeHtml(audit.status)}</strong>`];
-  if (audit.toolchain) parts.push(`<code>${escapeHtml(audit.toolchain)}</code>`);
-  if (Array.isArray(audit.axioms)) {
-    parts.push(`axioms: <code>${escapeHtml(audit.axioms.join(", ") || "none")}</code>`);
-  }
-  if (audit.audited_at) parts.push(escapeHtml(fmtUtc(audit.audited_at)));
-  const runHref = safeHttpUrl(audit.run_url);
-  if (runHref) {
-    parts.push(`<a class="proof-link" href="${escapeHtml(runHref)}" target="_blank" rel="noopener">audit run ↗</a>`);
-  }
-  return parts.join(" · ");
 }
 
 function ledgerRowHtml(p) {
@@ -1038,7 +1018,6 @@ async function loadLedgerProof(root, hash) {
     </div>
     <div class="small ledger-upstream">Upstream: ${upstreamHtml(proof.upstream)}</div>
     ${renderDecompProvenanceHtml(proof)}
-    <div class="small muted">Independent audit: ${renderAuditHtml(proof.audit)}</div>
     ${proofDetailHtml(proof)}
     ${also ? `<div class="small ledger-also"><div class="kv-label">The same patch was also accepted as</div><ul>${also}</ul></div>` : ""}
   `;

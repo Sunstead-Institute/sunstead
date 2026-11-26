@@ -41,7 +41,6 @@ import {
   verifierSlotName,
   sortMissionSummaries,
   proofIdFromPatchSha,
-  parseAuditAttestation,
   constantTimeEqual,
   shouldRunAsyncSubmit,
   formatSubmissionStatusView,
@@ -76,7 +75,6 @@ export interface HubEnv {
   LEAN4_V435_VERIFIER: DurableObjectNamespace<Lean4V435Verifier>;
   LEAN4_V431_VERIFIER: DurableObjectNamespace<Lean4V431Verifier>;
   GITHUB_API_TOKEN?: string;
-  AUDIT_API_TOKEN?: string;
   ADMIN_API_TOKEN?: string;
 }
 
@@ -339,7 +337,6 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     // Ledger permalink key: SHA-256 of the stored (possibly normalized) patch.
     // Rows from before this column are filled in by backfillPatchHashes().
     this.ensureColumn("accepted_patches", "patch_sha256", "TEXT");
-    this.ensureColumn("accepted_patches", "audit_json", "TEXT");
     this.ctx.storage.sql.exec(
       "CREATE INDEX IF NOT EXISTS idx_accepted_patches_sha ON accepted_patches(patch_sha256)"
     );
@@ -1262,11 +1259,6 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       return this.handleLedgerProof(decodeURIComponent(ledgerMatch[1]), url.origin);
     }
 
-    const auditMatch = path.match(/^\/api\/proofs\/([^/]+)\/audit$/);
-    if (method === "POST" && auditMatch) {
-      return this.handleRecordAudit(decodeURIComponent(auditMatch[1]), request);
-    }
-
     const taskFilesMatch = path.match(/^\/api\/missions\/([^/]+)\/tasks\/([^/]+)\/files$/);
     if (method === "GET" && taskFilesMatch) {
       return this.handleTaskFiles(
@@ -1842,7 +1834,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         `SELECT a.seq, a.mission_id, a.task_id, a.submission_id, a.contributor,
                 COALESCE(c.display_name, a.contributor) AS display_name,
                 c.github AS github, c.github_verified_handle AS github_verified_handle, c.x_handle AS x, c.linkedin_handle AS linkedin,
-                a.summary, a.patch, a.spec_sha256, a.created_at, s.verify_ms AS verify_ms, a.audit_json AS audit_json, a.is_demo AS is_demo
+                a.summary, a.patch, a.spec_sha256, a.created_at, s.verify_ms AS verify_ms, a.is_demo AS is_demo
          FROM accepted_patches a
          LEFT JOIN contributors c ON c.handle = a.contributor
          LEFT JOIN submissions s ON s.id = a.submission_id
@@ -1889,7 +1881,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     SELECT a.seq, a.mission_id, a.task_id, a.submission_id, a.contributor,
            COALESCE(c.display_name, a.contributor) AS display_name,
            c.github AS github, c.github_verified_handle AS github_verified_handle, c.x_handle AS x, c.linkedin_handle AS linkedin,
-           a.summary, a.patch, a.patch_sha256, a.spec_sha256, a.created_at, s.verify_ms AS verify_ms, a.audit_json AS audit_json, a.is_demo AS is_demo,
+           a.summary, a.patch, a.patch_sha256, a.spec_sha256, a.created_at, s.verify_ms AS verify_ms, a.is_demo AS is_demo,
            a.entry_kind AS entry_kind, a.co_authors_json AS co_authors_json, a.decomp_meta_json AS decomp_meta_json
     FROM accepted_patches a
     LEFT JOIN contributors c ON c.handle = a.contributor
@@ -1999,51 +1991,6 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     return jsonResp(formatSubmissionStatusView(rows[0], hubOrigin), 200, {
       "Cache-Control": "no-store",
     });
-  }
-
-  /**
-   * POST /api/proofs/:proof_id/audit: authenticated endpoint for `audit-proofs.yml`
-   * to record independent stock-Lean + `leanchecker` attestations on accepted proofs.
-   */
-  private async handleRecordAudit(hash: string, request: Request): Promise<Response> {
-    const expectedToken = this.env.AUDIT_API_TOKEN?.trim();
-    if (!expectedToken) {
-      return jsonResp({ error: "audit attestation endpoint is not configured" }, 503);
-    }
-    const provided = extractBearerToken(request);
-    if (!provided || !constantTimeEqual(provided, expectedToken)) {
-      return jsonResp({ error: "unauthorized audit attestation token" }, 401);
-    }
-    const key = hash.toLowerCase().replace(/^sha256:/, "");
-    if (!PROOF_HASH_RE.test(key)) {
-      return jsonResp({ error: "proof id must be a 64-character hex SHA-256" }, 400);
-    }
-    let rawBody: unknown;
-    try {
-      rawBody = await request.json();
-    } catch {
-      return jsonResp({ error: "invalid JSON body" }, 400);
-    }
-    let audit: ReturnType<typeof parseAuditAttestation>;
-    try {
-      audit = parseAuditAttestation(rawBody);
-    } catch (e) {
-      return jsonResp({ error: e instanceof Error ? e.message : String(e) }, 400);
-    }
-    await this.backfillPatchHashes();
-    const patchSha = `sha256:${key}`;
-    const exists = this.ctx.storage.sql
-      .exec<{ seq: number }>("SELECT seq FROM accepted_patches WHERE patch_sha256 = ? LIMIT 1", patchSha)
-      .toArray();
-    if (exists.length === 0) {
-      return jsonResp({ error: `no accepted proof with patch ${patchSha}` }, 404);
-    }
-    this.ctx.storage.sql.exec(
-      "UPDATE accepted_patches SET audit_json = ? WHERE patch_sha256 = ?",
-      JSON.stringify(audit),
-      patchSha
-    );
-    return jsonResp({ ok: true, proof_id: key, patch_sha256: patchSha, audit });
   }
 
   /** Single-request inspection of a task's current target files + frozen specs (no container wake-up). */
