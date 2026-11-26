@@ -1,0 +1,67 @@
+{
+  "repo": "teorth/IEANTN",
+  "commit": "cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3",
+  "license": "Apache-2.0",
+  "checks": [
+    {
+      "local_file": "IEANTN/Nodes/Buthe2016/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/Buthe2016/v1/Conclusions.lean",
+      "exact_sha256": "0b6ab451ea4776bb44d6a1680d748295baa68285a690efa4a9cb7b045e76972a"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Buthe2016/v1/Tables.lean",
+      "upstream_file": "IEANTN/Nodes/Buthe2016/v1/Tables.lean",
+      "exact_sha256": "3def126f7cf07dd77979af15781b59b69bd90e43071f3ab4bb416e573537d8d1"
+    },
+    {
+      "local_file": "IEANTN/Vocabulary/ErrorTerms.lean",
+      "upstream_file": "IEANTN/Vocabulary/ErrorTerms.lean",
+      "exact_sha256": "8027fc677653f3d86229a586404f9d4ab2ca6c8404d8ccc18df056b22c2e01bc"
+    },
+    {
+      "local_file": "IEANTN/Vocabulary/Numerics.lean",
+      "upstream_file": "IEANTN/Vocabulary/Numerics.lean",
+      "exact_sha256": "6dda8dda76515740e4ebb87af352f5eb4712f3b0038e84d2138b445d3be5b736"
+    },
+    {
+      "local_file": "IEANTN/Vocabulary/PrimeCounting.lean",
+      "upstream_file": "IEANTN/Vocabulary/PrimeCounting.lean",
+      "exact_sha256": "ff46c70252ac31f5f33aae9940bf029c36c2d466ff60a8615198b31b319a84c5"
+    },
+    {
+      "local_file": "IEANTN/Vocabulary/Zeta.lean",
+      "upstream_file": "IEANTN/Vocabulary/Zeta.lean",
+      "exact_sha256": "42e239de4c1151d03ed94ee4c0c51d031f974faa6998f447e85845665bb846ef"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Buthe2016/v1/TaskTheorem2Psi.lean",
+      "upstream_file": "IEANTN/Nodes/Buthe2016/v1/Challenge.lean",
+      "verbatim_snippet": "theorem Buthe2016.v1.challenge_theorem_2_psi : Buthe2016.v1.theorem_2_psi := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Buthe2016/v1/TaskTheorem2Theta.lean",
+      "upstream_file": "IEANTN/Nodes/Buthe2016/v1/Challenge.lean",
+      "verbatim_snippet": "theorem Buthe2016.v1.challenge_theorem_2_theta : Buthe2016.v1.theorem_2_theta := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Buthe2016/v1/TaskTheorem2LiMinusRiemannPi.lean",
+      "upstream_file": "IEANTN/Nodes/Buthe2016/v1/Challenge.lean",
+      "verbatim_snippet": "theorem Buthe2016.v1.challenge_theorem_2_li_minus_riemann_pi : Buthe2016.v1.theorem_2_li_minus_riemann_pi := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Buthe2016/v1/TaskTheorem2LiMinusPi.lean",
+      "upstream_file": "IEANTN/Nodes/Buthe2016/v1/Challenge.lean",
+      "verbatim_snippet": "theorem Buthe2016.v1.challenge_theorem_2_li_minus_pi : Buthe2016.v1.theorem_2_li_minus_pi := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Buthe2016/v1/TaskTheorem1Table1.lean",
+      "upstream_file": "IEANTN/Nodes/Buthe2016/v1/Challenge.lean",
+      "verbatim_snippet": "theorem Buthe2016.v1.challenge_theorem_1_table1 : Buthe2016.v1.theorem_1_table1 := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/Buthe2016/v1/TaskTheorem1Table2.lean",
+      "upstream_file": "IEANTN/Nodes/Buthe2016/v1/Challenge.lean",
+      "verbatim_snippet": "theorem Buthe2016.v1.challenge_theorem_1_table2 : Buthe2016.v1.theorem_1_table2 := by\n  sorry"
+    }
+  ]
+}

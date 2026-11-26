@@ -1,0 +1,98 @@
+{
+  "id": "ieantn-buthe-partial-rh",
+  "title": "IEANTN (Terence Tao): B\u00fcthe (2016) Partial RH Explicit Prime Bounds",
+  "description": "Six verbatim open explicit prime-counting theorems under partial Riemann hypothesis assumptions from Terence Tao's IEANTN (teorth/IEANTN@cd9c2dd3, Apache-2.0): B\u00fcthe (2016) Theorem 2 Schoenfeld-strength bounds for \u03c8(x), \u03b8(x), \u03c0*(x) - li(x), and \u03c0(x) - li(x) within range 4.92\u221a(x / log x) \u2264 T, plus Theorem 1 relative-error bounds for \u03c8(x) across Tables 1 and 2. Every frozen definition file is SHA-256 identical to upstream (0 custom axioms).",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/teorth/IEANTN",
+  "upstream": {
+    "repo": "teorth/IEANTN",
+    "commit": "cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3",
+    "license": "Apache-2.0"
+  },
+  "frozen_paths": [
+    "IEANTN/Nodes/Buthe2016/v1/Conclusions.lean",
+    "IEANTN/Nodes/Buthe2016/v1/Tables.lean",
+    "IEANTN/Vocabulary/ErrorTerms.lean",
+    "IEANTN/Vocabulary/Numerics.lean",
+    "IEANTN/Vocabulary/PrimeCounting.lean",
+    "IEANTN/Vocabulary/Zeta.lean",
+    "IEANTN/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 240,
+    "memory_mb": 6144
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "buthe2016_theorem_2_psi",
+      "title": "B\u00fcthe (2016) Theorem 2: |\u03c8(x) - x| \u2264 \u221ax (log x)\u00b2 / (8\u03c0) under partial RH",
+      "description": "Prove `Buthe2016.v1.challenge_theorem_2_psi`: if `RiemannHypothesisUpTo T`, then `|\u03c8(x) - x| \u2264 \u221ax (log x)\u00b2 / (8\u03c0)` for every `x > 59` with `4.92 \u221a(x / log x) \u2264 T`.",
+      "target_files": [
+        "IEANTN/Nodes/Buthe2016/v1/TaskTheorem2Psi.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/Buthe2016/v1/Challenge.lean#L19-L20"
+    },
+    {
+      "id": "buthe2016_theorem_2_theta",
+      "title": "B\u00fcthe (2016) Theorem 2: |\u03b8(x) - x| \u2264 \u221ax (log x)\u00b2 / (8\u03c0) under partial RH",
+      "description": "Prove `Buthe2016.v1.challenge_theorem_2_theta`: if `RiemannHypothesisUpTo T`, then `|\u03b8(x) - x| \u2264 \u221ax (log x)\u00b2 / (8\u03c0)` for every `x > 599` with `4.92 \u221a(x / log x) \u2264 T`.",
+      "target_files": [
+        "IEANTN/Nodes/Buthe2016/v1/TaskTheorem2Theta.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/Buthe2016/v1/Challenge.lean#L22-L23"
+    },
+    {
+      "id": "buthe2016_theorem_2_li_minus_riemann_pi",
+      "title": "B\u00fcthe (2016) Theorem 2 (7.1): |\u03c0*(x) - li(x)| \u2264 \u221ax log x / (8\u03c0) under partial RH",
+      "description": "Prove `Buthe2016.v1.challenge_theorem_2_li_minus_riemann_pi`: if `RiemannHypothesisUpTo T`, then `|riemannPrimeCounting x - li x| \u2264 \u221ax log x / (8\u03c0)` for every `x > 59` with `4.92 \u221a(x / log x) \u2264 T`.",
+      "target_files": [
+        "IEANTN/Nodes/Buthe2016/v1/TaskTheorem2LiMinusRiemannPi.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/Buthe2016/v1/Challenge.lean#L25-L26"
+    },
+    {
+      "id": "buthe2016_theorem_2_li_minus_pi",
+      "title": "B\u00fcthe (2016) Theorem 2 (7.2): |\u03c0(x) - li(x)| \u2264 \u221ax log x / (8\u03c0) under partial RH",
+      "description": "Prove `Buthe2016.v1.challenge_theorem_2_li_minus_pi`: if `RiemannHypothesisUpTo T`, then `|primeCounting x - li x| \u2264 \u221ax log x / (8\u03c0)` for every `x > 2657` with `4.92 \u221a(x / log x) \u2264 T`.",
+      "target_files": [
+        "IEANTN/Nodes/Buthe2016/v1/TaskTheorem2LiMinusPi.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/Buthe2016/v1/Challenge.lean#L28-L29"
+    },
+    {
+      "id": "buthe2016_theorem_1_table1",
+      "title": "B\u00fcthe (2016) Theorem 1 Table 1: relative |\u03c8(x) - x| \u2264 \u03b4\u2080 x bounds up to T = 3.061\u00b710\u00b9\u2070",
+      "description": "Prove `Buthe2016.v1.challenge_theorem_1_table1`: for every row `(b, T, \u03b4\u2080)` of Table 1, `RiemannHypothesisUpTo T` implies `|\u03c8(x) - x| \u2264 margin 0 * \u03b4\u2080 * x` for all `x \u2265 exp b`.",
+      "target_files": [
+        "IEANTN/Nodes/Buthe2016/v1/TaskTheorem1Table1.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/Buthe2016/v1/Challenge.lean#L31-L32"
+    },
+    {
+      "id": "buthe2016_theorem_1_table2",
+      "title": "B\u00fcthe (2016) Theorem 1 Table 2: relative |\u03c8(x) - x| \u2264 \u03b4\u2080 x bounds up to T = 2.445\u00b710\u00b9\u00b2",
+      "description": "Prove `Buthe2016.v1.challenge_theorem_1_table2`: for every row `(b, T, \u03b4\u2080)` of Table 2, `RiemannHypothesisUpTo T` implies `|\u03c8(x) - x| \u2264 margin 0 * \u03b4\u2080 * x` for all `x \u2265 exp b`.",
+      "target_files": [
+        "IEANTN/Nodes/Buthe2016/v1/TaskTheorem1Table2.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/teorth/IEANTN/blob/cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3/IEANTN/Nodes/Buthe2016/v1/Challenge.lean#L34-L35"
+    }
+  ]
+}

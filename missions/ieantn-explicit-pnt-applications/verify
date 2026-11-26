@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+"""Frozen verifier for `ieantn-explicit-pnt-applications`.
+
+Uses the shared trusted harness baked into `/opt/sunstead/sunstead_sandbox.py`
+with Lean 4.36.0 + read-only Mathlib v4.36.0.
+"""
+import sys
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify  # noqa: E402
+
+LIB_ROOT = "IEANTN"
+FROZEN_FILES = [
+    "IEANTN/Nodes/ContourIntegration/v1/Conclusions.lean",
+    "IEANTN/Nodes/DudekPlatt/v1/Conclusions.lean",
+    "IEANTN/Nodes/DudekPlatt/v3/Conclusions.lean",
+    "IEANTN/Nodes/DudekPlattNumerics/v1/Conclusions.lean",
+    "IEANTN/Nodes/KLN/v1/Conclusions.lean",
+    "IEANTN/Nodes/MT/v1/Conclusions.lean",
+    "IEANTN/Nodes/MTY/v1/Conclusions.lean",
+    "IEANTN/Nodes/PlattTrudgian/v1/Conclusions.lean",
+    "IEANTN/Nodes/PlattTrudgian2021/v1/Conclusions.lean",
+    "IEANTN/Nodes/PlattTrudgian2021/v1/Tables.lean",
+    "IEANTN/Nodes/PrimesBetweenCubes/v1/Conclusions.lean",
+    "IEANTN/Vocabulary.lean",
+    "IEANTN/Vocabulary/ErrorTerms.lean",
+    "IEANTN/Vocabulary/Goldbach.lean",
+    "IEANTN/Vocabulary/Numerics.lean",
+    "IEANTN/Vocabulary/PrimeCounting.lean",
+    "IEANTN/Vocabulary/PrimeGaps.lean",
+    "IEANTN/Vocabulary/Zeta.lean",
+    "IEANTN/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain"
+]
+
+TASKS = {
+    "residue_theorem_rectangle": {
+        "module": "IEANTN.Nodes.ContourIntegration.v1.TaskResidueTheoremRectangle",
+        "theorem": "ContourIntegration.v1.challenge_residue_theorem_rectangle",
+        "statement": "\ndef residue_theorem_rectangle : Prop :=\n  ContourIntegration.v1.residue_theorem_rectangle\n"
+    },
+    "platt_trudgian_2021_classical": {
+        "module": "IEANTN.Nodes.PlattTrudgian2021.v1.TaskTheorem1Classical",
+        "theorem": "PlattTrudgian2021.v1.challenge_theorem_1_classical",
+        "statement": "\ndef platt_trudgian_2021_classical : Prop :=\n  ∀ (mt_v1_zero_free_region : MT.v1.zero_free_region)\n    (platttrudgian_v1_rh_up_to : PlattTrudgian.v1.rh_up_to)\n    (kln_v1_zero_density : KLN.v1.zero_density), PlattTrudgian2021.v1.theorem_1_classical\n"
+    },
+    "platt_trudgian_2021_numerical": {
+        "module": "IEANTN.Nodes.PlattTrudgian2021.v1.TaskTheorem1Numerical",
+        "theorem": "PlattTrudgian2021.v1.challenge_theorem_1_numerical",
+        "statement": "\ndef platt_trudgian_2021_numerical : Prop :=\n  ∀ (mt_v1_zero_free_region : MT.v1.zero_free_region)\n    (platttrudgian_v1_rh_up_to : PlattTrudgian.v1.rh_up_to)\n    (kln_v1_zero_density : KLN.v1.zero_density), PlattTrudgian2021.v1.theorem_1_numerical\n"
+    },
+    "prime_between_successive_cubes": {
+        "module": "IEANTN.Nodes.PrimesBetweenCubes.v1.TaskPrimeBetweenSuccessiveCubes",
+        "theorem": "PrimesBetweenCubes.v1.challenge_prime_between_successive_cubes",
+        "statement": "\ndef prime_between_successive_cubes : Prop :=\n  ∀ (mty_v1_korobov_vinogradov_region : MTY.v1.korobov_vinogradov_region), PrimesBetweenCubes.v1.prime_between_successive_cubes\n"
+    },
+    "dudek_platt_ramanujan_inequality": {
+        "module": "IEANTN.Nodes.DudekPlatt.v1.TaskRamanujanInequality",
+        "theorem": "DudekPlatt.v1.challenge_ramanujan_inequality",
+        "statement": "\ndef dudek_platt_ramanujan_inequality : Prop :=\n  ∀ (dudekplattnumerics_v1_pi_two_sided_paper : DudekPlattNumerics.v1.pi_two_sided_paper)\n    (dudekplatt_v3_criterion : DudekPlatt.v3.criterion), DudekPlatt.v1.ramanujan_inequality\n"
+    },
+    "dudek_platt_largest_counterexample_on_rh": {
+        "module": "IEANTN.Nodes.DudekPlatt.v1.TaskLargestCounterexampleOnRH",
+        "theorem": "DudekPlatt.v1.challenge_largest_counterexample_on_rh",
+        "statement": "\ndef dudek_platt_largest_counterexample_on_rh : Prop :=\n  DudekPlatt.v1.largest_counterexample_on_rh\n"
+    }
+}
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>")
+    lean_verify(
+        sys.argv[1],
+        lib_root=LIB_ROOT,
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        uses_mathlib=True,
+        timeout_sec=230,
+    )

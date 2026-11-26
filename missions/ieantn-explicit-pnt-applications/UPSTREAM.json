@@ -1,0 +1,127 @@
+{
+  "repo": "teorth/IEANTN",
+  "commit": "cd9c2dd3cc0b4c5cac52e7c6c1c21555764152d3",
+  "license": "Apache-2.0",
+  "checks": [
+    {
+      "local_file": "IEANTN/Nodes/ContourIntegration/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/ContourIntegration/v1/Conclusions.lean",
+      "exact_sha256": "456e9ed77427947a96257b17c559eb4bab7078a129ccf7c922aa9d38d6ed5ab6"
+    },
+    {
+      "local_file": "IEANTN/Nodes/DudekPlatt/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/DudekPlatt/v1/Conclusions.lean",
+      "exact_sha256": "e81299c6fa86a9c48da10a8c47100ef7ef50dc1433c836f3b793db2c05c3c825"
+    },
+    {
+      "local_file": "IEANTN/Nodes/DudekPlatt/v3/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/DudekPlatt/v3/Conclusions.lean",
+      "exact_sha256": "e30db1a432e6f90700e55212583e560deca0e006b7c46eea5dc4e38f7fae318c"
+    },
+    {
+      "local_file": "IEANTN/Nodes/DudekPlattNumerics/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/DudekPlattNumerics/v1/Conclusions.lean",
+      "exact_sha256": "5bf4899817245c5fc651da361a0637486d96d82a720804b15a6dbcc3e5b6e08e"
+    },
+    {
+      "local_file": "IEANTN/Nodes/KLN/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/KLN/v1/Conclusions.lean",
+      "exact_sha256": "3848cdd5d0b528f497933fb45a4e159d3e1d78a2fcc361262459390acde45e7a"
+    },
+    {
+      "local_file": "IEANTN/Nodes/MT/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/MT/v1/Conclusions.lean",
+      "exact_sha256": "448ac115c812d25f11dc2634249455c930a8751241a79ef1af4e60cdefa20a3b"
+    },
+    {
+      "local_file": "IEANTN/Nodes/MTY/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/MTY/v1/Conclusions.lean",
+      "exact_sha256": "ae2868e796796d43a6fa7566c9b9ce3163c6a500c04576c14fa188d603f24412"
+    },
+    {
+      "local_file": "IEANTN/Nodes/PlattTrudgian/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/PlattTrudgian/v1/Conclusions.lean",
+      "exact_sha256": "3a5dfbca68c5ef883b9b0372f62224311b17bd29963cbb19d4dc0cb0feeb4667"
+    },
+    {
+      "local_file": "IEANTN/Nodes/PlattTrudgian2021/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/PlattTrudgian2021/v1/Conclusions.lean",
+      "exact_sha256": "cc276f57f7c6c022f6da9ee8951c6b69d96e0ccbfa9ee12fa4b4503257d9f74c"
+    },
+    {
+      "local_file": "IEANTN/Nodes/PlattTrudgian2021/v1/Tables.lean",
+      "upstream_file": "IEANTN/Nodes/PlattTrudgian2021/v1/Tables.lean",
+      "exact_sha256": "7541e1fa48769eca6edc5461546e8798cdf048ab7064020f3aa12678fc159dae"
+    },
+    {
+      "local_file": "IEANTN/Nodes/PrimesBetweenCubes/v1/Conclusions.lean",
+      "upstream_file": "IEANTN/Nodes/PrimesBetweenCubes/v1/Conclusions.lean",
+      "exact_sha256": "0cd98b9b656bc20970db36ca2612a0b95c07c1bb6262cf9b19dfe964232a3a3c"
+    },
+    {
+      "local_file": "IEANTN/Vocabulary.lean",
+      "upstream_file": "IEANTN/Vocabulary.lean",
+      "exact_sha256": "e64c3b4a12fe41ab5fb09fbf55fdcc926ae1f2a543e8877fb276cc0c3788d7d7"
+    },
+    {
+      "local_file": "IEANTN/Vocabulary/ErrorTerms.lean",
+      "upstream_file": "IEANTN/Vocabulary/ErrorTerms.lean",
+      "exact_sha256": "8027fc677653f3d86229a586404f9d4ab2ca6c8404d8ccc18df056b22c2e01bc"
+    },
+    {
+      "local_file": "IEANTN/Vocabulary/Goldbach.lean",
+      "upstream_file": "IEANTN/Vocabulary/Goldbach.lean",
+      "exact_sha256": "2ee6ad691c12271da34f445c9cd42367a5c0bc3ced973bbdb3db8949e13b7293"
+    },
+    {
+      "local_file": "IEANTN/Vocabulary/Numerics.lean",
+      "upstream_file": "IEANTN/Vocabulary/Numerics.lean",
+      "exact_sha256": "6dda8dda76515740e4ebb87af352f5eb4712f3b0038e84d2138b445d3be5b736"
+    },
+    {
+      "local_file": "IEANTN/Vocabulary/PrimeCounting.lean",
+      "upstream_file": "IEANTN/Vocabulary/PrimeCounting.lean",
+      "exact_sha256": "ff46c70252ac31f5f33aae9940bf029c36c2d466ff60a8615198b31b319a84c5"
+    },
+    {
+      "local_file": "IEANTN/Vocabulary/PrimeGaps.lean",
+      "upstream_file": "IEANTN/Vocabulary/PrimeGaps.lean",
+      "exact_sha256": "5c7168269e729f01ed0d17620bf9b6c134442e56ae2efbb018cbaa979916f18f"
+    },
+    {
+      "local_file": "IEANTN/Vocabulary/Zeta.lean",
+      "upstream_file": "IEANTN/Vocabulary/Zeta.lean",
+      "exact_sha256": "42e239de4c1151d03ed94ee4c0c51d031f974faa6998f447e85845665bb846ef"
+    },
+    {
+      "local_file": "IEANTN/Nodes/ContourIntegration/v1/TaskResidueTheoremRectangle.lean",
+      "upstream_file": "IEANTN/Nodes/ContourIntegration/v1/Challenge.lean",
+      "verbatim_snippet": "theorem ContourIntegration.v1.challenge_residue_theorem_rectangle : ContourIntegration.v1.residue_theorem_rectangle := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/PlattTrudgian2021/v1/TaskTheorem1Classical.lean",
+      "upstream_file": "IEANTN/Nodes/PlattTrudgian2021/v1/Challenge.lean",
+      "verbatim_snippet": "theorem PlattTrudgian2021.v1.challenge_theorem_1_classical\n    (mt_v1_zero_free_region : MT.v1.zero_free_region)\n    (platttrudgian_v1_rh_up_to : PlattTrudgian.v1.rh_up_to)\n    (kln_v1_zero_density : KLN.v1.zero_density) :\n    PlattTrudgian2021.v1.theorem_1_classical := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/PlattTrudgian2021/v1/TaskTheorem1Numerical.lean",
+      "upstream_file": "IEANTN/Nodes/PlattTrudgian2021/v1/Challenge.lean",
+      "verbatim_snippet": "theorem PlattTrudgian2021.v1.challenge_theorem_1_numerical\n    (mt_v1_zero_free_region : MT.v1.zero_free_region)\n    (platttrudgian_v1_rh_up_to : PlattTrudgian.v1.rh_up_to)\n    (kln_v1_zero_density : KLN.v1.zero_density) :\n    PlattTrudgian2021.v1.theorem_1_numerical := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/PrimesBetweenCubes/v1/TaskPrimeBetweenSuccessiveCubes.lean",
+      "upstream_file": "IEANTN/Nodes/PrimesBetweenCubes/v1/Challenge.lean",
+      "verbatim_snippet": "theorem PrimesBetweenCubes.v1.challenge_prime_between_successive_cubes\n    (mty_v1_korobov_vinogradov_region : MTY.v1.korobov_vinogradov_region) :\n    PrimesBetweenCubes.v1.prime_between_successive_cubes := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/DudekPlatt/v1/TaskRamanujanInequality.lean",
+      "upstream_file": "IEANTN/Nodes/DudekPlatt/v1/Challenge.lean",
+      "verbatim_snippet": "theorem DudekPlatt.v1.challenge_ramanujan_inequality\n    (dudekplattnumerics_v1_pi_two_sided_paper : DudekPlattNumerics.v1.pi_two_sided_paper)\n    (dudekplatt_v3_criterion : DudekPlatt.v3.criterion) :\n    DudekPlatt.v1.ramanujan_inequality := by\n  sorry"
+    },
+    {
+      "local_file": "IEANTN/Nodes/DudekPlatt/v1/TaskLargestCounterexampleOnRH.lean",
+      "upstream_file": "IEANTN/Nodes/DudekPlatt/v1/Challenge.lean",
+      "verbatim_snippet": "theorem DudekPlatt.v1.challenge_largest_counterexample_on_rh : DudekPlatt.v1.largest_counterexample_on_rh := by\n  sorry"
+    }
+  ]
+}

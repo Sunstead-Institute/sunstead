@@ -34,6 +34,8 @@ IMAGES = {
     "ieantn-zero-free-regions": DEFAULT_IMAGE,
     "ieantn-zeta-logderiv-values": DEFAULT_IMAGE,
     "ieantn-buthe-prime-bounds": DEFAULT_IMAGE,
+    "ieantn-buthe-partial-rh": DEFAULT_IMAGE,
+    "ieantn-explicit-pnt-applications": DEFAULT_IMAGE,
     "pnt-analytic-foundations": DEFAULT_IMAGE,
     "lnsym-aes-gcm-armv8": V435_IMAGE,
     "lnsym-gcm-gmult-armv8": V435_IMAGE,
@@ -42,7 +44,9 @@ IMAGES = {
     "matrix-rank-alphatensor-f2": DEFAULT_IMAGE,
     "aes-sbox-circuit": DEFAULT_IMAGE,
     "crypto-sbox-circuits": DEFAULT_IMAGE,
+    "crypto-linear-xor-opt": DEFAULT_IMAGE,
     "sorting-networks-opt": DEFAULT_IMAGE,
+    "sorting-networks-depth-opt": DEFAULT_IMAGE,
     "__synthetic_pure_lean__": DEFAULT_IMAGE,
     "__synthetic_mathlib__": DEFAULT_IMAGE,
     "__synthetic_hillclimb__": DEFAULT_IMAGE,
@@ -669,6 +673,22 @@ with open(os.path.join(MISSIONS, "crypto-sbox-circuits", "CryptoSbox", "Camellia
           encoding="utf-8") as f:
     CAMELLIA_AND_BASELINE = f.read()
 
+with open(os.path.join(MISSIONS, "sorting-networks-depth-opt", "SortDepth", "Layers9.lean"),
+          encoding="utf-8") as f:
+    SORTDEPTH_N9_BASELINE = f.read()
+
+with open(os.path.join(MISSIONS, "crypto-linear-xor-opt", "CryptoLinearXor", "AesMixColumnsCircuit.lean"),
+          encoding="utf-8") as f:
+    AES_MIXCOL_BASELINE = f.read()
+
+with open(os.path.join(MISSIONS, "crypto-linear-xor-opt", "CryptoLinearXor", "AriaDiffusionCircuit.lean"),
+          encoding="utf-8") as f:
+    ARIA_DIFF_BASELINE = f.read()
+
+with open(os.path.join(MISSIONS, "crypto-linear-xor-opt", "CryptoLinearXor", "CamelliaPCircuit.lean"),
+          encoding="utf-8") as f:
+    CAMELLIA_P_BASELINE = f.read()
+
 CASES = [
     ("rank444-wrong-score", "matrix-rank444-f2", "reduce_rank",
      {"Rank444/Certificate.lean": RANK_BASELINE.replace("Nat := 47", "Nat := 46", 1)},
@@ -761,6 +781,51 @@ CASES = [
     ("crypto-sbox-sorry-attack", "crypto-sbox-circuits", "sm4_and_gates",
      {"CryptoSbox/Sm4AndCircuit.lean": "def CryptoSbox.sm4AndScore : Nat := 1\ndef CryptoSbox.sm4AndGates : List (Nat × Nat × Nat) := by sorry\ndef CryptoSbox.sm4AndOutputs : List Nat := [0, 1, 2, 3, 4, 5, 6, 7]\n"},
      False, None, "sorry inside circuit definition must be rejected at lint/kernel"),
+    # --- Optimal-Depth Sorting Networks hill-climb (`sorting-networks-depth-opt`) ---
+    ("sortdepth-n9-baseline", "sorting-networks-depth-opt", "depth_n9",
+     {}, True, 9, "honest Odd-Even Transposition n=9 baseline must kernel-replay at 9 parallel layers"),
+    ("sortdepth-n16-baseline", "sorting-networks-depth-opt", "depth_n16",
+     {}, True, 16, "honest Odd-Even Transposition n=16 baseline must kernel-replay at 16 parallel layers"),
+    ("sortdepth-n9-duplicate-wire-in-layer", "sorting-networks-depth-opt", "depth_n9",
+     {"SortDepth/Layers9.lean": SORTDEPTH_N9_BASELINE.replace("(2, 3)", "(1, 3)", 1)},
+     False, None, "reusing wire 1 within a single parallel layer must be rejected by wellFormedLayers"),
+    ("sortdepth-n9-wrong-depth", "sorting-networks-depth-opt", "depth_n9",
+     {"SortDepth/Layers9.lean": SORTDEPTH_N9_BASELINE.replace("Nat := 9", "Nat := 8", 1)},
+     False, None, "claimed depth9 must equal layers9.length"),
+    ("sortdepth-n9-unsorted-drop-layer", "sorting-networks-depth-opt", "depth_n9",
+     {"SortDepth/Layers9.lean": (
+         SORTDEPTH_N9_BASELINE[:SORTDEPTH_N9_BASELINE.rfind(",\n  [")] + "\n]\n"
+     ).replace("Nat := 9", "Nat := 8", 1)},
+     False, None, "dropping the final parallel layer leaves inputs unsorted and must fail decide +kernel"),
+    ("sortdepth-n9-code-injection", "sorting-networks-depth-opt", "depth_n9",
+     {"SortDepth/Layers9.lean": SORTDEPTH_N9_BASELINE + "\n#eval IO.println \"pwn\"\n"},
+     False, None, "Lean code injection in layers file must be rejected at lint"),
+    # --- Cryptographic Linear-Layer XOR Circuits (`crypto-linear-xor-opt`) ---
+    ("linear-xor-aes-mc-baseline", "crypto-linear-xor-opt", "aes_mixcolumns_xor",
+     {}, True, 152, "AES MixColumns seed circuit must kernel-replay at 152 XOR gates"),
+    ("linear-xor-sm4-l-baseline", "crypto-linear-xor-opt", "sm4_linear_l_xor",
+     {}, True, 128, "SM4 linear diffusion L seed circuit must kernel-replay at 128 XOR gates"),
+    ("linear-xor-sm4-lprime-baseline", "crypto-linear-xor-opt", "sm4_key_lprime_xor",
+     {}, True, 64, "SM4 key diffusion L' seed circuit must kernel-replay at 64 XOR gates"),
+    ("linear-xor-aria-baseline", "crypto-linear-xor-opt", "aria_diffusion_xor",
+     {}, True, 96, "ARIA 16x16 diffusion seed circuit must kernel-replay at 96 XOR gates"),
+    ("linear-xor-camellia-p-baseline", "crypto-linear-xor-opt", "camellia_p_xor",
+     {}, True, 36, "Camellia P-function seed circuit must kernel-replay at 36 XOR gates"),
+    ("linear-xor-wrong-score", "crypto-linear-xor-opt", "aes_mixcolumns_xor",
+     {"CryptoLinearXor/AesMixColumnsCircuit.lean": AES_MIXCOL_BASELINE.replace("Nat := 152", "Nat := 151", 1)},
+     False, None, "claimed aesMixColumnsScore must equal aesMixColumnsGates.length"),
+    ("linear-xor-corrupted-output", "crypto-linear-xor-opt", "aria_diffusion_xor",
+     {"CryptoLinearXor/AriaDiffusionCircuit.lean": ARIA_DIFF_BASELINE.replace("Outputs : List Nat := [", "Outputs : List Nat := [0, ", 1).rsplit(",", 1)[0] + "]\n"},
+     False, None, "corrupted ARIA diffusion output wire must be rejected by F2 basis check"),
+    ("linear-xor-non-causal-wire", "crypto-linear-xor-opt", "camellia_p_xor",
+     {"CryptoLinearXor/CamelliaPCircuit.lean": CAMELLIA_P_BASELINE.replace("[\n  (", "[\n  (8, 0),\n  (", 1).replace("Nat := 36", "Nat := 37", 1)},
+     False, None, "non-causal XOR gate referencing wire 8 at gate 0 must be rejected by wellFormed"),
+    ("linear-xor-code-injection", "crypto-linear-xor-opt", "camellia_p_xor",
+     {"CryptoLinearXor/CamelliaPCircuit.lean": CAMELLIA_P_BASELINE + "\n#eval IO.println \"pwn\"\n"},
+     False, None, "non-literal Lean code injection in linear-XOR circuit must be rejected at lint"),
+    ("linear-xor-sorry-attack", "crypto-linear-xor-opt", "camellia_p_xor",
+     {"CryptoLinearXor/CamelliaPCircuit.lean": "def CryptoLinearXor.camelliaPScore : Nat := 1\ndef CryptoLinearXor.camelliaPGates : List (Nat × Nat) := by sorry\ndef CryptoLinearXor.camelliaPOutputs : List Nat := [0, 1, 2, 3, 4, 5, 6, 7]\n"},
+     False, None, "sorry inside linear-XOR circuit must be rejected at lint/kernel"),
     # --- Pure Lean 4.36.0 attacks + honest control (`__synthetic_pure_lean__`) ---
     ("lean-honest-control", "__synthetic_pure_lean__", "decoder_injective",
      {"SyntheticPureLean/DecoderInjective.lean": HONEST_DECODER}, True, None,

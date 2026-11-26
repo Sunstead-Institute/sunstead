@@ -1,0 +1,106 @@
+{
+  "id": "crypto-linear-xor-opt",
+  "title": "Cryptographic Diffusion Layer XOR Circuits: minimize straight-line XOR gate count",
+  "description": "Sunstead pins OpenSSL's verbatim diffusion layer implementations (`openssl/openssl@d94024ff`, Apache-2.0) for AES `MixColumns` & `InvMixColumns` (NIST FIPS 197, 32×32 over GF(2)), SM4 round `L` & key-schedule `L'` (RFC 8998 / ISO 18033-3, 32×32 over GF(2)), ARIA involutory diffusion `A` (RFC 5794 / ISO 18033-3, 16×16 over GF(2)), and Camellia `P`-function (RFC 3713 / ISO 18033-3, 8×8 over GF(2)). `CryptoLinearXor/Spec.lean` formally proves GF(2)-linearity, exact equivalence to the OpenSSL C constructions, invertibility/involution, and the Fundamental Linearity Soundness Theorem lifting a single-pass basis-mask check to all 2^n inputs (2^32 = 4,294,967,296 inputs for 32-bit layers) in pure Lean 4.36.0 (no Mathlib). Six independent hill-climb tracks start from unoptimized row-by-row XOR trees and challenge contributors to minimize straight-line XOR gate count (known research frontiers: 92, 103, ~72–90, ~45–56, 36, 16).",
+  "tier": 2,
+  "mode": "hillclimb",
+  "repo": "https://github.com/openssl/openssl",
+  "upstream": {
+    "repo": "openssl/openssl",
+    "commit": "d94024ffc7e726566a6255228ad0a7de4cfc956d",
+    "license": "Apache-2.0"
+  },
+  "score_direction": "minimize",
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 90,
+    "memory_mb": 2048
+  },
+  "frozen_paths": [
+    "CryptoLinearXor/Spec.lean",
+    "CryptoLinearXor/AesMixColumnsBound.lean",
+    "CryptoLinearXor/AesInvMixColumnsBound.lean",
+    "CryptoLinearXor/Sm4LinearLBound.lean",
+    "CryptoLinearXor/Sm4KeyLPrimeBound.lean",
+    "CryptoLinearXor/AriaDiffusionBound.lean",
+    "CryptoLinearXor/CamelliaPBound.lean",
+    "LICENSE",
+    "README.md",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "tasks": [
+    {
+      "id": "aes_mixcolumns_xor",
+      "title": "AES MixColumns (32×32): minimize straight-line XOR gate count",
+      "description": "Submit a straight-line XOR circuit implementing NIST FIPS 197 §5.1.3 / OpenSSL AES `MixColumns` (32×32 over GF(2), polynomial 0x11b, column [02, 03, 01, 01]) in `CryptoLinearXor/AesMixColumnsCircuit.lean` (`aesMixColumnsScore`, `aesMixColumnsGates`, `aesMixColumnsOutputs`). Seeded with a naive row-wise XOR tree (152 XORs; literature frontier: 92). The frozen Lean 4 kernel proof verifies well-formedness, XOR gate count, and exact equivalence on all 2^32 inputs via linearity soundness. Only strict improvements below the current record earn credit.",
+      "baseline_score": 152,
+      "target_files": [
+        "CryptoLinearXor/AesMixColumnsCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/openssl/openssl/blob/d94024ffc7e726566a6255228ad0a7de4cfc956d/crypto/aes/aes_core.c#L463-L489"
+    },
+    {
+      "id": "aes_invmixcolumns_xor",
+      "title": "AES InvMixColumns (32×32): minimize straight-line XOR gate count",
+      "description": "Submit a straight-line XOR circuit implementing NIST FIPS 197 §5.3.3 / OpenSSL AES `InvMixColumns` (32×32 over GF(2), polynomial 0x11b, column [0e, 0b, 0d, 09]) in `CryptoLinearXor/AesInvMixColumnsCircuit.lean` (`aesInvMixColumnsScore`, `aesInvMixColumnsGates`, `aesInvMixColumnsOutputs`). Seeded with a naive row-wise XOR tree (440 XORs; literature frontier: 103). The frozen Lean 4 kernel proof verifies well-formedness, XOR gate count, and exact equivalence on all 2^32 inputs via linearity soundness. Only strict improvements below the current record earn credit.",
+      "baseline_score": 440,
+      "target_files": [
+        "CryptoLinearXor/AesInvMixColumnsCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/openssl/openssl/blob/d94024ffc7e726566a6255228ad0a7de4cfc956d/crypto/aes/aes_core.c#L491-L525"
+    },
+    {
+      "id": "sm4_linear_l_xor",
+      "title": "SM4 Round Diffusion L (32×32): minimize straight-line XOR gate count",
+      "description": "Submit a straight-line XOR circuit implementing RFC 8998 / OpenSSL SM4 round linear transform `L(t) = t ^ rotl(t, 2) ^ rotl(t, 10) ^ rotl(t, 18) ^ rotl(t, 24)` (32×32 over GF(2)) in `CryptoLinearXor/Sm4LinearLCircuit.lean` (`sm4LinearLScore`, `sm4LinearLGates`, `sm4LinearLOutputs`). Seeded with a direct 4-XOR-per-bit tree (128 XORs). The frozen Lean 4 kernel proof verifies well-formedness, XOR gate count, and exact equivalence on all 2^32 inputs via linearity soundness. Only strict improvements below the current record earn credit.",
+      "baseline_score": 128,
+      "target_files": [
+        "CryptoLinearXor/Sm4LinearLCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/openssl/openssl/blob/d94024ffc7e726566a6255228ad0a7de4cfc956d/crypto/sm4/sm4.c#L257-L265"
+    },
+    {
+      "id": "sm4_key_lprime_xor",
+      "title": "SM4 Key Schedule Diffusion L' (32×32): minimize straight-line XOR gate count",
+      "description": "Submit a straight-line XOR circuit implementing RFC 8998 / OpenSSL SM4 key-schedule linear transform `L'(t) = t ^ rotl(t, 13) ^ rotl(t, 23)` (32×32 over GF(2)) in `CryptoLinearXor/Sm4KeyLPrimeCircuit.lean` (`sm4KeyLPrimeScore`, `sm4KeyLPrimeGates`, `sm4KeyLPrimeOutputs`). Seeded with a direct 2-XOR-per-bit tree (64 XORs). The frozen Lean 4 kernel proof verifies well-formedness, XOR gate count, and exact equivalence on all 2^32 inputs via linearity soundness. Only strict improvements below the current record earn credit.",
+      "baseline_score": 64,
+      "target_files": [
+        "CryptoLinearXor/Sm4KeyLPrimeCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/openssl/openssl/blob/d94024ffc7e726566a6255228ad0a7de4cfc956d/crypto/sm4/sm4.c#L272-L277"
+    },
+    {
+      "id": "aria_diffusion_xor",
+      "title": "ARIA Involutory Diffusion A (16×16): minimize straight-line XOR gate count",
+      "description": "Submit a straight-line XOR circuit implementing RFC 5794 / OpenSSL ARIA involutory 16×16 binary diffusion layer `a()` in `CryptoLinearXor/AriaDiffusionCircuit.lean` (`ariaDiffusionScore`, `ariaDiffusionGates`, `ariaDiffusionOutputs`). Seeded with a direct 6-XOR-per-row tree (96 XORs; literature frontier: 36). The frozen Lean 4 kernel proof verifies well-formedness, XOR gate count, and exact equivalence on all 2^16 inputs via linearity soundness. Only strict improvements below the current record earn credit.",
+      "baseline_score": 96,
+      "target_files": [
+        "CryptoLinearXor/AriaDiffusionCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/openssl/openssl/blob/d94024ffc7e726566a6255228ad0a7de4cfc956d/crypto/aria/aria.c#L944-L962"
+    },
+    {
+      "id": "camellia_p_xor",
+      "title": "Camellia P-function (8×8): minimize straight-line XOR gate count",
+      "description": "Submit a straight-line XOR circuit implementing RFC 3713 §2.3 / OpenSSL `Camellia_Feistel` 8×8 binary diffusion layer `P` in `CryptoLinearXor/CamelliaPCircuit.lean` (`camelliaPScore`, `camelliaPGates`, `camelliaPOutputs`). Seeded with a naive row-wise XOR tree (36 XORs; literature frontier: 16). The frozen Lean 4 kernel proof verifies well-formedness, XOR gate count, and exact equivalence on all 2^8 inputs via linearity soundness. Only strict improvements below the current record earn credit.",
+      "baseline_score": 36,
+      "target_files": [
+        "CryptoLinearXor/CamelliaPCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/openssl/openssl/blob/d94024ffc7e726566a6255228ad0a7de4cfc956d/crypto/camellia/camellia.c#L253-L272"
+    }
+  ]
+}

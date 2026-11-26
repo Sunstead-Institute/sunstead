@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+"""Verify an explicit parallel-layered sorting network on n = 9..16 wires."""
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify
+
+TASKS = {
+    "depth_n9": {
+        "module": "SortDepth.Bound9",
+        "theorem": "SortDepth.bound_9",
+        "score_const": "SortDepth.depth9",
+        "statement": "def depth_n9 (d : Nat) : Prop := SortDepth.ValidParallelSortingNetwork 9 d",
+        "label": "{score} layers (n=9)",
+    },
+    "depth_n10": {
+        "module": "SortDepth.Bound10",
+        "theorem": "SortDepth.bound_10",
+        "score_const": "SortDepth.depth10",
+        "statement": "def depth_n10 (d : Nat) : Prop := SortDepth.ValidParallelSortingNetwork 10 d",
+        "label": "{score} layers (n=10)",
+    },
+    "depth_n11": {
+        "module": "SortDepth.Bound11",
+        "theorem": "SortDepth.bound_11",
+        "score_const": "SortDepth.depth11",
+        "statement": "def depth_n11 (d : Nat) : Prop := SortDepth.ValidParallelSortingNetwork 11 d",
+        "label": "{score} layers (n=11)",
+    },
+    "depth_n12": {
+        "module": "SortDepth.Bound12",
+        "theorem": "SortDepth.bound_12",
+        "score_const": "SortDepth.depth12",
+        "statement": "def depth_n12 (d : Nat) : Prop := SortDepth.ValidParallelSortingNetwork 12 d",
+        "label": "{score} layers (n=12)",
+    },
+    "depth_n13": {
+        "module": "SortDepth.Bound13",
+        "theorem": "SortDepth.bound_13",
+        "score_const": "SortDepth.depth13",
+        "statement": "def depth_n13 (d : Nat) : Prop := SortDepth.ValidParallelSortingNetwork 13 d",
+        "label": "{score} layers (n=13)",
+    },
+    "depth_n14": {
+        "module": "SortDepth.Bound14",
+        "theorem": "SortDepth.bound_14",
+        "score_const": "SortDepth.depth14",
+        "statement": "def depth_n14 (d : Nat) : Prop := SortDepth.ValidParallelSortingNetwork 14 d",
+        "label": "{score} layers (n=14)",
+    },
+    "depth_n15": {
+        "module": "SortDepth.Bound15",
+        "theorem": "SortDepth.bound_15",
+        "score_const": "SortDepth.depth15",
+        "statement": "def depth_n15 (d : Nat) : Prop := SortDepth.ValidParallelSortingNetwork 15 d",
+        "label": "{score} layers (n=15)",
+    },
+    "depth_n16": {
+        "module": "SortDepth.Bound16",
+        "theorem": "SortDepth.bound_16",
+        "score_const": "SortDepth.depth16",
+        "statement": "def depth_n16 (d : Nat) : Prop := SortDepth.ValidParallelSortingNetwork 16 d",
+        "label": "{score} layers (n=16)",
+    },
+}
+
+LAYERS_TARGETS = {
+    "depth_n9": ("SortDepth/Layers9.lean", "SortDepth.depth9", "SortDepth.layers9"),
+    "depth_n10": ("SortDepth/Layers10.lean", "SortDepth.depth10", "SortDepth.layers10"),
+    "depth_n11": ("SortDepth/Layers11.lean", "SortDepth.depth11", "SortDepth.layers11"),
+    "depth_n12": ("SortDepth/Layers12.lean", "SortDepth.depth12", "SortDepth.layers12"),
+    "depth_n13": ("SortDepth/Layers13.lean", "SortDepth.depth13", "SortDepth.layers13"),
+    "depth_n14": ("SortDepth/Layers14.lean", "SortDepth.depth14", "SortDepth.layers14"),
+    "depth_n15": ("SortDepth/Layers15.lean", "SortDepth.depth15", "SortDepth.layers15"),
+    "depth_n16": ("SortDepth/Layers16.lean", "SortDepth.depth16", "SortDepth.layers16"),
+}
+
+MAX_BYTES = 16384
+MAX_LAYERS = 32
+MAX_COMPARATORS = 256
+
+_NAT = r"(?:0|[1-9][0-9]{0,2})"
+_PAIR_RE = re.compile(rf"\(\s*{_NAT}\s*,\s*{_NAT}\s*\)")
+_WS_RE = re.compile(r"\s*")
+
+
+def _skip_ws(s: str, pos: int) -> int:
+    return _WS_RE.match(s, pos).end()
+
+
+def check_layers(path: Path, depth_name: str, layers_name: str) -> None:
+    # Restrict the editable source to concrete parallel-layer literals replayable outside Lean.
+    if not path.is_file():
+        emit(False, f"Missing layers file: {path.name}", stage="lint")
+    raw = path.read_bytes()
+    if len(raw) > MAX_BYTES:
+        emit(False, f"Layers file exceeds {MAX_BYTES} bytes", stage="lint")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        emit(False, "Layers file must be valid UTF-8", stage="lint")
+
+    header_re = (
+        rf"\s*def\s+{re.escape(depth_name)}\s*:\s*Nat\s*:=\s*({_NAT})\s*\n"
+        rf"\s*def\s+{re.escape(layers_name)}\s*:\s*List\s*\(\s*List\s*\(Nat\s*×\s*Nat\)\s*\)\s*:=\s*\[(.*)\]\s*"
+    )
+    match = re.fullmatch(header_re, text, re.DOTALL)
+    if not match:
+        emit(
+            False,
+            f"Expected only literal definitions for {depth_name} and {layers_name}",
+            stage="lint",
+        )
+
+    body = match.group(2)
+    pos = _skip_ws(body, 0)
+    end = len(body)
+    if pos >= end:
+        emit(
+            False,
+            f"Expected 1 to {MAX_LAYERS} non-empty parallel layers",
+            stage="lint",
+        )
+
+    num_layers = 0
+    total_comparators = 0
+    while True:
+        if pos >= end or body[pos] != "[":
+            emit(
+                False,
+                f"Expected literal layer list `[ (i, j), ... ]` in {layers_name}",
+                stage="lint",
+            )
+        pos = _skip_ws(body, pos + 1)
+        layer_pairs = 0
+        while True:
+            pm = _PAIR_RE.match(body, pos)
+            if not pm:
+                emit(
+                    False,
+                    f"Expected non-empty literal (i, j) comparator pairs inside each layer of {layers_name}",
+                    stage="lint",
+                )
+            layer_pairs += 1
+            total_comparators += 1
+            if total_comparators > MAX_COMPARATORS:
+                emit(
+                    False,
+                    f"Total comparator count exceeds {MAX_COMPARATORS}",
+                    stage="lint",
+                )
+            pos = _skip_ws(body, pm.end())
+            if pos < end and body[pos] == ",":
+                pos = _skip_ws(body, pos + 1)
+                continue
+            if pos < end and body[pos] == "]":
+                pos = _skip_ws(body, pos + 1)
+                break
+            emit(
+                False,
+                f"Unexpected token inside layer of {layers_name}",
+                stage="lint",
+            )
+        num_layers += 1
+        if num_layers > MAX_LAYERS:
+            emit(
+                False,
+                f"Layer count exceeds {MAX_LAYERS}",
+                stage="lint",
+            )
+        if pos >= end:
+            break
+        if body[pos] != ",":
+            emit(
+                False,
+                f"Expected `,` between layers in {layers_name}",
+                stage="lint",
+            )
+        pos = _skip_ws(body, pos + 1)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>", stage="lint")
+    task_id = sys.argv[1]
+    if task_id in LAYERS_TARGETS:
+        rel_path, depth_name, layers_name = LAYERS_TARGETS[task_id]
+        check_layers(
+            Path(__file__).resolve().parent / rel_path,
+            depth_name,
+            layers_name,
+        )
+    lean_verify(
+        task_id,
+        lib_root="SortDepth",
+        frozen_files=["SortDepth/Spec.lean", "UPSTREAM.json", "lakefile.toml", "lean-toolchain"],
+        tasks=TASKS,
+        uses_mathlib=False,
+        timeout_sec=90,
+    )
