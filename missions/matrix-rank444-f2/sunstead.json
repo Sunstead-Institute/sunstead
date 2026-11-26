@@ -21,6 +21,7 @@
   },
   "frozen_paths": [
     "Rank444/Spec.lean",
+    "Rank444/Packed.lean",
     "Rank444/Bound.lean",
     "LICENSE",
     "README.md",

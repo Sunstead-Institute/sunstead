@@ -21,6 +21,7 @@
   },
   "frozen_paths": [
     "RankF2/Spec.lean",
+    "RankF2/Packed.lean",
     "RankF2/Common.lean",
     "RankF2/Bound333.lean",
     "RankF2/Bound334.lean",

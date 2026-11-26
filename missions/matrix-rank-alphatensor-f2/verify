@@ -152,7 +152,7 @@ if __name__ == "__main__":
     lean_verify(
         tid,
         lib_root="RankF2",
-        frozen_files=["RankF2/Spec.lean", "RankF2/Common.lean", "UPSTREAM.json", "lakefile.toml", "lean-toolchain"],
+        frozen_files=["RankF2/Spec.lean", "RankF2/Packed.lean", "RankF2/Common.lean", "UPSTREAM.json", "lakefile.toml", "lean-toolchain"],
         tasks=TASKS,
         uses_mathlib=True,
         timeout_sec=220,
