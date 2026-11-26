@@ -68,16 +68,25 @@ in the affine span of the inputs and the AND-gate outputs. Each AND can add at m
 generator modulo affine functions. To reproduce the ranks from
 [`LwcSbox/Spec.lean`](../missions/crypto-lwc-sboxes/LwcSbox/Spec.lean), apply the Boolean
 Möbius transform to each bit-sliced truth table, zero entries indexed by masks of popcount
-0 or 1, then row-reduce over GF(2). This gives rank 8 for SKINNY-128 and 4 each for PRESENT,
-GIFT and SPONGENT. The pinned upstream circuits in the registry attain those bounds.
+0 or 1, then row-reduce over GF(2). This gives rank 8 for SKINNY-128, 5 for Ascon, and
+4 each for PRESENT, GIFT and SPONGENT. The constructions cited in the registry attain those bounds.
 
-The ARIA designers' S2 formula is affine-equivalent to inversion over GF(2⁸)
+The [ARIA designers' S2 formula (§2.2)](https://www.math.snu.ac.kr/~jinhong/04Aria.pdf) is affine-equivalent to inversion over GF(2⁸)
 (`x^247 = (x^-1)^8`, with the zero convention and linear Frobenius map). The inverse S-box
 is also affine-equivalent to inversion. Both have degree 7 (also obtained by the Möbius
 transform on [`StdSbox/Spec.lean`](../missions/crypto-std-sboxes/StdSbox/Spec.lean)).
 Each AND layer at most doubles degree, so two layers cannot suffice. The
 [pinned NIST degree-7 AES circuit](https://github.com/usnistgov/Circuits/blob/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox/aes-sbox-a35-ad3-g139-gd27-xx104-38.circ.txt)
 attains AND-depth 3, and the affine conversions add no AND layers.
+
+## C4-free extremal graph sources
+
+For the closed C4-free tracks, the [Afzaly–McKay data page](https://users.cecs.anu.edu.au/~bdm/data/extremal.html)
+gives exact edge counts in the `H={C4}` table, also indexed in [OEIS A006855](https://oeis.org/A006855).
+For small-order background, see [Clapham, Flockhart and Sheehan (1989)](https://doi.org/10.1002/jgt.3190130107)
+(exact through 21 vertices) and Füredi's 1994 extended abstract, §6, linked by A006855.
+Neither is being cited for all the larger entries: for n ≥ 33, the exact edge counts here
+come from the Afzaly–McKay data page (papers in preparation).
 
 ## Current values (checked 26 Nov 2026)
 

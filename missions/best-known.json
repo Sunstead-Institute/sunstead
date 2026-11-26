@@ -243,7 +243,7 @@
         "url": "https://oeis.org/A003022",
         "checked": "2026-11-26",
         "proven_optimal": {
-          "source": "J. P. Robinson, 12-mark paper and 13-mark addendum: G(12) = 85 <= 99 < 106 = G(13); distinct positive differences give a Golomb ruler, so at most 12 marks fit.",
+          "source": "J. P. Robinson, Optimum Golomb Rulers and 13-mark addendum (lengths also tabulated in OEIS A003022): G(12) = 85 <= 99 < 106 = G(13); distinct positive differences give a Golomb ruler, so at most 12 marks fit.",
           "url": "https://doi.org/10.1109/tc.1983.1676205"
         }
       },
@@ -254,7 +254,7 @@
         "url": "https://oeis.org/A003022",
         "checked": "2026-11-26",
         "proven_optimal": {
-          "source": "J. B. Shearer, exhaustive 14–16 mark search: G(14) = 127 <= 149 < 151 = G(15); distinct positive differences give a Golomb ruler, so at most 14 marks fit.",
+          "source": "J. B. Shearer, Some New Optimum Golomb Rulers (14–16 marks; see also OEIS A003022): G(14) = 127 <= 149 < 151 = G(15); distinct positive differences give a Golomb ruler, so at most 14 marks fit.",
           "url": "https://research.ibm.com/publications/some-new-optimum-golomb-rulers"
         }
       },
@@ -276,7 +276,7 @@
         "url": "https://oeis.org/A003022",
         "checked": "2026-11-26",
         "proven_optimal": {
-          "source": "Garry–Vanderschel exhaustive project, as tabulated by Dollas, Rankin and McCracken: G(20) = 283 <= 299 < 333 = G(21); distinct positive differences give a Golomb ruler, so at most 20 marks fit.",
+          "source": "Garry–Vanderschel exhaustive search, values tabulated in A. Dimitromanolakis (2002), Table 2.1, and OEIS A003022: G(20) = 283 <= 299 < 333 = G(21); distinct positive differences give a Golomb ruler, so at most 20 marks fit.",
           "url": "https://www.cs.toronto.edu/~apostol/golomb/main.pdf"
         }
       },
@@ -347,7 +347,7 @@
         "url": "https://www.public.asu.edu/~ccolbou/src/tabby/catable.html",
         "checked": "2026-11-26",
         "proven_optimal": {
-          "source": "Construction of non-isomorphic covering arrays: enumeration proves CAN(3,16,2) = 17.",
+          "source": "Torres-Jiménez and Izquierdo-Márquez (2016), Construction of non-isomorphic covering arrays: computational enumeration establishes CAN(3,16,2) = 17. Hiess and Kampel (October 2025 preprint), Section 2.1, also discusses the lower bound and credits earlier computational work.",
           "url": "https://doi.org/10.1142/S1793830916500336"
         }
       },
@@ -358,7 +358,7 @@
         "url": "https://arxiv.org/html/2510.17596v1",
         "checked": "2026-11-26",
         "proven_optimal": {
-          "source": "Hiess and Kampel, Theorem 1 and Corollary 1: a strength-3 binary covering array of 17 rows has at most 16 columns, so CAN(3,20,2) >= 18.",
+          "source": "Hiess and Kampel, October 2025 computational preprint, Theorem 1 and Corollary 1: a strength-3 binary covering array of 17 rows has at most 16 columns, so CAN(3,20,2) >= 18.",
           "url": "https://arxiv.org/html/2510.17596v1"
         }
       },
@@ -743,7 +743,7 @@
         "checked": "2026-11-26",
         "proven_optimal": {
           "source": "Derived from the pinned SKINNY-128 circuit and frozen table: the nonlinear output ANFs have GF(2)-rank 8 modulo affine functions, requiring at least 8 AND-output generators. See docs/BEST-KNOWN.md.",
-          "url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-skinnyutil.h#L154"
+          "url": "https://github.com/Sunstead-Institute/sunstead/blob/main/docs/BEST-KNOWN.md#derived-s-box-optimality-bounds"
         }
       },
       "skinny8_and_depth": {
@@ -767,8 +767,8 @@
         "url": "https://eprint.iacr.org/2016/198",
         "checked": "2026-11-26",
         "proven_optimal": {
-          "source": "K. Stoffelen, Optimizing S-box Implementations for Several Criteria Using SAT Solvers, Section 3.2 and Table 1: Ascon needs at least five nonlinear binary gates.",
-          "url": "https://ko.stoffelen.nl/papers/fse2016-sboxoptimization.pdf"
+          "source": "The frozen Ascon S-box nonlinear output ANFs have GF(2)-rank 5 modulo affine functions, requiring at least 5 AND gates (derivation linked; independently, Stoffelen, FSE 2016, Section 3.2 and Table 1).",
+          "url": "https://github.com/Sunstead-Institute/sunstead/blob/main/docs/BEST-KNOWN.md#derived-s-box-optimality-bounds"
         }
       },
       "keccak_chi_total_gates": {
@@ -793,7 +793,7 @@
         "checked": "2026-11-26",
         "proven_optimal": {
           "source": "Derived from the pinned PRESENT circuit and frozen table: the nonlinear output ANFs have GF(2)-rank 4 modulo affine functions, requiring at least 4 AND-output generators. See docs/BEST-KNOWN.md.",
-          "url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-photon256.c#L51"
+          "url": "https://github.com/Sunstead-Institute/sunstead/blob/main/docs/BEST-KNOWN.md#derived-s-box-optimality-bounds"
         }
       },
       "gift_total_gates": {
@@ -811,7 +811,7 @@
         "checked": "2026-11-26",
         "proven_optimal": {
           "source": "Derived from the pinned GIFT circuit and frozen table: the nonlinear output ANFs have GF(2)-rank 4 modulo affine functions, requiring at least 4 AND-output generators. See docs/BEST-KNOWN.md.",
-          "url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-gift128.c#L480"
+          "url": "https://github.com/Sunstead-Institute/sunstead/blob/main/docs/BEST-KNOWN.md#derived-s-box-optimality-bounds"
         }
       },
       "spongent_total_gates": {
@@ -829,7 +829,7 @@
         "checked": "2026-11-26",
         "proven_optimal": {
           "source": "Derived from the pinned SPONGENT circuit and frozen table: the nonlinear output ANFs have GF(2)-rank 4 modulo affine functions, requiring at least 4 AND-output generators. See docs/BEST-KNOWN.md.",
-          "url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-spongent.c#L41"
+          "url": "https://github.com/Sunstead-Institute/sunstead/blob/main/docs/BEST-KNOWN.md#derived-s-box-optimality-bounds"
         }
       },
       "saturnin_total_gates": {
@@ -955,7 +955,7 @@
         "checked": "2026-11-26",
         "proven_optimal": {
           "source": "Derived from the ARIA designers' S2 formula (Section 2.2): S2 has Boolean degree 7 by affine equivalence to inversion, so two AND layers (degree at most 4) cannot suffice. See docs/BEST-KNOWN.md.",
-          "url": "https://www.math.snu.ac.kr/~jinhong/04Aria.pdf"
+          "url": "https://github.com/Sunstead-Institute/sunstead/blob/main/docs/BEST-KNOWN.md#derived-s-box-optimality-bounds"
         }
       },
       "aria_invs2_total_gates": {
@@ -980,7 +980,7 @@
         "checked": "2026-11-26",
         "proven_optimal": {
           "source": "Derived from the ARIA designers' S2 formula (Section 2.2): InvS2 has Boolean degree 7 by affine equivalence to inversion, so two AND layers (degree at most 4) cannot suffice. See docs/BEST-KNOWN.md.",
-          "url": "https://www.math.snu.ac.kr/~jinhong/04Aria.pdf"
+          "url": "https://github.com/Sunstead-Institute/sunstead/blob/main/docs/BEST-KNOWN.md#derived-s-box-optimality-bounds"
         }
       }
     },
@@ -1130,8 +1130,8 @@
       "c4free_n25": {
         "value": 63,
         "kind": "collection",
-        "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(25, C_4) = 63 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
-        "url": "https://oeis.org/A006855",
+        "source": "Afzaly–McKay, Extremal Graphs and Turan numbers, H={C4} table (also OEIS A006855): ex(25, C4) = 63.",
+        "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html",
         "checked": "2026-11-26",
         "proven_optimal": {
           "source": "A. Afzaly and B. D. McKay, extremal graphs exhaustive results table (unrestricted C4-free column): maximum 63 edges for 25 vertices.",
@@ -1141,8 +1141,8 @@
       "c4free_n27": {
         "value": 71,
         "kind": "collection",
-        "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(27, C_4) = 71 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
-        "url": "https://oeis.org/A006855",
+        "source": "Afzaly–McKay, Extremal Graphs and Turan numbers, H={C4} table (also OEIS A006855): ex(27, C4) = 71.",
+        "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html",
         "checked": "2026-11-26",
         "proven_optimal": {
           "source": "A. Afzaly and B. D. McKay, extremal graphs exhaustive results table (unrestricted C4-free column): maximum 71 edges for 27 vertices.",
@@ -1152,8 +1152,8 @@
       "c4free_n29": {
         "value": 80,
         "kind": "collection",
-        "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(29, C_4) = 80 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
-        "url": "https://oeis.org/A006855",
+        "source": "Afzaly–McKay, Extremal Graphs and Turan numbers, H={C4} table (also OEIS A006855): ex(29, C4) = 80.",
+        "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html",
         "checked": "2026-11-26",
         "proven_optimal": {
           "source": "A. Afzaly and B. D. McKay, extremal graphs exhaustive results table (unrestricted C4-free column): maximum 80 edges for 29 vertices.",
@@ -1163,8 +1163,8 @@
       "c4free_n32": {
         "value": 92,
         "kind": "collection",
-        "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(32, C_4) = 92 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
-        "url": "https://oeis.org/A006855",
+        "source": "Afzaly–McKay, Extremal Graphs and Turan numbers, H={C4} table (also OEIS A006855): ex(32, C4) = 92.",
+        "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html",
         "checked": "2026-11-26",
         "proven_optimal": {
           "source": "A. Afzaly and B. D. McKay, extremal graphs exhaustive results table (unrestricted C4-free column): maximum 92 edges for 32 vertices.",
@@ -1174,46 +1174,50 @@
       "c4free_n34": {
         "value": 102,
         "kind": "collection",
-        "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(34, C_4) = 102 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
-        "url": "https://oeis.org/A006855",
+        "source": "Afzaly–McKay, Extremal Graphs and Turan numbers, H={C4} table (also OEIS A006855): ex(34, C4) = 102.",
+        "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html",
         "checked": "2026-11-26",
         "proven_optimal": {
           "source": "A. Afzaly and B. D. McKay, extremal graphs exhaustive results table (unrestricted C4-free column): maximum 102 edges for 34 vertices.",
           "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html"
-        }
+        },
+        "note": "Exact edge count from the Afzaly–McKay data page; papers in preparation."
       },
       "c4free_n36": {
         "value": 110,
         "kind": "collection",
-        "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(36, C_4) = 110 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
-        "url": "https://oeis.org/A006855",
+        "source": "Afzaly–McKay, Extremal Graphs and Turan numbers, H={C4} table (also OEIS A006855): ex(36, C4) = 110.",
+        "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html",
         "checked": "2026-11-26",
         "proven_optimal": {
           "source": "A. Afzaly and B. D. McKay, extremal graphs exhaustive results table (unrestricted C4-free column): maximum 110 edges for 36 vertices.",
           "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html"
-        }
+        },
+        "note": "Exact edge count from the Afzaly–McKay data page; papers in preparation."
       },
       "c4free_n38": {
         "value": 117,
         "kind": "collection",
-        "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(38, C_4) = 117 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
-        "url": "https://oeis.org/A006855",
+        "source": "Afzaly–McKay, Extremal Graphs and Turan numbers, H={C4} table (also OEIS A006855): ex(38, C4) = 117.",
+        "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html",
         "checked": "2026-11-26",
         "proven_optimal": {
           "source": "A. Afzaly and B. D. McKay, extremal graphs exhaustive results table (unrestricted C4-free column): maximum 117 edges for 38 vertices.",
           "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html"
-        }
+        },
+        "note": "Exact edge count from the Afzaly–McKay data page; papers in preparation."
       },
       "c4free_n40": {
         "value": 127,
         "kind": "collection",
-        "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(40, C_4) = 127 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
-        "url": "https://oeis.org/A006855",
+        "source": "Afzaly–McKay, Extremal Graphs and Turan numbers, H={C4} table (also OEIS A006855): ex(40, C4) = 127.",
+        "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html",
         "checked": "2026-11-26",
         "proven_optimal": {
           "source": "A. Afzaly and B. D. McKay, extremal graphs exhaustive results table (unrestricted C4-free column): maximum 127 edges for 40 vertices.",
           "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html"
-        }
+        },
+        "note": "Exact edge count from the Afzaly–McKay data page; papers in preparation."
       }
     },
     "matrix-rank-alphatensor-f2": {
