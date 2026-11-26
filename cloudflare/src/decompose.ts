@@ -2363,8 +2363,8 @@ export async function executeRefute(
         const fullPoints = computeOpenConjectureRefutePoints(mission.manifest, latestTask);
         const priorSubgoalPoints = sql
           .exec<{ p: number }>(
-            `SELECT COALESCE(SUM(s.points), 0) AS p
-             FROM submissions s
+            `SELECT COALESCE(SUM(s.effective_points), 0) AS p
+             FROM scored_submissions s
              JOIN tasks t ON t.mission_id = s.mission_id AND t.task_id = s.task_id
              WHERE s.mission_id = ? AND s.contributor = ? AND s.accepted = 1 AND s.is_demo = 0
                AND COALESCE(s.kind, 'submit') IN ('subgoal', 'architect_vest')

@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
+import { initPointCorrections } from "../src/point_corrections.ts";
 import {
   applyClaim,
   buildLedgerEntry,
@@ -205,6 +206,7 @@ function createTestHub(opts: {
     }
   };
   initDecomposeSchema(sql, ensureColumn);
+  initPointCorrections(sql);
 
   const manifest = opts.manifest ?? makeManifest();
   for (const t of manifest.tasks) {

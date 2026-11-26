@@ -111,3 +111,32 @@ Entries of kind `heuristic`, `proxy` and `record` are the weakest and should be
 replaced by literature values when someone finds them. The circuits Sunstead could
 download (NIST AES S-box and MixColumns circuits, S. Jain's AES S-box circuits) were
 re-checked on every input before being recorded. Check NIST's usnistgov/Circuits (`data/slp/aes/`) first for anything AES-related: it is updated often and beat two 2026 preprints.
+
+## Append-only point corrections
+
+`cloudflare/corrections/` holds maintainer-approved correction batches. The
+SQLite Hub applies them in the order listed at startup after deployment.
+Every entry must match an existing accepted submission's contributor and
+original award. A batch is atomic and idempotent; a failed batch adds no points
+and is listed with its reason in `GET /api/health` under `point_corrections`.
+Fresh development databases without the historical submissions report a
+mismatch; other Hub functions remain available.
+
+`GET /api/corrections` lists applied batches, their approval metadata, the
+server-recorded application time (Unix seconds), and each entry. Submissions
+and proof records expose `original_points`, the net `points_delta` across all
+applied batches, and `effective_points = original_points + points_delta`.
+Old proofs with no matching submission return null for the original and
+effective award. Existing `points` and `points_awarded` fields on submission
+records retain the historical award. Leaderboard and profile totals (including
+MCP `get_me`) use effective awards and add any active-record crown bonuses as
+before. Corrections do not change crowns, proofs, task scores, or mission
+history.
+
+To reverse a batch, commit a new approved batch with its own ID and
+`reverses_batch_id` set to the target. List it after the target in the Hub
+startup list. Include the same submissions and original awards, negate each
+delta (including zero), and set `replayed_points` to the restored original
+award. The Hub rejects duplicate or partial compensation and rejects changes
+to an already applied batch. Do not delete previous batches or roll back to
+a Worker that predates effective-points reads as a way to reverse awards.

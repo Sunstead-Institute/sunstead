@@ -1469,6 +1469,12 @@ function contributorHtml(proof) {
   return `<strong>${escapeHtml(name)}</strong> <span class="muted small"><code>${escapeHtml(proof.contributor)}</code></span>${renderSocialLinksHtml(proof)}`;
 }
 
+/** "Points corrected" note for a record changed by a correction batch; empty otherwise. */
+function pointsCorrectionNote(record) {
+  if (!Number.isSafeInteger(record.points_delta) || record.points_delta === 0) return "";
+  return `<div class="muted small"><a class="proof-link" href="/api/corrections">Points corrected</a>: ${escapeHtml(record.original_points)} → ${escapeHtml(record.effective_points)} pts</div>`;
+}
+
 /** Diff, metadata and rebuild command for one accepted proof (task panel and ledger page). */
 function proofDetailHtml(proof) {
   const isRefutation = proof.entry_kind === "refutation";
@@ -1488,6 +1494,7 @@ function proofDetailHtml(proof) {
     : proof.verify_command || null;
   return `
     ${specNote}
+    ${pointsCorrectionNote(proof)}
     <div class="inspector-grid">
       <div class="kv"><div class="kv-label">Verification Time</div><div class="kv-val">${escapeHtml(fmtDuration(proof.verify_ms))}</div></div>
       <div class="kv"><div class="kv-label">Accepted</div><div class="kv-val">${escapeHtml(fmtUtc(proof.accepted_at))}</div></div>
@@ -1628,6 +1635,7 @@ function ledgerRowHtml(p) {
       <div class="ledger-main">
         <div class="ledger-title">${link ? `<a href="${link}">${title}</a>` : title} ${ledgerBadges(p)}</div>
         <div class="muted small">${escapeHtml(p.mission_title || p.mission_id)} · <code>${escapeHtml(p.task_id)}</code></div>
+        ${pointsCorrectionNote(p)}
         ${renderDecompProvenanceHtml(p)}
         <div class="small">Upstream: ${upstreamHtml(p.upstream)}</div>
       </div>
@@ -1855,7 +1863,7 @@ async function loadLedgerProof(root, hash) {
   const isHistoryEntry = !isRefutation && proof.entry_kind !== "subgoal";
   document.title = `${proof.task_title || proof.task_id} · ${isRefutation ? "Verified refutation" : "Verified proof"} · Sunstead`;
   const also = (proof.also_accepted_as || [])
-    .map((a) => `<li><code>${escapeHtml(a.mission_id)}/${escapeHtml(a.task_id)}</code> by <code>${escapeHtml(a.contributor)}</code>, ${escapeHtml(fmtUtc(a.accepted_at))}</li>`)
+    .map((a) => `<li><code>${escapeHtml(a.mission_id)}/${escapeHtml(a.task_id)}</code> by <code>${escapeHtml(a.contributor)}</code>, ${escapeHtml(fmtUtc(a.accepted_at))}${pointsCorrectionNote(a)}</li>`)
     .join("");
   root.innerHTML = `
     <p><a class="proof-link" href="/proofs">← All proofs</a></p>
@@ -1899,6 +1907,9 @@ async function loadInitialFeedAndLeaderboard() {
     contributor: s.contributor,
     accepted: s.status === "verifying" ? null : s.accepted,
     score: s.score,
+    original_points: s.original_points,
+    points_delta: s.points_delta,
+    effective_points: s.effective_points,
     summary: s.summary,
     timestamp: s.created_at,
   }));
@@ -1935,6 +1946,7 @@ function renderEvents() {
           </div>
           <div><strong>${escapeHtml(ev.contributor || "hub")}</strong>${escapeHtml(scoreBadge)}</div>
           <div class="muted small">${escapeHtml(ev.summary)}</div>
+          ${pointsCorrectionNote(ev)}
         </li>
       `;
     })

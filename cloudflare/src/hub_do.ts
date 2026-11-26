@@ -58,6 +58,7 @@ import {
   shouldRunAsyncSubmit,
   formatSubmissionStatusView,
   parseStoredCoAuthors,
+  publicPointFields,
   type SubmissionStatus,
   type SubmissionStatusRow,
 } from "./core";
@@ -82,6 +83,8 @@ import {
   type VerifierActionResponse,
 } from "./decompose";
 import { getMissionSeedFiles, SEED_MISSIONS, type SeedMission } from "./generated/missions";
+import { applyPointCorrections, initPointCorrections, listPointCorrections, type CorrectionStatus } from "./point_corrections";
+import historicalReplay from "../corrections/hillclimb-scoring-2026-11-26-01.json" with { type: "json" };
 import { BUILD_PROVENANCE } from "./generated/provenance";
 import { renderJoinTxt } from "./join_txt";
 import type { Lean4Verifier, Lean4V435Verifier, Lean4V431Verifier } from "./containers";
@@ -244,6 +247,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
   private sseClients = new Set<WritableStreamDefaultWriter<Uint8Array>>();
   private encoder = new TextEncoder();
   private stateLocks = new Map<string, Promise<void>>();
+  private correctionStatuses: CorrectionStatus[] = [];
   private verifierPool = new VerifierSlotPool(VERIFIER_POOL_SIZE);
 
   constructor(ctx: DurableObjectState, env: HubEnv) {
@@ -251,6 +255,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     ctx.blockConcurrencyWhile(async () => {
       this.initSchema();
       this.seedMissions();
+      initPointCorrections(this.ctx.storage.sql);
+      this.correctionStatuses = applyPointCorrections(this.ctx.storage, [historicalReplay]);
       reapStaleVerifyingSubmissions(this.ctx.storage.sql, Math.floor(Date.now() / 1000));
     });
   }
@@ -1073,8 +1079,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
            COUNT(DISTINCT CASE WHEN s.accepted = 1 AND s.is_demo = 0 AND COALESCE(s.kind, 'submit') NOT IN ('decompose', 'architect_vest', 'assembled') THEN s.mission_id || ':' || s.task_id END) AS verified_tasks,
            SUM(CASE WHEN s.accepted = 1 AND s.is_demo = 0 AND COALESCE(s.kind, 'submit') NOT IN ('decompose', 'architect_vest', 'assembled') THEN 1 ELSE 0 END) AS accepted_submissions,
            SUM(CASE WHEN s.status != 'verifying' AND s.is_demo = 0 AND COALESCE(s.kind, 'submit') NOT IN ('architect_vest', 'assembled') THEN 1 ELSE 0 END) AS total_submissions,
-           SUM(CASE WHEN s.accepted = 1 AND s.is_demo = 0 THEN s.points ELSE 0 END) AS base_points
-         FROM submissions s
+           SUM(CASE WHEN s.accepted = 1 AND s.is_demo = 0 THEN s.effective_points ELSE 0 END) AS base_points
+         FROM scored_submissions s
          LEFT JOIN contributors c ON c.handle = s.contributor
          WHERE s.status != 'verifying' AND s.is_demo = 0
          GROUP BY s.contributor`
@@ -1171,6 +1177,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         verifier_backend: "cloudflare-containers",
         registered_contributors: registeredCount,
         ...SCORING_PROVENANCE,
+        point_corrections: this.correctionStatuses,
         timestamp: Math.floor(Date.now() / 1000),
       });
     }
@@ -1280,6 +1287,10 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     const subStatusMatch = path.match(/^\/api\/submissions\/([^/]+)$/);
     if (method === "GET" && subStatusMatch) {
       return this.handleGetSubmission(decodeURIComponent(subStatusMatch[1]), url.origin);
+    }
+
+    if (method === "GET" && path === "/api/corrections") {
+      return jsonResp({ batches: listPointCorrections(this.ctx.storage.sql) });
     }
 
     if (method === "GET" && path === "/api/leaderboard") {
@@ -1594,6 +1605,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       github_verified_at: row.github_verified_at,
       links_public: nonDemoVerified >= 1,
       non_demo_verified_proofs: nonDemoVerified,
+      points: this.computeLeaderboard(Infinity).find((e) => e.contributor === handle)?.points ?? 0,
       decomposition_allowlisted: isAllowlisted(this.ctx.storage.sql, handle),
       created_at: row.created_at,
     });
@@ -1683,7 +1695,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         handle
       )
       .toArray();
-    const board = this.computeLeaderboard(500);
+    const board = this.computeLeaderboard(Infinity);
     const rankIdx = board.findIndex((e) => e.contributor === handle);
     if (profileRows.length === 0 && rankIdx === -1) {
       return jsonResp({ error: `unknown contributor: ${handle}` }, 404);
@@ -1696,14 +1708,17 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         accepted: number;
         score: number | null;
         points: number;
+        original_points: number;
+        points_delta: number;
+        effective_points: number;
         summary: string;
         patch_sha256: string;
         verify_ms: number;
         created_at: number;
       }>(
-        `SELECT id, mission_id, task_id, accepted, score, points, summary,
+        `SELECT id, mission_id, task_id, accepted, score, points, original_points, points_delta, effective_points, summary,
                 patch_sha256, verify_ms, created_at
-         FROM submissions WHERE contributor = ? ORDER BY created_at DESC LIMIT 30`,
+         FROM scored_submissions WHERE contributor = ? ORDER BY created_at DESC LIMIT 30`,
         handle
       )
       .toArray()
@@ -1934,10 +1949,11 @@ export class SunsteadHub extends DurableObject<HubEnv> {
                 COALESCE(c.display_name, a.contributor) AS display_name,
                 c.github AS github, c.github_verified_handle AS github_verified_handle, c.x_handle AS x, c.linkedin_handle AS linkedin,
                 a.summary, a.patch, a.spec_sha256, a.created_at, s.verify_ms AS verify_ms, a.is_demo AS is_demo,
+                s.original_points, s.points_delta,
                 a.entry_kind AS entry_kind, a.decomp_meta_json AS decomp_meta_json
          FROM accepted_patches a
          LEFT JOIN contributors c ON c.handle = a.contributor
-         LEFT JOIN submissions s ON s.id = a.submission_id
+         LEFT JOIN scored_submissions s ON s.id = a.submission_id
          WHERE a.mission_id = ? AND a.task_id = ?
          ORDER BY a.seq DESC LIMIT 1`,
         missionId,
@@ -1983,10 +1999,10 @@ export class SunsteadHub extends DurableObject<HubEnv> {
            c.github AS github, c.github_verified_handle AS github_verified_handle, c.x_handle AS x, c.linkedin_handle AS linkedin,
            a.summary, a.patch, a.patch_sha256, a.spec_sha256, a.created_at, s.verify_ms AS verify_ms, a.is_demo AS is_demo,
            a.entry_kind AS entry_kind, a.co_authors_json AS co_authors_json, a.decomp_meta_json AS decomp_meta_json,
-           a.scoring_provenance_json
+           a.scoring_provenance_json, s.original_points, s.points_delta
     FROM accepted_patches a
     LEFT JOIN contributors c ON c.handle = a.contributor
-    LEFT JOIN submissions s ON s.id = a.submission_id`;
+    LEFT JOIN scored_submissions s ON s.id = a.submission_id`;
 
   private ledgerMissionInfo(): (missionId: string) => LedgerMissionInfo {
     const cache = new Map<string, LedgerMissionInfo>();
@@ -2065,6 +2081,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         task_id: r.task_id,
         contributor: r.contributor,
         accepted_at: r.created_at,
+        ...publicPointFields(r.original_points, r.points_delta),
       })),
     });
   }
@@ -2077,10 +2094,10 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     }
     const rows = this.ctx.storage.sql
       .exec<SubmissionStatusRow>(
-        `SELECT id, mission_id, task_id, contributor, status, accepted, score, points,
+        `SELECT id, mission_id, task_id, contributor, status, accepted, score, points, points_delta,
                 summary, patch_sha256, proof_id, verify_ms, stage, diagnostics, error,
                 unlocked_dependents_json, created_at, completed_at
-         FROM submissions
+         FROM scored_submissions
          WHERE id = ?
          LIMIT 1`,
         id
