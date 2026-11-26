@@ -28,6 +28,9 @@ import {
   buildLedgerEntry,
   buildLedgerProof,
   isLedgerPagePath,
+  BASE_SECURITY_HEADERS,
+  HTML_CONTENT_SECURITY_POLICY,
+  buildEdgeSecurityHeaders,
   parseLedgerQuery,
   PROOF_HASH_RE,
   proofIdFromPatchSha,
@@ -63,6 +66,9 @@ import {
   STALE_VERIFYING_ERROR,
   STALE_VERIFYING_SUMMARY,
   isSubmissionVerifyingStale,
+  SUBMISSIONS_DEFAULT_LIMIT,
+  SUBMISSIONS_MAX_LIMIT,
+  parseSubmissionListFilters,
   constantTimeEqual,
   shouldRunAsyncSubmit,
   formatSubmissionStatusView,
@@ -2531,4 +2537,123 @@ test("isSubmissionVerifyingStale respects STALE_VERIFYING_SEC boundary and termi
   assert.equal(isSubmissionVerifyingStale({ status: "error", created_at: now - 3600 }, now), false);
   assert.equal(isSubmissionVerifyingStale({ status: "verifying", created_at: now - 30 }, now, 30), true);
   assert.equal(isSubmissionVerifyingStale({ status: "verifying", created_at: now - 29 }, now, 30), false);
+});
+
+// ---------------------------------------------------------------- edge security headers & submission list filters
+
+test("buildEdgeSecurityHeaders applies strict zero-inline-script CSP to HTML and base headers to non-HTML", () => {
+  const expectedBase = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+  };
+  assert.deepEqual(BASE_SECURITY_HEADERS, expectedBase);
+  assert.equal(
+    HTML_CONTENT_SECURITY_POLICY,
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+  );
+
+  for (const ct of ["text/html", "text/html; charset=utf-8", " TEXT/HTML; charset=UTF-8 "]) {
+    const hdrs = buildEdgeSecurityHeaders(ct);
+    assert.deepEqual(hdrs, {
+      ...expectedBase,
+      "Content-Security-Policy": HTML_CONTENT_SECURITY_POLICY,
+    });
+    assert.match(hdrs["Content-Security-Policy"], /(?:^|;\s*)script-src 'self'(?:;|$)/);
+  }
+
+  for (const ct of [
+    "application/json",
+    "application/json; charset=utf-8",
+    "text/javascript; charset=utf-8",
+    "text/css; charset=utf-8",
+    "text/plain; charset=utf-8",
+    "application/gzip",
+    "",
+    null,
+    undefined,
+  ]) {
+    const hdrs = buildEdgeSecurityHeaders(ct);
+    assert.deepEqual(hdrs, expectedBase);
+    assert.equal("Content-Security-Policy" in hdrs, false);
+  }
+
+  // Returned object is a fresh copy; mutating it must not pollute BASE_SECURITY_HEADERS.
+  const copy = buildEdgeSecurityHeaders("application/json");
+  copy["X-Frame-Options"] = "SAMEORIGIN";
+  assert.equal(buildEdgeSecurityHeaders("application/json")["X-Frame-Options"], "DENY");
+});
+
+test("parseSubmissionListFilters supports aliases, status validation, contributor normalization, and limit clamping", () => {
+  assert.equal(SUBMISSIONS_DEFAULT_LIMIT, 40);
+  assert.equal(SUBMISSIONS_MAX_LIMIT, 200);
+
+  assert.deepEqual(parseSubmissionListFilters(new URLSearchParams()), { limit: 40 });
+
+  // Canonical params
+  assert.deepEqual(
+    parseSubmissionListFilters(
+      new URLSearchParams("mission_id=fc-open-erdos-combinatorics&task_id=erdos_1&contributor=Codex-Dirichlet&status=accepted&limit=20")
+    ),
+    {
+      mission_id: "fc-open-erdos-combinatorics",
+      task_id: "erdos_1",
+      contributor: "codex-dirichlet",
+      status: "accepted",
+      limit: 20,
+    }
+  );
+
+  // Aliases (`mission`, `task`) + trimming + mixed case
+  assert.deepEqual(
+    parseSubmissionListFilters(
+      new URLSearchParams("mission=%20pnt-analytic%20&task=%20liouville%20&contributor=%20Alice_1%20&status=%20VERIFYING%20")
+    ),
+    {
+      mission_id: "pnt-analytic",
+      task_id: "liouville",
+      contributor: "alice_1",
+      status: "verifying",
+      limit: 40,
+    }
+  );
+
+  // Primary param takes precedence over alias when both are non-empty; empty primary falls back to alias
+  assert.equal(
+    parseSubmissionListFilters(new URLSearchParams("mission_id=primary-m&mission=alias-m")).mission_id,
+    "primary-m"
+  );
+  assert.equal(
+    parseSubmissionListFilters(new URLSearchParams("mission_id=&mission=alias-m")).mission_id,
+    "alias-m"
+  );
+  assert.equal(
+    parseSubmissionListFilters(new URLSearchParams("task_id=primary-t&task=alias-t")).task_id,
+    "primary-t"
+  );
+  assert.equal(
+    parseSubmissionListFilters(new URLSearchParams("task_id=%20&task=alias-t")).task_id,
+    "alias-t"
+  );
+
+  // All valid statuses accepted; invalid statuses safely ignored
+  for (const s of ["verifying", "accepted", "rejected", "error"] as const) {
+    assert.equal(parseSubmissionListFilters(new URLSearchParams(`status=${s}`)).status, s);
+  }
+  for (const bad of ["pending", "completed", "failed", "accepted' OR 1=1--", ""]) {
+    assert.equal(parseSubmissionListFilters(new URLSearchParams(`status=${encodeURIComponent(bad)}`)).status, undefined);
+  }
+
+  // Limit clamping & fallback
+  assert.equal(parseSubmissionListFilters(new URLSearchParams("limit=0")).limit, 1);
+  assert.equal(parseSubmissionListFilters(new URLSearchParams("limit=-15")).limit, 1);
+  assert.equal(parseSubmissionListFilters(new URLSearchParams("limit=1")).limit, 1);
+  assert.equal(parseSubmissionListFilters(new URLSearchParams("limit=25.9")).limit, 25);
+  assert.equal(parseSubmissionListFilters(new URLSearchParams("limit=200")).limit, 200);
+  assert.equal(parseSubmissionListFilters(new URLSearchParams("limit=999")).limit, 200);
+  assert.equal(parseSubmissionListFilters(new URLSearchParams("limit=")).limit, 40);
+  assert.equal(parseSubmissionListFilters(new URLSearchParams("limit=abc")).limit, 40);
+  assert.equal(parseSubmissionListFilters(new URLSearchParams("limit=Infinity")).limit, 40);
 });

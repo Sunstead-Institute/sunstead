@@ -1,16 +1,10 @@
 import { handleMcp } from "./mcp";
 import { Lean4Verifier, Lean4V435Verifier, Lean4V431Verifier } from "./containers";
-import { isLedgerPagePath } from "./core";
+import { buildEdgeSecurityHeaders, isLedgerPagePath } from "./core";
 import { STATIC_ASSETS } from "./generated/static";
 import { SunsteadHub, type HubEnv } from "./hub_do";
 
 export { SunsteadHub, Lean4Verifier, Lean4V435Verifier, Lean4V431Verifier };
-
-const SECURITY_HEADERS: Record<string, string> = {
-  "X-Content-Type-Options": "nosniff",
-  "X-Frame-Options": "DENY",
-  "Referrer-Policy": "strict-origin-when-cross-origin",
-};
 
 export default {
   async fetch(request: Request, env: HubEnv): Promise<Response> {
@@ -23,7 +17,7 @@ export default {
         status: 301,
         headers: {
           Location: `https://sunstead.org${url.pathname}${url.search}`,
-          ...SECURITY_HEADERS,
+          ...buildEdgeSecurityHeaders(),
         },
       });
     }
@@ -37,7 +31,7 @@ export default {
           "Cache-Control": asset.contentType.startsWith("text/html")
             ? "public, max-age=60"
             : "public, max-age=300",
-          ...SECURITY_HEADERS,
+          ...buildEdgeSecurityHeaders(asset.contentType),
         },
       });
     }
@@ -47,7 +41,11 @@ export default {
     if ((request.method === "GET" || request.method === "HEAD") && isLedgerPagePath(path)) {
       const asset = STATIC_ASSETS["/proofs.html"];
       return new Response(request.method === "HEAD" ? null : asset.body, {
-        headers: { "Content-Type": asset.contentType, "Cache-Control": "public, max-age=60", ...SECURITY_HEADERS },
+        headers: {
+          "Content-Type": asset.contentType,
+          "Cache-Control": "public, max-age=60",
+          ...buildEdgeSecurityHeaders(asset.contentType),
+        },
       });
     }
 
@@ -66,7 +64,7 @@ export default {
       const resp = await hub.fetch(forwardReq);
       if (path === "/api/events") return resp;
       const headers = new Headers(resp.headers);
-      for (const [k, v] of Object.entries(SECURITY_HEADERS)) {
+      for (const [k, v] of Object.entries(buildEdgeSecurityHeaders(resp.headers.get("Content-Type")))) {
         if (!headers.has(k)) headers.set(k, v);
       }
       return new Response(request.method === "HEAD" ? null : resp.body, {
@@ -76,6 +74,9 @@ export default {
       });
     }
 
-    return new Response("Not Found", { status: 404, headers: SECURITY_HEADERS });
+    return new Response("Not Found", {
+      status: 404,
+      headers: buildEdgeSecurityHeaders("text/plain; charset=utf-8"),
+    });
   },
 };

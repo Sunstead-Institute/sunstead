@@ -48,6 +48,8 @@ import {
   parseFrontierQuery,
   reapStaleVerifyingSubmissions,
   reapStaleVerifyingSubmissionById,
+  parseSubmissionListFilters,
+  querySubmissions,
   proofIdFromPatchSha,
   constantTimeEqual,
   shouldRunAsyncSubmit,
@@ -372,6 +374,14 @@ export class SunsteadHub extends DurableObject<HubEnv> {
            completed_at = COALESCE(completed_at, created_at)
        WHERE status = 'completed'`
     );
+    this.ctx.storage.sql.exec(`
+      CREATE INDEX IF NOT EXISTS idx_submissions_mission_created
+        ON submissions(mission_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_submissions_contributor_created
+        ON submissions(contributor, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_submissions_status_created
+        ON submissions(status, created_at DESC);
+    `);
     // Sync historical accepted submissions.patch_sha256 + proof_id to the
     // canonical normalized patch hash recorded in accepted_patches.
     this.ctx.storage.sql.exec(
@@ -827,70 +837,9 @@ export class SunsteadHub extends DurableObject<HubEnv> {
   }
 
   private getRecentSubmissions(missionId: string | null, limit: number): SubmissionRecord[] {
-    const rows = missionId
-      ? this.ctx.storage.sql
-          .exec<{
-            id: string;
-            mission_id: string;
-            task_id: string;
-            contributor: string;
-            status: string;
-            accepted: number;
-            score: number | null;
-            points: number;
-            summary: string;
-            patch_sha256: string;
-            proof_id: string | null;
-            verify_ms: number;
-            created_at: number;
-            completed_at: number | null;
-            is_demo: number;
-          }>(
-            `SELECT id, mission_id, task_id, contributor, status, accepted, score, points, summary,
-                    patch_sha256, proof_id, verify_ms, created_at, completed_at, is_demo
-             FROM submissions WHERE mission_id = ? ORDER BY created_at DESC LIMIT ?`,
-            missionId,
-            limit
-          )
-          .toArray()
-      : this.ctx.storage.sql
-          .exec<{
-            id: string;
-            mission_id: string;
-            task_id: string;
-            contributor: string;
-            status: string;
-            accepted: number;
-            score: number | null;
-            points: number;
-            summary: string;
-            patch_sha256: string;
-            proof_id: string | null;
-            verify_ms: number;
-            created_at: number;
-            completed_at: number | null;
-            is_demo: number;
-          }>(
-            `SELECT id, mission_id, task_id, contributor, status, accepted, score, points, summary,
-                    patch_sha256, proof_id, verify_ms, created_at, completed_at, is_demo
-             FROM submissions ORDER BY created_at DESC LIMIT ?`,
-            limit
-          )
-          .toArray();
-
-    return rows.map((r) => {
-      const status: SubmissionStatus =
-        r.status === "verifying" || r.status === "accepted" || r.status === "rejected" || r.status === "error"
-          ? r.status
-          : r.accepted !== 0
-            ? "accepted"
-            : "rejected";
-      return {
-        ...r,
-        status,
-        accepted: r.accepted !== 0,
-        is_demo: r.is_demo !== 0,
-      };
+    return querySubmissions(this.ctx.storage.sql, {
+      ...(missionId ? { mission_id: missionId } : {}),
+      limit,
     });
   }
 
@@ -1311,9 +1260,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     }
 
     if (method === "GET" && path === "/api/submissions") {
-      const missionId = url.searchParams.get("mission_id");
-      const limit = Math.max(1, Math.min(Number(url.searchParams.get("limit") || 40), 200));
-      return jsonResp({ submissions: this.getRecentSubmissions(missionId, limit) });
+      const filters = parseSubmissionListFilters(url.searchParams);
+      return jsonResp({ submissions: querySubmissions(this.ctx.storage.sql, filters) });
     }
 
     const subStatusMatch = path.match(/^\/api\/submissions\/([^/]+)$/);

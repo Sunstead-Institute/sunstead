@@ -1482,6 +1482,161 @@ export function reapStaleVerifyingSubmissionById(
 }
 
 // ---------------------------------------------------------------------------
+// Indexed submission list queries (`GET /api/submissions`)
+
+export const SUBMISSIONS_DEFAULT_LIMIT = 40;
+export const SUBMISSIONS_MAX_LIMIT = 200;
+
+export interface SubmissionListFilters {
+  mission_id?: string;
+  task_id?: string;
+  contributor?: string;
+  status?: SubmissionStatus;
+  limit: number;
+}
+
+export interface SubmissionListItem {
+  id: string;
+  mission_id: string;
+  task_id: string;
+  contributor: string;
+  status: SubmissionStatus;
+  accepted: boolean;
+  score: number | null;
+  points: number;
+  summary: string;
+  patch_sha256: string;
+  proof_id: string | null;
+  verify_ms: number;
+  created_at: number;
+  completed_at: number | null;
+  is_demo: boolean;
+}
+
+/** Parse optional filter query parameters for `GET /api/submissions`. */
+export function parseSubmissionListFilters(params: URLSearchParams): SubmissionListFilters {
+  let limit = SUBMISSIONS_DEFAULT_LIMIT;
+  const rawLimit = params.get("limit")?.trim();
+  if (rawLimit) {
+    const parsed = Number(rawLimit);
+    if (Number.isFinite(parsed)) {
+      limit = Math.max(1, Math.min(Math.floor(parsed), SUBMISSIONS_MAX_LIMIT));
+    }
+  }
+
+  const out: SubmissionListFilters = { limit };
+
+  const missionId = params.get("mission_id")?.trim() || params.get("mission")?.trim() || "";
+  if (missionId) out.mission_id = missionId;
+
+  const taskId = params.get("task_id")?.trim() || params.get("task")?.trim() || "";
+  if (taskId) out.task_id = taskId;
+
+  const contributor = params.get("contributor")?.trim().toLowerCase() || "";
+  if (contributor) out.contributor = contributor;
+
+  const rawStatus = params.get("status")?.trim().toLowerCase() || "";
+  if (
+    rawStatus === "verifying" ||
+    rawStatus === "accepted" ||
+    rawStatus === "rejected" ||
+    rawStatus === "error"
+  ) {
+    out.status = rawStatus;
+  }
+
+  return out;
+}
+
+/**
+ * Query recent submissions with strictly parameterized SQL `?` placeholders.
+ * Uses the `(mission_id, created_at DESC)`, `(contributor, created_at DESC)`,
+ * `(status, created_at DESC)`, and `(created_at DESC)` SQLite indexes.
+ */
+export function querySubmissions(
+  sql: StaleReaperSql,
+  filters: Partial<SubmissionListFilters> = {}
+): SubmissionListItem[] {
+  const where: string[] = [];
+  const args: (string | number)[] = [];
+
+  const missionId = filters.mission_id?.trim();
+  if (missionId) {
+    where.push("mission_id = ?");
+    args.push(missionId);
+  }
+  const taskId = filters.task_id?.trim();
+  if (taskId) {
+    where.push("task_id = ?");
+    args.push(taskId);
+  }
+  const contributor = filters.contributor?.trim().toLowerCase();
+  if (contributor) {
+    where.push("contributor = ?");
+    args.push(contributor);
+  }
+  if (
+    filters.status === "verifying" ||
+    filters.status === "accepted" ||
+    filters.status === "rejected" ||
+    filters.status === "error"
+  ) {
+    where.push("status = ?");
+    args.push(filters.status);
+  }
+
+  const limit =
+    filters.limit !== undefined && Number.isFinite(filters.limit)
+      ? Math.max(1, Math.min(Math.floor(filters.limit), SUBMISSIONS_MAX_LIMIT))
+      : SUBMISSIONS_DEFAULT_LIMIT;
+
+  const whereClause = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+  const rows = sql
+    .exec<{
+      id: string;
+      mission_id: string;
+      task_id: string;
+      contributor: string;
+      status: string;
+      accepted: number;
+      score: number | null;
+      points: number;
+      summary: string;
+      patch_sha256: string;
+      proof_id: string | null;
+      verify_ms: number;
+      created_at: number;
+      completed_at: number | null;
+      is_demo: number;
+    }>(
+      `SELECT id, mission_id, task_id, contributor, status, accepted, score, points, summary,
+              patch_sha256, proof_id, verify_ms, created_at, completed_at, is_demo
+       FROM submissions
+       ${whereClause}
+       ORDER BY created_at DESC
+       LIMIT ?`,
+      ...args,
+      limit
+    )
+    .toArray();
+
+  return rows.map((r) => {
+    const status: SubmissionStatus =
+      r.status === "verifying" || r.status === "accepted" || r.status === "rejected" || r.status === "error"
+        ? r.status
+        : r.accepted !== 0
+          ? "accepted"
+          : "rejected";
+    return {
+      ...r,
+      status,
+      accepted: r.accepted !== 0,
+      is_demo: r.is_demo !== 0,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Contributor social handles (strict handle-only validation + proof-gated display)
 
 export const GITHUB_HANDLE_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
@@ -2217,6 +2372,35 @@ export function buildLedgerProof(
 /** `/proofs`, `/proofs/` and `/proofs/<64 lowercase hex>` (optionally with a trailing slash). */
 export function isLedgerPagePath(path: string): boolean {
   return /^\/proofs\/?$/.test(path) || /^\/proofs\/[0-9a-f]{64}\/?$/.test(path);
+}
+
+// ---------------------------------------------------------------------------
+// Edge HTTP security headers (Cloudflare Worker responses)
+
+export const BASE_SECURITY_HEADERS: Readonly<Record<string, string>> = Object.freeze({
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+});
+
+export const HTML_CONTENT_SECURITY_POLICY =
+  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
+
+/**
+ * Return edge HTTP security headers for a Cloudflare Worker response.
+ * Includes the strict zero-inline-script HTML CSP whenever `contentType` starts with `"text/html"`.
+ */
+export function buildEdgeSecurityHeaders(contentType?: string | null): Record<string, string> {
+  const normalized = typeof contentType === "string" ? contentType.trim().toLowerCase() : "";
+  if (normalized.startsWith("text/html")) {
+    return {
+      ...BASE_SECURITY_HEADERS,
+      "Content-Security-Policy": HTML_CONTENT_SECURITY_POLICY,
+    };
+  }
+  return { ...BASE_SECURITY_HEADERS };
 }
 
 export type FailureStage =
