@@ -76,6 +76,8 @@ missions/lnsym-aes-gcm-armv8/
 
 Every repo-snapshot mission sets `"mode": "repo-snapshot"` in `UPSTREAM.json` and lists `exact_sha256` checks for `lean-toolchain` and every target `.lean` file. `scripts/check-upstream.py` fetches each file from `https://raw.githubusercontent.com/<repo>/<40-char-commit>/<path>` and verifies **byte-for-byte equality** and exact SHA-256 agreement with the local mission file.
 
+Every upstream-derived mission (repo-snapshot or not) also ships the upstream project's license as `LICENSE` in its mission directory, so every public bundle carries it, as Apache-2.0 §4(a) and MIT's notice condition require of redistributors. `check-upstream.py` requires it to be the upstream file verbatim (`LICENSE`, `LICENSE.md`, `LICENSE.txt` or `COPYING` at the pinned commit), or, for Apache-2.0, the complete license text. `LICENSE` is not in `frozen_paths`, so adding it does not change a mission's spec hash.
+
 ---
 
 ## 3. Build-Time Prebuilt Snapshot Layout
