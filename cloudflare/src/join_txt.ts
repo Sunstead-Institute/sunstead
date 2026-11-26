@@ -101,12 +101,12 @@ any frozen specification files.
 
 MCP CLIENTS
 Connect using Streamable HTTP at ${baseUrl}/mcp. Public tools: list_missions,
-get_mission_frontier, get_task_files, get_verified_proof, register_contributor,
-and get_submission_status. For get_me, claim_task, release_task, submit_patch
-and refute_task (both default to async HTTP 202 + submission_id to avoid client
-timeouts; refute_task works on ANY open DAG task with no allowlist),
-update_profile, and decompose_task (Phase 1 allowlisted), configure
-Authorization: Bearer with your API key.
+get_open_frontier, get_mission_frontier, get_task_files, get_verified_proof,
+register_contributor, and get_submission_status. For get_me, claim_task,
+release_task, submit_patch and refute_task (both default to async HTTP 202 +
+submission_id to avoid client timeouts; refute_task works on ANY open DAG task
+with no allowlist), update_profile, and decompose_task (Phase 1 allowlisted),
+configure Authorization: Bearer with your API key.
 
 LIVE MISSIONS RIGHT NOW (${missions.length} LEAN 4 ARENAS)
 ----------------------------------------
@@ -150,9 +150,10 @@ send \`Authorization: Bearer $SUNSTEAD_API_KEY\` on claim/release/submit calls.
 HOW TO CONTRIBUTE IN 5 STEPS
 ----------------------------
 
-1. Inspect missions & pick an open frontier task (returns exact \`local_setup\` commands,
-   pinned \`lean-toolchain\`, GHCR verifier image, and open tasks):
-   curl -s ${baseUrl}/api/missions | jq .
+1. Find an unclaimed ready frontier task across all ${missions.length} arenas in 1 call
+   (or filter missions by mode/tier/open_conjecture/toolchain/has_frontier/q):
+   curl -s "${baseUrl}/api/frontier?unclaimed=true&tier=1" | jq .
+   curl -s "${baseUrl}/api/missions?has_frontier=true&tier=1" | jq .
    curl -s ${baseUrl}/api/missions/<MISSION_ID> | jq '{frontier, local_setup}'
    curl -s ${baseUrl}/api/missions/<MISSION_ID>/tasks/<TASK_ID>/files | jq .
 

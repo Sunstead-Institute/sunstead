@@ -13,7 +13,12 @@ import {
   formatSubmissionStatusView,
   generateUnifiedDiff,
   parseStoredCoAuthors,
+  reapStaleVerifyingSubmissionById,
+  reapStaleVerifyingSubmissions,
   renderMbox,
+  STALE_VERIFYING_ERROR,
+  STALE_VERIFYING_SEC,
+  STALE_VERIFYING_SUMMARY,
   type MissionManifest,
   type MissionVerifyContract,
   type SubmissionStatusRow,
@@ -1373,4 +1378,188 @@ test("demo open_conjecture mission awards 0 points on refutation", async () => {
   assert.equal(res.body.points_awarded, 0);
   assert.equal(sumPoints("dave"), 0);
   assert.equal(getTasks("fc-demo")[0].status, "refuted");
+});
+
+test("reapStaleVerifyingSubmissions reaps only stale verifying rows and leaves fresh/terminal rows untouched", () => {
+  const { sql } = createTestHub();
+  const now = 1_700_010_000;
+  const insertRow = (opts: {
+    id: string;
+    status: string;
+    accepted: number;
+    points: number;
+    summary: string;
+    stage?: string | null;
+    error?: string | null;
+    created_at: number;
+    completed_at?: number | null;
+  }) => {
+    sql.exec(
+      `INSERT INTO submissions
+       (id, mission_id, task_id, contributor, status, accepted, score, points, summary, patch_sha256, verify_ms, stage, error, created_at, completed_at, is_demo)
+       VALUES (?, 'arklib-near-capacity-primes', 'near_capacity_prime_supply', 'alice', ?, ?, NULL, ?, ?, 'sha256:abc', 0, ?, ?, ?, ?, 0)`,
+      opts.id,
+      opts.status,
+      opts.accepted,
+      opts.points,
+      opts.summary,
+      opts.stage ?? null,
+      opts.error ?? null,
+      opts.created_at,
+      opts.completed_at ?? null
+    );
+  };
+
+  insertRow({
+    id: "sub-stale-old",
+    status: "verifying",
+    accepted: 0,
+    points: 0,
+    summary: "Verifying...",
+    created_at: now - 3600,
+  });
+  insertRow({
+    id: "sub-stale-boundary",
+    status: "verifying",
+    accepted: 0,
+    points: 0,
+    summary: "Verifying...",
+    created_at: now - STALE_VERIFYING_SEC,
+  });
+  insertRow({
+    id: "sub-fresh-verifying",
+    status: "verifying",
+    accepted: 0,
+    points: 0,
+    summary: "Verifying...",
+    created_at: now - (STALE_VERIFYING_SEC - 1),
+  });
+  insertRow({
+    id: "sub-old-accepted",
+    status: "accepted",
+    accepted: 1,
+    points: 150,
+    summary: "Kernel verified",
+    created_at: now - 7200,
+    completed_at: now - 7150,
+  });
+  insertRow({
+    id: "sub-old-rejected",
+    status: "rejected",
+    accepted: 0,
+    points: 0,
+    summary: "compile failed",
+    stage: "compile",
+    error: "type mismatch",
+    created_at: now - 7200,
+    completed_at: now - 7150,
+  });
+  insertRow({
+    id: "sub-old-error",
+    status: "error",
+    accepted: 0,
+    points: 0,
+    summary: "existing container err",
+    stage: "sandbox",
+    error: "existing container err",
+    created_at: now - 7200,
+    completed_at: now - 7150,
+  });
+
+  const reaped = reapStaleVerifyingSubmissions(sql, now);
+  assert.deepEqual(reaped, ["sub-stale-old", "sub-stale-boundary"]);
+
+  const fetchRow = (id: string) =>
+    sql
+      .exec<SubmissionStatusRow>(
+        `SELECT id, mission_id, task_id, contributor, status, accepted, score, points,
+                summary, patch_sha256, proof_id, verify_ms, stage, diagnostics, error,
+                unlocked_dependents_json, created_at, completed_at
+         FROM submissions WHERE id = ?`,
+        id
+      )
+      .one();
+
+  for (const id of ["sub-stale-old", "sub-stale-boundary"]) {
+    const r = fetchRow(id);
+    assert.equal(r.status, "error");
+    assert.equal(r.accepted, 0);
+    assert.equal(r.points, 0);
+    assert.equal(r.stage, "sandbox");
+    assert.equal(r.error, STALE_VERIFYING_ERROR);
+    assert.equal(r.summary, STALE_VERIFYING_SUMMARY);
+    assert.equal(r.completed_at, now);
+  }
+
+  // Fresh verifying row untouched
+  const fresh = fetchRow("sub-fresh-verifying");
+  assert.equal(fresh.status, "verifying");
+  assert.equal(fresh.completed_at, null);
+  assert.equal(fresh.error, null);
+
+  // Terminal rows completely untouched
+  const acc = fetchRow("sub-old-accepted");
+  assert.equal(acc.status, "accepted");
+  assert.equal(acc.accepted, 1);
+  assert.equal(acc.points, 150);
+  assert.equal(acc.completed_at, now - 7150);
+
+  const rej = fetchRow("sub-old-rejected");
+  assert.equal(rej.status, "rejected");
+  assert.equal(rej.stage, "compile");
+  assert.equal(rej.error, "type mismatch");
+
+  const err = fetchRow("sub-old-error");
+  assert.equal(err.status, "error");
+  assert.equal(err.error, "existing container err");
+  assert.equal(err.completed_at, now - 7150);
+
+  // Idempotent on second run
+  assert.deepEqual(reapStaleVerifyingSubmissions(sql, now), []);
+});
+
+test("reapStaleVerifyingSubmissionById lazily reaps a stale verifying submission on poll", () => {
+  const { sql } = createTestHub();
+  const created = 1_700_020_000;
+  sql.exec(
+    `INSERT INTO submissions
+     (id, mission_id, task_id, contributor, status, accepted, score, points, summary, patch_sha256, verify_ms, created_at, completed_at, is_demo)
+     VALUES ('sub-poll-lazy', 'arklib-near-capacity-primes', 'near_capacity_prime_supply', 'alice', 'verifying', 0, NULL, 0, 'Verifying...', 'sha256:def', 0, ?, NULL, 0)`,
+    created
+  );
+  const fetchRow = () =>
+    sql
+      .exec<SubmissionStatusRow>(
+        `SELECT id, mission_id, task_id, contributor, status, accepted, score, points,
+                summary, patch_sha256, proof_id, verify_ms, stage, diagnostics, error,
+                unlocked_dependents_json, created_at, completed_at
+         FROM submissions WHERE id = 'sub-poll-lazy'`
+      )
+      .one();
+
+  // Polling before threshold leaves row verifying
+  const early = reapStaleVerifyingSubmissionById(sql, fetchRow(), created + STALE_VERIFYING_SEC - 1);
+  assert.equal(early.status, "verifying");
+  assert.equal(fetchRow().status, "verifying");
+
+  // Polling at/past threshold reaps row immediately and persists to SQLite
+  const pollNow = created + STALE_VERIFYING_SEC + 5;
+  const reaped = reapStaleVerifyingSubmissionById(sql, fetchRow(), pollNow);
+  assert.equal(reaped.status, "error");
+  assert.equal(reaped.stage, "sandbox");
+  assert.equal(reaped.error, STALE_VERIFYING_ERROR);
+  assert.equal(reaped.summary, STALE_VERIFYING_SUMMARY);
+  assert.equal(reaped.completed_at, pollNow);
+
+  const persisted = fetchRow();
+  assert.equal(persisted.status, "error");
+  assert.equal(persisted.completed_at, pollNow);
+
+  const view = formatSubmissionStatusView(reaped, "https://sunstead.org");
+  assert.equal(view.status, "error");
+  assert.equal(view.accepted, false);
+  assert.equal(view.points_awarded, 0);
+  assert.equal(view.stage, "sandbox");
+  assert.equal(view.error, STALE_VERIFYING_ERROR);
+  assert.equal(view.completed_at, pollNow);
 });

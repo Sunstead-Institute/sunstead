@@ -53,6 +53,16 @@ import {
   verifierSlotName,
   isMissionCompleted,
   sortMissionSummaries,
+  filterMissionSummaries,
+  parseMissionListFilters,
+  buildGlobalFrontier,
+  parseFrontierQuery,
+  FRONTIER_DEFAULT_LIMIT,
+  FRONTIER_MAX_LIMIT,
+  STALE_VERIFYING_SEC,
+  STALE_VERIFYING_ERROR,
+  STALE_VERIFYING_SUMMARY,
+  isSubmissionVerifyingStale,
   constantTimeEqual,
   shouldRunAsyncSubmit,
   formatSubmissionStatusView,
@@ -2174,4 +2184,351 @@ test("renderJoinTxt labels open-conjecture packs, counts proved+refuted, and cap
   assert.match(txt, /1 proved, 1 refuted \/ 30/);
   assert.match(txt, /\(\+16 more; see GET \/api\/missions\/fc-erdos-open\)/);
   assert.match(txt, /open_conjecture: true/);
+  assert.match(txt, /\/api\/frontier\?unclaimed=true&tier=1/);
+  assert.match(txt, /get_open_frontier/);
+});
+
+// ---------------------------------------------------------------- mission filtering & global frontier
+
+test("filterMissionSummaries and parseMissionListFilters filter by all supported params while staying backward-compatible", () => {
+  const summaries = [
+    {
+      id: "fc-erdos-open",
+      title: "Formal Conjectures: Open Erdős Problems",
+      tier: 1,
+      mode: "dag" as const,
+      demo: false,
+      open_conjecture: true,
+      upstream: { repo: "google-deepmind/formal-conjectures" },
+      verifier_toolchain: "leanprover/lean4:v4.36.0",
+      total_tasks: 12,
+      verified_tasks: 2,
+      refuted_tasks: 1,
+      frontier_task_ids: ["erdos_1", "erdos_2"],
+    },
+    {
+      id: "lnsym-gcm-gmult-armv8",
+      title: "LNSym ARMv8 GCM Verification",
+      tier: 1,
+      mode: "dag" as const,
+      demo: false,
+      open_conjecture: false,
+      upstream: { repo: "leanprover/LNSym" },
+      verifier_toolchain: "leanprover/lean4:v4.35.0",
+      total_tasks: 4,
+      verified_tasks: 4,
+      refuted_tasks: 0,
+      frontier_task_ids: [],
+    },
+    {
+      id: "matrix-rank444-f2",
+      title: "4x4 Matrix Multiplication over F2",
+      tier: 2,
+      mode: "hillclimb" as const,
+      demo: false,
+      open_conjecture: false,
+      upstream: { repo: "google-deepmind/alphatensor" },
+      verifier_toolchain: "leanprover/lean4:v4.31.0",
+      total_tasks: 1,
+      verified_tasks: 0,
+      refuted_tasks: 0,
+      frontier_task_ids: ["rank444"],
+    },
+    {
+      id: "onboarding-sandbox",
+      title: "Sandbox Demo Mission",
+      tier: 0,
+      mode: "dag" as const,
+      demo: true,
+      open_conjecture: false,
+      upstream: null,
+      verifier_toolchain: "leanprover/lean4:v4.36.0",
+      total_tasks: 1,
+      verified_tasks: 0,
+      refuted_tasks: 0,
+      frontier_task_ids: ["demo_1"],
+    },
+  ];
+
+  // Empty query params -> 100% backward compatible (all missions returned unchanged)
+  assert.deepEqual(
+    filterMissionSummaries(summaries, parseMissionListFilters(new URLSearchParams())).map((m) => m.id),
+    summaries.map((m) => m.id)
+  );
+  // Invalid params ignored safely
+  assert.equal(
+    filterMissionSummaries(summaries, parseMissionListFilters(new URLSearchParams("mode=bogus&tier=abc&demo=maybe"))).length,
+    4
+  );
+
+  // mode
+  assert.deepEqual(
+    filterMissionSummaries(summaries, parseMissionListFilters(new URLSearchParams("mode=hillclimb"))).map((m) => m.id),
+    ["matrix-rank444-f2"]
+  );
+  // tier
+  assert.deepEqual(
+    filterMissionSummaries(summaries, parseMissionListFilters(new URLSearchParams("tier=1"))).map((m) => m.id),
+    ["fc-erdos-open", "lnsym-gcm-gmult-armv8"]
+  );
+  // open_conjecture
+  assert.deepEqual(
+    filterMissionSummaries(summaries, parseMissionListFilters(new URLSearchParams("open_conjecture=true"))).map((m) => m.id),
+    ["fc-erdos-open"]
+  );
+  assert.deepEqual(
+    filterMissionSummaries(summaries, parseMissionListFilters(new URLSearchParams("open_conjecture=false"))).map((m) => m.id),
+    ["lnsym-gcm-gmult-armv8", "matrix-rank444-f2", "onboarding-sandbox"]
+  );
+  // toolchain (exact & substring, case-insensitive)
+  assert.deepEqual(
+    filterMissionSummaries(summaries, parseMissionListFilters(new URLSearchParams("toolchain=v4.35.0"))).map((m) => m.id),
+    ["lnsym-gcm-gmult-armv8"]
+  );
+  assert.deepEqual(
+    filterMissionSummaries(summaries, parseMissionListFilters(new URLSearchParams("toolchain=leanprover/lean4:v4.31.0"))).map((m) => m.id),
+    ["matrix-rank444-f2"]
+  );
+  // has_frontier
+  assert.deepEqual(
+    filterMissionSummaries(summaries, parseMissionListFilters(new URLSearchParams("has_frontier=true"))).map((m) => m.id),
+    ["fc-erdos-open", "matrix-rank444-f2", "onboarding-sandbox"]
+  );
+  // demo
+  assert.deepEqual(
+    filterMissionSummaries(summaries, parseMissionListFilters(new URLSearchParams("demo=true"))).map((m) => m.id),
+    ["onboarding-sandbox"]
+  );
+  assert.deepEqual(
+    filterMissionSummaries(summaries, parseMissionListFilters(new URLSearchParams("demo=false"))).map((m) => m.id),
+    ["fc-erdos-open", "lnsym-gcm-gmult-armv8", "matrix-rank444-f2"]
+  );
+  // q matching id, title, and upstream.repo
+  assert.deepEqual(
+    filterMissionSummaries(summaries, parseMissionListFilters(new URLSearchParams("q=ERDŐS"))).map((m) => m.id),
+    ["fc-erdos-open"]
+  );
+  assert.deepEqual(
+    filterMissionSummaries(summaries, parseMissionListFilters(new URLSearchParams("q=deepmind"))).map((m) => m.id),
+    ["fc-erdos-open", "matrix-rank444-f2"]
+  );
+  assert.deepEqual(
+    filterMissionSummaries(summaries, parseMissionListFilters(new URLSearchParams("q=lnsym-gcm"))).map((m) => m.id),
+    ["lnsym-gcm-gmult-armv8"]
+  );
+  // Combined filters
+  assert.deepEqual(
+    filterMissionSummaries(
+      summaries,
+      parseMissionListFilters(new URLSearchParams("mode=dag&tier=1&has_frontier=true&demo=false"))
+    ).map((m) => m.id),
+    ["fc-erdos-open"]
+  );
+});
+
+test("buildGlobalFrontier sorts deterministically, excludes demo/disputed/blocked tasks, filters, and paginates", () => {
+  const bk: BestKnown = {
+    value: 47,
+    kind: "literature",
+    source: "Strassen / AlphaTensor",
+    url: "https://example.org/rank444",
+    checked: "2026-11-26",
+  };
+  const mTier2Hill = mission("hillclimb", 2, {
+    id: "matrix-rank444-f2",
+    title: "Matrix Rank 4x4 F2",
+    verifier: { image: "sunstead/verifier-lean4-v4.31.0:v0.1", toolchain: "leanprover/lean4:v4.31.0", command: ["./verify"] },
+  });
+  const mTier1Hill = mission("hillclimb", 1, {
+    id: "tier1-hill",
+    title: "Tier 1 Optimization",
+    verifier: { image: "sunstead/verifier-lean4:v0.2", toolchain: "leanprover/lean4:v4.36.0", command: ["./verify"] },
+  });
+  const mTier1Dag = mission("dag", 1, {
+    id: "alpha-dag",
+    title: "Alpha Blueprint",
+    verifier: { image: "sunstead/verifier-lean4-v4.35.0:v0.1", toolchain: "leanprover/lean4:v4.35.0", command: ["./verify"] },
+  });
+  const mTier1OpenConj = mission("dag", 1, {
+    id: "fc-open",
+    title: "Open Conjectures Pack",
+    open_conjecture: true,
+    verifier: { image: "sunstead/verifier-lean4:v0.2", toolchain: "leanprover/lean4:v4.36.0", command: ["./verify"] },
+  });
+  const mDemo = mission("dag", 1, {
+    id: "sandbox-demo",
+    title: "Sandbox Demo",
+    demo: true,
+    verifier: { image: "sunstead/verifier-lean4:v0.2", toolchain: "leanprover/lean4:v4.36.0", command: ["./verify"] },
+  });
+
+  const input = [
+    {
+      manifest: mTier2Hill,
+      tasks: [
+        task("rank444", {
+          status: "verified",
+          best_score: 47,
+          def: {
+            id: "rank444",
+            title: "Beat rank 47",
+            target_files: ["Rank444/Certificate.lean"],
+            depends_on: [],
+            best_known: bk,
+            upstream_url: "https://github.com/org/repo/blob/abc/Spec.lean#L1",
+          },
+        }),
+      ],
+    },
+    {
+      manifest: mTier1Hill,
+      tasks: [task("t1_opt")],
+    },
+    {
+      manifest: mTier1Dag,
+      tasks: [
+        task("leased_t1", {
+          status: "leased",
+          active_lease: { task_id: "leased_t1", contributor: "alice", lease_token: "tok", expires_at_unix: 999999 },
+        }),
+        task("open_t1", {
+          def: { id: "open_t1", title: "First Open DAG Lemma", target_files: ["Alpha/One.lean"], depends_on: [] },
+        }),
+        task("blocked_t1", {}, ["open_t1"]),
+        task("verified_t1", { status: "verified" }),
+        task("disputed_t1", {
+          disputed_counterexample: {
+            refutation_id: "ref-1",
+            refuter: "dave",
+            proof_id: "a".repeat(64),
+            summary: "false",
+            created_at: 1000,
+          },
+        }),
+      ],
+    },
+    {
+      manifest: mTier1OpenConj,
+      tasks: [
+        task("conj_a"),
+        task("conj_a__d1__sub1", {
+          def: { id: "conj_a__d1__sub1", title: "Spawned subgoal", target_files: ["Fc/Sub1.lean"], decomp_id: "d1" },
+        }),
+        task("conj_refuted", { status: "refuted" }),
+      ],
+    },
+    {
+      manifest: mDemo,
+      tasks: [task("demo_task")],
+    },
+  ];
+
+  // Default excludes demo, disputed, blocked, verified DAG, refuted DAG; keeps verified hillclimb.
+  // Priority: unclaimed first -> Tier 1 before Tier 2 -> DAG before hillclimb -> mission order + task order.
+  const res = buildGlobalFrontier(input);
+  assert.equal(res.limit, FRONTIER_DEFAULT_LIMIT);
+  assert.equal(res.offset, 0);
+  assert.equal(res.total_matching, 6);
+  assert.equal(res.returned, 6);
+  assert.deepEqual(
+    res.tasks.map((t) => `${t.mission_id}/${t.task_id}`),
+    [
+      "alpha-dag/open_t1",            // unclaimed, T1, dag (mission idx 2)
+      "fc-open/conj_a",               // unclaimed, T1, dag (mission idx 3, task idx 0)
+      "fc-open/conj_a__d1__sub1",     // unclaimed, T1, dag (mission idx 3, task idx 1)
+      "tier1-hill/t1_opt",            // unclaimed, T1, hillclimb
+      "matrix-rank444-f2/rank444",    // unclaimed, T2, hillclimb
+      "alpha-dag/leased_t1",          // leased, T1, dag (sorted after all unclaimed!)
+    ]
+  );
+
+  // Verify entry fields completely
+  const hillEntry = res.tasks.find((t) => t.task_id === "rank444")!;
+  assert.deepEqual(hillEntry, {
+    mission_id: "matrix-rank444-f2",
+    mission_title: "Matrix Rank 4x4 F2",
+    task_id: "rank444",
+    title: "Beat rank 47",
+    mode: "hillclimb",
+    tier: 2,
+    open_conjecture: false,
+    toolchain: "leanprover/lean4:v4.31.0",
+    verifier_image: "ghcr.io/sunstead-institute/verifier-lean4-v4.31.0:v0.1",
+    status: "verified",
+    leased: false,
+    lease_contributor: null,
+    best_score: 47,
+    best_known: bk,
+    upstream_url: "https://github.com/org/repo/blob/abc/Spec.lean#L1",
+    target_files: ["Rank444/Certificate.lean"],
+    depends_on: [],
+  });
+  const leasedEntry = res.tasks.find((t) => t.task_id === "leased_t1")!;
+  assert.equal(leasedEntry.leased, true);
+  assert.equal(leasedEntry.lease_contributor, "alice");
+  assert.equal(res.tasks.find((t) => t.task_id === "conj_a")!.open_conjecture, true);
+  assert.equal(res.tasks.find((t) => t.task_id === "conj_a__d1__sub1")!.open_conjecture, false);
+
+  // include_demo=true surfaces demo missions
+  const withDemo = buildGlobalFrontier(input, parseFrontierQuery(new URLSearchParams("include_demo=true")));
+  assert.equal(withDemo.total_matching, 7);
+  assert.ok(withDemo.tasks.some((t) => t.mission_id === "sandbox-demo" && t.task_id === "demo_task"));
+
+  // unclaimed=true removes leased_t1
+  const unclaimed = buildGlobalFrontier(input, parseFrontierQuery(new URLSearchParams("unclaimed=true")));
+  assert.equal(unclaimed.total_matching, 5);
+  assert.ok(unclaimed.tasks.every((t) => !t.leased));
+
+  // open_conjecture=true selects only root open conjecture (not spawned subgoal)
+  const onlyConj = buildGlobalFrontier(input, parseFrontierQuery(new URLSearchParams("open_conjecture=true")));
+  assert.deepEqual(onlyConj.tasks.map((t) => t.task_id), ["conj_a"]);
+
+  // toolchain, mission, q filters
+  assert.deepEqual(
+    buildGlobalFrontier(input, parseFrontierQuery(new URLSearchParams("toolchain=v4.35.0"))).tasks.map((t) => t.task_id),
+    ["open_t1", "leased_t1"]
+  );
+  assert.deepEqual(
+    buildGlobalFrontier(input, parseFrontierQuery(new URLSearchParams("mission=fc-open"))).tasks.map((t) => t.task_id),
+    ["conj_a", "conj_a__d1__sub1"]
+  );
+  assert.deepEqual(
+    buildGlobalFrontier(input, parseFrontierQuery(new URLSearchParams("q=Beat%20rank"))).tasks.map((t) => t.task_id),
+    ["rank444"]
+  );
+
+  // Pagination & limit clamping
+  const page1 = buildGlobalFrontier(input, parseFrontierQuery(new URLSearchParams("limit=2&offset=1")));
+  assert.equal(page1.total_matching, 6);
+  assert.equal(page1.limit, 2);
+  assert.equal(page1.offset, 1);
+  assert.equal(page1.returned, 2);
+  assert.deepEqual(page1.tasks.map((t) => t.task_id), ["conj_a", "conj_a__d1__sub1"]);
+
+  const clampedHigh = buildGlobalFrontier(input, parseFrontierQuery(new URLSearchParams("limit=9999&offset=-5")));
+  assert.equal(clampedHigh.limit, FRONTIER_MAX_LIMIT);
+  assert.equal(clampedHigh.offset, 0);
+
+  const clampedLow = buildGlobalFrontier(input, parseFrontierQuery(new URLSearchParams("limit=0")));
+  assert.equal(clampedLow.limit, 1);
+  assert.equal(clampedLow.returned, 1);
+
+  const emptyLimit = buildGlobalFrontier(input, parseFrontierQuery(new URLSearchParams("limit=")));
+  assert.equal(emptyLimit.limit, FRONTIER_DEFAULT_LIMIT);
+});
+
+test("isSubmissionVerifyingStale respects STALE_VERIFYING_SEC boundary and terminal statuses", () => {
+  assert.equal(STALE_VERIFYING_SEC, 600);
+  assert.match(STALE_VERIFYING_ERROR, /interrupted before completion/);
+  assert.match(STALE_VERIFYING_SUMMARY, /please resubmit/);
+
+  const now = 1_700_001_000;
+  assert.equal(isSubmissionVerifyingStale({ status: "verifying", created_at: now - 599 }, now), false);
+  assert.equal(isSubmissionVerifyingStale({ status: "verifying", created_at: now - 600 }, now), true);
+  assert.equal(isSubmissionVerifyingStale({ status: "verifying", created_at: now - 3600 }, now), true);
+  assert.equal(isSubmissionVerifyingStale({ status: "accepted", created_at: now - 3600 }, now), false);
+  assert.equal(isSubmissionVerifyingStale({ status: "rejected", created_at: now - 3600 }, now), false);
+  assert.equal(isSubmissionVerifyingStale({ status: "error", created_at: now - 3600 }, now), false);
+  assert.equal(isSubmissionVerifyingStale({ status: "verifying", created_at: now - 30 }, now, 30), true);
+  assert.equal(isSubmissionVerifyingStale({ status: "verifying", created_at: now - 29 }, now, 30), false);
 });
