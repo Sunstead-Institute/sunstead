@@ -80,3 +80,15 @@ Lean only, no Mathlib) and runs them too, covering a successful build, a proof
 that does not compile (its compiler output must reach the error and
 `build.log`), a helper `axiom` that the checker rejects, and the same axiom
 behind an `elab_rules` that spoofs `#print axioms`.
+
+## Bundles from CI
+
+The "Verify published proofs against upstream" workflow
+(`.github/workflows/upstream-verify.yml`) can write these bundles for you. Run
+it by hand (Actions, then "Run workflow") with **bundles** ticked, and
+optionally one `proof_id`. For each proof that `verify.py` verifies, the job
+then runs `export-upstream.py` with the full build and uploads the bundle as
+the artifact `upstream-bundle-<proof id>`. The job has read-only permissions
+and no tokens, so it cannot push or open a pull request anywhere: sending a
+bundle upstream stays a maintainer's decision. Scheduled runs never write
+bundles.
