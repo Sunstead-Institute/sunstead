@@ -58,6 +58,13 @@ mission). `--no-build` stops after step 4 and never reports "verified".
 `--json` prints a machine-readable result and `--keep DIR` keeps the patched
 upstream checkout.
 
+For a compatibility check, pass `--upstream-commit <40-hex SHA>` after reviewing
+the upstream revision. The replay fails if the target file differs byte-for-byte
+from the ledger pin, so the pinned line anchor remains valid. Other files and
+dependencies may have changed: a pass verifies the proof at the tested commit
+only; it does not attest that the target is unclaimed or that imported definitions
+have retained their meaning. JSON names the tested and pinned commits separately.
+
 ## What you trust when it passes
 
 The upstream repository at that commit (the statement and everything it
@@ -81,6 +88,8 @@ Even so, run it in a disposable VM or container if you would not run
 every upstream-linked ledger proof each day (and on demand for one proof id),
 on GitHub's public runners with no secrets, and posts a summary table to the
 run page. Exit 3 (not upstream-checkable) is reported but does not fail the run.
+On manual runs, `upstream_commit` requires one `proof_id`. Scheduled runs
+continue to use the ledger pins.
 
 ## For maintainers
 
