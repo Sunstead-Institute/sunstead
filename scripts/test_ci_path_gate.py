@@ -77,6 +77,8 @@ class CiPathGateTests(unittest.TestCase):
     def test_export_scripts_only_run_export(self):
         res = gate.classify_paths(["scripts/export-upstream.py"])
         self.assertTrue(res["run_export"])
+        for path in ("scripts/sunstead_verify.py", "scripts/test_sunstead_verify.py", "scripts/scout-upstream.py"):
+            self.assertTrue(gate.classify_paths([path])["run_export"], path)
         self.assertFalse(res["run_v436"])
         self.assertFalse(res["run_v435"])
         self.assertFalse(res["run_v431"])

@@ -9,6 +9,10 @@ upstream stays a maintainer's decision, made after reading the bundle.
 python3 scripts/export-upstream.py --proof-id <ledger id> --out /tmp/export-<id>
 ```
 
+The checks below are the same code anyone outside the project runs through
+[`/verify.py`](VERIFY-YOURSELF.md): `scripts/sunstead_verify.py` is the engine and
+this script adds the mission files from this checkout and the PR bundle.
+
 `<ledger id>` is the hex in a `/proofs/<id>` permalink. The proof is read with
 `GET /api/proofs/<id>` from `--hub` (default `https://sunstead.org`, read only).
 `--proof-json` takes a saved copy of that response instead.

@@ -853,13 +853,29 @@ function proofDetailHtml(proof) {
       </div>
       <pre class="proof-cmd" tabindex="0">${escapeHtml(proof.how_to_rebuild)}</pre>
     </div>
+    ${
+      proof.verify_command
+        ? `<div class="proof-block">
+      <div class="proof-block-head">
+        <span class="kv-label">Check it against upstream, without trusting Sunstead (<a class="proof-link" href="/proofs#verify-yourself">how</a>)</span>
+        <button type="button" class="btn-outline-ink proof-copy" data-copy="verify" data-label="Copy command">Copy command</button>
+      </div>
+      <pre class="proof-cmd" tabindex="0">${escapeHtml(proof.verify_command)}</pre>
+    </div>`
+        : ""
+    }
   `;
 }
 
 function wireProofCopyButtons(root, proof) {
   root.querySelectorAll(".proof-copy").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      const text = btn.dataset.copy === "patch" ? proof.patch : proof.how_to_rebuild;
+      const text =
+        btn.dataset.copy === "patch"
+          ? proof.patch
+          : btn.dataset.copy === "verify"
+            ? proof.verify_command
+            : proof.how_to_rebuild;
       try {
         await navigator.clipboard.writeText(text);
         btn.textContent = "Copied ✓";

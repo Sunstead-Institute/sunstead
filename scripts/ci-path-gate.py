@@ -49,6 +49,11 @@ ALL_VERIFIER_SHARED_FILES = {
 EXPORT_FILES = {
     "scripts/export-upstream.py",
     "scripts/test_export_upstream.py",
+    # Shared engine of export-upstream.py, served publicly as /verify.py, and the
+    # scout parser it must stay identical to.
+    "scripts/sunstead_verify.py",
+    "scripts/test_sunstead_verify.py",
+    "scripts/scout-upstream.py",
     ".github/workflows/ci.yml",
 }
 

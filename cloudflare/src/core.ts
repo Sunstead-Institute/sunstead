@@ -1414,6 +1414,24 @@ export function howToRebuild(hubOrigin: string, missionId: string): string {
 }
 
 /**
+ * Command that checks one ledger proof against its upstream repository with the
+ * standalone public verifier (`/verify.py`, scripts/sunstead_verify.py), so the
+ * check trusts the upstream repo and stock Lean rather than Sunstead. Null when
+ * the entry has no single upstream `sorry` to check against (demo and retired
+ * missions, hill-climb tasks, decomposition subgoals, refutations, assembled roots).
+ */
+export function verifyCommand(
+  hubOrigin: string,
+  proofId: string | null,
+  entry: { entry_kind: string; mission_demo: boolean; upstream: { task_url: string | null } | null }
+): string | null {
+  if (!proofId || !/^[0-9a-f]{64}$/.test(proofId)) return null;
+  if (entry.entry_kind !== "proof" || entry.mission_demo || !entry.upstream?.task_url) return null;
+  const hubArg = hubOrigin === "https://sunstead.org" ? "" : ` --hub ${shellQuote(hubOrigin)}`;
+  return `curl -fsSLO ${shellQuote(`${hubOrigin}/verify.py`)} && python3 verify.py ${proofId}${hubArg}`;
+}
+
+/**
  * Public view of a task's accepted proof (GET /api/missions/:id/tasks/:task/proof).
  * `currentSpecSha256` is the mission's spec hash now; a proof accepted under an
  * older spec is still shown, but flagged.
@@ -1577,10 +1595,19 @@ export function buildLedgerEntry(
       : entryKind === "refutation" && taskDef?.title
         ? `Refutation: ¬ (${taskDef.title})`
         : taskDef?.title ?? null;
+  const proofId = proofIdFromPatchSha(row.patch_sha256);
+  const upstreamView = upstream
+    ? {
+        repo: upstream.repo,
+        commit: upstream.commit,
+        license: upstream.license,
+        task_url: taskDef?.upstream_url ?? null,
+      }
+    : null;
   return {
-    proof_id: proofIdFromPatchSha(row.patch_sha256),
+    proof_id: proofId,
     patch_sha256: row.patch_sha256,
-    permalink: `${hubOrigin}/proofs/${proofIdFromPatchSha(row.patch_sha256)}`,
+    permalink: `${hubOrigin}/proofs/${proofId}`,
     seq: row.seq,
     entry_kind: entryKind,
     mission_id: row.mission_id,
@@ -1589,14 +1616,12 @@ export function buildLedgerEntry(
     mission_demo: isDemo,
     task_id: row.task_id,
     task_title: taskTitle,
-    upstream: upstream
-      ? {
-          repo: upstream.repo,
-          commit: upstream.commit,
-          license: upstream.license,
-          task_url: taskDef?.upstream_url ?? null,
-        }
-      : null,
+    upstream: upstreamView,
+    verify_command: verifyCommand(hubOrigin, proofId, {
+      entry_kind: entryKind,
+      mission_demo: isDemo,
+      upstream: upstreamView,
+    }),
     contributor: row.contributor,
     display_name: row.display_name || row.contributor,
     github: social.github,

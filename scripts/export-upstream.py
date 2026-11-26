@@ -33,33 +33,26 @@ Usage:
 `--hub` (default https://sunstead.org) is only read with GET /api/proofs/<id>.
 """
 import argparse
-import ast
-import importlib.util
 import json
 import os
 import re
 import shutil
-import subprocess
 import sys
 import tempfile
-import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-UA = {"User-Agent": "sunstead-export-upstream/0.1"}
-STANDARD_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
-PROOF_ID_RE = re.compile(r"^[0-9a-f]{64}$")
-COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
-REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
-SIMPLE_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z_0-9']*$")
-SCOPED_PREFIX_RE = re.compile(r"^(?:set_option|open|attribute|local|scoped)\b.*\bin\s*$")
+sys.path.insert(0, os.path.join(ROOT, "scripts"))
+# The statement matching, proof splicing, build and axiom checks are shared with
+# the public verifier (served as https://sunstead.org/verify.py) so the two can
+# never disagree about what "this proof closes that upstream sorry" means.
+import sunstead_verify as sv  # noqa: E402
+from sunstead_verify import (  # noqa: E402,F401  (re-exported for tests)
+    AXIOM_CHECKER, GIT, build_and_check, extract_contribution, fetch_upstream,
+    lean_module, load_mission, parse_upstream_url, proved_file, read, run, short, transplant,
+    verify_theorems,
+)
 
-_spec = importlib.util.spec_from_file_location("scout_upstream", os.path.join(ROOT, "scripts", "scout-upstream.py"))
-scout = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(scout)
-
-
-class ExportError(Exception):
-    pass
+ExportError = sv.VerifyError
 
 
 # ---------------------------------------------------------------- inputs
@@ -68,369 +61,7 @@ def load_proof(args) -> dict:
     if args.proof_json:
         with open(args.proof_json, encoding="utf-8") as f:
             return json.load(f)
-    pid = args.proof_id.lower().removeprefix("sha256:")
-    if not PROOF_ID_RE.match(pid):
-        raise ExportError("--proof-id must be 64 hex characters")
-    url = f"{args.hub.rstrip('/')}/api/proofs/{pid}"
-    with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=60) as r:
-        return json.loads(r.read().decode("utf-8"))
-
-
-def verify_theorems(verify_src: str) -> dict:
-    """task id -> fully qualified theorem name, from a mission's `verify` TASKS table."""
-    try:
-        tree = ast.parse(verify_src)
-        for node in tree.body:
-            if isinstance(node, ast.Assign):
-                for target in node.targets:
-                    if isinstance(target, ast.Name) and target.id == "TASKS":
-                        tasks = ast.literal_eval(node.value)
-                        if isinstance(tasks, dict):
-                            return {
-                                k: v["theorem"]
-                                for k, v in tasks.items()
-                                if isinstance(k, str) and isinstance(v, dict) and isinstance(v.get("theorem"), str)
-                            }
-    except (SyntaxError, ValueError):
-        pass
-    pat = re.compile(r'"(?P<task>[\w.-]+)"\s*:\s*\{\s*"module"\s*:\s*"[^"]+"\s*,\s*"theorem"\s*:\s*"(?P<thm>[^"]+)"')
-    return {m.group("task"): m.group("thm") for m in pat.finditer(verify_src)}
-
-
-def parse_upstream_url(url: str):
-    """github.com/<owner>/<repo>/blob/<commit>/<path>#L<a>[-L<b>] -> (repo, commit, path, a, b)."""
-    m = re.match(
-        r"^https://github\.com/(?P<repo>[^/]+/[^/]+)/blob/(?P<commit>[0-9a-f]{40})/(?P<path>[^#]+\.lean)#L(?P<a>\d+)(?:-L(?P<b>\d+))?$",
-        url or "",
-    )
-    if not m:
-        raise ExportError(f"task upstream_url is not a pinned GitHub line link: {url!r}")
-    a = int(m.group("a"))
-    return m.group("repo"), m.group("commit"), m.group("path"), a, int(m.group("b") or a)
-
-
-def load_mission(missions_root: str, proof: dict) -> dict:
-    mid = proof.get("mission_id", "")
-    if not re.match(r"^[\w.-]+$", mid):
-        raise ExportError(f"bad mission id {mid!r}")
-    mdir = os.path.join(missions_root, mid)
-    if not os.path.isfile(os.path.join(mdir, "sunstead.json")):
-        raise ExportError(f"mission {mid} not found under {missions_root} (retired missions cannot be exported)")
-    manifest = json.loads(read(os.path.join(mdir, "sunstead.json")))
-    if manifest.get("demo"):
-        raise ExportError(f"{mid} is a demo mission; nothing to send upstream")
-    upstream = json.loads(read(os.path.join(mdir, "UPSTREAM.json")))
-    for k in ("repo", "commit", "license"):
-        if not upstream.get(k):
-            raise ExportError(f"UPSTREAM.json missing {k}")
-    if not REPO_RE.match(upstream["repo"]) or not COMMIT_RE.match(upstream["commit"]):
-        raise ExportError("UPSTREAM.json repo/commit malformed (need owner/name and a 40-hex commit)")
-    task = next((t for t in manifest["tasks"] if t["id"] == proof.get("task_id")), None)
-    if task is None:
-        raise ExportError(f"task {proof.get('task_id')!r} not in {mid}/sunstead.json")
-    if len(task.get("target_files", [])) != 1:
-        raise ExportError("export supports tasks with exactly one target file")
-    repo, commit, path, line_a, line_b = parse_upstream_url(task.get("upstream_url", ""))
-    if repo != upstream["repo"] or commit != upstream["commit"]:
-        raise ExportError(f"task upstream_url points at {repo}@{commit}, mission pins {upstream['repo']}@{upstream['commit']}")
-    theorems = verify_theorems(read(os.path.join(mdir, "verify")))
-    if task["id"] not in theorems:
-        raise ExportError(f"no theorem for task {task['id']} in {mid}/verify")
-    is_repo_snapshot = (manifest.get("snapshot") or {}).get("mode") == "repo-snapshot"
-    return {
-        "id": mid, "dir": mdir, "manifest": manifest, "upstream": upstream, "task": task,
-        "target_file": task["target_files"][0], "theorem": theorems[task["id"]],
-        "upstream_path": path, "upstream_lines": (line_a, line_b),
-        "is_repo_snapshot": is_repo_snapshot,
-    }
-
-
-# ---------------------------------------------------------------- git helpers
-
-def run(cmd, cwd, check=True, timeout=None, log=None):
-    p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout)
-    if log is not None:
-        log.append(f"$ {' '.join(cmd)}  (exit {p.returncode})\n{p.stdout}{p.stderr}")
-    if check and p.returncode != 0:
-        raise ExportError(f"{' '.join(cmd[:3])}… failed ({p.returncode}): {(p.stderr or p.stdout)[-1500:]}")
-    return p
-
-
-# Every git call: no hooks from any repo config, fixed identity, no signing.
-GIT = ["git", "-c", "core.hooksPath=/dev/null", "-c", "user.name=sunstead-export",
-       "-c", "user.email=export@localhost", "-c", "commit.gpgsign=false"]
-
-
-def proved_file(mission: dict, patch: str, scratch: str):
-    """Seed target file and the same file with the accepted patch applied."""
-    work = os.path.join(scratch, "mission")
-    shutil.copytree(mission["dir"], work)
-    run([*GIT, "init", "-q"], work)
-    run([*GIT, "add", "-A"], work)
-    run([*GIT, "commit", "-q", "-m", "seed"], work)
-    patch_path = os.path.join(scratch, "accepted.patch")
-    with open(patch_path, "w", encoding="utf-8") as f:
-        f.write(patch if patch.endswith("\n") else patch + "\n")
-    run([*GIT, "apply", "--whitespace=nowarn", patch_path], work)
-    changed = run([*GIT, "diff", "--name-only"], work).stdout.split()
-    untracked = run([*GIT, "ls-files", "--others", "--exclude-standard"], work).stdout.split()
-    if set(changed + untracked) - {mission["target_file"]}:
-        raise ExportError(f"patch touches files other than {mission['target_file']}: {sorted(set(changed + untracked))}")
-    if os.path.islink(os.path.join(work, mission["target_file"])):
-        raise ExportError(f"patch turns {mission['target_file']} into a symlink")
-    for line in run([*GIT, "diff", "--raw"], work).stdout.splitlines():
-        old_mode, new_mode = line.split()[:2]
-        if old_mode.lstrip(":") != new_mode or new_mode != "100644":
-            raise ExportError(f"patch changes file mode ({line.strip()})")
-    seed = read(os.path.join(mission["dir"], mission["target_file"]))
-    proved = read(os.path.join(work, mission["target_file"]))
-    return seed, proved
-
-
-def fetch_upstream(repo_url: str, commit: str, dest: str, log: list):
-    os.makedirs(dest)
-    run([*GIT, "init", "-q"], dest)
-    run([*GIT, "remote", "add", "origin", repo_url], dest)
-    run([*GIT, "fetch", "-q", "--depth", "1", "origin", commit], dest, timeout=1800, log=log)
-    run([*GIT, "-c", "advice.detachedHead=false", "checkout", "-q", "FETCH_HEAD"], dest)
-    head = run([*GIT, "rev-parse", "HEAD"], dest).stdout.strip()
-    if head != commit:
-        raise ExportError(f"fetched {head}, expected pinned {commit}")
-
-
-# ---------------------------------------------------------------- Lean surgery
-
-def read(path: str) -> str:
-    with open(path, encoding="utf-8") as f:
-        return f.read()
-
-
-def norm(s: str) -> str:
-    return " ".join(scout.mask_comments_and_strings(s).split())
-
-
-def norm_statement(s: str) -> str:
-    """Statement for comparison: comments, whitespace and leading attributes ignored
-    (Sunstead copies keep the statement verbatim but may drop `@[simp]` and the like)."""
-    return re.sub(r"^(?:@\[[^\]]*\]\s*)+", "", norm(s))
-
-
-def short(name: str) -> str:
-    return name.rsplit(".", 1)[-1]
-
-
-def find_decl(decls, theorem: str):
-    exact = [d for d in decls if d.name == theorem]
-    if exact:
-        return exact[0]
-    by_short = [d for d in decls if short(d.name) == short(theorem)]
-    if len(by_short) == 1:
-        return by_short[0]
-    raise ExportError(f"declaration {theorem} not found (or ambiguous) in proved file")
-
-
-def leading_block_start(lines, masked_lines, idx: int) -> int:
-    """First line of doc comments, attributes, or scoped `... in` modifiers directly above line idx (0-based)."""
-    j = idx
-    while j > 0:
-        raw, masked = lines[j - 1], masked_lines[j - 1]
-        if not raw.strip():
-            break
-        m = masked.strip()
-        if m == "" or m.startswith("@[") or SCOPED_PREFIX_RE.match(m):
-            j -= 1
-            continue
-        break
-    return j
-
-
-def decl_text_with_header(src: str, d) -> str:
-    lines, masked = src.split("\n"), scout.mask_comments_and_strings(src).split("\n")
-    start = leading_block_start(lines, masked, d.start_line - 1)
-    return "\n".join(lines[start:d.end_line])
-
-
-def split_statement(d):
-    cut = scout.statement_end(d.code)
-    if cut < 0:
-        raise ExportError(f"cannot find `:=` in {d.name}")
-    return d.raw[:cut], d.raw[cut:]
-
-
-def extract_contribution(seed: str, proved: str, theorem: str) -> dict:
-    seed_decls, proved_decls = scout.split_declarations(seed), scout.split_declarations(proved)
-    seed_target, proved_target = find_decl(seed_decls, theorem), find_decl(proved_decls, theorem)
-    seed_stmt, _ = split_statement(seed_target)
-    proved_stmt, proof = split_statement(proved_target)
-    if norm_statement(seed_stmt) != norm_statement(proved_stmt):
-        raise ExportError("the accepted file changed the frozen statement; refusing to export")
-    if scout.SORRY_RE.search(scout.mask_comments_and_strings(proof)):
-        raise ExportError("accepted proof still contains `sorry`")
-    seed_names = {d.name for d in seed_decls}
-    helpers = [d for d in proved_decls if d.name not in seed_names and d.start_line < proved_target.start_line]
-    for h in helpers:
-        if h.sorry_lines:
-            raise ExportError(f"helper {h.name} contains `sorry`")
-    late = [d.name for d in proved_decls if d.name not in seed_names and d.start_line > proved_target.start_line]
-    seed_imports = set(re.findall(r"^import\s+(\S+)", seed, re.M))
-    new_imports = [m for m in re.findall(r"^import\s+(\S+)", proved, re.M) if m not in seed_imports]
-    seed_opens = set(re.findall(r"^open\b.*$", seed, re.M))
-    new_opens = [o for o in re.findall(r"^open\b.*$", proved, re.M) if o not in seed_opens]
-    return {
-        "statement": seed_stmt,
-        "proof": proof.rstrip(),
-        "helpers": [decl_text_with_header(proved, d) for d in helpers],
-        "helper_names": [d.name for d in helpers],
-        "after_target": late,
-        "new_imports": new_imports,
-        "new_opens": new_opens,
-    }
-
-
-def transplant(upstream_src: str, mission: dict, contrib: dict) -> tuple:
-    """Upstream file text with the proof (and helpers, imports) put in place, the
-    upstream declaration, and the 1-based (first, last) lines of the new helpers
-    plus declaration."""
-    decls = scout.split_declarations(upstream_src)
-    a, b = mission["upstream_lines"]
-    hits = [d for d in decls if d.start_line <= b and d.end_line >= a and d.sorry_lines]
-    if len(hits) != 1:
-        raise ExportError(f"expected one sorry declaration at {mission['upstream_path']}:{a}-{b}, found {len(hits)}")
-    d = hits[0]
-    up_stmt, up_proof = split_statement(d)
-    if short(d.name) != short(mission["theorem"]):
-        raise ExportError(
-            f"the upstream sorry at {mission['upstream_path']}:{a} sits inside `{d.name}`, which the mission "
-            f"extracted as the separate theorem `{short(mission['theorem'])}`. Automatic export only swaps the "
-            "proof of a matching upstream declaration; this one needs a hand-written upstream lemma."
-        )
-    if norm_statement(up_stmt) != norm_statement(contrib["statement"]):
-        raise ExportError(
-            "upstream statement differs from the mission's frozen statement at the pinned commit:\n"
-            f"  upstream: {norm_statement(up_stmt)[:300]}\n  mission:  {norm_statement(contrib['statement'])[:300]}"
-        )
-    if not scout.SORRY_RE.search(scout.mask_comments_and_strings(up_proof)):
-        raise ExportError(f"{d.name} at the pinned commit has no `sorry` to replace")
-    lines = upstream_src.split("\n")
-    masked = scout.mask_comments_and_strings(upstream_src).split("\n")
-    new_decl = up_stmt + contrib["proof"]
-    header_start = leading_block_start(lines, masked, d.start_line - 1)
-    helper_lines = "\n\n".join(contrib["helpers"]).split("\n") + [""] if contrib["helpers"] else []
-    before = lines[:header_start] + helper_lines + lines[header_start:d.start_line - 1]
-    decl_lines = new_decl.split("\n")
-    text = "\n".join(before + decl_lines + lines[d.end_line:])
-    existing = set(re.findall(r"^import\s+(\S+)", upstream_src, re.M))
-    added_imports = [m for m in contrib["new_imports"] if m not in existing]
-    shift = len(added_imports)
-    first = (header_start + 1 if helper_lines else len(before) + 1) + shift
-    span = (first, len(before) + len(decl_lines) + shift)
-    if added_imports:
-        imp = [m.end() for m in re.finditer(r"^import\s+\S+[^\n]*\n", text, re.M)]
-        at = imp[-1] if imp else 0
-        text = text[:at] + "".join(f"import {m}\n" for m in added_imports) + text[at:]
-    return text, d, span
-
-
-# ---------------------------------------------------------------- build & checks
-
-def lean_module(path: str) -> str:
-    parts = path[: -len(".lean")].split("/")
-    return ".".join(p if SIMPLE_IDENT_RE.match(p) else f"«{p}»" for p in parts)
-
-
-# Standalone checker run with `lake env lean --run`. It imports only `Lean`, loads
-# the built module's environment with `importModules ... (loadExts := false)` (no
-# elaborators, commands, `initialize` hooks or `#print` run), requires the
-# declaration to be a theorem, and lists its axioms with `collectAxioms`, so
-# nothing in the upstream or contributed source can rewrite the report (cf.
-# redteam.py's lean-spoof-axiom-report).
-AXIOM_CHECKER = """import Lean
-open Lean
-
-def stripGuillemets (raw : String) : String :=
-  match raw.toList with
-  | '«' :: rest =>
-    match rest.reverse with
-    | '»' :: innerRev => String.ofList innerRev.reverse
-    | _ => raw
-  | _ => raw
-
-def parseLeanName (s : String) : Name :=
-  (s.splitOn ".").foldl (fun acc part => Name.str acc (stripGuillemets part)) Name.anonymous
-
-def main (args : List String) : IO UInt32 := do
-  match args with
-  | [modStr, declStr] =>
-    let mod := parseLeanName modStr
-    let decl := parseLeanName declStr
-    initSearchPath (← findSysroot)
-    let env ← importModules #[{ module := mod }] {} 0 (loadExts := false)
-    match env.find? decl with
-    | some (.thmInfo _) => pure ()
-    | some _ =>
-      IO.println s!"NOT_A_THEOREM {decl}"
-      return 3
-    | none =>
-      IO.println s!"MISSING {decl}"
-      return 4
-    let ctx : Core.Context := { fileName := "<sunstead-export>", fileMap := default }
-    let (axs, _) ← (collectAxioms decl : CoreM (Array Name)).toIO ctx { env := env }
-    for a in axs do
-      IO.println s!"AXIOM {a}"
-    IO.println "SUNSTEAD_AXIOMS_DONE"
-    return 0
-  | _ =>
-    IO.eprintln "usage: lean --run check.lean <module> <declaration>"
-    return 2
-"""
-
-
-def tail(p, n=60) -> str:
-    lines = (p.stdout + p.stderr).rstrip().splitlines()
-    return "\n".join("    " + l for l in lines[-n:])
-
-
-def read_axioms(output: str, decl_name: str) -> list:
-    if f"NOT_A_THEOREM {decl_name}" in output:
-        raise ExportError(f"{decl_name} is not a theorem after the build")
-    if f"MISSING {decl_name}" in output:
-        raise ExportError(f"{decl_name} not found in the built module")
-    if "SUNSTEAD_AXIOMS_DONE" not in output:
-        raise ExportError("axiom checker did not finish")
-    return [l[len("AXIOM "):].strip() for l in output.splitlines() if l.startswith("AXIOM ")]
-
-
-def build_and_check(updir: str, mission: dict, decl_name: str, lint_cmds, log: list, scratch: str) -> dict:
-    checks = {}
-    run(["lake", "exe", "cache", "get"], updir, check=False, timeout=3600, log=log)
-    module = lean_module(mission["upstream_path"])
-    p = run(["lake", "build", module], updir, check=False, timeout=6 * 3600, log=log)
-    checks["lake_build"] = p.returncode == 0
-    if p.returncode != 0:
-        raise ExportError(f"lake build {module} failed:\n{tail(p)}")
-    out = p.stdout + p.stderr
-    # Lean prints `<file>:l:c: warning: declaration uses 'sorry'`; lake prints
-    # `warning: ./<file>:l:c: declaration uses 'sorry'`. Accept both.
-    sorry_warn = re.findall(
-        rf"(?:\./)*{re.escape(mission['upstream_path'])}:(\d+):\d+:(?: warning:)? declaration uses 'sorry'", out
-    )
-    checks["sorry_warnings_in_file"] = [int(x) for x in sorry_warn]
-    checker = os.path.join(scratch, "sunstead_axiom_check.lean")  # outside the upstream checkout
-    with open(checker, "w", encoding="utf-8") as f:
-        f.write(AXIOM_CHECKER)
-    p = run(["lake", "env", "lean", "--run", checker, module, decl_name], updir, check=False, timeout=3600, log=log)
-    if p.returncode not in (0, 3, 4):
-        raise ExportError(f"axiom checker failed for {decl_name}:\n{tail(p)}")
-    axioms = read_axioms(p.stdout, decl_name)
-    checks["axioms"] = axioms
-    bad = sorted(set(axioms) - STANDARD_AXIOMS)
-    if bad:
-        raise ExportError(f"{decl_name} depends on non-standard axioms: {bad}")
-    checks["lint"] = []
-    for cmd in lint_cmds:
-        p = run(["bash", "-c", cmd], updir, check=False, timeout=3600, log=log)
-        checks["lint"].append({"cmd": cmd, "ok": p.returncode == 0})
-    return checks
+    return sv.load_public_proof(args.hub, args.proof_id)  # also checks sha256(patch) == id
 
 
 # ---------------------------------------------------------------- bundle
@@ -498,6 +129,10 @@ def export(args) -> dict:
                     raise ExportError("proof imports another mission module; export its dependency first")
             if contrib["after_target"]:
                 warnings.append(f"declarations added after the theorem are not exported: {contrib['after_target']}")
+            try:
+                sv.check_no_metaprogramming(contrib)
+            except ExportError as e:
+                warnings.append(str(e).split(". Read the patch")[0] + "; review it before sending")
             if contrib["new_opens"]:
                 warnings.append(f"the proved file adds `open` lines; add what the proof needs upstream by hand: {contrib['new_opens']}")
             updir = os.path.join(scratch, "upstream")
@@ -507,14 +142,21 @@ def export(args) -> dict:
             if not os.path.isfile(target):
                 raise ExportError(f"{mission['upstream_path']} not in upstream at the pinned commit")
             src = read(target)
-            new_src, decl, span = transplant(src, mission, contrib)
-            with open(target, "w", encoding="utf-8") as f:
-                f.write(new_src)
+            sv.check_imports_resolve(updir, contrib)
+            new_src, decl, span, ref = transplant(src, mission, contrib)
             checks = {}
             if not args.no_build:
-                checks = build_and_check(updir, mission, decl.name, args.lint_cmd or [], log, scratch)
-                if any(span[0] <= ln <= span[1] for ln in checks["sorry_warnings_in_file"]):
+                # Build with the pristine reference statement in place, then drop it from the diff.
+                with open(target, "w", encoding="utf-8") as f:
+                    f.write(sv.with_reference(new_src, ref))
+                checks = build_and_check(updir, mission, decl.name, log, scratch, ref_name=ref["name"])
+                shift = len(ref["lines"])
+                if any(span[0] + shift <= ln <= span[1] + shift for ln in checks["sorry_warnings_in_file"]):
                     raise ExportError(f"{decl.name} (or a helper) still reports `sorry` after the build")
+            with open(target, "w", encoding="utf-8") as f:
+                f.write(new_src)
+            if not args.no_build:
+                checks["lint"] = sv.run_lints(updir, args.lint_cmd or [], log)
             diff = run([*GIT, "diff", "--no-color"], updir).stdout
             os.makedirs(out, exist_ok=True)
             with open(os.path.join(out, "upstream.patch"), "w", encoding="utf-8") as f:

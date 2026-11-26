@@ -61,11 +61,12 @@
         <h1>Verified Proofs Ledger</h1>
         <p class="hero-subtitle">Each entry is a patch the Lean 4 kernel accepted, with a permanent link named by its SHA-256.</p>
         <p class="hero-desc">
-          For every proof you can see who submitted it, which upstream repository and commit it targets, the frozen spec it was checked against, and the exact diff. Each one comes with a command that rebuilds the mission from its public seed and history, so you can re-run the check yourself instead of trusting this page.
+          For every proof you can see who submitted it, which upstream repository and commit it targets, the frozen spec it was checked against, and the exact diff. Each one comes with a command that rebuilds the mission from its public seed and history, and, where the task mirrors a real upstream <code>sorry</code>, a command that checks the proof against the upstream repository itself, so you can re-run the check instead of trusting this page.
         </p>
         <div class="hero-cta-row">
           <a href="/" class="btn-outline-gold">← BACK TO LIVE BLUEPRINTS</a>
           <a href="/api/proofs" class="btn-ghost-bone" target="_blank" rel="noopener">LEDGER API (JSON)</a>
+          <a href="#verify-yourself" class="btn-ghost-bone">CHECK IT WITHOUT TRUSTING US</a>
           <a href="https://github.com/Sunstead-Institute/sunstead/actions/workflows/audit-proofs.yml" class="btn-ghost-bone" target="_blank" rel="noopener">INDEPENDENT AUDIT LOG ↗</a>
         </div>
       </div>
@@ -75,6 +76,28 @@
   <main class="page-main">
     <section class="section-block card ledger-card" id="ledger-root" aria-live="polite">
       <div class="muted small">Loading the ledger…</div>
+    </section>
+
+    <section class="section-block card verify-card" id="verify-yourself">
+      <h2>Check a proof without trusting Sunstead</h2>
+      <p>
+        <a href="/verify.py">verify.py</a> is one standard-library Python file
+        (<a href="https://github.com/Sunstead-Institute/sunstead/blob/main/scripts/sunstead_verify.py" target="_blank" rel="noopener">source and tests</a>). Give it a proof id from this page and it
+        clones the upstream repository from GitHub at the pinned commit, checks that the upstream statement is exactly the
+        one the proof was checked against, puts the proof in place of the upstream <code>sorry</code>, builds it with the
+        project's own Lean toolchain and lists the theorem's axioms (only <code>propext</code>,
+        <code>Classical.choice</code> and <code>Quot.sound</code> pass).
+      </p>
+      <pre class="proof-cmd" tabindex="0">curl -fsSLO https://sunstead.org/verify.py
+python3 verify.py &lt;proof id&gt;</pre>
+      <p class="muted small">
+        When it passes, what you trusted is the upstream repository at that commit, GitHub for serving it, and the Lean
+        toolchain <a href="https://github.com/leanprover/elan" target="_blank" rel="noopener">elan</a> installs for it.
+        Sunstead's verifier, hub and code are not involved: the hub only hands over the candidate proof, and the script
+        checks it hashes to the id you asked for. Building Lean runs code (tactics, and the upstream lakefile), so use a
+        disposable VM or container if you would not build that upstream project directly. Needs <code>git</code> and
+        elan; projects built on Mathlib download several GB of cache.
+      </p>
     </section>
   </main>
 

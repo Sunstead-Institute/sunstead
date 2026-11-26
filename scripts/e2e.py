@@ -389,7 +389,17 @@ def main():
         code, perm = req("GET", "/api/proofs/" + entry["proof_id"])
         assert code == 200 and perm["patch_sha256"] == entry["patch_sha256"], (code, perm)
         code, page = req("GET", "/proofs/" + entry["proof_id"], raw=True)
-        assert code == 200 and b'id="ledger-root"' in page, code
+        assert code == 200 and b'id="ledger-root"' in page and b'id="verify-yourself"' in page, code
+        for e in ledger["proofs"]:
+            vc = e.get("verify_command")
+            assert vc is None or vc.split("verify.py ", 1)[1].startswith(e["proof_id"]), e
+        # The public verifier's own integrity check (sha256(patch) == proof id) agrees with the hub.
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import sunstead_verify
+        sunstead_verify.load_public_proof(BASE, entry["proof_id"])
+    code, script = req("GET", "/verify.py", raw=True)
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "sunstead_verify.py"), "rb") as f:
+        assert code == 200 and script == f.read(), "served /verify.py must be scripts/sunstead_verify.py byte for byte"
     code, res = req("GET", "/api/proofs/" + "0" * 64)
     assert code == 404, (code, res)
     code, res = req("GET", "/api/proofs/not-a-hash")
