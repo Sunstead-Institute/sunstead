@@ -13,11 +13,6 @@ on:
         description: "Only this proof id (64 hex); empty = every upstream-linked proof"
         required: false
         default: ""
-      bundles:
-        description: "Also write a review bundle (export-upstream.py: upstream.patch + PR_BODY.md) for each verified proof. Nothing is sent upstream."
-        type: boolean
-        required: false
-        default: false
   schedule:
     - cron: "17 4 * * *"
 
@@ -90,26 +85,6 @@ jobs:
         with:
           name: upstream-verify-${{ matrix.proof_id }}
           path: result.json
-      # Draft upstream PR bundle for a maintainer to read. It is only an
-      # artifact: this job has read-only permissions and no tokens, so it cannot
-      # push or open anything anywhere.
-      - name: Review bundle (export-upstream.py)
-        id: bundle
-        if: ${{ inputs.bundles && steps.run.outputs.code == '0' }}
-        run: |
-          out="$RUNNER_TEMP/bundle-${{ matrix.proof_id }}"
-          set +e
-          python3 scripts/export-upstream.py --proof-id "${{ matrix.proof_id }}" --out "$out" 2>&1 | tail -n 40
-          code=${PIPESTATUS[0]}
-          set -e
-          echo "dir=$out" >> "$GITHUB_OUTPUT"
-          if [ "$code" != 0 ]; then echo "::warning::export-upstream.py exited $code for ${{ matrix.proof_id }}"; fi
-      - uses: actions/upload-artifact@v4
-        if: ${{ inputs.bundles && steps.run.outputs.code == '0' && steps.bundle.outputs.dir != '' }}
-        with:
-          name: upstream-bundle-${{ matrix.proof_id }}
-          path: ${{ steps.bundle.outputs.dir }}
-          if-no-files-found: ignore
       - name: Fail on a real verification failure (exit 1); 3 = not upstream-checkable
         run: |
           case "${{ steps.run.outputs.code }}" in

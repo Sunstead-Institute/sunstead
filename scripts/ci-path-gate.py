@@ -44,10 +44,8 @@ ALL_VERIFIER_SHARED_FILES = {
     "scripts/test_ci_path_gate.py",
     ".github/workflows/ci.yml",
 }
-EXPORT_FILES = {
-    "scripts/export-upstream.py",
-    "scripts/test_export_upstream.py",
-    # Shared engine of export-upstream.py, served publicly as /verify.py, and the
+PUBLIC_VERIFY_FILES = {
+    # Standalone public verifier served as /verify.py, its tests, and the
     # scout parser it must stay identical to.
     "scripts/sunstead_verify.py",
     "scripts/test_sunstead_verify.py",
@@ -58,6 +56,7 @@ EXPORT_FILES = {
 # Hub-only metadata under missions/ that no verifier image or Lean build reads.
 HUB_ONLY_MISSION_FILES = {
     "missions/best-known.json",
+    "missions/task-disputes.json",
 }
 
 TOOLCHAIN_VERIFIER_DIRS = {
@@ -97,7 +96,7 @@ def all_enabled(reason):
         "run_v436": True,
         "run_v435": True,
         "run_v431": True,
-        "run_export": True,
+        "run_public_verify": True,
         "pub_v436": True,
         "pub_v435": True,
         "pub_v431": True,
@@ -116,7 +115,7 @@ def classify_paths(changed_files, *, event_name="pull_request", missions_dir=MIS
         "run_v436": False,
         "run_v435": False,
         "run_v431": False,
-        "run_export": False,
+        "run_public_verify": False,
         "pub_v436": False,
         "pub_v435": False,
         "pub_v431": False,
@@ -134,9 +133,9 @@ def classify_paths(changed_files, *, event_name="pull_request", missions_dir=MIS
         p = raw.strip().replace("\\", "/")
         if not p:
             continue
-        if p in EXPORT_FILES:
-            out["run_export"] = True
-            reasons.append(f"export:{p}")
+        if p in PUBLIC_VERIFY_FILES:
+            out["run_public_verify"] = True
+            reasons.append(f"public-verify:{p}")
         if p == ".github/workflows/publish-verifiers.yml":
             out["pub_v436"] = out["pub_v435"] = out["pub_v431"] = True
             reasons.append("publish-workflow")
@@ -184,7 +183,7 @@ def classify_paths(changed_files, *, event_name="pull_request", missions_dir=MIS
                 out[f"pub_{tc}"] = True
                 reasons.append(f"mission-{tc}:{mdir}")
             if p.endswith(("/verify", "/sunstead.json", "/lean-toolchain")):
-                out["run_export"] = True
+                out["run_public_verify"] = True
             continue
 
     out["reason"] = ", ".join(dict.fromkeys(reasons))[:240] if reasons else "non-verifier paths only"
@@ -235,7 +234,7 @@ def main():
     if args.json:
         print(json.dumps(result, sort_keys=True))
     else:
-        for k in ("run_v436", "run_v435", "run_v431", "run_export", "pub_v436", "pub_v435", "pub_v431", "reason"):
+        for k in ("run_v436", "run_v435", "run_v431", "run_public_verify", "pub_v436", "pub_v435", "pub_v431", "reason"):
             v = result[k]
             val = "true" if v is True else ("false" if v is False else v)
             print(f"{k}={val}")

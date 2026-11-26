@@ -299,6 +299,15 @@ function nodePalette(task, mode) {
       titleColor: "#6B1B1B",
     };
   }
+  if (task.def && task.def.upstream_disputed) {
+    return {
+      fill: "#FDF3F3",
+      stroke: "#B44343",
+      badge: "UPSTREAM DISPUTED",
+      badgeColor: "#9B2C2C",
+      titleColor: "#6B1B1B",
+    };
+  }
   if (!task.unlocked) {
     return {
       fill: "#F2EFE7",
@@ -524,6 +533,8 @@ function renderDag(detail) {
     let footer = `${t.attempts} run${t.attempts === 1 ? "" : "s"}`;
     if (t.disputed_counterexample) {
       footer = `disputed ¬T by ${t.disputed_counterexample.refuter}`;
+    } else if (t.def && t.def.upstream_disputed) {
+      footer = `upstream disputed (${t.def.upstream_disputed.recorded_at || "excluded"})`;
     } else if (manifest.mode === "hillclimb" && t.best_score !== null && t.best_score !== undefined) {
       if (t.active_lease) {
         footer = `best: ${t.best_score} · claimed: ${t.active_lease.contributor}`;
@@ -650,6 +661,8 @@ function renderInspector(detail) {
       })()
     : "";
 
+  const upstreamDispute = task.def?.upstream_disputed || null;
+  const upstreamDisputeUrl = upstreamDispute ? safeHttpUrl(upstreamDispute.url) : null;
   const disputedBannerHtml = task.disputed_counterexample
     ? `<div class="dispute-banner">
         <strong>Disputed Counterexample (¬ T):</strong>
@@ -657,7 +670,14 @@ function renderInspector(detail) {
         (${escapeHtml(fmtUtc(task.disputed_counterexample.created_at))})
         ${task.disputed_counterexample.proof_id ? ` · <a class="proof-link" href="/proofs/${escapeHtml(task.disputed_counterexample.proof_id)}">inspect counterexample ↗</a>` : ""}
       </div>`
-    : "";
+    : upstreamDispute
+      ? `<div class="dispute-banner">
+          <strong>Upstream Disputed:</strong>
+          ${escapeHtml(upstreamDispute.reason)}
+          ${upstreamDispute.recorded_at ? ` <span class="muted small">(${escapeHtml(upstreamDispute.recorded_at)})</span>` : ""}
+          ${upstreamDisputeUrl ? ` · <a class="proof-link" href="${escapeHtml(upstreamDisputeUrl)}" target="_blank" rel="noopener">upstream issue ↗</a>` : ""}
+        </div>`
+      : "";
 
   el.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">
@@ -687,7 +707,11 @@ function renderInspector(detail) {
         <div class="kv-label">Submit Endpoint</div>
         <div class="kv-val">POST ${escapeHtml(origin)}/api/missions/${escapeHtml(m.id)}/tasks/${escapeHtml(task.def.id)}/submit</div>
       </div>
-      ${m.decomposition?.enabled && !task.def.decomp_id ? `<div class="kv"><div class="kv-label">v2 Decompose / Refute</div><div class="kv-val">POST .../tasks/${escapeHtml(task.def.id)}/decompose (allowlist) · /refute (open)</div></div>` : ""}
+      ${
+        m.mode === "dag"
+          ? `<div class="kv"><div class="kv-label">${m.decomposition?.enabled && !task.def.decomp_id ? "Disprove / Decompose" : "Disprove False Statement"}</div><div class="kv-val">POST .../tasks/${escapeHtml(task.def.id)}/refute (open to all)${m.decomposition?.enabled && !task.def.decomp_id ? ` · /decompose (allowlist)` : ""}</div></div>`
+          : ""
+      }
     </div>
     ${task.status === "verified" ? `<div class="proof-panel" id="proof-panel" aria-live="polite"><div class="muted small">Loading verified proof…</div></div>` : ""}
   `;
@@ -821,8 +845,16 @@ function upstreamHtml(up) {
       ? `<a class="proof-link" href="https://github.com/${escapeHtml(up.repo)}/tree/${escapeHtml(up.commit)}" target="_blank" rel="noopener">${label}</a>`
       : label;
   const taskUrl = safeHttpUrl(up.task_url);
+  const taskLinkLabel =
+    up.anchor_kind === "optimization_spec"
+      ? "upstream spec ↗"
+      : up.anchor_kind === "challenge_node"
+        ? "upstream challenge ↗"
+        : up.anchor_kind === "extracted_lemma"
+          ? "upstream context ↗"
+          : "upstream sorry ↗";
   const task = taskUrl
-    ? ` · <a class="proof-link" href="${escapeHtml(taskUrl)}" target="_blank" rel="noopener">upstream sorry ↗</a>`
+    ? ` · <a class="proof-link" href="${escapeHtml(taskUrl)}" target="_blank" rel="noopener">${taskLinkLabel}</a>`
     : "";
   return `${main}${up.license ? ` <span class="muted small">(${escapeHtml(up.license)})</span>` : ""}${task}`;
 }
@@ -839,6 +871,12 @@ function proofDetailHtml(proof) {
     : `<div class="proof-warn small">Accepted under an earlier frozen spec than the one live now.</div>`;
   const proofId = String(proof.patch_sha256 || "").replace(/^sha256:/, "");
   const permalink = /^[0-9a-f]{64}$/.test(proofId) ? `<a class="proof-link" href="/proofs/${proofId}">permalink</a>` : "";
+  const rebuildCmd = proof.verification
+    ? proof.verification.mission_replay?.command || null
+    : proof.how_to_rebuild || null;
+  const verifyCmd = proof.verification
+    ? proof.verification.upstream_replay?.command || null
+    : proof.verify_command || null;
   return `
     ${specNote}
     <div class="inspector-grid">
@@ -855,21 +893,25 @@ function proofDetailHtml(proof) {
       </div>
       <pre class="proof-diff" tabindex="0">${renderDiffHtml(proof.patch)}</pre>
     </div>
-    <div class="proof-block">
+    ${
+      rebuildCmd
+        ? `<div class="proof-block">
       <div class="proof-block-head">
         <span class="kv-label">Rebuild and check it yourself (seed bundle + git am)</span>
         <button type="button" class="btn-outline-ink proof-copy" data-copy="rebuild" data-label="Copy command">Copy command</button>
       </div>
-      <pre class="proof-cmd" tabindex="0">${escapeHtml(proof.how_to_rebuild)}</pre>
-    </div>
+      <pre class="proof-cmd" tabindex="0">${escapeHtml(rebuildCmd)}</pre>
+    </div>`
+        : ""
+    }
     ${
-      proof.verify_command
+      verifyCmd
         ? `<div class="proof-block">
       <div class="proof-block-head">
         <span class="kv-label">Check it against upstream, without trusting Sunstead (<a class="proof-link" href="/proofs#verify-yourself">how</a>)</span>
         <button type="button" class="btn-outline-ink proof-copy" data-copy="verify" data-label="Copy command">Copy command</button>
       </div>
-      <pre class="proof-cmd" tabindex="0">${escapeHtml(proof.verify_command)}</pre>
+      <pre class="proof-cmd" tabindex="0">${escapeHtml(verifyCmd)}</pre>
     </div>`
         : ""
     }
@@ -877,14 +919,20 @@ function proofDetailHtml(proof) {
 }
 
 function wireProofCopyButtons(root, proof) {
+  const rebuildCmd = proof.verification
+    ? proof.verification.mission_replay?.command || ""
+    : proof.how_to_rebuild || "";
+  const verifyCmd = proof.verification
+    ? proof.verification.upstream_replay?.command || ""
+    : proof.verify_command || "";
   root.querySelectorAll(".proof-copy").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const text =
         btn.dataset.copy === "patch"
           ? proof.patch
           : btn.dataset.copy === "verify"
-            ? proof.verify_command
-            : proof.how_to_rebuild;
+            ? verifyCmd
+            : rebuildCmd;
       try {
         await navigator.clipboard.writeText(text);
         btn.textContent = "Copied ✓";

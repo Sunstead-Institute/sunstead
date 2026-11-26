@@ -15,6 +15,13 @@ A, B, C = "a" * 64, "b" * 64, "c" * 64
 
 
 class Tests(unittest.TestCase):
+    def test_uses_structured_verification_when_present(self):
+        ledger = {"proofs": [
+            {"proof_id": A, "verification": {"upstream_replay": {"kind": "in_place_sorry", "command": "curl ..."}}},
+            {"proof_id": B, "verification": {"upstream_replay": None}, "verify_command": "stale"},
+        ]}
+        self.assertEqual(uvl.list_ids(ledger), [A])
+
     def test_uses_verify_command_when_present(self):
         ledger = {"proofs": [
             {"proof_id": A, "verify_command": "curl ... verify.py " + A},

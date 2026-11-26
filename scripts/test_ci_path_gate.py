@@ -20,14 +20,18 @@ class CiPathGateTests(unittest.TestCase):
         self.assertFalse(res["run_v436"])
         self.assertFalse(res["run_v435"])
         self.assertFalse(res["run_v431"])
-        self.assertFalse(res["run_export"])
+        self.assertFalse(res["run_public_verify"])
         self.assertFalse(res["pub_v436"])
         self.assertFalse(res["pub_v435"])
         self.assertFalse(res["pub_v431"])
 
-    def test_best_known_registry_is_hub_only(self):
-        res = gate.classify_paths(["missions/best-known.json", "scripts/check-best-known.py"])
-        for key in ("run_v436", "run_v435", "run_v431", "run_export", "pub_v436", "pub_v435", "pub_v431"):
+    def test_hub_only_mission_registries_skip_verifiers(self):
+        res = gate.classify_paths([
+            "missions/best-known.json",
+            "missions/task-disputes.json",
+            "scripts/check-best-known.py",
+        ])
+        for key in ("run_v436", "run_v435", "run_v431", "run_public_verify", "pub_v436", "pub_v435", "pub_v431"):
             self.assertFalse(res[key], key)
         # Any other file at the missions/ root still fails closed.
         self.assertTrue(gate.classify_paths(["missions/other.json"])["run_v436"])
@@ -53,10 +57,10 @@ class CiPathGateTests(unittest.TestCase):
         self.assertFalse(r431["run_v436"])
         self.assertFalse(r431["run_v435"])
 
-    def test_mission_verify_or_manifest_also_runs_export(self):
+    def test_mission_verify_or_manifest_also_runs_public_verify(self):
         res = gate.classify_paths(["missions/ieantn-buthe-prime-bounds/sunstead.json"])
         self.assertTrue(res["run_v436"])
-        self.assertTrue(res["run_export"])
+        self.assertTrue(res["run_public_verify"])
         self.assertFalse(res["run_v435"])
         self.assertFalse(res["run_v431"])
 
@@ -81,11 +85,11 @@ class CiPathGateTests(unittest.TestCase):
         self.assertFalse(res["run_v435"])
         self.assertFalse(res["pub_v431"])
 
-    def test_export_scripts_only_run_export(self):
-        res = gate.classify_paths(["scripts/export-upstream.py"])
-        self.assertTrue(res["run_export"])
+    def test_public_verify_scripts_only_run_public_verify(self):
+        res = gate.classify_paths(["scripts/sunstead_verify.py"])
+        self.assertTrue(res["run_public_verify"])
         for path in ("scripts/sunstead_verify.py", "scripts/test_sunstead_verify.py", "scripts/scout-upstream.py"):
-            self.assertTrue(gate.classify_paths([path])["run_export"], path)
+            self.assertTrue(gate.classify_paths([path])["run_public_verify"], path)
         self.assertFalse(res["run_v436"])
         self.assertFalse(res["run_v435"])
         self.assertFalse(res["run_v431"])
@@ -101,7 +105,7 @@ class CiPathGateTests(unittest.TestCase):
             gate.classify_paths([], event_name="schedule"),
             gate.classify_paths([], event_name="workflow_dispatch"),
         ):
-            for key in ("run_v436", "run_v435", "run_v431", "run_export"):
+            for key in ("run_v436", "run_v435", "run_v431", "run_public_verify"):
                 self.assertTrue(res[key], key)
 
     def test_dynamic_new_mission_discovery(self):

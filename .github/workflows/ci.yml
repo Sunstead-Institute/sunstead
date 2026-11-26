@@ -24,7 +24,7 @@ jobs:
       run_v436: ${{ steps.gate.outputs.run_v436 }}
       run_v435: ${{ steps.gate.outputs.run_v435 }}
       run_v431: ${{ steps.gate.outputs.run_v431 }}
-      run_export: ${{ steps.gate.outputs.run_export }}
+      run_public_verify: ${{ steps.gate.outputs.run_public_verify }}
       reason: ${{ steps.gate.outputs.reason }}
     steps:
       - uses: actions/checkout@v4
@@ -44,7 +44,7 @@ jobs:
           elif [ "$EVENT_NAME" = "push" ]; then
             # PR merges already ran the full required verifier checks on refs/pull/<n>/merge;
             # main push keeps Hub + Python always-on, while weekly schedule / publish-verifiers / deploy full cover main images.
-            printf 'run_v436=false\nrun_v435=false\nrun_v431=false\nrun_export=false\nreason=push-main-fast-path\n' >> "$GITHUB_OUTPUT"
+            printf 'run_v436=false\nrun_v435=false\nrun_v431=false\nrun_public_verify=false\nreason=push-main-fast-path\n' >> "$GITHUB_OUTPUT"
           else
             python3 scripts/ci-path-gate.py --event "$EVENT_NAME"
           fi
@@ -83,7 +83,6 @@ jobs:
             cloudflare/containers/verifier_server.py \
             scripts/check-upstream.py scripts/check-statements.py scripts/redteam.py scripts/e2e.py \
             scripts/scout-upstream.py scripts/test_scout_upstream.py \
-            scripts/export-upstream.py scripts/test_export_upstream.py \
             scripts/sunstead_verify.py scripts/test_sunstead_verify.py \
             scripts/upstream-verify-list.py scripts/test_upstream_verify_list.py \
             scripts/test_bootstrap_snapshot.py \
@@ -94,8 +93,6 @@ jobs:
         run: python3 scripts/test_ci_path_gate.py -v
       - name: Upstream scout unit tests (offline)
         run: python3 scripts/test_scout_upstream.py
-      - name: Upstream export unit tests (offline, no Lean)
-        run: python3 scripts/test_export_upstream.py
       - name: Public verifier (/verify.py) unit tests (offline, no Lean)
         run: python3 scripts/test_sunstead_verify.py
       - name: Upstream verification sweep helper tests (offline)
@@ -107,11 +104,11 @@ jobs:
       - name: Every hill-climb task has a sourced best known value
         run: python3 scripts/check-best-known.py
 
-  export-upstream:
-    name: Upstream export (core Lean build)
+  public-verify:
+    name: Public verifier (/verify.py core Lean build)
     runs-on: ubuntu-latest
     needs: [changes, python]
-    if: ${{ needs.changes.outputs.run_export == 'true' }}
+    if: ${{ needs.changes.outputs.run_public_verify == 'true' }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -123,9 +120,7 @@ jobs:
           curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
             | sh -s -- -y --no-modify-path --default-toolchain "$(cat missions/pnt-analytic-foundations/lean-toolchain)"
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
-      - name: Export tests with lake build, sorry and axiom checks
-        run: python3 scripts/test_export_upstream.py -v
-      - name: Public verifier (/verify.py) tests with lake build
+      - name: Public verifier (/verify.py) tests with lake build, sorry and axiom checks
         run: python3 scripts/test_sunstead_verify.py -v
 
   verifiers-v436:
@@ -244,14 +239,14 @@ jobs:
     name: CI Gate (required branch-protection check)
     runs-on: ubuntu-latest
     if: always()
-    needs: [changes, hub, python, export-upstream, verifiers-v436, verifiers-v435, verifiers-v431]
+    needs: [changes, hub, python, public-verify, verifiers-v436, verifiers-v435, verifiers-v431]
     steps:
       - name: Verify every non-skipped required check succeeded
         env:
           RES_CHANGES: ${{ needs.changes.result }}
           RES_HUB: ${{ needs.hub.result }}
           RES_PYTHON: ${{ needs.python.result }}
-          RES_EXPORT: ${{ needs.export-upstream.result }}
+          RES_PUBLIC_VERIFY: ${{ needs.public-verify.result }}
           RES_V436: ${{ needs.verifiers-v436.result }}
           RES_V435: ${{ needs.verifiers-v435.result }}
           RES_V431: ${{ needs.verifiers-v431.result }}
@@ -269,7 +264,7 @@ jobs:
             fi
           done
           for pair in \
-            "export-upstream:${RES_EXPORT}" \
+            "public-verify:${RES_PUBLIC_VERIFY}" \
             "verifiers-v436:${RES_V436}" \
             "verifiers-v435:${RES_V435}" \
             "verifiers-v431:${RES_V431}"; do

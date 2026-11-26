@@ -9,6 +9,10 @@ import {
   computeFrontier,
   computePoints,
   beatsBestKnown,
+  isTaskDisputed,
+  taskDisputeReason,
+  resolveUpstreamAnchor,
+  verifyCommand,
   MATCH_BEST_KNOWN_POINTS,
   NEAR_BEST_KNOWN_POINTS,
   extractPatchPaths,
@@ -747,6 +751,19 @@ test("ledger entries carry provenance, attribution, spec status and a permalink"
     commit: "e990613" + "0".repeat(33),
     license: "Apache-2.0",
     task_url: "https://github.com/AlexKontorovich/PrimeNumberTheoremAnd/blob/x/PNT.lean#L1",
+    anchor_kind: "in_place_sorry",
+  });
+  assert.deepEqual(e.verification, {
+    mission_replay: {
+      bundle_url: "https://sunstead.org/api/missions/pnt-analytic-foundations/bundle.tar.gz?base=seed",
+      history_mbox_url: "https://sunstead.org/api/missions/pnt-analytic-foundations/history.mbox",
+      command: howToRebuild("https://sunstead.org", "pnt-analytic-foundations"),
+    },
+    upstream_replay: {
+      kind: "in_place_sorry",
+      script_url: "https://sunstead.org/verify.py",
+      command: `curl -fsSLO 'https://sunstead.org/verify.py' && python3 verify.py ${LEDGER_SHA}`,
+    },
   });
   assert.equal(e.display_name, "Codex Dirichlet");
   assert.deepEqual(e.files, ["PNT/Liouville.lean"]);
@@ -826,8 +843,89 @@ test("ledger entries carry an upstream verify command only where one upstream so
   const noUrl = ledgerMission({
     tasks: [{ id: "liouville", title: "Liouville lemma", target_files: ["PNT/Liouville.lean"] }],
   });
-  assert.equal(buildLedgerEntry(row, noUrl, "https://sunstead.org").verify_command, null, "hill-climb style task");
+  assert.equal(buildLedgerEntry(row, noUrl, "https://sunstead.org").verify_command, null, "task without upstream_url");
   assert.equal(buildLedgerEntry({ ...row, patch_sha256: "sha256:<script>" }, ledgerMission(), "https://sunstead.org").verify_command, null);
+
+  // Hill-climb tracks WITH an upstream_url (pinned spec/table, not a sorry) must never emit verify.py.
+  const hillclimbWithUrl = ledgerMission({
+    id: "aes-sbox-circuit",
+    mode: "hillclimb",
+    tasks: [
+      {
+        id: "liouville",
+        title: "Minimize AES S-box gates",
+        target_files: ["AesSbox/Circuit.lean"],
+        upstream_url: "https://github.com/leanprover/LNSym/blob/49f8a1d9/Specs/AESCommon.lean#L15-L33",
+      },
+    ],
+  });
+  const hcEntry = buildLedgerEntry(row, hillclimbWithUrl, "https://sunstead.org");
+  assert.equal(hcEntry.upstream?.anchor_kind, "optimization_spec");
+  assert.equal(hcEntry.verify_command, null, "hill-climb task with upstream_url must have verify_command: null");
+  assert.equal(hcEntry.verification.upstream_replay, null);
+  assert.ok(hcEntry.verification.mission_replay, "live hill-climb entry still supports mission_replay");
+
+  // Extracted nested sorry (ArkLib) cannot be spliced into upstream automatically.
+  const arklibMission = ledgerMission({
+    id: "arklib-near-capacity-primes",
+    mode: "dag",
+    tasks: [
+      {
+        id: "liouville",
+        title: "Near-capacity prime supply",
+        target_files: ["ArkLibNearCapacity/PrimeSupply.lean"],
+        upstream_url: "https://github.com/Verified-zkEVM/ArkLib/blob/2934c83/ArkLib/CorrelatedAgreement.lean#L10",
+      },
+    ],
+  });
+  const arkEntry = buildLedgerEntry(row, arklibMission, "https://sunstead.org");
+  assert.equal(arkEntry.upstream?.anchor_kind, "extracted_lemma");
+  assert.equal(arkEntry.verify_command, null);
+  assert.equal(arkEntry.verification.upstream_replay, null);
+
+  // IEANTN Challenge.lean node is classified as challenge_node and remains upstream-verifiable.
+  const ieantnMission = ledgerMission({
+    id: "ieantn-zeta-foundations",
+    mode: "dag",
+    tasks: [
+      {
+        id: "liouville",
+        title: "Patel Lemma 2",
+        target_files: ["IEANTN/Nodes/Patel2020/v1/TaskLemma2.lean"],
+        upstream_url: "https://github.com/teorth/IEANTN/blob/cd9c2dd3/IEANTN/Nodes/Patel2020/v1/Challenge.lean#L20-L22",
+      },
+    ],
+  });
+  const ieantnEntry = buildLedgerEntry(row, ieantnMission, "https://sunstead.org");
+  assert.equal(ieantnEntry.upstream?.anchor_kind, "challenge_node");
+  assert.equal(ieantnEntry.verification.upstream_replay?.kind, "challenge_node");
+  assert.ok(ieantnEntry.verify_command?.includes("verify.py"));
+
+  // Refutations and retired missions have mission_replay: null (not in history.mbox / no live bundle).
+  const refEntry = buildLedgerEntry({ ...row, entry_kind: "refutation" }, ledgerMission(), "https://sunstead.org");
+  assert.equal(refEntry.verification.mission_replay, null);
+  assert.equal(refEntry.verification.upstream_replay, null);
+  const retEntry = buildLedgerEntry(row, null, "https://sunstead.org");
+  assert.equal(retEntry.verification.mission_replay, null);
+  assert.equal(retEntry.verification.upstream_replay, null);
+
+  // Explicit upstream_anchor override on a task manifest wins over heuristics.
+  assert.equal(
+    resolveUpstreamAnchor(
+      ledgerMission().manifest,
+      { upstream_url: "https://github.com/a/b/blob/x/F.lean#L1", upstream_anchor: "extracted_lemma" }
+    ),
+    "extracted_lemma"
+  );
+  assert.equal(
+    verifyCommand("https://sunstead.org", LEDGER_SHA, {
+      entry_kind: "proof",
+      mission_demo: false,
+      mission_mode: "hillclimb",
+      upstream: { task_url: "https://github.com/a/b/blob/x/F.lean#L1" },
+    }),
+    null
+  );
 });
 
 test("parseLedgerQuery clamps limit and ignores bad cursors", () => {
@@ -1464,6 +1562,26 @@ test("web/app.js hill-climb nodePalette preserves CLAIMED/OPEN status and SSE in
     ).badge,
     "DISPUTED ¬T"
   );
+  assert.equal(
+    nodePalette(
+      {
+        unlocked: true,
+        status: "open",
+        active_lease: null,
+        def: {
+          id: "buthe_lemma_3_bounds",
+          upstream_disputed: {
+            source: "upstream",
+            reason: "false as stated",
+            url: "https://github.com/teorth/IEANTN/issues/268",
+            recorded_at: "2026-11-26",
+          },
+        },
+      },
+      "dag"
+    ).badge,
+    "UPSTREAM DISPUTED"
+  );
   assert.match(appJs, /decomp-cluster/);
   assert.match(appJs, /decomp-edge/);
   assert.match(appJs, /ledger-badge-refute/);
@@ -1584,6 +1702,110 @@ test("v2 checkDecompositionEligibility enforces allowlist, pilot flag, depth <= 
     activeDecompsByContributor: 2,
   });
   assert.equal(ok1.depth, 1);
+
+  // Disputed tasks (kernel counterexample or upstream_disputed) cannot be decomposed.
+  const kernelDisputed = task("root_t", {
+    disputed_counterexample: {
+      refutation_id: "ref-1",
+      refuter: "dave",
+      proof_id: "a".repeat(64),
+      summary: "counterexample",
+      created_at: 1700000000,
+    },
+  });
+  assert.throws(
+    () =>
+      checkDecompositionEligibility({
+        manifest: pilot,
+        task: kernelDisputed,
+        allTasks: [kernelDisputed],
+        contributor: "alice",
+        isAllowlisted: true,
+        activeDecompsOnTarget: 0,
+        activeDecompsByContributor: 0,
+      }),
+    /counterexample.*cannot be decomposed/
+  );
+  const upstreamDisputed = task("root_u", {
+    def: {
+      id: "root_u",
+      title: "root_u",
+      target_files: ["M/U.lean"],
+      upstream_disputed: {
+        source: "upstream",
+        reason: "missing hypothesis",
+        url: "https://github.com/teorth/IEANTN/issues/268",
+        recorded_at: "2026-11-26",
+      },
+    },
+  });
+  assert.throws(
+    () =>
+      checkDecompositionEligibility({
+        manifest: pilot,
+        task: upstreamDisputed,
+        allTasks: [upstreamDisputed],
+        contributor: "alice",
+        isAllowlisted: true,
+        activeDecompsOnTarget: 0,
+        activeDecompsByContributor: 0,
+      }),
+    /upstream-disputed.*cannot be decomposed/
+  );
+});
+
+test("disputed tasks are excluded from computeFrontier, blocked from applyClaim, and called out in /join.txt", () => {
+  const healthy = task("healthy");
+  const kernelDisputed = task("kernel_bad", {
+    disputed_counterexample: {
+      refutation_id: "ref-1",
+      refuter: "dave",
+      proof_id: "a".repeat(64),
+      summary: "¬ T verified",
+      created_at: 1700000000,
+    },
+  });
+  const upstreamDisputed = task("upstream_bad", {
+    def: {
+      id: "upstream_bad",
+      title: "Upstream Bug",
+      target_files: ["M/Bad.lean"],
+      upstream_disputed: {
+        source: "upstream",
+        reason: "false as stated in upstream issue #268",
+        url: "https://github.com/teorth/IEANTN/issues/268",
+        recorded_at: "2026-11-26",
+      },
+    },
+  });
+  const dependent = task("depends_on_bad", {}, ["upstream_bad"]);
+  const all = [healthy, kernelDisputed, upstreamDisputed, dependent];
+
+  assert.equal(isTaskDisputed(healthy), false);
+  assert.equal(isTaskDisputed(kernelDisputed), true);
+  assert.equal(isTaskDisputed(upstreamDisputed), true);
+  assert.match(taskDisputeReason(kernelDisputed) ?? "", /counterexample/);
+  assert.match(taskDisputeReason(upstreamDisputed) ?? "", /issues\/268/);
+
+  assert.deepEqual(computeFrontier("dag", all), ["healthy"]);
+  assert.deepEqual(computeFrontier("hillclimb", all), ["healthy"]);
+
+  assert.throws(
+    () => applyClaim("dag", all, "kernel_bad", "alice", "tok", 1700000100, 1800),
+    /counterexample.*cannot be claimed/
+  );
+  assert.throws(
+    () => applyClaim("dag", all, "upstream_bad", "alice", "tok", 1700000100, 1800),
+    /upstream-disputed.*cannot be claimed/
+  );
+
+  const joinTxt = renderJoinTxt("https://sunstead.org", [
+    { manifest: mission("dag", 1, { id: "ieantn-test" }), tasks: all },
+  ]);
+  assert.match(joinTxt, /DISPROVING A FALSE THEOREM \(POST \.\.\.\/refute — ALL DAG MISSIONS\)/);
+  assert.match(joinTxt, /Open frontier tasks: healthy/);
+  assert.match(joinTxt, /Disputed tasks \(excluded from frontier\): kernel_bad, upstream_bad/);
+  assert.match(joinTxt, /\/refute\?async=1/);
 });
 
 test("v2 parseDecomposeRequest and parseRefuteRequest enforce subgoal bounds, statement size, and path scoping", () => {

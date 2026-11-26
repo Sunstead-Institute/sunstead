@@ -22,6 +22,9 @@ UA = {"User-Agent": "sunstead-upstream-verify/0.1"}
 
 
 def eligible(p: dict) -> bool:
+    ver = p.get("verification")
+    if isinstance(ver, dict) and "upstream_replay" in ver:
+        return bool(ver["upstream_replay"])
     if "verify_command" in p:
         return bool(p["verify_command"])
     return (

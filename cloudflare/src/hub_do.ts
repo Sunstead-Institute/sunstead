@@ -7,6 +7,7 @@ import {
   computePoints,
   beatsBestKnown,
   isTaskUnlocked,
+  taskDisputeReason,
   validatePatch,
   type Lease,
   type MissionManifest,
@@ -62,6 +63,7 @@ import {
   listAllowlist,
   listMissionDecompositions,
   listMissionRefutations,
+  prepareRefute,
   upsertAllowlistEntry,
   type DecomposeHubContext,
   type VerifierActionResponse,
@@ -117,6 +119,7 @@ interface SubmissionRecord {
   created_at: number;
   completed_at?: number | null;
   is_demo: boolean;
+  kind?: string;
 }
 
 type ContributorRecord = {
@@ -790,8 +793,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
   private insertSubmission(rec: SubmissionRecord): void {
     this.ctx.storage.sql.exec(
       `INSERT INTO submissions
-       (id, mission_id, task_id, contributor, status, accepted, score, points, summary, patch_sha256, proof_id, verify_ms, stage, diagnostics, error, unlocked_dependents_json, created_at, completed_at, is_demo)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, mission_id, task_id, contributor, status, accepted, score, points, summary, patch_sha256, proof_id, verify_ms, stage, diagnostics, error, unlocked_dependents_json, created_at, completed_at, is_demo, kind)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       rec.id,
       rec.mission_id,
       rec.task_id,
@@ -810,7 +813,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       rec.unlocked_dependents_json ?? null,
       rec.created_at,
       rec.completed_at ?? null,
-      rec.is_demo ? 1 : 0
+      rec.is_demo ? 1 : 0,
+      rec.kind ?? "submit"
     );
   }
 
@@ -2271,6 +2275,13 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     if (!task) return jsonResp({ error: `unknown task: ${taskId}` }, 404);
 
     // Check task readiness BEFORE recording rate limits or waking any verifier container.
+    const disputeMsg = taskDisputeReason(task);
+    if (disputeMsg) {
+      return jsonResp(
+        { error: `${disputeMsg}; new proofs are not accepted for disputed tasks` },
+        409
+      );
+    }
     if (!isTaskUnlocked(task, tasksPre)) {
       return jsonResp({ error: `task '${taskId}' is blocked on unverified dependencies` }, 409);
     }
@@ -2983,6 +2994,13 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     const mission = this.getMissionRow(missionId);
     if (!mission) return jsonResp({ error: `unknown mission: ${missionId}` }, 404);
 
+    const dCtx = this.makeDecomposeContext(mission, url.origin);
+    // Pre-validate target, mode, and patch BEFORE recording rate limits or waking any container.
+    const prep = prepareRefute(dCtx, { taskId, rawBody: body });
+    if (!prep.ok) {
+      return jsonResp(prep.body, prep.status);
+    }
+
     const ip = clientIp(request);
     const now = Math.floor(Date.now() / 1000);
     const rlId = this.checkRateLimit(
@@ -2998,13 +3016,116 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         { "Retry-After": String(rlId.retryAfterSec) }
       );
     }
+    if (ip !== "unknown") {
+      const rlIp = this.checkRateLimit(
+        `submit:ip:${ip}`,
+        RATE_LIMITS.submit_ip.limit,
+        RATE_LIMITS.submit_ip.windowSec,
+        now
+      );
+      if (!rlIp.allowed) {
+        return jsonResp(
+          { error: `rate limit reached for this IP; retry in ${rlIp.retryAfterSec}s` },
+          429,
+          { "Retry-After": String(rlIp.retryAfterSec) }
+        );
+      }
+    }
     this.recordRateEvent(`submit:id:${auth.handle}`, now);
     if (ip !== "unknown") this.recordRateEvent(`submit:ip:${ip}`, now);
 
-    const res = await executeRefute(this.makeDecomposeContext(mission, url.origin), {
+    const asyncMode = shouldRunAsyncSubmit(url, body, request.headers);
+    if (asyncMode) {
+      const subId = crypto.randomUUID();
+      const patchSha = await sha256Hex(prep.prepared.parsed.patch);
+      const startSummary = `Verifying refutation from ${auth.handle} in internet-less Firecracker Container…`;
+      this.insertSubmission({
+        id: subId,
+        mission_id: missionId,
+        task_id: taskId,
+        contributor: auth.handle,
+        status: "verifying",
+        accepted: false,
+        score: null,
+        points: 0,
+        summary: startSummary,
+        patch_sha256: patchSha,
+        verify_ms: 0,
+        created_at: now,
+        completed_at: null,
+        is_demo: Boolean(mission.manifest.demo),
+        kind: "refute",
+      });
+      this.emit({
+        kind: "verification_started",
+        submission_id: subId,
+        mission_id: missionId,
+        task_id: taskId,
+        contributor: auth.handle,
+        accepted: null,
+        score: null,
+        summary: startSummary,
+        timestamp: now,
+      });
+      const work = executeRefute(dCtx, {
+        taskId,
+        contributor: auth.handle,
+        rawBody: body,
+        existingSubmissionId: subId,
+        createdAt: now,
+        prepared: prep.prepared,
+      }).catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        const failedAt = Math.floor(Date.now() / 1000);
+        this.updateSubmissionOutcome({
+          id: subId,
+          status: "error",
+          accepted: false,
+          score: null,
+          points: 0,
+          summary: msg,
+          patch_sha256: patchSha,
+          verify_ms: 0,
+          stage: "sandbox",
+          error: msg,
+          completed_at: failedAt,
+        });
+        this.emit({
+          kind: "submission_rejected",
+          submission_id: subId,
+          mission_id: missionId,
+          task_id: taskId,
+          contributor: auth.handle,
+          accepted: false,
+          score: null,
+          summary: `refutation error: ${msg}`,
+          timestamp: failedAt,
+        });
+      });
+      this.ctx.waitUntil(work.then(() => undefined, () => undefined));
+      return jsonResp(
+        {
+          accepted: null,
+          status: "verifying",
+          submission_id: subId,
+          mission_id: missionId,
+          task_id: taskId,
+          contributor: auth.handle,
+          kind: "refute",
+          status_url: `${url.origin}/api/submissions/${encodeURIComponent(subId)}`,
+          summary:
+            "Refutation verification queued in internet-less Firecracker Container; poll status_url or watch /api/events.",
+        },
+        202,
+        { "Cache-Control": "no-store" }
+      );
+    }
+
+    const res = await executeRefute(dCtx, {
       taskId,
       contributor: auth.handle,
       rawBody: body,
+      prepared: prep.prepared,
     });
     return jsonResp(res.body, res.status);
   }

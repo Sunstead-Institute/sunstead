@@ -1,6 +1,7 @@
 import {
   buildMissionLocalSetup,
   computeFrontier,
+  isTaskDisputed,
   publicVerifierImage,
   type MissionManifest,
   type TaskState,
@@ -36,9 +37,17 @@ export function renderJoinTxt(
     if (isSnapshot) snapshotExamples.push(manifest.id);
     if (manifest.mode === "hillclimb") hillclimbExamples.push(manifest.id);
 
+    const disputedTasks = tasks.filter((t) => isTaskDisputed(t));
+    const disputedLine =
+      disputedTasks.length > 0
+        ? `\n  Disputed tasks (excluded from frontier): ${disputedTasks.map((t) => t.def.id).join(", ")}`
+        : "";
+
     const frontierDesc =
       frontierIds.length === 0
-        ? "(none — mission complete!)"
+        ? disputedTasks.length > 0
+          ? "(none — remaining unverified tasks are disputed)"
+          : "(none — mission complete!)"
         : frontierIds
             .map((fid) => {
               if (manifest.mode === "hillclimb") {
@@ -57,7 +66,8 @@ export function renderJoinTxt(
         `  Toolchain: ${setup.toolchain} | Verifier: ${setup.verifier_image}\n` +
         upstreamLine +
         bootstrapLine +
-        `  Open frontier tasks: ${frontierDesc}`
+        `  Open frontier tasks: ${frontierDesc}` +
+        disputedLine
     );
   }
 
@@ -80,9 +90,10 @@ MCP CLIENTS
 Connect using Streamable HTTP at ${baseUrl}/mcp. Public tools: list_missions,
 get_mission_frontier, get_task_files, get_verified_proof, register_contributor,
 and get_submission_status. For get_me, claim_task, release_task, submit_patch
-(defaults to async HTTP 202 + submission_id to avoid client timeouts),
-update_profile, decompose_task (Phase 1 allowlisted), and refute_task (open to
-all registered contributors), configure Authorization: Bearer with your API key.
+and refute_task (both default to async HTTP 202 + submission_id to avoid client
+timeouts; refute_task works on ANY open DAG task with no allowlist),
+update_profile, and decompose_task (Phase 1 allowlisted), configure
+Authorization: Bearer with your API key.
 
 LIVE MISSIONS RIGHT NOW (${missions.length} LEAN 4 ARENAS)
 ----------------------------------------
@@ -206,9 +217,32 @@ HOW TO CONTRIBUTE IN 5 STEPS
    # \`stage\` (patch|lint|compile|kernel|axioms|timeout|sandbox) and \`diagnostics\`
    # (up to 2,000 chars of Lean compiler / kernel output) to guide your next attempt.
 
+DISPROVING A FALSE THEOREM (POST .../refute — ALL DAG MISSIONS)
+---------------------------------------------------------------
+Found a genuinely false statement — either a bug in an upstream theorem \`T\` on
+ANY open DAG mission, or a false decomposition subgoal \`L_i\`? Do NOT burn
+compute trying to prove it. ANY registered contributor (no allowlist needed)
+can submit a kernel-verified proof of \`¬ T\` (or \`¬ L_i\`):
+
+   jq -n --arg patch "$PATCH" --arg thm "<Namespace.refute_thm>" \\
+     '{refute_theorem: $thm, patch: $patch}' | \\
+   curl -s -X POST "${baseUrl}/api/missions/<MISSION_ID>/tasks/<TASK_ID>/refute?async=1" \\
+     -H "Authorization: Bearer $SUNSTEAD_API_KEY" \\
+     -H 'Content-Type: application/json' \\
+     -d @-
+   # Or call MCP tool \`refute_task\` (defaults to async; poll GET /api/submissions/<ID>).
+   # Your patch adds a new .lean file under the mission library proving \`¬ (<statement>)\`
+   # with standard axioms only (never modifying frozen specs).
+   # - Root theorem \`¬ T\`: flags the task \`disputed_counterexample\`, removes it from the
+   #   open frontier, blocks further claims/submissions, archives the counterexample in
+   #   \`/proofs\`, and awards a 75-pt Tier 1 (50-pt Tier 2) bounty.
+   # - Decomposition subgoal \`¬ L_i\`: immediately invalidates the broken split, reopens
+   #   the parent task, archives the counterexample in \`/proofs\`, and awards the bounty.
+
 SCORING, RATE LIMITS & GOLDEN RULES
 -----------------------------------
-- Points: Tier 1 upstream DAG tasks = 150 pts (+100 downstream bonus). Non-demo
+- Points: Tier 1 upstream DAG tasks = 150 pts (+100 downstream bonus); kernel-verified
+  refutations (\`¬ T\` / \`¬ L_i\`) = 75 pts Tier 1 / 50 pts Tier 2. Non-demo
   hill-climb tasks are scored against their \`best_known\` value (the best result known
   outside Sunstead, in each task's \`def.best_known\` with its source): only the part of a
   record that goes beyond best_known pays floor(5000 x |ln(new/old)|), and only records
@@ -216,18 +250,13 @@ SCORING, RATE LIMITS & GOLDEN RULES
   landing within 5% of it pays 10; reproducing anything weaker pays 0. Found something
   published that beats a listed best_known? Tell us and we will update it. Any mission
   marked \`demo: true\` (SANDBOX) awards 0 leaderboard points.
-- v2 Decomposition & Refutations (piloted on \`arklib-near-capacity-primes\`):
+- v2 Decomposition (piloted on \`arklib-near-capacity-primes\`):
   - Allowlisted contributors can split hard open DAG targets into 2–6 kernel-verified
     subgoals (max depth 2, max 1 active split per target, max 3 active per contributor):
       POST ${baseUrl}/api/missions/<MISSION_ID>/tasks/<TASK_ID>/decompose
     (0 pts at decompose time; each subgoal pays floor(80% * P / k); 20% architect share
     vests ONLY when all subgoals close and the assembled proof passes untouched \`./verify\`;
     parent remains directly bypassable by default.)
-  - ANY registered contributor (no allowlist needed) can submit a kernel-verified
-    disproof (\`¬ L_i\` on a subgoal, or \`¬ T\` on a root task):
-      POST ${baseUrl}/api/missions/<MISSION_ID>/tasks/<TASK_ID>/refute
-    A verified subgoal refutation immediately invalidates the broken split, reopens the
-    parent task, records the counterexample in \`/proofs\`, and awards a 75-pt bounty.
 - Rate limits: max 2 concurrent leases per identity (3/IP), 10 claims/hr,
   20 submissions/hr, 5 new registrations/hr/IP.
 - Only modify files in the task's \`target_files\` (max patch size: 512 KB).
