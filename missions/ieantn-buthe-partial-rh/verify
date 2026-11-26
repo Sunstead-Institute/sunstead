@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+"""Frozen verifier for `ieantn-buthe-partial-rh`.
+
+Uses the shared trusted harness baked into `/opt/sunstead/sunstead_sandbox.py`
+with Lean 4.36.0 + read-only Mathlib v4.36.0.
+"""
+import sys
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify  # noqa: E402
+
+LIB_ROOT = "IEANTN"
+FROZEN_FILES = [
+    "IEANTN/Nodes/Buthe2016/v1/Conclusions.lean",
+    "IEANTN/Nodes/Buthe2016/v1/Tables.lean",
+    "IEANTN/Vocabulary/ErrorTerms.lean",
+    "IEANTN/Vocabulary/Numerics.lean",
+    "IEANTN/Vocabulary/PrimeCounting.lean",
+    "IEANTN/Vocabulary/Zeta.lean",
+    "IEANTN/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain"
+]
+
+TASKS = {
+    "buthe2016_theorem_2_psi": {
+        "module": "IEANTN.Nodes.Buthe2016.v1.TaskTheorem2Psi",
+        "theorem": "Buthe2016.v1.challenge_theorem_2_psi",
+        "statement": "\ndef buthe2016_theorem_2_psi : Prop :=\n  Buthe2016.v1.theorem_2_psi\n"
+    },
+    "buthe2016_theorem_2_theta": {
+        "module": "IEANTN.Nodes.Buthe2016.v1.TaskTheorem2Theta",
+        "theorem": "Buthe2016.v1.challenge_theorem_2_theta",
+        "statement": "\ndef buthe2016_theorem_2_theta : Prop :=\n  Buthe2016.v1.theorem_2_theta\n"
+    },
+    "buthe2016_theorem_2_li_minus_riemann_pi": {
+        "module": "IEANTN.Nodes.Buthe2016.v1.TaskTheorem2LiMinusRiemannPi",
+        "theorem": "Buthe2016.v1.challenge_theorem_2_li_minus_riemann_pi",
+        "statement": "\ndef buthe2016_theorem_2_li_minus_riemann_pi : Prop :=\n  Buthe2016.v1.theorem_2_li_minus_riemann_pi\n"
+    },
+    "buthe2016_theorem_2_li_minus_pi": {
+        "module": "IEANTN.Nodes.Buthe2016.v1.TaskTheorem2LiMinusPi",
+        "theorem": "Buthe2016.v1.challenge_theorem_2_li_minus_pi",
+        "statement": "\ndef buthe2016_theorem_2_li_minus_pi : Prop :=\n  Buthe2016.v1.theorem_2_li_minus_pi\n"
+    },
+    "buthe2016_theorem_1_table1": {
+        "module": "IEANTN.Nodes.Buthe2016.v1.TaskTheorem1Table1",
+        "theorem": "Buthe2016.v1.challenge_theorem_1_table1",
+        "statement": "\ndef buthe2016_theorem_1_table1 : Prop :=\n  Buthe2016.v1.theorem_1_table1\n"
+    },
+    "buthe2016_theorem_1_table2": {
+        "module": "IEANTN.Nodes.Buthe2016.v1.TaskTheorem1Table2",
+        "theorem": "Buthe2016.v1.challenge_theorem_1_table2",
+        "statement": "\ndef buthe2016_theorem_1_table2 : Prop :=\n  Buthe2016.v1.theorem_1_table2\n"
+    }
+}
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>")
+    lean_verify(
+        sys.argv[1],
+        lib_root=LIB_ROOT,
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        uses_mathlib=True,
+        timeout_sec=230,
+    )
