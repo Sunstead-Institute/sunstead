@@ -214,9 +214,30 @@ print(json.dumps({
   }
 }
 
+// Best known values for hill-climb tasks live outside the frozen per-mission
+// manifests (so updating a citation never changes a mission's spec hash or its
+// verifier image). They are merged into each task definition here; every
+// non-demo hill-climb task must have one (scripts/check-best-known.py checks the
+// sources in CI).
+const bestKnownRegistry = JSON.parse(
+  fs.readFileSync(path.join(missionsDir, "best-known.json"), "utf8")
+).missions;
+
 const missions = missionDirs.map((dirName) => {
   const fullDir = path.join(missionsDir, dirName);
   const manifest = JSON.parse(fs.readFileSync(path.join(fullDir, "sunstead.json"), "utf8"));
+  if (manifest.mode === "hillclimb" && !manifest.demo) {
+    const entries = bestKnownRegistry[manifest.id] || {};
+    for (const task of manifest.tasks) {
+      const bk = entries[task.id];
+      if (!bk || typeof bk.value !== "number" || !bk.source || !bk.url) {
+        throw new Error(
+          `missions/best-known.json has no sourced best_known for hill-climb task ${manifest.id}/${task.id}`
+        );
+      }
+      task.best_known = bk;
+    }
+  }
   const spec_sha256 = computeSpecSha256(fullDir, manifest.frozen_paths);
   const seed_tree_sha256 = computeSeedTreeSha256(fullDir);
   const image = (manifest.verifier?.image || "").trim();

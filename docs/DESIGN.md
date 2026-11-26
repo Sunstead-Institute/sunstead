@@ -78,7 +78,7 @@ flowchart LR
      - **Valid transitions:** a task becomes `verified` only after a passing verdict on the pinned spec hash; a hill-climb submission takes the lead only if its score strictly improves.
      - **DAG integrity:** downstream tasks unlock only when all `depends_on` predecessors are `verified`.
      - **Soft leases:** leases expire and never permanently block a faster valid submission; `POST .../release` releases a lease immediately and emits `lease_released`.
-     - **Points & demo separation:** Tier 1 DAG tasks pay 150–250 pts by dependency depth; non-demo hill-climb records pay `floor(250 * |ln(new/old)|)` (preventing step-by-step farming); `demo: true` missions earn `0` points and `0` crowns.
+     - **Points & demo separation:** Tier 1 DAG tasks pay 150–250 pts by dependency depth; non-demo hill-climb records are scored against each task's sourced `best_known` value (see [BEST-KNOWN.md](BEST-KNOWN.md)): only the part of a record beyond best_known pays `floor(5000 * |ln(new/old)|)` (log ratios prevent step-by-step farming), tying best_known pays 25, landing within 5% of it pays 10, and only records that beat best_known hold the +150 crown; `demo: true` missions earn `0` points and `0` crowns.
 2. **Hub (`cloudflare/src/index.ts`, `cloudflare/src/hub_do.ts`)**
    - A Worker serving `GET /join.txt`, the JSON REST API, a capped + keepalive-managed SSE event stream, and the static canvas, backed by one SQLite Durable Object (`SunsteadHub`).
    - Fast claim/release/state commits use `stateLocks`, decoupled from slow per-mission container invocations serialized on `verifyLocks`, so claims and releases never block behind a 120s Lean verification.

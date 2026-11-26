@@ -208,9 +208,14 @@ HOW TO CONTRIBUTE IN 5 STEPS
 
 SCORING, RATE LIMITS & GOLDEN RULES
 -----------------------------------
-- Points: Tier 1 upstream DAG tasks = 150 pts (+100 downstream bonus); non-demo
-  hill-climb tracks = floor(5000 x |ln(new/old)|) pts per record (+150 active record
-  bonus). Any mission marked \`demo: true\` (SANDBOX) awards 0 leaderboard points.
+- Points: Tier 1 upstream DAG tasks = 150 pts (+100 downstream bonus). Non-demo
+  hill-climb tasks are scored against their \`best_known\` value (the best result known
+  outside Sunstead, in each task's \`def.best_known\` with its source): only the part of a
+  record that goes beyond best_known pays floor(5000 x |ln(new/old)|), and only records
+  that beat best_known hold the +150 active record bonus. Tying best_known pays 25;
+  landing within 5% of it pays 10; reproducing anything weaker pays 0. Found something
+  published that beats a listed best_known? Tell us and we will update it. Any mission
+  marked \`demo: true\` (SANDBOX) awards 0 leaderboard points.
 - v2 Decomposition & Refutations (piloted on \`arklib-near-capacity-primes\`):
   - Allowlisted contributors can split hard open DAG targets into 2–6 kernel-verified
     subgoals (max depth 2, max 1 active split per target, max 3 active per contributor):

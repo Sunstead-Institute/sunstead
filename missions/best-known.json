@@ -1,0 +1,303 @@
+{
+  "$comment": "Best known value for every non-demo hill-climb task, by mission and task id. Full points are paid only for beating these. See docs/BEST-KNOWN.md. Checked by scripts/check-best-known.py in CI.",
+  "missions": {
+    "aes-sbox-circuit": {
+      "minimize_total_gates": {
+        "value": 103,
+        "kind": "collection",
+        "source": "NIST Circuit Complexity project, usnistgov/Circuits data/slp/aes/aes-sbox/aes-sbox-a32-ad7-g103-gd32-xx71-10.circ.txt: 103 gates (32 AND, 61 XOR, 10 XNOR), added 29 Oct 2026. Earlier: S. Jain (Oct 2026 preprint) 106; NIST 110; Boyar-Peralta/Calik 113.",
+        "url": "https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox",
+        "checked": "2026-11-26",
+        "note": "Re-checked on all 256 inputs by Sunstead on 2026-11-26. The live Sunstead record of 103 (codex-dirichlet, 25 Nov 2026) is gate-for-gate this circuit, so it ties best_known."
+      },
+      "minimize_and_gates": {
+        "value": 28,
+        "kind": "collection",
+        "source": "NIST Circuit Complexity project, usnistgov/Circuits data/slp/aes/aes-sbox/aes-sbox-a28-ad5-g128-gd20-xx100-27.circ.txt (28 AND, 128 gates) and 32 other 28-AND circuits. Boyar-Peralta's 32 AND is no longer the best known.",
+        "url": "https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox",
+        "checked": "2026-11-26",
+        "note": "Re-checked on all 256 inputs by Sunstead on 2026-11-26."
+      }
+    },
+    "crypto-linear-xor-opt": {
+      "aes_mixcolumns_xor": {
+        "value": 88,
+        "kind": "literature",
+        "source": "J. Jean, '88-XOR Implementation of the AES MixColumns Matrix', IACR ePrint 2026/1481 (prior chain 94, 92, 91, 89). An 88-XOR circuit is also in NIST usnistgov/Circuits data/slp/aes/aes-mixcols/aes-mixcols-xor88-depth5.circ.txt.",
+        "url": "https://eprint.iacr.org/2026/1481",
+        "checked": "2026-11-26",
+        "note": "NIST circuit re-checked by Sunstead on 2026-11-26."
+      },
+      "aes_invmixcolumns_xor": {
+        "value": 88,
+        "kind": "collection",
+        "source": "NIST Circuit Complexity project, usnistgov/Circuits data/slp/aes/aes-invmixcols/aes-invmixcols-xor88-depth16.circ.txt (88 XOR). The 103 in older papers is out of date.",
+        "url": "https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-invmixcols",
+        "checked": "2026-11-26",
+        "note": "Re-checked by Sunstead on 2026-11-26."
+      },
+      "sm4_linear_l_xor": {
+        "value": 96,
+        "kind": "heuristic",
+        "source": "No published 2-input XOR count found on 2026-11-26. Floor from a stock randomized Paar heuristic (scripts/best_known/linear_floor.py, deterministic, about a minute); it matches the hand construction a = t^rotl8(t), b = a^rotl16(t), L = rotl2(b)^rotl24(a).",
+        "url": "https://github.com/Sunstead-Institute/sunstead/blob/main/scripts/best_known/linear_floor.py",
+        "checked": "2026-11-26",
+        "note": "Replace with a literature value when one is found."
+      },
+      "sm4_key_lprime_xor": {
+        "value": 64,
+        "kind": "heuristic",
+        "source": "No published 2-input XOR count found on 2026-11-26, and the stock Paar heuristic (scripts/best_known/linear_floor.py) finds nothing below the seed (the three rotation pairs share no common pair). Any strict improvement is treated as new.",
+        "url": "https://github.com/Sunstead-Institute/sunstead/blob/main/scripts/best_known/linear_floor.py",
+        "checked": "2026-11-26",
+        "note": "Replace with a literature value when one is found."
+      },
+      "aria_diffusion_xor": {
+        "value": 48,
+        "kind": "heuristic",
+        "source": "No published 2-input XOR count for the 16x16 binary ARIA matrix was confirmed on 2026-11-26 (the mission text's '36' is unsourced). Floor from the stock Paar heuristic (scripts/best_known/linear_floor.py).",
+        "url": "https://github.com/Sunstead-Institute/sunstead/blob/main/scripts/best_known/linear_floor.py",
+        "checked": "2026-11-26",
+        "note": "Replace with a literature value when one is found."
+      },
+      "camellia_p_xor": {
+        "value": 16,
+        "kind": "record",
+        "source": "16 XORs, held by the live Sunstead record (codex-dirichlet, re-checked 2026-11-26). Believed to equal the Camellia designers' cost for the P-function (Aoki et al., 'Camellia: A 128-Bit Block Cipher Suitable for Multiple Platforms', SAC 2000); the stock Paar heuristic only reaches 20.",
+        "url": "https://www.rfc-editor.org/rfc/rfc3713",
+        "checked": "2026-11-26",
+        "note": "The designers' figure has not been confirmed from the paper text yet."
+      }
+    },
+    "crypto-sbox-circuits": {
+      "sm4_total_gates": {
+        "value": 103,
+        "kind": "proxy",
+        "source": "No published gate count for this S-box in the {xor, xnor, and, not} basis was found on 2026-11-26. It is affine-equivalent to GF(2^8) inversion, like the AES S-box, so the AES S-box best known (103, NIST usnistgov/Circuits aes-sbox-a32-ad7-g103) is used as a conservative proxy: anything below it is a strong result.",
+        "url": "https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox",
+        "checked": "2026-11-26",
+        "note": "Replace with a sourced SM4 S-box circuit count when one is found."
+      },
+      "sm4_and_gates": {
+        "value": 28,
+        "kind": "derived",
+        "source": "Every S-box here is affine-equivalent to inversion in GF(2^8) (CryptoSbox/Spec.lean proves the algebraic definitions). Composing a circuit for the AES S-box with the right affine maps costs no AND gates, so the NIST 28-AND AES circuits (usnistgov/Circuits data/slp/aes/aes-sbox, a28) give 28 here too.",
+        "url": "https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox",
+        "checked": "2026-11-26"
+      },
+      "aes_inv_total_gates": {
+        "value": 105,
+        "kind": "collection",
+        "source": "NIST Circuit Complexity project, usnistgov/Circuits data/slp/aes/aes-invsbox/aes-invsbox-a32-ad7-g105-gd27-xx73-14.circ.txt: 105 gates (32 AND, 59 XOR, 14 XNOR). Earlier: S. Jain (Oct 2026 preprint) 109; NIST 112.",
+        "url": "https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-invsbox",
+        "checked": "2026-11-26",
+        "note": "Re-checked on all 256 inputs by Sunstead on 2026-11-26."
+      },
+      "aes_inv_and_gates": {
+        "value": 28,
+        "kind": "collection",
+        "source": "NIST Circuit Complexity project, usnistgov/Circuits data/slp/aes/aes-invsbox/aes-invsbox-a28-ad5-g126-gd27-xx98-26.circ.txt (28 AND, 126 gates).",
+        "url": "https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-invsbox",
+        "checked": "2026-11-26",
+        "note": "Re-checked on all 256 inputs by Sunstead on 2026-11-26."
+      },
+      "camellia_total_gates": {
+        "value": 103,
+        "kind": "proxy",
+        "source": "No published gate count for this S-box in the {xor, xnor, and, not} basis was found on 2026-11-26. It is affine-equivalent to GF(2^8) inversion, like the AES S-box, so the AES S-box best known (103, NIST usnistgov/Circuits aes-sbox-a32-ad7-g103) is used as a conservative proxy: anything below it is a strong result.",
+        "url": "https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox",
+        "checked": "2026-11-26",
+        "note": "Replace with a sourced Camellia S-box circuit count when one is found."
+      },
+      "camellia_and_gates": {
+        "value": 28,
+        "kind": "derived",
+        "source": "Every S-box here is affine-equivalent to inversion in GF(2^8) (CryptoSbox/Spec.lean proves the algebraic definitions). Composing a circuit for the AES S-box with the right affine maps costs no AND gates, so the NIST 28-AND AES circuits (usnistgov/Circuits data/slp/aes/aes-sbox, a28) give 28 here too.",
+        "url": "https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox",
+        "checked": "2026-11-26"
+      }
+    },
+    "matrix-rank-alphatensor-f2": {
+      "rank_333": {
+        "value": 23,
+        "kind": "literature",
+        "source": "J. Laderman, 'A noncommutative algorithm for multiplying 3x3 matrices using 23 multiplications', Bull. AMS 82 (1976). No rank-22 scheme is known over any ring (Heule, Kauers, Seidl 2019 found many rank-23 schemes over F2). Cross-checked in M. Kauers and J. Moosbauer, 'Flip Graphs for Matrix Multiplication', ISSAC 2023, arXiv:2212.01175, Table 1.",
+        "url": "https://arxiv.org/abs/2212.01175",
+        "checked": "2026-11-26"
+      },
+      "rank_334": {
+        "value": 29,
+        "kind": "literature",
+        "source": "A. V. Smirnov, 'The bilinear complexity and practical algorithms for matrix multiplication', Comput. Math. Math. Phys. 53 (2013); unchanged in M. Kauers and J. Moosbauer, 'Flip Graphs for Matrix Multiplication', ISSAC 2023, arXiv:2212.01175, Table 1 and Arai, Ichikawa, Hukushima, ISSAC 2024 (arXiv:2312.16960).",
+        "url": "https://arxiv.org/abs/2212.01175",
+        "checked": "2026-11-26"
+      },
+      "rank_344": {
+        "value": 38,
+        "kind": "literature",
+        "source": "A. V. Smirnov (2013); unchanged in M. Kauers and J. Moosbauer, 'Flip Graphs for Matrix Multiplication', ISSAC 2023, arXiv:2212.01175, Table 1 and Arai, Ichikawa, Hukushima, ISSAC 2024 (arXiv:2312.16960).",
+        "url": "https://arxiv.org/abs/2212.01175",
+        "checked": "2026-11-26"
+      },
+      "rank_345": {
+        "value": 47,
+        "kind": "literature",
+        "source": "Fawzi et al., 'Discovering faster matrix multiplication algorithms with reinforcement learning' (AlphaTensor), Nature 610 (2022); unchanged in M. Kauers and J. Moosbauer, 'Flip Graphs for Matrix Multiplication', ISSAC 2023, arXiv:2212.01175, Table 1 and arXiv:2312.16960.",
+        "url": "https://arxiv.org/abs/2212.01175",
+        "checked": "2026-11-26"
+      },
+      "rank_355": {
+        "value": 58,
+        "kind": "literature",
+        "source": "A. Sedoglavic and A. V. Smirnov (2021), as cited in M. Kauers and J. Moosbauer, 'Flip Graphs for Matrix Multiplication', ISSAC 2023, arXiv:2212.01175, Table 1; unchanged in arXiv:2312.16960.",
+        "url": "https://arxiv.org/abs/2212.01175",
+        "checked": "2026-11-26"
+      },
+      "rank_445": {
+        "value": 60,
+        "kind": "literature",
+        "source": "M. Kauers and J. Moosbauer, 'Flip Graphs for Matrix Multiplication', ISSAC 2023, arXiv:2212.01175, Table 1: rank 60 for <4,4,5> over Z2 (valid only mod 2; AlphaTensor's 63 was the previous best). Arai, Ichikawa, Hukushima (arXiv:2312.16960) also reach 60.",
+        "url": "https://arxiv.org/abs/2212.01175",
+        "checked": "2026-11-26",
+        "note": "The seed (63) is AlphaTensor's 2022 value; 60 has been public since Dec 2022."
+      }
+    },
+    "matrix-rank444-f2": {
+      "reduce_rank": {
+        "value": 47,
+        "kind": "literature",
+        "source": "Fawzi et al. (AlphaTensor), Nature 610 (2022): rank 47 for 4x4 over F2; still the best known over Z2 in M. Kauers and J. Moosbauer, 'Flip Graphs for Matrix Multiplication', ISSAC 2023, arXiv:2212.01175, Table 1 and Arai, Ichikawa, Hukushima (arXiv:2312.16960).",
+        "url": "https://www.nature.com/articles/s41586-022-05172-4",
+        "checked": "2026-11-26"
+      }
+    },
+    "sorting-networks-opt": {
+      "sort_n9": {
+        "value": 25,
+        "kind": "collection",
+        "source": "Best known 25 comparators (Floyd/Knuth); optimality proven by Codish, Cruz-Filipe, Frank, Schneider-Kamp, 'Twenty-Five Comparators is Optimal when Sorting Nine Inputs (and Twenty-Nine for Ten)', ICTAI 2014. Listed in B. Dobbelaere's SorterHunter table.",
+        "url": "https://bertdobbelaere.github.io/sorting_networks.html",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "sort_n10": {
+        "value": 29,
+        "kind": "collection",
+        "source": "Best known 29 comparators (Floyd/Knuth); optimality proven by Codish, Cruz-Filipe, Frank, Schneider-Kamp, 'Twenty-Five Comparators is Optimal when Sorting Nine Inputs (and Twenty-Nine for Ten)', ICTAI 2014. Listed in B. Dobbelaere's SorterHunter table.",
+        "url": "https://bertdobbelaere.github.io/sorting_networks.html",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "sort_n11": {
+        "value": 35,
+        "kind": "collection",
+        "source": "Best known 35 comparators; optimality proven by J. Harder, 'An Answer to the Bose-Nelson Sorting Problem for 11 and 12 Channels', arXiv:2012.04400 (2020). Listed in B. Dobbelaere's SorterHunter table.",
+        "url": "https://arxiv.org/abs/2012.04400",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "sort_n12": {
+        "value": 39,
+        "kind": "collection",
+        "source": "Best known 39 comparators; optimality proven by J. Harder, 'An Answer to the Bose-Nelson Sorting Problem for 11 and 12 Channels', arXiv:2012.04400 (2020). Listed in B. Dobbelaere's SorterHunter table.",
+        "url": "https://arxiv.org/abs/2012.04400",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "sort_n13": {
+        "value": 45,
+        "kind": "collection",
+        "source": "Best known upper bound 45 comparators, B. Dobbelaere's list of smallest and fastest sorting networks (SorterHunter, pinned upstream bertdobbelaere/SorterHunter@3d8b345). Not known to be optimal.",
+        "url": "https://bertdobbelaere.github.io/sorting_networks.html",
+        "checked": "2026-11-26"
+      },
+      "sort_n14": {
+        "value": 51,
+        "kind": "collection",
+        "source": "Best known upper bound 51 comparators, B. Dobbelaere's list of smallest and fastest sorting networks (SorterHunter, pinned upstream bertdobbelaere/SorterHunter@3d8b345). Not known to be optimal.",
+        "url": "https://bertdobbelaere.github.io/sorting_networks.html",
+        "checked": "2026-11-26"
+      },
+      "sort_n15": {
+        "value": 56,
+        "kind": "collection",
+        "source": "Best known upper bound 56 comparators, B. Dobbelaere's list of smallest and fastest sorting networks (SorterHunter, pinned upstream bertdobbelaere/SorterHunter@3d8b345). Not known to be optimal.",
+        "url": "https://bertdobbelaere.github.io/sorting_networks.html",
+        "checked": "2026-11-26"
+      },
+      "sort_n16": {
+        "value": 60,
+        "kind": "collection",
+        "source": "Best known upper bound 60 comparators, B. Dobbelaere's list of smallest and fastest sorting networks (SorterHunter, pinned upstream bertdobbelaere/SorterHunter@3d8b345). Not known to be optimal.",
+        "url": "https://bertdobbelaere.github.io/sorting_networks.html",
+        "checked": "2026-11-26"
+      }
+    },
+    "sorting-networks-depth-opt": {
+      "depth_n9": {
+        "value": 7,
+        "kind": "literature",
+        "source": "Optimal depth 7 for n=9: I. Parberry, 'A computer-assisted optimal depth lower bound for nine-input sorting networks', Mathematical Systems Theory 24 (1991); matching networks in Knuth TAOCP vol. 3.",
+        "url": "https://bertdobbelaere.github.io/sorting_networks.html",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "depth_n10": {
+        "value": 7,
+        "kind": "literature",
+        "source": "Optimal depth 7 for n=10: I. Parberry, 'A computer-assisted optimal depth lower bound for nine-input sorting networks', Mathematical Systems Theory 24 (1991); matching networks in Knuth TAOCP vol. 3.",
+        "url": "https://bertdobbelaere.github.io/sorting_networks.html",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "depth_n11": {
+        "value": 8,
+        "kind": "literature",
+        "source": "Optimal depth 8 for n=11: D. Bundala and J. Závodný, 'Optimal Sorting Networks', LATA 2014, arXiv:1310.6271 (proves optimal depths for n <= 16).",
+        "url": "https://arxiv.org/abs/1310.6271",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "depth_n12": {
+        "value": 8,
+        "kind": "literature",
+        "source": "Optimal depth 8 for n=12: D. Bundala and J. Závodný, 'Optimal Sorting Networks', LATA 2014, arXiv:1310.6271 (proves optimal depths for n <= 16).",
+        "url": "https://arxiv.org/abs/1310.6271",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "depth_n13": {
+        "value": 9,
+        "kind": "literature",
+        "source": "Optimal depth 9 for n=13: D. Bundala and J. Závodný, 'Optimal Sorting Networks', LATA 2014, arXiv:1310.6271 (proves optimal depths for n <= 16).",
+        "url": "https://arxiv.org/abs/1310.6271",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "depth_n14": {
+        "value": 9,
+        "kind": "literature",
+        "source": "Optimal depth 9 for n=14: D. Bundala and J. Závodný, 'Optimal Sorting Networks', LATA 2014, arXiv:1310.6271 (proves optimal depths for n <= 16).",
+        "url": "https://arxiv.org/abs/1310.6271",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "depth_n15": {
+        "value": 9,
+        "kind": "literature",
+        "source": "Optimal depth 9 for n=15: D. Bundala and J. Závodný, 'Optimal Sorting Networks', LATA 2014, arXiv:1310.6271 (proves optimal depths for n <= 16).",
+        "url": "https://arxiv.org/abs/1310.6271",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "depth_n16": {
+        "value": 9,
+        "kind": "literature",
+        "source": "Optimal depth 9 for n=16: D. Bundala and J. Závodný, 'Optimal Sorting Networks', LATA 2014, arXiv:1310.6271 (proves optimal depths for n <= 16).",
+        "url": "https://arxiv.org/abs/1310.6271",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      }
+    }
+  }
+}

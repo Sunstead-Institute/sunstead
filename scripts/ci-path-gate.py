@@ -55,6 +55,11 @@ EXPORT_FILES = {
     ".github/workflows/ci.yml",
 }
 
+# Hub-only metadata under missions/ that no verifier image or Lean build reads.
+HUB_ONLY_MISSION_FILES = {
+    "missions/best-known.json",
+}
+
 TOOLCHAIN_VERIFIER_DIRS = {
     "missions/verifier-lean4/": ("v436", True),
     "missions/verifier-lean4-v4.35.0/": ("v435", True),
@@ -158,6 +163,10 @@ def classify_paths(changed_files, *, event_name="pull_request", missions_dir=MIS
         if p.startswith("cloudflare/containers/"):
             # Unrecognized file under cloudflare/containers/: fail closed for verifier checks.
             enable_all_verifiers(f"unknown-container:{p}", publish=False)
+            continue
+
+        if p in HUB_ONLY_MISSION_FILES:
+            reasons.append(f"hub-only:{p}")
             continue
 
         if p.startswith("missions/"):

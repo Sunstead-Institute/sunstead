@@ -25,6 +25,13 @@ class CiPathGateTests(unittest.TestCase):
         self.assertFalse(res["pub_v435"])
         self.assertFalse(res["pub_v431"])
 
+    def test_best_known_registry_is_hub_only(self):
+        res = gate.classify_paths(["missions/best-known.json", "scripts/check-best-known.py"])
+        for key in ("run_v436", "run_v435", "run_v431", "run_export", "pub_v436", "pub_v435", "pub_v431"):
+            self.assertFalse(res[key], key)
+        # Any other file at the missions/ root still fails closed.
+        self.assertTrue(gate.classify_paths(["missions/other.json"])["run_v436"])
+
     def test_single_toolchain_mission_isolates_to_its_toolchain(self):
         r436 = gate.classify_paths(["missions/arklib-near-capacity-primes/ArkLibNearCapacity/Spec.lean"])
         self.assertTrue(r436["run_v436"])
