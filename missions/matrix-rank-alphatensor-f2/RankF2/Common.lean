@@ -1,4 +1,5 @@
 import RankF2.Spec
+import RankF2.Packed
 
 namespace B334
 open Finset
@@ -24,14 +25,6 @@ theorem sum_getD {α : Type*} (L : List α) (d : α) (g : α → ZMod 2) {N : �
     rw [Fin.sum_univ_succ]
     simp only [Fin.val_zero, Fin.val_succ, List.getD_cons_zero, List.getD_cons_succ, ih, List.map_cons,
       List.sum_cons]
-
-/-- entry `(x, y, z)` of `∑ₛ aₛ ⊗ bₛ ⊗ cₛ` for a list of mask triples `(aₛ, bₛ, cₛ)`, as a parity -/
-def entryN : List (ℕ × ℕ × ℕ) → ℕ → ℕ → ℕ → Bool
-  | [], _, _, _ => false
-  | t :: L, x, y, z => xor (t.1.testBit x && t.2.1.testBit y && t.2.2.testBit z) (entryN L x y z)
-
-def tgtShape (n m p x y z : ℕ) : Bool :=
-  decide (x % m = y / p ∧ y % p = z / n ∧ z % n = x / m)
 
 theorem zb_entryN (L : List (ℕ × ℕ × ℕ)) (x y z : ℕ) :
     zb (entryN L x y z) = (L.map (fun t => zbit t.1 x * zbit t.2.1 y * zbit t.2.2 z)).sum := by

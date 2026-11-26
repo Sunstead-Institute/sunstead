@@ -1,5 +1,6 @@
 import Rank444.Spec
 import Rank444.Certificate
+import Rank444.Packed
 
 namespace B334
 open Finset
@@ -28,16 +29,15 @@ theorem sum_getD {α : Type*} (L : List α) (d : α) (g : α → ZMod 2) {N : �
 
 /-! ## Verification of the submitted decomposition -/
 
-/-- entry `(x, y, z)` of `∑ₛ aₛ ⊗ bₛ ⊗ cₛ` for a list of mask triples `(aₛ, bₛ, cₛ)`, as a parity -/
-def entryN : List (ℕ × ℕ × ℕ) → ℕ → ℕ → ℕ → Bool
-  | [], _, _, _ => false
-  | t :: L, x, y, z => xor (t.1.testBit x && t.2.1.testBit y && t.2.2.testBit z) (entryN L x y z)
-
 /-- entry `(x, y, z)` of mmT 4 4 4 -/
 def tgtN (x y z : ℕ) : Bool := decide (x % 4 = y / 4 ∧ y % 4 = z / 4 ∧ z % 4 = x / 4)
 
-theorem certificate_correct : ∀ x < 16, ∀ y < 16, ∀ z < 16, entryN certificate x y z = tgtN x y z := by
+/-- All 256 packed rows of the submitted table match ⟨4,4,4⟩ (one kernel evaluation). -/
+theorem certificate_rows : rowsOK 4 4 4 certificate = true := by
   decide +kernel
+
+theorem certificate_correct : ∀ x < 16, ∀ y < 16, ∀ z < 16, entryN certificate x y z = tgtN x y z :=
+  entries_of_rowsOK 4 4 4 certificate certificate_rows
 
 theorem zb_entryN (L : List (ℕ × ℕ × ℕ)) (x y z : ℕ) :
     zb (entryN L x y z) = (L.map (fun t => zbit t.1 x * zbit t.2.1 y * zbit t.2.2 z)).sum := by

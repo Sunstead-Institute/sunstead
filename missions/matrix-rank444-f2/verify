@@ -49,7 +49,7 @@ if __name__ == "__main__":
         emit(False, "usage: ./verify <task_id>", stage="lint")
     check_certificate(Path(__file__).resolve().parent / "Rank444" / "Certificate.lean")
     lean_verify(
-        sys.argv[1], lib_root="Rank444", frozen_files=["Rank444/Spec.lean", "UPSTREAM.json",
+        sys.argv[1], lib_root="Rank444", frozen_files=["Rank444/Spec.lean", "Rank444/Packed.lean", "UPSTREAM.json",
                                                       "lakefile.toml", "lean-toolchain"],
         tasks=TASKS, uses_mathlib=True, timeout_sec=170,
     )
