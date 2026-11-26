@@ -70,13 +70,19 @@ class CiPathGateTests(unittest.TestCase):
             self.assertTrue(res[key], key)
 
     def test_verifier_server_and_redteam_enable_all_verifiers_only(self):
-        for p in ("cloudflare/containers/verifier_server.py", "scripts/redteam.py", "scripts/check-statements.py"):
+        for p in (
+            "cloudflare/containers/verifier_server.py",
+            "cloudflare/containers/test_verifier_server.py",
+            "scripts/redteam.py",
+            "scripts/check-statements.py",
+        ):
             with self.subTest(path=p):
                 res = gate.classify_paths([p])
                 self.assertTrue(res["run_v436"])
                 self.assertTrue(res["run_v435"])
                 self.assertTrue(res["run_v431"])
                 self.assertFalse(res["pub_v436"])
+                self.assertIn(f"shared:{p}", res["reason"])
 
     def test_cloudflare_dockerfile_only_runs_its_toolchain(self):
         res = gate.classify_paths(["cloudflare/containers/lean4-v4.31.0/Dockerfile"])

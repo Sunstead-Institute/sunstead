@@ -81,6 +81,7 @@ jobs:
             missions/verifier-common/prebuild_cache.py \
             missions/verifier-common/prebuild_snapshot.py \
             cloudflare/containers/verifier_server.py \
+            cloudflare/containers/test_verifier_server.py \
             scripts/check-upstream.py scripts/check-statements.py scripts/test_check_statements.py scripts/redteam.py scripts/e2e.py \
             scripts/scout-upstream.py scripts/test_scout_upstream.py \
             scripts/sunstead_verify.py scripts/test_sunstead_verify.py \
@@ -89,6 +90,8 @@ jobs:
             scripts/ci-path-gate.py scripts/test_ci_path_gate.py \
             scripts/check-best-known.py scripts/best_known/linear_floor.py
           for f in missions/*/verify; do python3 -m py_compile "$f"; done
+      - name: Verifier server unit tests (offline)
+        run: python3 cloudflare/containers/test_verifier_server.py -v
       - name: CI path gate unit tests (offline)
         run: python3 scripts/test_ci_path_gate.py -v
       - name: Upstream scout unit tests (offline)
@@ -151,7 +154,7 @@ jobs:
       - name: Build Lean 4.36.0 verifier image (runs SunsteadCheck selftest)
         run: ./scripts/build-verifiers.sh v4.36.0
       - name: Red-team suite (v4.36.0 missions + synthetic attacks)
-        run: python3 scripts/redteam.py --image sunstead/verifier-lean4:v0.2
+        run: python3 scripts/redteam.py --image sunstead/verifier-lean4:v0.2 --jobs 3
       - name: Frozen task statements match seed theorems (v4.36.0 missions)
         run: python3 scripts/check-statements.py --image sunstead/verifier-lean4:v0.2 --jobs 3
       - name: Build & verify Cloudflare Lean 4.36.0 container (reuses local elan + Mathlib layers)
@@ -181,7 +184,7 @@ jobs:
       - name: Build Lean 4.35.0 verifier image (runs SunsteadCheck selftest)
         run: ./scripts/build-verifiers.sh v4.35.0
       - name: Red-team suite (v4.35.0 missions)
-        run: python3 scripts/redteam.py --image sunstead/verifier-lean4-v4.35.0:v0.1
+        run: python3 scripts/redteam.py --image sunstead/verifier-lean4-v4.35.0:v0.1 --jobs 2
       - name: Frozen task statements match seed theorems (v4.35.0 missions)
         run: python3 scripts/check-statements.py --image sunstead/verifier-lean4-v4.35.0:v0.1 --jobs 2
       - name: Build & verify Cloudflare Lean 4.35.0 container (reuses local elan layers)

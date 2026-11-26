@@ -34,11 +34,23 @@ import tarfile
 import tempfile
 import time
 
-sys.path.insert(0, "/opt/sunstead")
-from sunstead_sandbox import CHECKER_USER, RUNNER_USER, kill_all_processes  # noqa: E402
+_SANDBOX_IMPORTED = False
+if os.path.isdir("/opt/sunstead") and "/opt/sunstead" not in sys.path:
+    sys.path.insert(0, "/opt/sunstead")
+try:
+    from sunstead_sandbox import CHECKER_USER, RUNNER_USER, kill_all_processes  # noqa: E402
+    _SANDBOX_IMPORTED = True
+except ImportError:
+    # Allow offline unit tests outside the verifier container to import this module.
+    RUNNER_USER = "sunstead-runner"
+    CHECKER_USER = "sunstead-checker"
+
+    def kill_all_processes(user):
+        return True
 
 MISSIONS_ROOT = "/missions"
 WORK_DIR = "/work"
+TMP_DIR = "/tmp"
 SANDBOX_SCRIPT = "/opt/sunstead/sunstead_sandbox.py"
 MAX_PAYLOAD_BYTES = 16 * 1024 * 1024
 MAX_DIAGNOSTICS_CHARS = 2000
@@ -170,8 +182,107 @@ def kill_sandbox_processes():
     kill_all_processes(CHECKER_USER)
 
 
+def _remove_path(path: str):
+    try:
+        if os.path.isdir(path) and not os.path.islink(path):
+            shutil.rmtree(path, ignore_errors=True)
+            if os.path.exists(path):
+                for root, dirs, files in os.walk(path, topdown=False):
+                    for name in files:
+                        try:
+                            os.chmod(os.path.join(root, name), 0o700)
+                        except OSError:
+                            pass
+                    for name in dirs:
+                        try:
+                            os.chmod(os.path.join(root, name), 0o700)
+                        except OSError:
+                            pass
+                    try:
+                        os.chmod(root, 0o700)
+                    except OSError:
+                        pass
+                shutil.rmtree(path, ignore_errors=True)
+        else:
+            os.unlink(path)
+    except OSError:
+        pass
+
+
+def cleanup_sandbox_tmp(keep_path=None):
+    """Remove leaked sandbox temp dirs and stale patch/v2 spec files from TMP_DIR."""
+    keep_abs = os.path.abspath(keep_path) if keep_path else None
+    keep_real = os.path.realpath(keep_path) if keep_path else None
+    try:
+        entries = os.listdir(TMP_DIR)
+    except OSError:
+        return
+    for name in entries:
+        is_job = name.startswith("sunstead-job-")
+        is_patch = name == "incoming.patch"
+        is_v2_spec = name.startswith("sunstead-v2-") and name.endswith(".json")
+        if not (is_job or is_patch or is_v2_spec):
+            continue
+        path = os.path.join(TMP_DIR, name)
+        if keep_abs and (os.path.abspath(path) == keep_abs or os.path.realpath(path) == keep_real):
+            continue
+        _remove_path(path)
+
+
+def run_subprocess_isolated(cmd, *, cwd, timeout):
+    """Run `cmd` in a dedicated POSIX session/process group so timeouts kill the whole tree."""
+    proc = subprocess.Popen(
+        cmd,
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        except OSError:
+            try:
+                proc.kill()
+            except OSError:
+                pass
+        proc.wait()
+        for stream in (proc.stdout, proc.stderr):
+            if stream is not None:
+                try:
+                    stream.close()
+                except OSError:
+                    pass
+        kill_sandbox_processes()
+        cleanup_sandbox_tmp()
+        raise
+    except BaseException:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except OSError:
+            try:
+                proc.kill()
+            except OSError:
+                pass
+        proc.wait()
+        for stream in (proc.stdout, proc.stderr):
+            if stream is not None:
+                try:
+                    stream.close()
+                except OSError:
+                    pass
+        raise
+    return subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
+
+
 def reset_work_from_seed(mission_id: str, current_files: dict, frozen_paths: list):
     kill_sandbox_processes()
+    cleanup_sandbox_tmp()
     seed_dir = os.path.join(MISSIONS_ROOT, mission_id)
     if not os.path.isdir(seed_dir):
         raise ValueError(f"mission not present in this verifier container: {mission_id}")
@@ -209,10 +320,13 @@ def reset_work_from_seed(mission_id: str, current_files: dict, frozen_paths: lis
     # Initialize a clean git repository so `git apply` & `git diff` behave identically to local Docker.
     for args in [
         ["git", "init", "-q", "-b", "main"],
-        ["git", "config", "user.name", "Sunstead Hub"],
-        ["git", "config", "user.email", "hub@sunstead.org"],
         ["git", "add", "."],
-        ["git", "commit", "-q", "-m", "Sunstead live mission state"],
+        [
+            "git",
+            "-c", "user.name=Sunstead Hub",
+            "-c", "user.email=hub@sunstead.org",
+            "commit", "-q", "-m", "Sunstead live mission state",
+        ],
     ]:
         subprocess.run(args, cwd=WORK_DIR, check=True, capture_output=True)
 
@@ -229,8 +343,15 @@ def parse_verdict(stdout: str):
 
 
 class VerifierHandler(http.server.BaseHTTPRequestHandler):
+    # Guard request reading against stalled/half-open clients wedging the single-threaded server.
+    timeout = 30
+
     def log_message(self, fmt, *args):
         pass
+
+    def _extend_socket_timeout(self, timeout_sec: int):
+        if getattr(self, "connection", None) is not None:
+            self.connection.settimeout(max(300, timeout_sec + 60))
 
     def send_json(self, code: int, obj: dict):
         body = json.dumps(obj).encode("utf-8")
@@ -297,6 +418,9 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
             mission_id = req["mission_id"]
             frozen_paths = req.get("frozen_paths", [])
             current_files = resolve_current_files(req)
+            raw_timeout = req.get("timeout_sec", 90)
+            timeout_sec = max(5, min(int(90 if raw_timeout is None else raw_timeout), 240))
+            self._extend_socket_timeout(timeout_sec)
             reset_work_from_seed(mission_id, current_files, frozen_paths)
 
             buf = io.BytesIO()
@@ -317,6 +441,9 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
             self.send_json(409, {"need_files": True})
         except Exception as e:
             self.send_json(500, {"error": str(e)})
+        finally:
+            kill_sandbox_processes()
+            cleanup_sandbox_tmp()
 
     def handle_verify(self, req: dict):
         started = time.monotonic()
@@ -327,11 +454,13 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
             frozen_paths = req.get("frozen_paths", [])
             target_files = req.get("target_files", [])
             current_files = resolve_current_files(req)
-            timeout_sec = max(5, min(int(req.get("timeout_sec", 90)), 240))
+            raw_timeout = req.get("timeout_sec", 90)
+            timeout_sec = max(5, min(int(90 if raw_timeout is None else raw_timeout), 240))
+            self._extend_socket_timeout(timeout_sec)
 
             reset_work_from_seed(mission_id, current_files, frozen_paths)
 
-            patch_file = "/tmp/incoming.patch"
+            patch_file = os.path.join(TMP_DIR, "incoming.patch")
             with open(patch_file, "w", encoding="utf-8") as f:
                 f.write(patch)
 
@@ -432,17 +561,18 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
 
             # Remove .git before invoking mission verifier so ./verify operates on a clean tree.
             shutil.rmtree(os.path.join(WORK_DIR, ".git"), ignore_errors=True)
+            kill_sandbox_processes()
+            cleanup_sandbox_tmp()
 
             try:
-                proc = subprocess.run(
+                proc = run_subprocess_isolated(
                     ["./verify", task_id],
                     cwd=WORK_DIR,
-                    capture_output=True,
-                    text=True,
                     timeout=timeout_sec,
                 )
             except subprocess.TimeoutExpired:
                 kill_sandbox_processes()
+                cleanup_sandbox_tmp()
                 ms = int((time.monotonic() - started) * 1000)
                 msg = f"verification timed out after {timeout_sec}s"
                 self.send_json(200, {
@@ -459,6 +589,7 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
                 return
 
             kill_sandbox_processes()
+            cleanup_sandbox_tmp()
             ms = int((time.monotonic() - started) * 1000)
             verdict = parse_verdict(proc.stdout)
             if verdict is None:
@@ -506,6 +637,9 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
             self.send_json(409, {"need_files": True})
         except Exception as e:
             self.send_json(500, {"error": f"verifier container error: {e}"})
+        finally:
+            kill_sandbox_processes()
+            cleanup_sandbox_tmp()
 
     def handle_v2_action(self, action: str, req: dict):
         """Handle v2 `decompose`, `subgoal`, and `refute` actions via `sunstead_sandbox.py`."""
@@ -519,7 +653,9 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
             frozen_paths = list(seed_frozen_paths)
             target_files = list(req.get("target_files", []))
             current_files = resolve_current_files(req)
-            timeout_sec = max(5, min(int(req.get("timeout_sec", 90)), 240))
+            raw_timeout = req.get("timeout_sec", 90)
+            timeout_sec = max(5, min(int(90 if raw_timeout is None else raw_timeout), 240))
+            self._extend_socket_timeout(timeout_sec)
 
             # Freeze decomposition reduction file(s) during subgoal verification so a
             # subgoal solver cannot tamper with the reduction glue (RFC §7 Attack #5).
@@ -548,7 +684,7 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
 
             reset_work_from_seed(mission_id, current_files, seed_frozen_paths)
 
-            patch_file = "/tmp/incoming.patch"
+            patch_file = os.path.join(TMP_DIR, "incoming.patch")
             with open(patch_file, "w", encoding="utf-8") as f:
                 f.write(patch)
 
@@ -674,14 +810,16 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
                 if key in req and req[key] is not None:
                     action_spec[key] = req[key]
 
-            fd, spec_path = tempfile.mkstemp(prefix="sunstead-v2-", suffix=".json", dir="/tmp")
+            fd, spec_path = tempfile.mkstemp(prefix="sunstead-v2-", suffix=".json", dir=TMP_DIR)
             with os.fdopen(fd, "w", encoding="utf-8") as sf:
                 json.dump(action_spec, sf)
             os.chmod(spec_path, 0o600)
 
             seed_verify = os.path.join(MISSIONS_ROOT, mission_id, "verify")
+            kill_sandbox_processes()
+            cleanup_sandbox_tmp(keep_path=spec_path)
             try:
-                proc = subprocess.run(
+                proc = run_subprocess_isolated(
                     [
                         sys.executable, "-I", SANDBOX_SCRIPT,
                         "--action", action,
@@ -689,12 +827,11 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
                         "--verify-path", seed_verify,
                     ],
                     cwd=WORK_DIR,
-                    capture_output=True,
-                    text=True,
                     timeout=timeout_sec,
                 )
             except subprocess.TimeoutExpired:
                 kill_sandbox_processes()
+                cleanup_sandbox_tmp()
                 ms = int((time.monotonic() - started) * 1000)
                 msg = f"verification timed out after {timeout_sec}s"
                 self.send_json(200, {
@@ -711,6 +848,7 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
                 return
 
             kill_sandbox_processes()
+            cleanup_sandbox_tmp()
             ms = int((time.monotonic() - started) * 1000)
             verdict = parse_verdict(proc.stdout)
             if verdict is None:
@@ -772,9 +910,13 @@ class VerifierHandler(http.server.BaseHTTPRequestHandler):
                     os.unlink(spec_path)
                 except OSError:
                     pass
+            kill_sandbox_processes()
+            cleanup_sandbox_tmp()
 
 
 if __name__ == "__main__":
+    if not _SANDBOX_IMPORTED:
+        raise SystemExit("verifier_server.py requires /opt/sunstead/sunstead_sandbox.py")
     if os.geteuid() != 0:
         raise SystemExit("verifier_server.py must run as root (verify drops privileges itself)")
     os.makedirs(WORK_DIR, exist_ok=True)

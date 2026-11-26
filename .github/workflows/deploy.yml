@@ -60,17 +60,28 @@ jobs:
             missions/verifier-common/prebuild_cache.py \
             missions/verifier-common/prebuild_snapshot.py \
             cloudflare/containers/verifier_server.py \
-            scripts/check-upstream.py scripts/check-statements.py scripts/redteam.py scripts/e2e.py
+            cloudflare/containers/test_verifier_server.py \
+            scripts/check-upstream.py scripts/check-statements.py scripts/test_check_statements.py scripts/redteam.py scripts/e2e.py \
+            scripts/ci-path-gate.py scripts/test_ci_path_gate.py \
+            scripts/check-best-known.py scripts/best_known/linear_floor.py
           for f in missions/*/verify; do python3 -m py_compile "$f"; done
+      - name: Verifier server unit tests (offline)
+        run: python3 cloudflare/containers/test_verifier_server.py -v
+      - name: CI path gate unit tests (offline)
+        run: python3 scripts/test_ci_path_gate.py -v
+      - name: Statement-checker batching unit tests (offline)
+        run: python3 scripts/test_check_statements.py -v
       - name: Verify verbatim upstream provenance against pinned commits
         run: python3 scripts/check-upstream.py
+      - name: Every hill-climb task has a sourced best known value
+        run: python3 scripts/check-best-known.py
 
   verifiers:
     name: Gate · Lean 4 verifiers (v4.36.0 + v4.35.0) + red-team + statements
     runs-on: ubuntu-latest
     needs: python
     if: ${{ inputs.mode != 'worker' }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - name: Free runner disk space for Lean 4.36 + Mathlib Docker build
@@ -91,9 +102,9 @@ jobs:
       - name: Build Lean 4 verifier images (v4.36.0 + v4.35.0, runs SunsteadCheck selftest)
         run: ./scripts/build-verifiers.sh v4.36.0 v4.35.0
       - name: Red-team suite (v4.36.0 + v4.35.0)
-        run: python3 scripts/redteam.py --exclude-mission curve25519-dalek
+        run: python3 scripts/redteam.py --exclude-mission curve25519-dalek --jobs 3
       - name: Frozen task statements match seed theorems (v4.36.0 + v4.35.0)
-        run: python3 scripts/check-statements.py --exclude-mission curve25519-dalek
+        run: python3 scripts/check-statements.py --exclude-mission curve25519-dalek --jobs 3
 
   verifiers-v431:
     name: Gate · Lean 4 verifier (v4.31.0) + curve25519-dalek
