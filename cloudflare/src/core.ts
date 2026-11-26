@@ -761,6 +761,17 @@ function logRatioPoints(previous: number, next: number): number {
   return Math.max(0, Math.floor(HILLCLIMB_LOG_SCALE * rel));
 }
 
+// Bump when the points/crown rules or their eligibility change.
+export const SCORING_RULE_VERSION = "sunstead-scoring-v2";
+
+export type ScoringProvenance = {
+  scoring_rule_version: string;
+  git_sha: string | null;
+  mission_bundle_sha256: string;
+};
+
+export class ScoringUnavailableError extends Error {}
+
 /**
  * Points for an accepted submission.
  *
@@ -777,9 +788,8 @@ function logRatioPoints(previous: number, next: number): number {
  * - A record short of best_known but within NEAR_BEST_KNOWN_FRACTION of it pays
  *   NEAR_BEST_KNOWN_POINTS; anything further away pays 0.
  * Reproducing a published result therefore earns a small flat amount, never a
- * breakthrough's worth. Tasks without best_known keep the legacy rule (log ratio
- * against the previous record; the first record with no baseline pays 100); CI
- * requires best_known on every non-demo hill-climb task.
+ * breakthrough's worth. A missing or invalid best_known is a hub configuration
+ * error, not permission to fall back to scoring against the seed.
  */
 export function computePoints(
   mission: MissionManifest,
@@ -792,17 +802,21 @@ export function computePoints(
   if (mission.mode === "hillclimb") {
     const direction: ScoreDirection = mission.score_direction ?? "maximize";
     const bestKnown = task.def.best_known;
-    if (bestKnown && Number.isFinite(bestKnown.value) && newScore !== null) {
-      const b = bestKnown.value;
-      const reference =
-        previousBest !== null && strictlyBetter(direction, previousBest, b) ? previousBest : b;
-      if (strictlyBetter(direction, newScore, reference)) return logRatioPoints(reference, newScore);
-      if (newScore === b) return MATCH_BEST_KNOWN_POINTS;
-      const gap = Math.abs(newScore - b) / Math.max(Math.abs(b), 1);
-      return gap <= NEAR_BEST_KNOWN_FRACTION ? NEAR_BEST_KNOWN_POINTS : 0;
+    if (!bestKnown || !Number.isFinite(bestKnown.value)) {
+      throw new ScoringUnavailableError(
+        "Hill-climb scoring is unavailable: this task has no finite best_known. Retry after the hub configuration is fixed."
+      );
     }
-    if (previousBest === null || newScore === null) return 100;
-    return logRatioPoints(previousBest, newScore);
+    if (newScore === null || !Number.isFinite(newScore)) {
+      throw new Error("hill-climb scoring requires a finite verified score");
+    }
+    const b = bestKnown.value;
+    const reference =
+      previousBest !== null && strictlyBetter(direction, previousBest, b) ? previousBest : b;
+    if (strictlyBetter(direction, newScore, reference)) return logRatioPoints(reference, newScore);
+    if (newScore === b) return MATCH_BEST_KNOWN_POINTS;
+    const gap = Math.abs(newScore - b) / Math.max(Math.abs(b), 1);
+    return gap <= NEAR_BEST_KNOWN_FRACTION ? NEAR_BEST_KNOWN_POINTS : 0;
   }
   if (mission.tier === 1) {
     return hasDeps ? 250 : 150;
@@ -2191,7 +2205,10 @@ export const LEDGER_DEFAULT_LIMIT = 50;
 export const LEDGER_MAX_LIMIT = 200;
 
 /** accepted_patches row (with contributor join) as the ledger reads it. */
-export type LedgerRow = AcceptedProofRow & { patch_sha256: string };
+export type LedgerRow = AcceptedProofRow & {
+  patch_sha256: string;
+  scoring_provenance_json?: string | null;
+};
 
 /** What the ledger needs to know about a mission; null when it has been retired. */
 export type LedgerMissionInfo = {
@@ -2343,6 +2360,9 @@ export function buildLedgerEntry(
     social_links: buildSocialLinksFromHandles(social),
     accepted_at: row.created_at,
     verify_ms: row.verify_ms,
+    scoring: row.scoring_provenance_json
+      ? (JSON.parse(row.scoring_provenance_json) as ScoringProvenance)
+      : null,
     spec_sha256: row.spec_sha256,
     spec_is_current: mission !== null && row.spec_sha256 === mission.spec_sha256,
     files: extractPatchPaths(row.patch),

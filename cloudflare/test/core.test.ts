@@ -8,6 +8,7 @@ import {
   applyVerdict,
   computeFrontier,
   computePoints,
+  ScoringUnavailableError,
   beatsBestKnown,
   isTaskDisputed,
   taskDisputeReason,
@@ -527,19 +528,31 @@ test("hill-climb accepts only strict improvements in the score direction", () =>
   assert.equal(applyVerdict("hillclimb", "maximize", FROZEN, SPEC, tasks, "x", p, v(1001)).new_best_score, 1001);
 });
 
-test("hill-climb points follow the log ratio, reward tight open records, and prevent farming", () => {
+test("hill-climb log ratios beyond the frontier prevent farming", () => {
   const m = mission("hillclimb", 2);
-  const t = task("x");
+  const t = withBestKnown("x", 10000);
   assert.equal(HILLCLIMB_LOG_SCALE, 5000);
   assert.equal(computePoints(m, t, 10000, 9999), 0, "a 0.01% improvement earns nothing");
-  assert.equal(computePoints(m, t, 47, 46), 107, "breaking 47->46 on matrix-rank444-f2 awards meaningful credit");
-  assert.equal(computePoints(m, t, 23, 22), 222, "breaking 23->22 on <3,3,3> awards substantial credit");
-  assert.equal(computePoints(m, t, 1000, 500), Math.floor(5000 * Math.log(2)), "halving earns floor(5000 ln 2)");
-  assert.equal(computePoints(m, t, 100, 200), Math.floor(5000 * Math.log(2)), "maximize direction uses the same ratio");
-  assert.equal(computePoints(m, t, null, 500), 100, "first record without a baseline");
+  assert.equal(computePoints(m, t, 47, 46), 107);
+  assert.equal(computePoints(m, t, 23, 22), 222);
+  assert.equal(computePoints(m, t, 1000, 500), Math.floor(5000 * Math.log(2)));
+  assert.equal(computePoints(m, t, null, 500), Math.floor(5000 * Math.abs(Math.log(500 / 10000))));
   let farmed = 0;
   for (let s = 1000; s > 150; s--) farmed += computePoints(m, t, s, s - 1);
   assert.ok(farmed <= computePoints(m, t, 1000, 150), `step-by-step farming earned ${farmed}`);
+});
+
+test("sort_n10 cannot fall back to 333 seed-based points when best_known is unavailable", () => {
+  const m = mission("hillclimb", 2);
+  const t = withBestKnown("sort_n10", 29);
+  t.def.baseline_score = 31;
+  assert.equal(computePoints(m, t, 31, 29), MATCH_BEST_KNOWN_POINTS);
+  const known = t.def.best_known!;
+  for (const bestKnown of [undefined, null, { ...known, value: NaN }, { ...known, value: Infinity }]) {
+    t.def.best_known = bestKnown;
+    assert.throws(() => computePoints(m, t, 31, 29), ScoringUnavailableError);
+    assert.throws(() => computePoints(m, t, null, 29), ScoringUnavailableError);
+  }
 });
 
 function withBestKnown(id: string, value: number, extra: Partial<BestKnown> = {}): TaskState {

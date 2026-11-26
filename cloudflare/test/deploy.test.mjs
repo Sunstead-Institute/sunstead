@@ -1,6 +1,7 @@
 // Tests for scripts/deploy.mjs (Worker-only vs full deploy helper).
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -446,7 +447,14 @@ test("sync-assets scales cleanly to 50 multi-task Arena Packs (1,000 tasks) well
     }
 
     const genDir = path.join(tmp, "generated");
-    const { bundle, sizes } = syncAssets({ repoRoot: tmp, genDir, silent: true });
+    const { bundle, sizes, provenance } = syncAssets({ repoRoot: tmp, genDir, silent: true });
+    assert.equal(provenance.git_sha, null, "no commit claimed for a build without Git");
+    assert.equal(provenance.mission_bundle_sha256,
+      createHash("sha256").update(fs.readFileSync(path.join(genDir, "missions.ts"))).digest("hex"));
+    assert.throws(
+      () => syncAssets({ repoRoot: tmp, genDir, silent: true, requireCleanGit: true }),
+      /clean Git checkout/
+    );
     assert.equal(bundle.stats.missionCount, 50);
     assert.equal(bundle.stats.totalTasks, 1000);
     assert.equal(bundle.stats.skippedFiles, 50, "50 unserved LICENSE files skipped");

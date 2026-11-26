@@ -117,6 +117,7 @@ export type RefutationRow = {
 
 export interface DecomposeHubContext {
   sql: SqlLike;
+  scoringProvenanceJson: string;
   mission: {
     manifest: MissionManifest;
     spec_sha256: string;
@@ -1303,8 +1304,8 @@ async function tryAutoAssembleDecomposition(
       const asmSubId = ctx.randomUUID();
       sql.exec(
         `INSERT INTO accepted_patches
-         (mission_id, task_id, submission_id, contributor, summary, patch, spec_sha256, created_at, patch_sha256, is_demo, entry_kind, in_history, co_authors_json, decomp_meta_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'assembled', 0, ?, ?)`,
+         (mission_id, task_id, submission_id, contributor, summary, patch, spec_sha256, created_at, patch_sha256, is_demo, entry_kind, in_history, co_authors_json, decomp_meta_json, scoring_provenance_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'assembled', 0, ?, ?, ?)`,
         missionId,
         parentSub.task_id,
         asmSubId,
@@ -1324,7 +1325,8 @@ async function tryAutoAssembleDecomposition(
           subgoal_title: parentSub.title,
           proposer: decomp.proposer,
           depth: decomp.depth,
-        })
+        }),
+        ctx.scoringProvenanceJson
       );
       if (vestPoints > 0) {
         sql.exec(
@@ -1537,8 +1539,8 @@ async function tryAutoAssembleDecomposition(
     // Record ONE clean root commit in `accepted_patches` (`in_history = 1`) with Co-authored-by attribution!
     sql.exec(
       `INSERT INTO accepted_patches
-       (mission_id, task_id, submission_id, contributor, summary, patch, spec_sha256, created_at, patch_sha256, is_demo, entry_kind, in_history, co_authors_json, decomp_meta_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'assembled', 1, ?, ?)`,
+       (mission_id, task_id, submission_id, contributor, summary, patch, spec_sha256, created_at, patch_sha256, is_demo, entry_kind, in_history, co_authors_json, decomp_meta_json, scoring_provenance_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'assembled', 1, ?, ?, ?)`,
       missionId,
       decomp.root_task_id,
       asmSubmissionId,
@@ -1558,7 +1560,8 @@ async function tryAutoAssembleDecomposition(
         depth: decomp.depth,
         subgoal_count: subgoals.length,
         architect_points_vested: vestPoints,
-      })
+      }),
+      ctx.scoringProvenanceJson
     );
 
     ctx.emit({
@@ -1792,8 +1795,8 @@ export async function executeSubgoalSubmit(
     // Record subgoal proof in ledger (`in_history = 0` so history.mbox stays clean).
     sql.exec(
       `INSERT INTO accepted_patches
-       (mission_id, task_id, submission_id, contributor, summary, patch, spec_sha256, created_at, patch_sha256, is_demo, entry_kind, in_history, decomp_meta_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'subgoal', 0, ?)`,
+       (mission_id, task_id, submission_id, contributor, summary, patch, spec_sha256, created_at, patch_sha256, is_demo, entry_kind, in_history, decomp_meta_json, scoring_provenance_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'subgoal', 0, ?, ?)`,
       missionId,
       taskId,
       subId,
@@ -1812,7 +1815,8 @@ export async function executeSubgoalSubmit(
         subgoal_title: sub.title,
         proposer: latestDecomp.proposer,
         depth: latestDecomp.depth,
-      })
+      }),
+      ctx.scoringProvenanceJson
     );
 
     ctx.emit({
@@ -2438,8 +2442,8 @@ export async function executeRefute(
     // Permanently store the verified counterexample in the public ledger (`in_history = 0`).
     sql.exec(
       `INSERT INTO accepted_patches
-       (mission_id, task_id, submission_id, contributor, summary, patch, spec_sha256, created_at, patch_sha256, is_demo, entry_kind, in_history, decomp_meta_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'refutation', 0, ?)`,
+       (mission_id, task_id, submission_id, contributor, summary, patch, spec_sha256, created_at, patch_sha256, is_demo, entry_kind, in_history, decomp_meta_json, scoring_provenance_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'refutation', 0, ?, ?)`,
       missionId,
       taskId,
       subId,
@@ -2459,7 +2463,8 @@ export async function executeRefute(
         ...(reopenedParentTaskId ? { parent_task_id: reopenedParentTaskId } : {}),
         ...(sub ? { subgoal_id: sub.id, subgoal_title: sub.title } : {}),
         ...(proposerFlagged ? { proposer: proposerFlagged } : {}),
-      })
+      }),
+      ctx.scoringProvenanceJson
     );
 
     ctx.emit({

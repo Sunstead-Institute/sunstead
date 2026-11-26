@@ -164,6 +164,18 @@ To change the delay, edit `DO_CODE_UPDATE_MAX_DELAY_SEC` (0 to 86400 seconds).
 
 Each job runs `/opt/sunstead/sunstead-check selftest` offline before pushing, tags both the version tag and `sha-<commit>`, and writes the immutable `@sha256:` digest to the workflow summary. On the very first push of a new package name under the `Sunstead-Institute` GitHub org, confirm its package visibility is set to **Public** in GitHub Packages settings so contributors can `docker pull` without authentication.
 
+## Scoring build provenance
+
+Deploy from a clean Git checkout. Both deploy modes run the same asset sync,
+which reads Git HEAD and computes SHA-256 over the exact generated mission
+module (including merged best-known values). No extra credentials or bindings
+are needed. Local builds can run with a dirty checkout but report a null SHA.
+
+Read `GET /api/health` for the serving Hub build's `git_sha`,
+`mission_bundle_sha256` and `scoring_rule_version`. New public proof ledger
+entries preserve the same fields in `scoring` at acceptance; historical
+entries return `scoring: null` rather than attributing them to the current build.
+
 ## After deploy
 
 - `curl https://sunstead.org/join.txt` returns the Lean 4.36.0 + Mathlib onboarding guide.
