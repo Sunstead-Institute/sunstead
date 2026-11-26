@@ -20,6 +20,8 @@ import sys
 import tarfile
 import tempfile
 import unittest
+import urllib.error
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -187,7 +189,7 @@ class ParityTests(unittest.TestCase):
                 mod = line.split()[1].split(".")[0]
                 self.assertIn(mod, {
                     "argparse", "ast", "hashlib", "io", "json", "os", "re", "shutil", "subprocess",
-                    "sys", "tarfile", "tempfile", "urllib", "dataclasses",
+                    "sys", "tarfile", "tempfile", "time", "urllib", "dataclasses",
                 }, line)
 
 
@@ -637,6 +639,320 @@ class VerifyTests(unittest.TestCase):
         self.assertEqual(code, 0, err)
         self.assertIn("STATEMENT MATCHES upstream", out)
 
+    def test_lean436_module_system_parse_and_transplant(self):
+        mod_upstream = (
+            "module\n\n"
+            "public import Up.Core\n\n"
+            "@[expose] public section\n\n"
+            "namespace Up\n\n"
+            "public def baseVal : Nat := 1\n\n"
+            "public theorem target_thm : baseVal = 1 := by\n"
+            "  sorry\n\n"
+            "public section Extra\n\n"
+            "public lemma other_lemma : True := by\n"
+            "  sorry\n\n"
+            "end Extra\n\n"
+            "end Up\n"
+        )
+        mod_proved = (
+            "module\n\n"
+            "public import Up.Core\n"
+            "public import Mathlib.Tactic.Ring\n"
+            "private import Init.Data.Nat.Basic\n\n"
+            "@[expose] public section\n\n"
+            "namespace Up\n\n"
+            "public def baseVal : Nat := 1\n\n"
+            "private lemma helper_base : baseVal = 1 := rfl\n\n"
+            "public theorem target_thm : baseVal = 1 := by\n"
+            "  exact helper_base\n\n"
+            "public section Extra\n\n"
+            "public lemma other_lemma : True := by\n"
+            "  sorry\n\n"
+            "end Extra\n\n"
+            "end Up\n"
+        )
+        decls = sv.split_declarations(mod_upstream)
+        by_name = {d.name: d for d in decls}
+        self.assertIn("Up.baseVal", by_name)
+        self.assertEqual(by_name["Up.baseVal"].kind, "def")
+        self.assertIn("Up.target_thm", by_name)
+        self.assertEqual(by_name["Up.target_thm"].kind, "theorem")
+        # Declaration stops cleanly before `public section Extra`.
+        self.assertNotIn("public section Extra", by_name["Up.target_thm"].raw)
+        self.assertIn("Up.other_lemma", by_name)
+        self.assertEqual(by_name["Up.other_lemma"].kind, "lemma")
+        self.assertTrue(sv.has_module_header(mod_upstream))
+        self.assertFalse(sv.has_module_header(UPSTREAM_FILE))
+
+        self.assertEqual(
+            sv.parse_imports(mod_proved),
+            [
+                ("Up.Core", "public import"),
+                ("Mathlib.Tactic.Ring", "public import"),
+                ("Init.Data.Nat.Basic", "private import"),
+            ],
+        )
+
+        # End-to-end splice on a module-system repo-snapshot fixture.
+        with tempfile.TemporaryDirectory() as t:
+            up = os.path.join(t, "upstream")
+            os.makedirs(os.path.join(up, "Up"))
+            write(os.path.join(up, "Up", "Mod.lean"), mod_upstream)
+            git(up, "init", "-q")
+            git(up, "add", "-A")
+            git(up, "commit", "-q", "-m", "upstream")
+            git(up, "config", "uploadpack.allowReachableSHA1InWant", "true")
+            sha = git(up, "rev-parse", "HEAD").strip()
+
+            m = os.path.join(t, "mission")
+            os.makedirs(os.path.join(m, "Up"))
+            write(os.path.join(m, "sunstead.json"), json.dumps({
+                "id": "mod-snap", "title": "Mod Snap", "tier": 1, "mode": "dag",
+                "upstream": {"repo": "o/modup", "commit": sha, "license": "Apache-2.0"},
+                "snapshot": {"mode": "repo-snapshot", "snapshot_id": "mod-snap", "allow_module_system": True},
+                "frozen_paths": ["UPSTREAM.json"],
+                "tasks": [{
+                    "id": "target_thm", "title": "t",
+                    "target_files": ["Up/Mod.lean"],
+                    "upstream_url": f"https://github.com/o/modup/blob/{sha}/Up/Mod.lean#L11-L12",
+                }],
+            }))
+            write(os.path.join(m, "UPSTREAM.json"), json.dumps({
+                "repo": "o/modup", "commit": sha, "license": "Apache-2.0", "checks": [],
+            }))
+            write(os.path.join(m, "verify"), (
+                'TASKS = {\n'
+                '    "target_thm": {\n'
+                '        "module": "Up.Mod",\n'
+                '        "theorem": "Up.target_thm",\n'
+                '    },\n'
+                '}\n'
+            ))
+            write(os.path.join(m, "Up", "Mod.lean"), mod_upstream)
+
+            patch = make_patch("Up/Mod.lean", mod_upstream, mod_proved)
+            pj, bj = os.path.join(t, "proof.json"), os.path.join(t, "seed.tar.gz")
+            keep = os.path.join(t, "kept-mod")
+            write(pj, json.dumps({
+                "proof_id": hashlib.sha256(patch.encode()).hexdigest(),
+                "mission_id": "mod-snap", "task_id": "target_thm",
+                "upstream": {"repo": "o/modup", "commit": sha},
+                "patch": patch,
+            }))
+            with open(bj, "wb") as f:
+                f.write(tar_of(m))
+
+            err, stdout = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stderr(err), contextlib.redirect_stdout(stdout):
+                code = sv.main([
+                    "--proof-json", pj, "--seed-bundle", bj,
+                    "--upstream-url", "file://" + up, "--no-build", "--keep", keep,
+                ])
+            self.assertEqual(code, 0, err.getvalue())
+            patched = read(os.path.join(keep, "Up", "Mod.lean"))
+            lines = patched.splitlines()
+            self.assertEqual(lines[0], "module", "`module` directive must remain at top of file")
+            self.assertEqual(lines[2], "public import Up.Core")
+            self.assertEqual(lines[3], "public import Mathlib.Tactic.Ring")
+            self.assertEqual(lines[4], "private import Init.Data.Nat.Basic")
+            self.assertEqual(patched.count("Up.Core"), 1, "must not duplicate existing public import")
+            self.assertIn("private lemma helper_base : baseVal = 1 := rfl", patched)
+            self.assertIn("exact helper_base", patched)
+
+            # Missing upstream module added via `public import` must still be caught as exit 3.
+            bad_proved = mod_proved.replace(
+                "public import Mathlib.Tactic.Ring\n",
+                "public import Up.MissingTaskFile\n",
+            )
+            bad_patch = make_patch("Up/Mod.lean", mod_upstream, bad_proved)
+            write(pj, json.dumps({
+                "proof_id": hashlib.sha256(bad_patch.encode()).hexdigest(),
+                "mission_id": "mod-snap", "task_id": "target_thm",
+                "upstream": {"repo": "o/modup", "commit": sha},
+                "patch": bad_patch,
+            }))
+            err2, out2 = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stderr(err2), contextlib.redirect_stdout(out2):
+                code2 = sv.main([
+                    "--proof-json", pj, "--seed-bundle", bj,
+                    "--upstream-url", "file://" + up, "--no-build",
+                ])
+            self.assertEqual(code2, 3, err2.getvalue())
+            self.assertIn("Up.MissingTaskFile", err2.getvalue())
+
+        # `axiom_checker_source` adds `importAll := true` only when module system is active.
+        self.assertNotIn("importAll", sv.axiom_checker_source(import_all=False))
+        mod_checker = sv.axiom_checker_source(import_all=True)
+        self.assertIn("importAll := true", mod_checker)
+        self.assertIn("loadExts := false", mod_checker)
+
+        # Real Sphere-Packing-Lean mission resolves with allow_module_system=True.
+        sp_dir = os.path.join(ROOT, "missions")
+        sp_m = sv.load_mission(sp_dir, {
+            "mission_id": "sphere-packing-e8-foundations",
+            "task_id": "e8_sphere_packing_main_theorem",
+        })
+        self.assertTrue(sp_m["allow_module_system"])
+        sp_main = read(os.path.join(sp_dir, "sphere-packing-e8-foundations", "SpherePacking", "MainTheorem.lean"))
+        self.assertTrue(sv.has_module_header(sp_main))
+        self.assertEqual(sv.parse_imports(sp_main), [("SpherePacking.Basic.E8", "public import")])
+        sp_decls = sv.split_declarations(sp_main)
+        self.assertEqual([d.name for d in sp_decls], ["SpherePacking.MainTheorem"])
+
+    def test_module_file_without_imports_inserts_after_module_header(self):
+        src = "/- header -/\nmodule\n\npublic theorem t : True := by\n  sorry\n"
+        self.assertEqual(sv.header_import_insert_line(src), 2)
+        mission = {
+            "theorem": "t", "upstream_path": "Up/M.lean", "upstream_lines": (4, 5),
+        }
+        contrib = {
+            "statement": "public theorem t : True ",
+            "proof": ":= by\n  trivial",
+            "helpers": [],
+            "new_imports": ["Mathlib.Tactic.Ring"],
+            "new_import_prefixes": {"Mathlib.Tactic.Ring": "public import"},
+        }
+        text, decl, span, ref = sv.transplant(src, mission, contrib)
+        lines = text.splitlines()
+        self.assertEqual(lines[1], "module")
+        self.assertEqual(lines[2], "public import Mathlib.Tactic.Ring")
+        self.assertEqual(ref["lines"][0], "public theorem sunsteadRefStatement : True := sorry")
+
+    def test_self_contained_and_hillclimb_arenas_return_exit_3(self):
+        # 1. Mission without UPSTREAM.json -> NotUpstreamCheckable (exit 3), not FileNotFoundError (exit 2).
+        os.unlink(os.path.join(self.missions, "m1", "UPSTREAM.json"))
+        code, err, _ = self.run_verify()
+        self.assertEqual(code, 3, err)
+        self.assertIn("NOT CHECKABLE AGAINST UPSTREAM", err)
+        self.assertIn("UPSTREAM.json", err)
+
+        # 2. Task without upstream_url -> NotUpstreamCheckable (exit 3).
+        self.write_mission()
+        mpath = os.path.join(self.missions, "m1", "sunstead.json")
+        manifest = json.loads(read(mpath))
+        manifest["tasks"][0].pop("upstream_url", None)
+        write(mpath, json.dumps(manifest))
+        code2, err2, _ = self.run_verify()
+        self.assertEqual(code2, 3, err2)
+        self.assertIn("NOT CHECKABLE AGAINST UPSTREAM", err2)
+        self.assertIn("no upstream_url", err2)
+
+        # 3. Hill-climb mission (both synthetic and real repo missions) -> NotUpstreamCheckable (exit 3).
+        self.write_mission()
+        manifest = json.loads(read(mpath))
+        manifest["mode"] = "hillclimb"
+        write(mpath, json.dumps(manifest))
+        code3, err3, _ = self.run_verify()
+        self.assertEqual(code3, 3, err3)
+        self.assertIn("NOT CHECKABLE AGAINST UPSTREAM", err3)
+        self.assertIn("hill-climb", err3)
+
+        missions_dir = os.path.join(ROOT, "missions")
+        for mid, tid in (
+            ("coding-theory-bounds", "code_17_8"),
+            ("matrix-rank444-f2", "reduce_rank"),
+            ("sorting-networks-opt", "sort_n9"),
+        ):
+            with self.assertRaises(sv.NotUpstreamCheckable):
+                sv.load_mission(missions_dir, {"mission_id": mid, "task_id": tid})
+
+    def test_fetch_retries_transient_errors_and_never_retries_permanent_ones(self):
+        class FakeResp:
+            def __init__(self, payload: bytes):
+                self._payload = payload
+
+            def read(self, n=-1):
+                return self._payload[:n] if n >= 0 else self._payload
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        # 1. Transient 503 then 429 then 200 -> succeeds with exponential backoff sleeps.
+        sleeps = []
+        outcomes = [
+            urllib.error.HTTPError("https://example.invalid/a", 503, "Unavailable", {}, None),
+            urllib.error.HTTPError("https://example.invalid/a", 429, "Too Many", {}, None),
+            FakeResp(b"ok-bytes"),
+        ]
+        calls = []
+
+        def fake_urlopen(req, timeout=None):
+            calls.append(timeout)
+            item = outcomes.pop(0)
+            if isinstance(item, Exception):
+                raise item
+            return item
+
+        with mock.patch.object(sv.urllib.request, "urlopen", side_effect=fake_urlopen):
+            data = sv.fetch("https://example.invalid/a", sleep=sleeps.append)
+        self.assertEqual(data, b"ok-bytes")
+        self.assertEqual(calls, [120, 120, 120])
+        self.assertEqual(sleeps, [0.5, 1.5])
+
+        # 2. Transient URLError then 200 -> retries and succeeds.
+        sleeps.clear()
+        url_outcomes = [urllib.error.URLError("connection reset"), FakeResp(b"recovered")]
+        with mock.patch.object(
+            sv.urllib.request, "urlopen",
+            side_effect=lambda req, timeout=None: (_ for _ in ()).throw(url_outcomes.pop(0))
+            if isinstance(url_outcomes[0], Exception) else url_outcomes.pop(0),
+        ):
+            self.assertEqual(sv.fetch("https://example.invalid/b", sleep=sleeps.append), b"recovered")
+        self.assertEqual(sleeps, [0.5])
+
+        # 3. Exhausting transient 502 retries stops at 3 attempts and re-raises HTTPError.
+        sleeps.clear()
+        attempts_seen = []
+
+        def always_502(req, timeout=None):
+            attempts_seen.append(1)
+            raise urllib.error.HTTPError(req.full_url, 502, "Bad Gateway", {}, None)
+
+        with mock.patch.object(sv.urllib.request, "urlopen", side_effect=always_502):
+            with self.assertRaises(urllib.error.HTTPError) as cm502:
+                sv.fetch("https://example.invalid/c", sleep=sleeps.append)
+        self.assertEqual(cm502.exception.code, 502)
+        self.assertEqual(len(attempts_seen), 3)
+        self.assertEqual(sleeps, [0.5, 1.5])
+
+        # 4. Permanent HTTP 404 is NOT retried.
+        sleeps.clear()
+        seen_404 = []
+
+        def always_404(req, timeout=None):
+            seen_404.append(1)
+            raise urllib.error.HTTPError(req.full_url, 404, "Not Found", {}, None)
+
+        with mock.patch.object(sv.urllib.request, "urlopen", side_effect=always_404):
+            with self.assertRaises(urllib.error.HTTPError) as cm404:
+                sv.fetch("https://example.invalid/missing", sleep=sleeps.append)
+        self.assertEqual(cm404.exception.code, 404)
+        self.assertEqual(len(seen_404), 1)
+        self.assertEqual(sleeps, [])
+
+        # 5. Oversized download (> limit) is NOT retried and enforces limit strictly.
+        sleeps.clear()
+        seen_big = []
+
+        def big_resp(req, timeout=None):
+            seen_big.append(1)
+            return FakeResp(b"x" * 100)
+
+        with mock.patch.object(sv.urllib.request, "urlopen", side_effect=big_resp):
+            with self.assertRaises(sv.VerifyError) as cm_big:
+                sv.fetch("https://example.invalid/big", limit=16, sleep=sleeps.append)
+        self.assertIn("larger than 16 bytes", str(cm_big.exception))
+        self.assertEqual(len(seen_big), 1)
+        self.assertEqual(sleeps, [])
+
+        # 6. Non-https URL is rejected immediately with 0 urlopen calls.
+        with mock.patch.object(sv.urllib.request, "urlopen", side_effect=AssertionError("must not call")):
+            with self.assertRaises(sv.VerifyError):
+                sv.fetch("http://example.invalid/plain", sleep=sleeps.append)
+
 
 @unittest.skipUnless(sv.shutil.which("lake"), "needs a Lean toolchain (lake on PATH)")
 class PublicBuildTests(unittest.TestCase):
@@ -849,6 +1165,125 @@ class PublicBuildTests(unittest.TestCase):
             self.assertEqual(r["upstream_file"], "Up/AES-GCM/Kernel.lean")
             self.assertEqual(r["upstream_declaration"], "AESProgram.run_kernel")
             self.assertIn("Building Up.«AES-GCM».Kernel", err.getvalue())
+
+    def test_builds_and_checks_lean436_module_system_and_catches_private_axiom(self):
+        """Full `lake build` + `AXIOM_CHECKER` (`importAll := true`) on a Lean 4.36
+        `module`-system fixture with `public import`, `public theorem`, and private helper."""
+        core_src = (
+            "module\n\n"
+            "namespace ModUp\n"
+            "@[expose] public def baseFactor : Nat := 11\n"
+            "end ModUp\n"
+        )
+        mod_seed = (
+            "module\n\n"
+            "public import Up.Core\n\n"
+            "namespace ModUp\n\n"
+            "public theorem factor_eq : baseFactor = 11 := by\n"
+            "  sorry\n\n"
+            "end ModUp\n"
+        )
+        mod_honest = (
+            "module\n\n"
+            "public import Up.Core\n\n"
+            "namespace ModUp\n\n"
+            "private theorem helper_factor : baseFactor = 11 := rfl\n\n"
+            "public theorem factor_eq : baseFactor = 11 := by\n"
+            "  exact helper_factor\n\n"
+            "end ModUp\n"
+        )
+        mod_cheat = (
+            "module\n\n"
+            "public import Up.Core\n\n"
+            "namespace ModUp\n\n"
+            "private axiom cheat_ax : baseFactor = 11\n\n"
+            "public theorem factor_eq : baseFactor = 11 := by\n"
+            "  exact cheat_ax\n\n"
+            "end ModUp\n"
+        )
+        with tempfile.TemporaryDirectory() as t:
+            up = os.path.join(t, "upstream")
+            os.makedirs(os.path.join(up, "Up"))
+            write(os.path.join(up, "Up", "Core.lean"), core_src)
+            write(os.path.join(up, "Up", "Target.lean"), mod_seed)
+            write(os.path.join(up, "Up.lean"), "import Up.Target\n")
+            write(os.path.join(up, "lakefile.toml"), 'name = "up"\ndefaultTargets = ["Up"]\n\n[[lean_lib]]\nname = "Up"\n')
+            toolchain = os.environ.get("SUNSTEAD_TEST_TOOLCHAIN") or read(
+                os.path.join(ROOT, "missions", "pnt-analytic-foundations", "lean-toolchain")
+            ).strip()
+            write(os.path.join(up, "lean-toolchain"), toolchain + "\n")
+            git(up, "init", "-q")
+            git(up, "add", "-A")
+            git(up, "commit", "-q", "-m", "upstream")
+            git(up, "config", "uploadpack.allowReachableSHA1InWant", "true")
+            sha = git(up, "rev-parse", "HEAD").strip()
+
+            m = os.path.join(t, "mission")
+            os.makedirs(os.path.join(m, "Up"))
+            write(os.path.join(m, "sunstead.json"), json.dumps({
+                "id": "mod-snap", "title": "Mod Snap", "tier": 1, "mode": "dag",
+                "upstream": {"repo": "o/modup", "commit": sha, "license": "Apache-2.0"},
+                "snapshot": {"mode": "repo-snapshot", "snapshot_id": "mod-snap", "allow_module_system": True},
+                "frozen_paths": [],
+                "tasks": [{
+                    "id": "factor_eq", "title": "factor",
+                    "target_files": ["Up/Target.lean"],
+                    "upstream_url": f"https://github.com/o/modup/blob/{sha}/Up/Target.lean#L7-L8",
+                }],
+            }))
+            write(os.path.join(m, "UPSTREAM.json"), json.dumps({
+                "repo": "o/modup", "commit": sha, "license": "Apache-2.0",
+            }))
+            write(os.path.join(m, "verify"), (
+                'TASKS = {\n'
+                '    "factor_eq": {\n'
+                '        "module": "Up.Target",\n'
+                '        "theorem": "ModUp.factor_eq",\n'
+                '    },\n'
+                '}\n'
+            ))
+            write(os.path.join(m, "Up", "Target.lean"), mod_seed)
+
+            bj = os.path.join(t, "seed.tar.gz")
+            with open(bj, "wb") as f:
+                f.write(tar_of(m))
+
+            # 1. Honest proof verifies cleanly with 0 non-standard axioms.
+            patch = make_patch("Up/Target.lean", mod_seed, mod_honest)
+            pj = os.path.join(t, "proof.json")
+            write(pj, json.dumps({
+                "proof_id": hashlib.sha256(patch.encode()).hexdigest(),
+                "mission_id": "mod-snap", "task_id": "factor_eq",
+                "upstream": {"repo": "o/modup", "commit": sha},
+                "patch": patch,
+            }))
+            err, stdout = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stderr(err), contextlib.redirect_stdout(stdout):
+                code = sv.main([
+                    "--proof-json", pj, "--seed-bundle", bj,
+                    "--upstream-url", "file://" + up, "--json",
+                ])
+            self.assertEqual(code, 0, err.getvalue() + stdout.getvalue())
+            r = json.loads(stdout.getvalue())
+            self.assertTrue(r["verified"])
+            self.assertEqual(r["axioms"], [])
+
+            # 2. Private axiom inside a `module` file is caught via `importAll := true`.
+            cheat_patch = make_patch("Up/Target.lean", mod_seed, mod_cheat)
+            write(pj, json.dumps({
+                "proof_id": hashlib.sha256(cheat_patch.encode()).hexdigest(),
+                "mission_id": "mod-snap", "task_id": "factor_eq",
+                "upstream": {"repo": "o/modup", "commit": sha},
+                "patch": cheat_patch,
+            }))
+            err2, stdout2 = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stderr(err2), contextlib.redirect_stdout(stdout2):
+                code2 = sv.main([
+                    "--proof-json", pj, "--seed-bundle", bj,
+                    "--upstream-url", "file://" + up, "--json",
+                ])
+            self.assertEqual(code2, 1, err2.getvalue() + stdout2.getvalue())
+            self.assertIn("non-standard axioms", err2.getvalue())
 
 
 if __name__ == "__main__":

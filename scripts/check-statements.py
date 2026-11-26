@@ -35,6 +35,20 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MISSIONS = os.path.join(ROOT, "missions")
 BATCH_RESULT_PREFIX = "SUNSTEAD_BATCH_RESULT "
+JOB_TMP_DIR = "/tmp"
+
+
+def _cleanup_job_tmp(tmp_dir=None):
+    """Best-effort removal of leftover `/tmp/sunstead-job-*` scratch entries."""
+    base = JOB_TMP_DIR if tmp_dir is None else tmp_dir
+    for path in glob.glob(os.path.join(base, "sunstead-job-*")):
+        if os.path.isdir(path) and not os.path.islink(path):
+            shutil.rmtree(path, ignore_errors=True)
+        else:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
 
 
 def parse_verdict(stdout, stderr="", returncode=0):
@@ -76,8 +90,7 @@ def _cleanup_after_timeout():
                     pass
     except Exception:
         pass
-    for path in glob.glob("/tmp/sunstead-job-*"):
-        shutil.rmtree(path, ignore_errors=True)
+    _cleanup_job_tmp()
 
 
 def _maybe_warm_mission_cache(task_timeout):
@@ -140,6 +153,8 @@ def inside_batch(task_ids, task_timeout, *, workdir="/work", script_path=None):
                 timeout=task_timeout,
             )
             verdict = parse_verdict(p.stdout, p.stderr, returncode=p.returncode)
+            if not verdict.get("ok"):
+                _cleanup_job_tmp()
         except subprocess.TimeoutExpired:
             _cleanup_after_timeout()
             verdict = {"ok": False, "summary": f"timed out after {task_timeout}s"}
@@ -226,6 +241,26 @@ def _run_batch_chunk(mission_dir, image, chunk, timeout):
         subprocess.run(["docker", "rm", "-f", cid], capture_output=True)
 
 
+def build_work_chunks(work, batch_size=0):
+    """Expand mission work items into container chunks ordered largest-first.
+
+    Each input item is `(mission_name, mission_dir, image, task_ids)`.
+    Returns `(mission_name, mission_dir, image, chunk_idx, chunk_task_ids)` sorted
+    by `(-len(chunk), mission_name, chunk_idx)` for parallel work-stealing across
+    large multi-task arenas.
+    """
+    chunks = []
+    for name, mission_dir, image, task_ids in work:
+        ids = list(task_ids)
+        if not ids:
+            continue
+        step = batch_size if batch_size and batch_size > 0 else len(ids)
+        for chunk_idx, i in enumerate(range(0, len(ids), step)):
+            chunks.append((name, mission_dir, image, chunk_idx, ids[i:i + step]))
+    chunks.sort(key=lambda item: (-len(item[4]), item[0], item[3]))
+    return chunks
+
+
 def run_mission_batch(mission_dir, image, task_ids, timeout, batch_size=0):
     """Verify all `task_ids` of one mission in a single container (or chunks of `batch_size`)."""
     ids = list(task_ids)
@@ -261,7 +296,7 @@ def main(argv=None):
     ap.add_argument("--batch-size", type=int, default=0,
                     help="max tasks per container (0 = all tasks of a mission in one container)")
     ap.add_argument("--jobs", type=int, default=1,
-                    help="parallel mission verifier containers (default: 1)")
+                    help="parallel verifier containers across missions/chunks (default: 1)")
     args = ap.parse_args(raw_argv)
     if args.timeout <= 0:
         ap.error("--timeout must be positive")
@@ -303,32 +338,53 @@ def main(argv=None):
             failures += 0 if res.get("ok") else 1
             print(f"[{mark}] {name}/{task_id}: {res.get('summary', '')}", flush=True)
 
-    workers = min(args.jobs, len(work))
-    if workers <= 1:
-        for name, mission_dir, image, task_ids in work:
-            _emit_mission(
-                name,
-                run_mission_batch(
-                    mission_dir, image, task_ids, args.timeout, batch_size=args.batch_size
-                ),
-            )
+    if args.batch_size > 0:
+        chunks = build_work_chunks(work, args.batch_size)
+        workers = min(args.jobs, len(chunks))
+        if workers <= 1:
+            for name, mission_dir, image, _chunk_idx, chunk in chunks:
+                _emit_mission(name, _run_batch_chunk(mission_dir, image, chunk, args.timeout))
+        else:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+                futs = {
+                    pool.submit(
+                        _run_batch_chunk,
+                        mission_dir,
+                        image,
+                        chunk,
+                        args.timeout,
+                    ): name
+                    for name, mission_dir, image, _chunk_idx, chunk in chunks
+                }
+                for fut in concurrent.futures.as_completed(futs):
+                    _emit_mission(futs[fut], fut.result())
     else:
-        # Longest-processing-time-first (most tasks first) minimizes tail latency.
-        ordered = sorted(work, key=lambda item: (-len(item[3]), item[0]))
-        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-            futs = {
-                pool.submit(
-                    run_mission_batch,
-                    mission_dir,
-                    image,
-                    task_ids,
-                    args.timeout,
-                    batch_size=args.batch_size,
-                ): name
-                for name, mission_dir, image, task_ids in ordered
-            }
-            for fut in concurrent.futures.as_completed(futs):
-                _emit_mission(futs[fut], fut.result())
+        workers = min(args.jobs, len(work))
+        if workers <= 1:
+            for name, mission_dir, image, task_ids in work:
+                _emit_mission(
+                    name,
+                    run_mission_batch(
+                        mission_dir, image, task_ids, args.timeout, batch_size=0
+                    ),
+                )
+        else:
+            # Longest-processing-time-first (most tasks first) minimizes tail latency.
+            ordered = sorted(work, key=lambda item: (-len(item[3]), item[0]))
+            with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+                futs = {
+                    pool.submit(
+                        run_mission_batch,
+                        mission_dir,
+                        image,
+                        task_ids,
+                        args.timeout,
+                        batch_size=0,
+                    ): name
+                    for name, mission_dir, image, task_ids in ordered
+                }
+                for fut in concurrent.futures.as_completed(futs):
+                    _emit_mission(futs[fut], fut.result())
 
     if checked == 0:
         print("no tasks checked")

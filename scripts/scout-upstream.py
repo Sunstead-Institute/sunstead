@@ -159,9 +159,9 @@ DECL_KINDS = (
     "example", "opaque", "inductive", "axiom",
 )
 PROOF_KINDS = {"theorem", "lemma"}
-MODIFIERS = ("private", "protected", "noncomputable", "nonrec", "partial", "unsafe", "scoped", "local")
+MODIFIERS = ("public", "private", "protected", "noncomputable", "nonrec", "partial", "unsafe", "scoped", "local")
 DECL_RE = re.compile(
-    r"^(?:@\[[^\n]*?\]\s*)?(?:(?:" + "|".join(MODIFIERS) + r")\s+)*"
+    r"^(?:@\[[^\n]*?\]\s*)*(?:(?:" + "|".join(MODIFIERS) + r")\s+)*"
     r"(?P<kind>" + "|".join(DECL_KINDS) + r")\b\s*(?P<name>[^\s:({\[⦃]*)"
 )
 MARKER_RE = re.compile(
@@ -289,14 +289,17 @@ class Decl:
 def split_declarations(src: str):
     """Split a Lean file into top-level declarations. A declaration starts at a
     column-0 line matching DECL_RE (attributes allowed on the same line) and
-    ends where the next column-0 declaration, `namespace`, `section`, `end`,
-    `open`, `variable` or attribute line starts."""
+    ends where the next column-0 declaration, `module`, `namespace`, `section`,
+    `public section`, `end`, `open`, `variable` or attribute line starts."""
     masked = mask_comments_and_strings(src)
     raw_lines = src.split("\n")
     lines = masked.split("\n")
     starts = []
     ns_stack = []
-    boundary = re.compile(r"^(namespace|section|end|open|variable|universe|set_option|@\[|#|noncomputable section|mutual)\b")
+    boundary = re.compile(
+        r"^(module|namespace|section|end|open|variable|universe|set_option|@\[|#|"
+        r"(?:(?:public|noncomputable)\s+)+section|mutual)\b"
+    )
     ns_at = {}
     for idx, line in enumerate(lines):
         m = re.match(r"^namespace\s+([\w'.]+)", line)
