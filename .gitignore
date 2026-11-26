@@ -12,5 +12,8 @@
 cloudflare/node_modules
 cloudflare/.cloudflare
 cloudflare/src/generated
+# Local build output from `cf deploy`/Vite; deploys require a clean checkout.
+cloudflare/dist
+cloudflare/.wrangler
 __pycache__/
 target/
