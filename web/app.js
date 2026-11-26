@@ -6,6 +6,10 @@ const state = {
   events: [],
   proofCache: new Map(), // "mission/task" -> accepted proof JSON
   collapsedDecomps: new Set(), // "mission:parent:decomp_id"
+  missionFilter: { category: "all", query: "", openOnly: false },
+  taskFilter: { status: "all", query: "" },
+  pendingDeepLink: null,
+  detailRequestSeq: 0,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -140,6 +144,201 @@ function isMissionCompleted(m) {
   return Boolean(m && m.mode === "dag" && m.total_tasks > 0 && resolved >= m.total_tasks);
 }
 
+// ---------------- Pure Filter, Layout & Deep-Link Helpers ----------------
+
+function matchesMissionCategory(m, category) {
+  if (!m) return false;
+  if (!category || category === "all") return true;
+  if (category === "dag") {
+    return m.mode === "dag" && !m.open_conjecture && m.snapshot?.mode !== "repo-snapshot";
+  }
+  if (category === "conjectures") {
+    return m.open_conjecture === true;
+  }
+  if (category === "hillclimb") {
+    return m.mode === "hillclimb";
+  }
+  if (category === "repo-snapshot") {
+    return m.snapshot?.mode === "repo-snapshot";
+  }
+  return true;
+}
+
+function matchesMissionQuery(m, query) {
+  const q = String(query ?? "").trim().toLowerCase();
+  if (!q) return true;
+  const haystacks = [
+    m?.id,
+    m?.title,
+    m?.upstream?.repo,
+    m?.verifier_toolchain,
+  ];
+  return haystacks.some((val) => typeof val === "string" && val.toLowerCase().includes(q));
+}
+
+function missionHasOpenWork(m) {
+  return Array.isArray(m?.frontier_task_ids) && m.frontier_task_ids.length > 0;
+}
+
+function filterMissions(missions, filters = {}) {
+  const list = Array.isArray(missions) ? missions : [];
+  const category = filters.category || "all";
+  const query = filters.query || "";
+  const openOnly = Boolean(filters.openOnly);
+  return list.filter(
+    (m) =>
+      matchesMissionCategory(m, category) &&
+      matchesMissionQuery(m, query) &&
+      (!openOnly || missionHasOpenWork(m))
+  );
+}
+
+function countMissionCategories(missions, filters = {}) {
+  const list = Array.isArray(missions) ? missions : [];
+  const query = filters.query || "";
+  const openOnly = Boolean(filters.openOnly);
+  const base = list.filter(
+    (m) => matchesMissionQuery(m, query) && (!openOnly || missionHasOpenWork(m))
+  );
+  return {
+    all: base.length,
+    dag: base.filter((m) => matchesMissionCategory(m, "dag")).length,
+    conjectures: base.filter((m) => matchesMissionCategory(m, "conjectures")).length,
+    hillclimb: base.filter((m) => matchesMissionCategory(m, "hillclimb")).length,
+    "repo-snapshot": base.filter((m) => matchesMissionCategory(m, "repo-snapshot")).length,
+  };
+}
+
+function isTaskReady(task, mode) {
+  if (!task || !task.unlocked) return false;
+  if (task.disputed_counterexample || (task.def && task.def.upstream_disputed)) return false;
+  if (task.active_lease) return false;
+  if (task.status === "refuted") return false;
+  if (mode === "hillclimb") return true;
+  return task.status !== "verified";
+}
+
+function matchesTaskStatus(task, mode, status) {
+  if (!task) return false;
+  if (!status || status === "all") return true;
+  if (status === "ready") return isTaskReady(task, mode);
+  if (status === "verified") return task.status === "verified";
+  if (status === "refuted") return task.status === "refuted";
+  if (status === "claimed") return Boolean(task.active_lease);
+  return true;
+}
+
+function matchesTaskQuery(task, query) {
+  const q = String(query ?? "").trim().toLowerCase();
+  if (!q) return true;
+  const haystacks = [task?.def?.id, task?.def?.title, task?.def?.subgoal_id];
+  return haystacks.some((val) => typeof val === "string" && val.toLowerCase().includes(q));
+}
+
+function filterBlueprintTasks(tasks, mode, filters = {}) {
+  const list = Array.isArray(tasks) ? tasks : [];
+  const status = filters.status || "all";
+  const query = filters.query || "";
+  return list.filter(
+    (t) => matchesTaskStatus(t, mode, status) && matchesTaskQuery(t, query)
+  );
+}
+
+function countTaskStatuses(tasks, mode, query = "") {
+  const list = Array.isArray(tasks) ? tasks : [];
+  const base = list.filter((t) => matchesTaskQuery(t, query));
+  return {
+    all: base.length,
+    ready: base.filter((t) => matchesTaskStatus(t, mode, "ready")).length,
+    verified: base.filter((t) => matchesTaskStatus(t, mode, "verified")).length,
+    refuted: base.filter((t) => matchesTaskStatus(t, mode, "refuted")).length,
+    claimed: base.filter((t) => matchesTaskStatus(t, mode, "claimed")).length,
+  };
+}
+
+function parseDeepLink(search) {
+  const params = new URLSearchParams(search || "");
+  const mission = (params.get("mission") || "").trim() || null;
+  const task = (params.get("task") || "").trim() || null;
+  return { mission, task };
+}
+
+function buildDeepLinkUrl(currentHref, missionId, taskId) {
+  const url = new URL(currentHref);
+  if (missionId) url.searchParams.set("mission", missionId);
+  else url.searchParams.delete("mission");
+  if (taskId) url.searchParams.set("task", taskId);
+  else url.searchParams.delete("task");
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+function syncUrlDeepLink(missionId, taskId) {
+  if (
+    typeof window === "undefined" ||
+    typeof history === "undefined" ||
+    typeof history.replaceState !== "function"
+  ) {
+    return;
+  }
+  const next = buildDeepLinkUrl(window.location.href, missionId, taskId);
+  history.replaceState(null, "", next);
+}
+
+function normalizeLedgerEntryKind(entry) {
+  const kind = entry?.entry_kind;
+  if (kind === "refutation" || kind === "subgoal" || kind === "assembled") return kind;
+  return "proof";
+}
+
+function matchesLedgerQuery(entry, query) {
+  const q = String(query ?? "").trim().toLowerCase();
+  if (!q) return true;
+  const haystacks = [
+    entry?.contributor,
+    entry?.display_name,
+    entry?.github,
+    entry?.task_id,
+    entry?.task_title,
+    entry?.mission_id,
+    entry?.mission_title,
+    entry?.proof_id,
+  ];
+  if (Array.isArray(entry?.co_authors)) {
+    for (const ca of entry.co_authors) {
+      haystacks.push(ca?.handle, ca?.display_name);
+    }
+  }
+  return haystacks.some((val) => typeof val === "string" && val.toLowerCase().includes(q));
+}
+
+function filterLedgerProofs(proofs, filters = {}) {
+  const list = Array.isArray(proofs) ? proofs : [];
+  const missionId = String(filters.missionId || "").trim();
+  const kind = filters.kind || "all";
+  const query = filters.query || "";
+  return list.filter((p) => {
+    if (missionId && p?.mission_id !== missionId) return false;
+    if (kind !== "all" && normalizeLedgerEntryKind(p) !== kind) return false;
+    return matchesLedgerQuery(p, query);
+  });
+}
+
+function countLedgerKinds(proofs, filters = {}) {
+  const list = Array.isArray(proofs) ? proofs : [];
+  const missionId = String(filters.missionId || "").trim();
+  const query = filters.query || "";
+  const base = list.filter(
+    (p) => (!missionId || p?.mission_id === missionId) && matchesLedgerQuery(p, query)
+  );
+  return {
+    all: base.length,
+    proof: base.filter((p) => normalizeLedgerEntryKind(p) === "proof").length,
+    refutation: base.filter((p) => normalizeLedgerEntryKind(p) === "refutation").length,
+    subgoal: base.filter((p) => normalizeLedgerEntryKind(p) === "subgoal").length,
+    assembled: base.filter((p) => normalizeLedgerEntryKind(p) === "assembled").length,
+  };
+}
+
 async function loadMissions() {
   const data = await fetchJson("/api/missions");
   state.missions = data.missions || [];
@@ -154,6 +353,15 @@ async function loadMissions() {
     : "";
   $("stat-frontier").textContent = `${openFrontier}`;
   $("stat-missions").textContent = `${state.missions.length}`;
+
+  if (state.pendingDeepLink) {
+    const { mission, task } = state.pendingDeepLink;
+    state.pendingDeepLink = null;
+    if (mission && state.missions.some((m) => m.id === mission)) {
+      state.activeMissionId = mission;
+      state.selectedTaskId = task || null;
+    }
+  }
 
   if (
     state.missions.length > 0 &&
@@ -187,13 +395,16 @@ function renderMissionCardHtml(m, completed) {
   const conjectureBadge = m.open_conjecture
     ? `<span class="badge-conjecture" title="Two-sided open conjecture: prove T or refute ¬T for full credit">T OR ¬T</span>`
     : "";
+  const snapshotBadge = m.snapshot?.mode === "repo-snapshot"
+    ? `<span class="badge-snapshot" title="Repo-snapshot mission pinned to full upstream Lean 4 repository">SNAPSHOT</span>`
+    : "";
   const demoBadge = m.demo
     ? `<span class="badge-demo" title="Protocol sandbox: awards 0 leaderboard points">SANDBOX</span>`
     : "";
   return `
     <button class="mission-tab ${doneClass} ${active}" data-id="${escapeHtml(m.id)}">
       <div class="tab-top">
-        <span style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap"><span class="badge-gold">Tier ${m.tier}</span>${conjectureBadge}${demoBadge}</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap"><span class="badge-gold">Tier ${m.tier}</span>${conjectureBadge}${snapshotBadge}${demoBadge}</span>
         <span class="badge-teal">${modeLabel} · ${countText}</span>
       </div>
       <div class="tab-title">${escapeHtml(m.title)}</div>
@@ -203,16 +414,114 @@ function renderMissionCardHtml(m, completed) {
   `;
 }
 
+function isMissionFilterActive() {
+  return (
+    state.missionFilter.category !== "all" ||
+    state.missionFilter.query.trim() !== "" ||
+    state.missionFilter.openOnly
+  );
+}
+
+function resetMissionFilters() {
+  state.missionFilter = { category: "all", query: "", openOnly: false };
+  const searchEl = $("mission-search");
+  if (searchEl) searchEl.value = "";
+  const openEl = $("mission-open-only");
+  if (openEl) openEl.checked = false;
+  renderMissionTabs();
+}
+
+function resetTaskFilters() {
+  state.taskFilter = { status: "all", query: "" };
+  const searchEl = $("task-search");
+  if (searchEl) searchEl.value = "";
+}
+
+function updateMissionFilterUi(shownCount, totalCount) {
+  const counts = countMissionCategories(state.missions, {
+    query: state.missionFilter.query,
+    openOnly: state.missionFilter.openOnly,
+  });
+  const pillsRoot = $("mission-category-pills");
+  if (pillsRoot) {
+    pillsRoot.querySelectorAll(".filter-pill").forEach((btn) => {
+      const cat = btn.dataset.category || "all";
+      btn.classList.toggle("active", cat === state.missionFilter.category);
+      const badge = btn.querySelector(".pill-count");
+      if (badge) badge.textContent = String(counts[cat] ?? 0);
+    });
+  }
+  const countEl = $("mission-filter-count");
+  if (countEl) {
+    countEl.textContent = `Showing ${shownCount} of ${totalCount} mission${totalCount === 1 ? "" : "s"}`;
+  }
+  const clearEl = $("mission-filter-clear");
+  if (clearEl) {
+    clearEl.classList.toggle("hidden", !isMissionFilterActive());
+  }
+}
+
+function setupMissionFilters() {
+  const pillsRoot = $("mission-category-pills");
+  if (pillsRoot) {
+    pillsRoot.querySelectorAll(".filter-pill").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.missionFilter.category = btn.dataset.category || "all";
+        renderMissionTabs();
+      });
+    });
+  }
+  const searchEl = $("mission-search");
+  if (searchEl) {
+    searchEl.addEventListener("input", () => {
+      state.missionFilter.query = searchEl.value;
+      renderMissionTabs();
+    });
+  }
+  const openEl = $("mission-open-only");
+  if (openEl) {
+    openEl.addEventListener("change", () => {
+      state.missionFilter.openOnly = openEl.checked;
+      renderMissionTabs();
+    });
+  }
+  const clearEl = $("mission-filter-clear");
+  if (clearEl) {
+    clearEl.addEventListener("click", resetMissionFilters);
+  }
+}
+
 function renderMissionTabs() {
   const activeContainer = $("mission-tabs");
   const completedSection = $("completed-missions-section");
   const completedContainer = $("completed-mission-tabs");
   const completedCount = $("completed-missions-count");
 
-  const activeMissions = state.missions.filter((m) => !isMissionCompleted(m));
-  const completedMissions = state.missions.filter((m) => isMissionCompleted(m));
+  const filtered = filterMissions(state.missions, state.missionFilter);
+  updateMissionFilterUi(filtered.length, state.missions.length);
 
-  activeContainer.innerHTML = activeMissions.map((m) => renderMissionCardHtml(m, false)).join("");
+  const activeMissions = filtered.filter((m) => !isMissionCompleted(m));
+  const completedMissions = filtered.filter((m) => isMissionCompleted(m));
+
+  if (filtered.length === 0) {
+    activeContainer.innerHTML = `
+      <div class="filter-empty">
+        <div>No missions match your current filters.</div>
+        <button type="button" class="filter-clear" id="mission-empty-clear">Clear filters</button>
+      </div>
+    `;
+    const emptyClear = $("mission-empty-clear");
+    if (emptyClear) emptyClear.addEventListener("click", resetMissionFilters);
+  } else if (activeMissions.length === 0) {
+    activeContainer.innerHTML = `
+      <div class="filter-empty">
+        <div>All matching missions are in the Completed Showcase below.</div>
+      </div>
+    `;
+  } else {
+    activeContainer.innerHTML = activeMissions.map((m) => renderMissionCardHtml(m, false)).join("");
+  }
+
   if (completedSection && completedContainer) {
     if (completedMissions.length > 0) {
       completedSection.classList.remove("hidden");
@@ -230,10 +539,15 @@ function renderMissionTabs() {
     if (!root) return;
     root.querySelectorAll(".mission-tab").forEach((btn) => {
       btn.addEventListener("click", () => {
-        state.activeMissionId = btn.dataset.id;
+        const nextId = btn.dataset.id;
+        if (nextId !== state.activeMissionId) {
+          resetTaskFilters();
+        }
+        state.activeMissionId = nextId;
         state.selectedTaskId = null;
+        syncUrlDeepLink(state.activeMissionId, null);
         renderMissionTabs();
-        loadMissionDetail(state.activeMissionId);
+        loadMissionDetail(state.activeMissionId, { syncUrl: true });
       });
     });
   };
@@ -241,8 +555,10 @@ function renderMissionTabs() {
   wire(completedContainer);
 }
 
-async function loadMissionDetail(missionId) {
+async function loadMissionDetail(missionId, opts = {}) {
+  const reqSeq = ++state.detailRequestSeq;
   const detail = await fetchJson(`/api/missions/${encodeURIComponent(missionId)}`);
+  if (reqSeq !== state.detailRequestSeq) return;
   state.activeDetail = detail;
 
   const manifest = detail.mission.manifest;
@@ -273,10 +589,16 @@ async function loadMissionDetail(missionId) {
   $("active-title").textContent = manifest.title;
   $("active-desc").textContent = manifest.description || "";
 
-  if (!state.selectedTaskId && detail.tasks.length > 0) {
+  const hasValidSelection =
+    state.selectedTaskId && detail.tasks.some((t) => t.def.id === state.selectedTaskId);
+  if (!hasValidSelection && detail.tasks.length > 0) {
     state.selectedTaskId = detail.frontier[0] || detail.tasks[0].def.id;
   }
+  if (opts.syncUrl) {
+    syncUrlDeepLink(missionId, state.selectedTaskId);
+  }
 
+  renderTaskFilterBar(detail);
   renderDag(detail);
   renderInspector(detail);
 }
@@ -421,8 +743,156 @@ function decompClusterKey(missionId, parentTaskId, decompId) {
   return `${missionId}:${parentTaskId}:${decompId}`;
 }
 
+function computeBlueprintLayout(tasks, activeDecomps = [], collapsedDecomps = new Set(), missionId = "") {
+  const nodeW = 262;
+  const nodeH = 92;
+  const byId = new Map(tasks.map((t) => [t.def.id, t]));
+  const layers = computeLayers(tasks);
+
+  const hasDepEdges = tasks.some((t) =>
+    (t.def.depends_on || []).some((depId) => byId.has(depId))
+  );
+  const hasExpandedDecomp =
+    tasks.some((t) => t.def.parent_task_id && byId.has(t.def.parent_task_id)) ||
+    (activeDecomps || []).some((d) => {
+      const key = decompClusterKey(missionId, d.parent_task_id, d.decomp_id);
+      if (collapsedDecomps && collapsedDecomps.has(key)) return false;
+      return tasks.some(
+        (t) => t.def.parent_task_id === d.parent_task_id && t.def.decomp_id === d.decomp_id
+      );
+    });
+
+  const useFlatGrid = !hasDepEdges && !hasExpandedDecomp && layers.size === 1 && tasks.length > 6;
+
+  if (useFlatGrid) {
+    const cols = tasks.length >= 19 ? 4 : 3;
+    const rows = Math.ceil(tasks.length / cols);
+    const colGap = 28;
+    const hasCollapsedPill = (activeDecomps || []).some(
+      (d) =>
+        collapsedDecomps &&
+        collapsedDecomps.has(decompClusterKey(missionId, d.parent_task_id, d.decomp_id)) &&
+        byId.has(d.parent_task_id)
+    );
+    const rowGap = hasCollapsedPill ? 28 : 20;
+    const padX = 28;
+    const padY = 28;
+    const width = padX * 2 + cols * nodeW + (cols - 1) * colGap;
+    const height = Math.max(240, padY * 2 + rows * nodeH + (rows - 1) * rowGap);
+    const pos = new Map();
+    tasks.forEach((t, idx) => {
+      const col = idx % cols;
+      const row = Math.floor(idx / cols);
+      const x = padX + col * (nodeW + colGap);
+      const y = padY + row * (nodeH + rowGap);
+      pos.set(t.def.id, { x, y });
+    });
+    return { mode: "grid", cols, rows, nodeW, nodeH, colGap, rowGap, width, height, pos, layers };
+  }
+
+  const colGap = 94;
+  const rowGap = 24;
+  const padX = 36;
+  const padY = 44;
+
+  const numCols = Math.max(1, layers.size);
+  const maxRows = Math.max(1, ...Array.from(layers.values()).map((col) => col.length));
+  const width = Math.max(780, padX * 2 + numCols * nodeW + (numCols - 1) * colGap);
+  const height = Math.max(350, padY * 2 + maxRows * nodeH + (maxRows - 1) * rowGap);
+
+  const pos = new Map();
+  let colPosIdx = 0;
+  for (const [, colTasks] of layers.entries()) {
+    const colHeight = colTasks.length * nodeH + (colTasks.length - 1) * rowGap;
+    const startY = (height - colHeight) / 2;
+    colTasks.forEach((t, rowIdx) => {
+      const x = padX + colPosIdx * (nodeW + colGap);
+      const y = startY + rowIdx * (nodeH + rowGap);
+      pos.set(t.def.id, { x, y });
+    });
+    colPosIdx += 1;
+  }
+  return { mode: "dag", cols: numCols, rows: maxRows, nodeW, nodeH, colGap, rowGap, width, height, pos, layers };
+}
+
+function isTaskFilterActive() {
+  return state.taskFilter.status !== "all" || state.taskFilter.query.trim() !== "";
+}
+
+function renderTaskFilterBar(detail) {
+  const bar = $("task-filter-bar");
+  if (!bar) return;
+  const allTasks = detail?.tasks || [];
+  const show = allTasks.length > 8;
+  bar.classList.toggle("hidden", !show);
+  if (!show) {
+    resetTaskFilters();
+    return;
+  }
+  const mode = detail.mission.manifest.mode;
+  const counts = countTaskStatuses(allTasks, mode, state.taskFilter.query);
+  const pillsRoot = $("task-status-pills");
+  if (pillsRoot) {
+    pillsRoot.querySelectorAll(".filter-pill").forEach((btn) => {
+      const st = btn.dataset.status || "all";
+      btn.classList.toggle("active", st === state.taskFilter.status);
+      const badge = btn.querySelector(".pill-count");
+      if (badge) badge.textContent = String(counts[st] ?? 0);
+    });
+  }
+  const searchEl = $("task-search");
+  if (searchEl && searchEl.value !== state.taskFilter.query) {
+    searchEl.value = state.taskFilter.query;
+  }
+  const shown = filterBlueprintTasks(allTasks, mode, state.taskFilter).length;
+  const countEl = $("task-filter-count");
+  if (countEl) {
+    countEl.textContent = `Showing ${shown} of ${allTasks.length}`;
+  }
+  const clearEl = $("task-filter-clear");
+  if (clearEl) {
+    clearEl.classList.toggle("hidden", !isTaskFilterActive());
+  }
+}
+
+function setupTaskFilters() {
+  const pillsRoot = $("task-status-pills");
+  if (pillsRoot) {
+    pillsRoot.querySelectorAll(".filter-pill").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.taskFilter.status = btn.dataset.status || "all";
+        if (state.activeDetail) {
+          renderTaskFilterBar(state.activeDetail);
+          renderDag(state.activeDetail);
+        }
+      });
+    });
+  }
+  const searchEl = $("task-search");
+  if (searchEl) {
+    searchEl.addEventListener("input", () => {
+      state.taskFilter.query = searchEl.value;
+      if (state.activeDetail) {
+        renderTaskFilterBar(state.activeDetail);
+        renderDag(state.activeDetail);
+      }
+    });
+  }
+  const clearEl = $("task-filter-clear");
+  if (clearEl) {
+    clearEl.addEventListener("click", () => {
+      resetTaskFilters();
+      if (state.activeDetail) {
+        renderTaskFilterBar(state.activeDetail);
+        renderDag(state.activeDetail);
+      }
+    });
+  }
+}
+
 function renderDag(detail) {
   const svg = $("dag-svg");
+  const emptyEl = $("dag-empty");
   const allTasks = detail.tasks;
   const manifest = detail.mission.manifest;
   const activeDecomps = (detail.decompositions || []).filter((d) => d.status === "active");
@@ -440,35 +910,51 @@ function renderDag(detail) {
     }
     return false;
   };
-  const tasks = allTasks.filter((t) => !isHiddenByCollapse(t));
-  const layers = computeLayers(tasks);
+  const uncollapsedTasks = allTasks.filter((t) => !isHiddenByCollapse(t));
+  const tasks =
+    allTasks.length > 8
+      ? filterBlueprintTasks(uncollapsedTasks, manifest.mode, state.taskFilter)
+      : uncollapsedTasks;
 
-  const nodeW = 262;
-  const nodeH = 92;
-  const colGap = 94;
-  const rowGap = 24;
-  const padX = 36;
-  const padY = 44;
+  if (tasks.length === 0) {
+    svg.innerHTML = "";
+    svg.classList.add("hidden");
+    if (emptyEl) {
+      emptyEl.classList.remove("hidden");
+      emptyEl.innerHTML = `
+        <div>No tasks match your current task filter.</div>
+        <button type="button" class="filter-clear" id="dag-empty-clear">Clear task filter</button>
+      `;
+      const btn = $("dag-empty-clear");
+      if (btn) {
+        btn.addEventListener("click", () => {
+          resetTaskFilters();
+          renderTaskFilterBar(detail);
+          renderDag(detail);
+        });
+      }
+    }
+    return;
+  }
 
-  const numCols = Math.max(1, layers.size);
-  const maxRows = Math.max(1, ...Array.from(layers.values()).map((col) => col.length));
-  const width = Math.max(780, padX * 2 + numCols * nodeW + (numCols - 1) * colGap);
-  const height = Math.max(350, padY * 2 + maxRows * nodeH + (maxRows - 1) * rowGap);
+  svg.classList.remove("hidden");
+  if (emptyEl) {
+    emptyEl.classList.add("hidden");
+    emptyEl.innerHTML = "";
+  }
+
+  const layout = computeBlueprintLayout(tasks, activeDecomps, state.collapsedDecomps, manifest.id);
+  const { nodeW, nodeH, width, height, pos } = layout;
 
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-  svg.style.minHeight = `${Math.min(height, 680)}px`;
-
-  const pos = new Map();
-  let colPosIdx = 0;
-  for (const [, colTasks] of layers.entries()) {
-    const colHeight = colTasks.length * nodeH + (colTasks.length - 1) * rowGap;
-    const startY = (height - colHeight) / 2;
-    colTasks.forEach((t, rowIdx) => {
-      const x = padX + colPosIdx * (nodeW + colGap);
-      const y = startY + rowIdx * (nodeH + rowGap);
-      pos.set(t.def.id, { x, y });
-    });
-    colPosIdx += 1;
+  if (layout.mode === "grid") {
+    svg.style.width = `${width}px`;
+    svg.style.height = `${height}px`;
+    svg.style.minHeight = `${Math.min(height, 680)}px`;
+  } else {
+    svg.style.width = width > 900 ? `${width}px` : "";
+    svg.style.height = height > 760 ? `${height}px` : "";
+    svg.style.minHeight = `${Math.min(height, 680)}px`;
   }
 
   let defsHtml = `<defs>
@@ -649,6 +1135,7 @@ function renderDag(detail) {
   svg.querySelectorAll(".dag-node").forEach((g) => {
     g.addEventListener("click", () => {
       state.selectedTaskId = g.dataset.taskId;
+      syncUrlDeepLink(manifest.id, state.selectedTaskId);
       renderDag(detail);
       renderInspector(detail);
     });
@@ -815,6 +1302,7 @@ function renderInspector(detail) {
     btn.addEventListener("click", () => {
       if (btn.dataset.jumpTask) {
         state.selectedTaskId = btn.dataset.jumpTask;
+        syncUrlDeepLink(m.id, state.selectedTaskId);
         renderDag(detail);
         renderInspector(detail);
       }
@@ -1131,34 +1619,206 @@ function ledgerRowHtml(p) {
 }
 
 async function loadLedgerList(root) {
-  root.innerHTML = `
-    <div class="card-header"><h3>All accepted proofs</h3><span id="ledger-count" class="muted small"></span></div>
-    <ol id="ledger-list" class="ledger-list"></ol>
-    <div class="ledger-more"><button type="button" id="ledger-more" class="btn-outline-ink hidden">Load older proofs</button></div>`;
+  if (!$("ledger-list")) {
+    root.innerHTML = `
+      <div class="card-header ledger-card-header"><h3>All accepted proofs</h3><span id="ledger-count" class="muted small"></span></div>
+      <div class="filter-bar ledger-filter-bar" id="ledger-filters" aria-label="Filter accepted proofs">
+        <div class="filter-bar-top">
+          <div class="filter-pills" id="ledger-kind-pills" role="group" aria-label="Filter proofs by entry kind">
+            <button type="button" class="filter-pill active" data-kind="all">All <span class="pill-count">0</span></button>
+            <button type="button" class="filter-pill filter-pill-teal" data-kind="proof">Proofs <span class="pill-count">0</span></button>
+            <button type="button" class="filter-pill filter-pill-plum" data-kind="refutation">Refutations <span class="pill-count">0</span></button>
+            <button type="button" class="filter-pill filter-pill-gold" data-kind="subgoal">Subgoals <span class="pill-count">0</span></button>
+            <button type="button" class="filter-pill filter-pill-teal" data-kind="assembled">Assembled <span class="pill-count">0</span></button>
+          </div>
+          <div class="filter-controls">
+            <select id="ledger-mission-filter" class="filter-select" aria-label="Filter proofs by mission">
+              <option value="">All missions</option>
+            </select>
+            <input id="ledger-search" class="filter-input" type="search" placeholder="Search contributor, task, mission, or hash…" aria-label="Search proofs by contributor, task, mission, or hash" />
+          </div>
+        </div>
+        <div class="filter-status-row">
+          <span id="ledger-filter-summary" class="muted small">Loading the ledger…</span>
+          <button type="button" id="ledger-filter-clear" class="filter-clear hidden">Clear filters</button>
+        </div>
+      </div>
+      <ol id="ledger-list" class="ledger-list"></ol>
+      <div class="ledger-more"><button type="button" id="ledger-more" class="btn-outline-ink hidden">Load older proofs</button></div>`;
+  }
+
   const list = $("ledger-list");
   const more = $("ledger-more");
+  const missionSelect = $("ledger-mission-filter");
+  const searchInput = $("ledger-search");
+  const kindPills = $("ledger-kind-pills");
+  const summaryEl = $("ledger-filter-summary");
+  const clearBtn = $("ledger-filter-clear");
+
+  const initialParams = new URLSearchParams(window.location.search || "");
+  const initialMission = (initialParams.get("mission") || initialParams.get("mission_id") || "").trim();
+
+  const ledgerState = {
+    proofs: [],
+    total: 0,
+    missions: [],
+    loadError: null,
+    filters: { missionId: initialMission, kind: "all", query: "" },
+  };
   let before = null;
+
+  const isFiltered = () =>
+    ledgerState.filters.missionId !== "" ||
+    ledgerState.filters.kind !== "all" ||
+    ledgerState.filters.query.trim() !== "";
+
+  const syncMissionOptions = () => {
+    if (!missionSelect) return;
+    const byId = new Map();
+    for (const m of ledgerState.missions) {
+      if (m && m.id) byId.set(m.id, { id: m.id, title: m.title || m.id, count: 0 });
+    }
+    for (const p of ledgerState.proofs) {
+      if (!p || !p.mission_id) continue;
+      const cur = byId.get(p.mission_id) || {
+        id: p.mission_id,
+        title: p.mission_title || p.mission_id,
+        count: 0,
+      };
+      cur.count += 1;
+      byId.set(p.mission_id, cur);
+    }
+    const entries = [...byId.values()].sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.title.localeCompare(b.title);
+    });
+    const prevValue = ledgerState.filters.missionId;
+    missionSelect.innerHTML = `<option value="">All missions</option>${entries
+      .map((e) => {
+        const label = e.count > 0 ? `${e.title} (${e.count})` : e.title;
+        return `<option value="${escapeHtml(e.id)}">${escapeHtml(label)}</option>`;
+      })
+      .join("")}`;
+    if (prevValue && byId.has(prevValue)) {
+      missionSelect.value = prevValue;
+    } else if (prevValue) {
+      const opt = document.createElement("option");
+      opt.value = prevValue;
+      opt.textContent = prevValue;
+      missionSelect.appendChild(opt);
+      missionSelect.value = prevValue;
+    }
+  };
+
+  const resetLedgerFilters = () => {
+    ledgerState.filters = { missionId: "", kind: "all", query: "" };
+    if (missionSelect) missionSelect.value = "";
+    if (searchInput) searchInput.value = "";
+    renderFilteredLedger();
+  };
+
+  const renderFilteredLedger = () => {
+    const counts = countLedgerKinds(ledgerState.proofs, {
+      missionId: ledgerState.filters.missionId,
+      query: ledgerState.filters.query,
+    });
+    if (kindPills) {
+      kindPills.querySelectorAll(".filter-pill").forEach((btn) => {
+        const kind = btn.dataset.kind || "all";
+        btn.classList.toggle("active", kind === ledgerState.filters.kind);
+        const badge = btn.querySelector(".pill-count");
+        if (badge) badge.textContent = String(counts[kind] ?? 0);
+      });
+    }
+    const filtered = filterLedgerProofs(ledgerState.proofs, ledgerState.filters);
+    if (clearBtn) clearBtn.classList.toggle("hidden", !isFiltered());
+    if (summaryEl) {
+      const loaded = ledgerState.proofs.length;
+      const total = Math.max(ledgerState.total, loaded);
+      if (total === 0) {
+        summaryEl.textContent = "0 accepted proofs";
+      } else if (loaded < total) {
+        summaryEl.textContent = `Showing ${filtered.length} of ${loaded} loaded (${total} total)`;
+      } else {
+        summaryEl.textContent = `Showing ${filtered.length} of ${total} proof${total === 1 ? "" : "s"}`;
+      }
+    }
+    if (ledgerState.proofs.length === 0) {
+      list.innerHTML = ledgerState.loadError
+        ? `<li class="muted small">Could not load the ledger (${escapeHtml(ledgerState.loadError)}).</li>`
+        : `<li class="muted small">No proofs have been accepted yet.</li>`;
+    } else if (filtered.length === 0) {
+      list.innerHTML = `
+        <li class="filter-empty">
+          <div>No loaded proofs match your filters.${before !== null ? " Try loading older proofs or clearing filters." : ""}</div>
+          <button type="button" class="filter-clear" id="ledger-empty-clear">Clear filters</button>
+        </li>`;
+      const emptyClear = $("ledger-empty-clear");
+      if (emptyClear) emptyClear.addEventListener("click", resetLedgerFilters);
+    } else {
+      list.innerHTML = filtered.map(ledgerRowHtml).join("");
+    }
+  };
+
+  if (kindPills) {
+    kindPills.querySelectorAll(".filter-pill").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        ledgerState.filters.kind = btn.dataset.kind || "all";
+        renderFilteredLedger();
+      });
+    });
+  }
+  if (missionSelect) {
+    missionSelect.addEventListener("change", () => {
+      ledgerState.filters.missionId = missionSelect.value;
+      renderFilteredLedger();
+    });
+  }
+  if (searchInput) {
+    searchInput.addEventListener("input", () => {
+      ledgerState.filters.query = searchInput.value;
+      renderFilteredLedger();
+    });
+  }
+  if (clearBtn) {
+    clearBtn.addEventListener("click", resetLedgerFilters);
+  }
+
   const loadPage = async () => {
     more.disabled = true;
     try {
       const q = before === null ? "" : `&before=${encodeURIComponent(before)}`;
-      const data = await fetchJson(`/api/proofs?limit=50${q}`);
-      $("ledger-count").textContent = `${Number(data.total) || 0} total`;
-      if (before === null && (!data.proofs || data.proofs.length === 0)) {
-        list.innerHTML = `<li class="muted small">No proofs have been accepted yet.</li>`;
-      } else {
-        list.insertAdjacentHTML("beforeend", (data.proofs || []).map(ledgerRowHtml).join(""));
+      const data = await fetchJson(`/api/proofs?limit=100${q}`);
+      ledgerState.loadError = null;
+      ledgerState.total = Number(data.total) || 0;
+      $("ledger-count").textContent = `${ledgerState.total} total`;
+      if (Array.isArray(data.proofs) && data.proofs.length > 0) {
+        ledgerState.proofs.push(...data.proofs);
       }
       before = data.next_before ?? null;
       more.classList.toggle("hidden", before === null);
+      syncMissionOptions();
+      renderFilteredLedger();
     } catch (e) {
-      list.insertAdjacentHTML("beforeend", `<li class="muted small">Could not load the ledger (${escapeHtml(e.message)}).</li>`);
+      ledgerState.loadError = e.message;
+      if (ledgerState.proofs.length === 0) {
+        renderFilteredLedger();
+      } else {
+        list.insertAdjacentHTML("beforeend", `<li class="muted small">Could not load older proofs (${escapeHtml(e.message)}).</li>`);
+      }
     } finally {
       more.disabled = false;
     }
   };
   more.addEventListener("click", loadPage);
-  await loadPage();
+
+  const [missionsResp] = await Promise.all([
+    fetchJson("/api/missions").catch(() => ({ missions: [] })),
+    loadPage(),
+  ]);
+  ledgerState.missions = missionsResp.missions || [];
+  syncMissionOptions();
+  renderFilteredLedger();
 }
 
 async function loadLedgerProof(root, hash) {
@@ -1398,11 +2058,14 @@ function setupJoinModal() {
   }
 }
 
-(async function init() {
+async function init() {
   renderAttractorArt();
   setupJoinModal();
   const tasks = [loadHealth()];
   if ($("mission-tabs")) {
+    state.pendingDeepLink = parseDeepLink(window.location.search);
+    setupMissionFilters();
+    setupTaskFilters();
     tasks.push(loadMissions(), loadInitialFeedAndLeaderboard());
   }
   if ($("ledger-root")) {
@@ -1412,4 +2075,8 @@ function setupJoinModal() {
   if ($("event-feed")) {
     connectSse();
   }
-})();
+}
+
+if (typeof document !== "undefined" && typeof window !== "undefined") {
+  init();
+}

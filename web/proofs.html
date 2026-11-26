@@ -75,7 +75,33 @@
 
   <main class="page-main">
     <section class="section-block card ledger-card" id="ledger-root" aria-live="polite">
-      <div class="muted small">Loading the ledger…</div>
+      <div class="card-header ledger-card-header">
+        <h3>All accepted proofs</h3>
+        <span id="ledger-count" class="muted small"></span>
+      </div>
+      <div class="filter-bar ledger-filter-bar" id="ledger-filters" aria-label="Filter accepted proofs">
+        <div class="filter-bar-top">
+          <div class="filter-pills" id="ledger-kind-pills" role="group" aria-label="Filter proofs by entry kind">
+            <button type="button" class="filter-pill active" data-kind="all">All <span class="pill-count">0</span></button>
+            <button type="button" class="filter-pill filter-pill-teal" data-kind="proof">Proofs <span class="pill-count">0</span></button>
+            <button type="button" class="filter-pill filter-pill-plum" data-kind="refutation">Refutations <span class="pill-count">0</span></button>
+            <button type="button" class="filter-pill filter-pill-gold" data-kind="subgoal">Subgoals <span class="pill-count">0</span></button>
+            <button type="button" class="filter-pill filter-pill-teal" data-kind="assembled">Assembled <span class="pill-count">0</span></button>
+          </div>
+          <div class="filter-controls">
+            <select id="ledger-mission-filter" class="filter-select" aria-label="Filter proofs by mission">
+              <option value="">All missions</option>
+            </select>
+            <input id="ledger-search" class="filter-input" type="search" placeholder="Search contributor, task, mission, or hash…" aria-label="Search proofs by contributor, task, mission, or hash" />
+          </div>
+        </div>
+        <div class="filter-status-row">
+          <span id="ledger-filter-summary" class="muted small">Loading the ledger…</span>
+          <button type="button" id="ledger-filter-clear" class="filter-clear hidden">Clear filters</button>
+        </div>
+      </div>
+      <ol id="ledger-list" class="ledger-list"></ol>
+      <div class="ledger-more"><button type="button" id="ledger-more" class="btn-outline-ink hidden">Load older proofs</button></div>
     </section>
 
     <section class="section-block card verify-card" id="verify-yourself">
