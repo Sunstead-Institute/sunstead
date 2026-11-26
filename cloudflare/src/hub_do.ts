@@ -5,6 +5,7 @@ import {
   applyVerdict,
   computeFrontier,
   computePoints,
+  ScoringUnavailableError,
   beatsBestKnown,
   isTaskUnlocked,
   taskDisputeReason,
@@ -1031,7 +1032,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         if (
           t.status === "verified" &&
           t.verified_by &&
-          (!t.def.best_known || beatsBestKnown(direction, t.def.best_known, t.best_score))
+          beatsBestKnown(direction, t.def.best_known, t.best_score)
         ) {
           hillclimbCrowns.set(t.verified_by, (hillclimbCrowns.get(t.verified_by) ?? 0) + 1);
         }
@@ -2863,6 +2864,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         };
       } catch (e) {
         const reason = e instanceof Error ? e.message : String(e);
+        const scoringUnavailable = e instanceof ScoringUnavailableError;
+        const status = scoringUnavailable ? "error" : "rejected";
         const diag = sanitizeFailureDiagnostics(cRes.stage, cRes.diagnostics);
         this.ctx.storage.sql.exec(
           "UPDATE tasks SET attempts = attempts + 1 WHERE mission_id = ? AND task_id = ?",
@@ -2871,7 +2874,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         );
         this.updateSubmissionOutcome({
           id: subId,
-          status: "rejected",
+          status,
           accepted: false,
           score: cRes.score ?? null,
           points: 0,
@@ -2895,10 +2898,10 @@ export class SunsteadHub extends DurableObject<HubEnv> {
           timestamp: finishedAt,
         });
         return {
-          status: 422,
+          status: scoringUnavailable ? 503 : 422,
           body: {
             accepted: false,
-            status: "rejected",
+            status,
             submission_id: subId,
             error: reason,
             verify_ms: verifyMs,
