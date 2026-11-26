@@ -146,7 +146,7 @@ function isMissionCompleted(m) {
 }
 
 function optimalityCitation(mode, task) {
-  const citation = task.def?.best_known?.proven_optimal;
+  const citation = task?.def?.best_known?.proven_optimal;
   return mode === "hillclimb" && citation?.source && safeHttpUrl(citation.url) ? citation : null;
 }
 
@@ -216,7 +216,7 @@ function countMissionCategories(missions, filters = {}) {
 }
 
 function isTaskReady(task, mode) {
-  if (!task || !task.unlocked) return false;
+  if (!task || !task.unlocked || optimalityCitation(mode, task)) return false;
   if (task.disputed_counterexample || (task.def && task.def.upstream_disputed)) return false;
   if (task.active_lease) return false;
   if (task.status === "refuted") return false;
@@ -230,7 +230,8 @@ function matchesTaskStatus(task, mode, status) {
   if (status === "ready") return isTaskReady(task, mode);
   if (status === "verified") return task.status === "verified";
   if (status === "refuted") return task.status === "refuted";
-  if (status === "claimed") return Boolean(task.active_lease);
+  if (status === "claimed") return !optimalityCitation(mode, task) && Boolean(task.active_lease);
+  if (status === "optimal") return Boolean(optimalityCitation(mode, task));
   return true;
 }
 
@@ -259,6 +260,7 @@ function countTaskStatuses(tasks, mode, query = "") {
     verified: base.filter((t) => matchesTaskStatus(t, mode, "verified")).length,
     refuted: base.filter((t) => matchesTaskStatus(t, mode, "refuted")).length,
     claimed: base.filter((t) => matchesTaskStatus(t, mode, "claimed")).length,
+    optimal: base.filter((t) => matchesTaskStatus(t, mode, "optimal")).length,
   };
 }
 
@@ -387,7 +389,8 @@ function renderMissionCardHtml(m, completed) {
   const resolved = resolvedTaskCount(m);
   const refuted = m.refuted_tasks || 0;
   const optimal = m.proven_optimal_tasks || 0;
-  const pct = m.total_tasks > 0 ? Math.round(((optimal || resolved) / m.total_tasks) * 100) : 0;
+  const progress = m.mode === "hillclimb" ? optimal : resolved;
+  const pct = m.total_tasks > 0 ? Math.round((progress / m.total_tasks) * 100) : 0;
   const active = m.id === state.activeMissionId ? "active" : "";
   const doneClass = completed ? "mission-tab-completed" : "";
   const modeLabel =
@@ -398,7 +401,7 @@ function renderMissionCardHtml(m, completed) {
         : m.open_conjecture
           ? "CONJECTURES"
           : "BLUEPRINT";
-  const countText = optimal > 0
+  const countText = m.mode === "hillclimb"
     ? `${optimal}/${m.total_tasks} optimal`
     : refuted > 0 ? `${resolved}/${m.total_tasks} (${refuted} ¬T)` : `${resolved}/${m.total_tasks}`;
   const conjectureBadge = m.open_conjecture
@@ -855,6 +858,7 @@ function renderTaskFilterBar(detail) {
   if (pillsRoot) {
     pillsRoot.querySelectorAll(".filter-pill").forEach((btn) => {
       const st = btn.dataset.status || "all";
+      if (st === "optimal") btn.classList.toggle("hidden", mode !== "hillclimb");
       btn.classList.toggle("active", st === state.taskFilter.status);
       const badge = btn.querySelector(".pill-count");
       if (badge) badge.textContent = String(counts[st] ?? 0);
@@ -1211,10 +1215,9 @@ function renderInspector(detail) {
   const bestKnownHtml =
     optimum
       ? `<div class="kv"><div class="kv-label">Solved · Proven Optimal</div><div class="kv-val">${escapeHtml(bk.value)} · <a class="proof-link" href="${escapeHtml(optimum.url)}" target="_blank" rel="noopener">${escapeHtml(optimum.source)} ↗</a><div class="muted small">Closed to claims and submissions. This is a literature result, not a Sunstead verification.</div></div></div>`
-      :
-    bk && typeof bk.value === "number"
-      ? `<div class="kv"><div class="kv-label">Best Known Outside Sunstead</div><div class="kv-val">${escapeHtml(bk.value)} · <a href="${escapeHtml(bk.url)}" target="_blank" rel="noopener" style="color:var(--teal);text-decoration:none" title="${escapeHtml(bk.source)}">source ↗</a><div class="muted" style="font-size:12px;margin-top:4px">Full points only for beating this; tying it pays 25.</div></div></div>`
-      : "";
+      : bk && typeof bk.value === "number"
+        ? `<div class="kv"><div class="kv-label">Best Known Outside Sunstead</div><div class="kv-val">${escapeHtml(bk.value)} · <a href="${escapeHtml(bk.url)}" target="_blank" rel="noopener" style="color:var(--teal);text-decoration:none" title="${escapeHtml(bk.source)}">source ↗</a><div class="muted" style="font-size:12px;margin-top:4px">Full points only for beating this; tying it pays 25.</div></div></div>`
+        : "";
   const upstreamHtml = task.def.upstream_url
     ? `<div class="kv"><div class="kv-label">Upstream Statement</div><div class="kv-val"><a href="${escapeHtml(task.def.upstream_url)}" target="_blank" rel="noopener" style="color:var(--teal);text-decoration:none">${escapeHtml(task.def.upstream_url.replace(/^https:\/\/github\.com\//, ""))} ↗</a></div></div>`
     : "";

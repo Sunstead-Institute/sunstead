@@ -115,7 +115,7 @@ test("HTML & CSS preserve core hooks and expose filter toolbars and scrollable b
   for (const cat of ["all", "dag", "conjectures", "hillclimb", "repo-snapshot"]) {
     assert.ok(indexHtml.includes(`data-category="${cat}"`), `index.html missing mission category "${cat}"`);
   }
-  for (const st of ["all", "ready", "verified", "refuted", "claimed"]) {
+  for (const st of ["all", "ready", "verified", "refuted", "claimed", "optimal"]) {
     assert.ok(indexHtml.includes(`data-status="${st}"`), `index.html missing task status "${st}"`);
   }
 
@@ -303,7 +303,7 @@ test("task filter logic classifies Ready, Verified, Refuted, Claimed, and search
   ];
 
   const dagCounts = plain(ctx.countTaskStatuses(tasks, "dag", ""));
-  assert.deepEqual(dagCounts, { all: 6, ready: 1, verified: 1, refuted: 1, claimed: 1 });
+  assert.deepEqual(dagCounts, { all: 6, ready: 1, verified: 1, refuted: 1, claimed: 1, optimal: 0 });
   assert.deepEqual(
     plain(ctx.filterBlueprintTasks(tasks, "dag", { status: "ready" }).map((t) => t.def.id)),
     ["ready_t"]
@@ -429,27 +429,28 @@ test("proofs ledger filtering handles entry kinds, mission dropdown, search, and
   );
 });
 
-test("renderDag sets explicit full-size SVG dimensions for flat grids and resets cleanly for small DAGs", () => {
-  const mkEl = () => {
-    const attrs = {};
-    const classes = new Set();
-    return {
-      attrs,
-      style: {},
-      innerHTML: "",
-      classList: {
-        add: (c) => classes.add(c),
-        remove: (c) => classes.delete(c),
-        toggle: (c, f) => (f ? classes.add(c) : classes.delete(c)),
-        contains: (c) => classes.has(c),
-      },
-      setAttribute: (k, v) => {
-        attrs[k] = String(v);
-      },
-      querySelectorAll: () => [],
-      addEventListener: () => {},
-    };
+const mkEl = () => {
+  const attrs = {};
+  const classes = new Set();
+  return {
+    attrs,
+    style: {},
+    innerHTML: "",
+    classList: {
+      add: (c) => classes.add(c),
+      remove: (c) => classes.delete(c),
+      toggle: (c, f) => (f ? classes.add(c) : classes.delete(c)),
+      contains: (c) => classes.has(c),
+    },
+    setAttribute: (k, v) => {
+      attrs[k] = String(v);
+    },
+    querySelectorAll: () => [],
+    addEventListener: () => {},
   };
+};
+
+test("renderDag sets explicit full-size SVG dimensions for flat grids and resets cleanly for small DAGs", () => {
   const svgEl = mkEl();
   const emptyEl = mkEl();
   const replaced = [];
@@ -575,4 +576,59 @@ test("UI card and ledger row rendering escape all dynamic strings against XSS", 
   });
   assert.ok(!rowHtml.includes("<script>"), "ledger row must escape <script>");
   assert.ok(!rowHtml.includes("javascript:alert"), "ledger row must reject javascript: URLs");
+});
+
+test("closed hill-climbs stay out of open status filters but appear in the completed showcase and deep-linked grid inspector", async () => {
+  const citation = { source: "Exact bound <paper>", url: "https://example.org/proof" };
+  const closed = makeTask("depth", {}, { best_known: { value: 7, proven_optimal: citation } });
+  const tasks = [
+    closed,
+    ...Array.from({ length: 8 }, (_, i) => makeTask(`d_${i + 1}`, {}, { best_known: closed.def.best_known })),
+  ];
+  const mission = {
+    id: "sorting", title: "Sorting", tier: 2, mode: "hillclimb", score_direction: "minimize",
+    total_tasks: tasks.length, proven_optimal_tasks: tasks.length, verified_tasks: 0,
+    frontier_task_ids: [], verifier: { image: "sunstead/verifier-lean4:v0.2" },
+  };
+  const detail = { mission: { manifest: mission, spec_sha256: "spec" }, tasks, frontier: [] };
+  const elements = new Map();
+  const el = (id) => {
+    if (!elements.has(id)) elements.set(id, mkEl());
+    return elements.get(id);
+  };
+  const ctx = loadWebAppContext({
+    document: { getElementById: el },
+    fetch: async (url) => {
+      if (url === "/api/missions") return { ok: true, json: async () => ({ missions: [mission] }) };
+      assert.equal(url, "/api/missions/sorting");
+      return { ok: true, json: async () => detail };
+    },
+  });
+  const url = new URL("https://sunstead.org/?mission=sorting&task=d_6#blueprint");
+  ctx.window = { location: url };
+
+  const open = makeTask("size", { status: "verified" });
+  const formerLease = { ...closed, active_lease: { contributor: "tester" } };
+  assert.deepEqual(plain(ctx.countTaskStatuses([formerLease, open], "hillclimb")), {
+    all: 2, ready: 1, verified: 1, refuted: 0, claimed: 0, optimal: 1,
+  });
+  assert.deepEqual(plain(ctx.filterBlueprintTasks([formerLease, open], "hillclimb", { status: "optimal" })), [formerLease]);
+  assert.equal(ctx.filterMissions([mission], { openOnly: true }).length, 0);
+  assert.equal(ctx.countMissionCategories([mission], { openOnly: true }).hillclimb, 0);
+  assert.equal(ctx.isMissionCompleted({ ...mission, proven_optimal_tasks: 0, verified_tasks: tasks.length }), false);
+
+  vm.runInContext("state.pendingDeepLink = parseDeepLink(window.location.search)", ctx);
+  await ctx.loadMissions();
+  assert.match(el("completed-mission-tabs").innerHTML, /mission-tab-completed active/);
+  assert.match(el("completed-mission-tabs").innerHTML, /9\/9 optimal/);
+  assert.equal(el("stat-verified").textContent, "0/9");
+  assert.equal(el("stat-frontier").textContent, "0");
+  assert.match(el("dag-svg").innerHTML, /PROVEN OPTIMAL/);
+  assert.match(el("dag-svg").innerHTML, /optimum: 7 · closed/);
+  assert.match(el("dag-svg").innerHTML, /dag-node selected [^>]*data-task-id="d_6"/);
+  assert.match(el("task-inspector").innerHTML, /<code>d_6<\/code>/);
+  assert.match(el("task-inspector").innerHTML, /Solved · Proven Optimal/);
+  assert.match(el("task-inspector").innerHTML, /href="https:\/\/example.org\/proof"/);
+  assert.match(el("task-inspector").innerHTML, /Exact bound &lt;paper&gt;/);
+  assert.doesNotMatch(el("task-inspector").innerHTML, /Submit Endpoint|id="proof-panel"/);
 });

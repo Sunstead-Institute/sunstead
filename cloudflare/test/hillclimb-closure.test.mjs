@@ -42,12 +42,17 @@ function fixture() {
   const hub = Object.assign(Object.create(SunsteadHub.prototype), {
     getMissionRow: (mid) => mid === id ? mission : null,
     getTasks: () => tasks,
-    getAllTasksByMission: () => new Map([[id, tasks]]),
-    listMissionsRows: () => [mission],
     resolveContributor: async () => ({ ok: true, handle: "tester" }),
     withLock: async (_locks, _key, fn) => fn(),
   });
-  return { hub, tasks };
+  const closedMission = {
+    ...mission,
+    manifest: { ...manifest, id: "all-closed", tasks: [closed] },
+  };
+  hub.listMissionsRows = () => [mission, closedMission];
+  hub.getAllTasksByMission = () => new Map([[id, tasks], ["all-closed", [tasks[1]]]]);
+  hub.ctx = { storage: { sql: { exec: () => ({ toArray: () => [] }) } } };
+  return { hub };
 }
 
 const request = (path, body) => new Request(`https://hub.test/api/missions/sorting${path}`, body
@@ -71,14 +76,30 @@ test("closed task claim and sync/async submission reject before rate limits or v
 
 test("API summaries and details exclude closed tasks from frontier but preserve their definitions", async () => {
   const { hub } = fixture();
-  hub.ctx = { storage: { sql: { exec: () => ({ toArray: () => [] }) } } };
   hub.getRecentSubmissions = () => [];
   const summaries = await (await hub.fetch(new Request("https://hub.test/api/missions"))).json();
-  assert.deepEqual(summaries.missions[0].frontier_task_ids, ["size"]);
-  assert.equal(summaries.missions[0].proven_optimal_tasks, 1);
-  assert.equal(summaries.missions[0].verified_tasks, 0);
+  const sorting = summaries.missions.find((m) => m.id === "sorting");
+  assert.deepEqual(sorting.frontier_task_ids, ["size"]);
+  assert.equal(sorting.proven_optimal_tasks, 1);
+  assert.equal(sorting.verified_tasks, 0);
   const detail = await (await hub.fetch(request(""))).json();
   assert.deepEqual(detail.frontier, ["size"]);
   assert.equal(detail.tasks[1].status, "open");
   assert.equal(detail.tasks[1].def.best_known.proven_optimal.url, "https://example.org/proof");
+});
+
+test("global frontier and has_frontier mission filter exclude closed work", async () => {
+  const { hub } = fixture();
+  async function get(path) {
+    const response = await hub.fetch(new Request(`https://hub.test/api/${path}`));
+    assert.equal(response.status, 200);
+    return response.json();
+  }
+  const frontier = await get("frontier");
+  assert.equal(frontier.total_matching, 1);
+  assert.deepEqual(frontier.tasks.map((t) => [t.mission_id, t.task_id]), [["sorting", "size"]]);
+  const unfiltered = await get("missions");
+  assert.deepEqual(unfiltered.missions.find((m) => m.id === "all-closed").frontier_task_ids, []);
+  const filtered = await get("missions?has_frontier=true");
+  assert.deepEqual(filtered.missions.map((m) => m.id), ["sorting"]);
 });

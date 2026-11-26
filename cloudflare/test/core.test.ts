@@ -585,7 +585,9 @@ test("best_known scoring respects maximize direction and proven optima", () => {
   assert.equal(computePoints(max, t, 10, 200), Math.floor(5000 * Math.log(2)));
   assert.equal(beatsBestKnown("maximize", t.def.best_known, 101), true);
   assert.equal(beatsBestKnown("maximize", t.def.best_known, 100), false);
-  const opt = withBestKnown("sort_n9", 25, { proven_optimal: true });
+  const opt = withBestKnown("sort_n9", 25, {
+    proven_optimal: { source: "Sorting nine needs 25 comparators", url: "https://arxiv.org/abs/1405.5754" },
+  });
   assert.equal(computePoints(mission("hillclimb", 2), opt, 26, 25), MATCH_BEST_KNOWN_POINTS);
   assert.equal(beatsBestKnown("minimize", opt.def.best_known, 25), false);
   assert.equal(beatsBestKnown("minimize", null, 1), false);
