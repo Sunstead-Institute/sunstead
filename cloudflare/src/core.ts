@@ -309,8 +309,8 @@ export interface BestKnown {
   /** Human-readable citation (authors, title, year) or how to reproduce it. */
   source: string;
   url: string;
-  /** The value is a proven optimum: nothing can beat it, so the task only pays the match bonus. */
-  proven_optimal?: boolean;
+  /** The opposite bound is proved; close this track without rewriting the ledger. */
+  proven_optimal?: { source: string; url: string };
   /** Date (YYYY-MM-DD) the value was last checked against the literature. */
   checked: string;
   note?: string;
@@ -580,6 +580,17 @@ export function taskDisputeReason(
   return null;
 }
 
+export function isTaskProvenOptimal(mode: MissionMode, task: Pick<TaskState, "def">): boolean {
+  const citation = task.def.best_known?.proven_optimal;
+  return mode === "hillclimb" && Boolean(citation?.source && citation?.url);
+}
+
+export function provenOptimalReason(mode: MissionMode, task: Pick<TaskState, "def">): string | null {
+  const bk = task.def.best_known;
+  if (!isTaskProvenOptimal(mode, task) || !bk?.proven_optimal) return null;
+  return `task '${task.def.id}' is closed: ${bk.value} is proven optimal (${bk.proven_optimal.url})`;
+}
+
 export function isTaskUnlocked(
   task: TaskState,
   allTasks: TaskState[],
@@ -597,7 +608,7 @@ export function computeFrontier(mode: MissionMode, tasks: TaskState[]): string[]
   const byId = new Map<string, TaskState>(tasks.map((t) => [t.def.id, t]));
   return tasks
     .filter((t) => {
-      if (isTaskDisputed(t)) return false;
+      if (isTaskDisputed(t) || isTaskProvenOptimal(mode, t)) return false;
       const unlocked = isTaskUnlocked(t, tasks, byId);
       return mode === "dag" ? unlocked && !isTaskResolved(t) : unlocked;
     })
@@ -619,6 +630,8 @@ export function applyClaim(
   if (disputeMsg) {
     throw new Error(`${disputeMsg} and cannot be claimed`);
   }
+  const optimalMsg = provenOptimalReason(mode, task);
+  if (optimalMsg) throw new Error(`${optimalMsg} and cannot be claimed`);
   if (!isTaskUnlocked(task, allTasks)) {
     throw new Error(`task '${taskId}' is blocked on unverified dependencies`);
   }
@@ -818,19 +831,23 @@ export interface SortableMissionSummary {
   total_tasks: number;
   verified_tasks: number;
   refuted_tasks?: number;
+  proven_optimal_tasks?: number;
 }
 
-/** A DAG mission with every task resolved (proved or open-conjecture refuted) belongs in the Completed Showcase; hill-climb tracks stay open. */
+/** Completed Showcase: resolved DAGs and hill-climbs with every optimum proved. */
 export function isMissionCompleted(
-  m: Pick<SortableMissionSummary, "mode" | "total_tasks" | "verified_tasks" | "refuted_tasks">
+  m: Pick<SortableMissionSummary, "mode" | "total_tasks" | "verified_tasks" | "refuted_tasks" | "proven_optimal_tasks">
 ): boolean {
-  return m.mode === "dag" && m.total_tasks > 0 && m.verified_tasks + (m.refuted_tasks ?? 0) >= m.total_tasks;
+  if (m.total_tasks <= 0) return false;
+  return m.mode === "hillclimb"
+    ? (m.proven_optimal_tasks ?? 0) >= m.total_tasks
+    : m.verified_tasks + (m.refuted_tasks ?? 0) >= m.total_tasks;
 }
 
 /**
  * Canonical mission ordering for `/api/missions`, `/join.txt`, and the homepage:
  * 1. Active (incomplete) non-demo missions first, with Tier 1 Blueprint DAGs ahead of Tier 2 optimization tracks.
- * 2. Completed (100% verified) non-demo DAG showcase missions next.
+ * 2. Completed non-demo showcase missions next.
  * 3. Any `demo: true` sandbox missions last.
  */
 export function sortMissionSummaries<T extends SortableMissionSummary>(missions: T[]): T[] {
@@ -1896,7 +1913,7 @@ export function buildMissionLocalSetup(
     nativeSteps.push("lake build");
     notes.push(
       `Hill-climb mission (${dir}${baseline !== null && baseline !== undefined ? `, baseline: ${baseline}` : ""}): only strict improvements over the live best_score are accepted.`,
-      `Full points are paid only for beating each task's best_known value (the best result known outside Sunstead, shown in the task's \`def.best_known\`); reproducing a known result earns a small flat amount.`,
+      `Tracks with a cited proven optimum are closed to claims and submissions. Full points are paid only for beating each open task's best_known value (the best result known outside Sunstead, shown in the task's \`def.best_known\`); reproducing a known result earns a small flat amount.`,
       `Edit only the task's certificate target file(s) (e.g. ${firstTarget}); never touch frozen Spec/Bound/verify files.`
     );
   } else {

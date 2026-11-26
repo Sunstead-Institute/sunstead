@@ -11,6 +11,7 @@ import {
   beatsBestKnown,
   isTaskDisputed,
   taskDisputeReason,
+  provenOptimalReason,
   resolveUpstreamAnchor,
   verifyCommand,
   MATCH_BEST_KNOWN_POINTS,
@@ -1562,9 +1563,13 @@ test("web/app.js hill-climb nodePalette preserves CLAIMED/OPEN status and SSE in
   assert.match(appJs, /state\.proofCache\.clear\(\)/);
   assert.match(appJs, /completed-missions-section/);
 
-  const ctx: Record<string, unknown> = {};
+  const optimumMatch = appJs.match(/function optimalityCitation\(mode, task\) \{[\s\S]*?\n\}/);
+  const safeUrlMatch = appJs.match(/function safeHttpUrl\(u\) \{[\s\S]*?\n\}/);
+  assert.ok(optimumMatch);
+  assert.ok(safeUrlMatch);
+  const ctx: Record<string, unknown> = { URL };
   vm.runInNewContext(
-    `${paletteMatch[0]}\n${completedMatch[0]}\nthis.nodePalette = nodePalette;\nthis.isMissionCompleted = isMissionCompleted;`,
+    `${paletteMatch[0]}\n${completedMatch[0]}\n${optimumMatch[0]}\n${safeUrlMatch[0]}\nthis.nodePalette = nodePalette;\nthis.isMissionCompleted = isMissionCompleted;`,
     ctx
   );
   const nodePalette = ctx.nodePalette as (t: Record<string, unknown>, mode: string) => {
@@ -1582,6 +1587,12 @@ test("web/app.js hill-climb nodePalette preserves CLAIMED/OPEN status and SSE in
     nodePalette({ unlocked: true, status: "verified", active_lease: null }, "hillclimb").badge,
     "RECORD · OPEN"
   );
+  const closedPal = nodePalette({
+    unlocked: true, status: "open", active_lease: { contributor: "alice" },
+    def: { best_known: { proven_optimal: { source: "Exact bound", url: "https://example.org/proof" } } },
+  }, "hillclimb");
+  assert.equal(closedPal.badge, "PROVEN OPTIMAL");
+  assert.equal(uiIsMissionCompleted({ mode: "hillclimb", total_tasks: 8, proven_optimal_tasks: 8 }), true);
   const verifiedPal = nodePalette({ unlocked: true, status: "verified", active_lease: null }, "dag");
   assert.equal(verifiedPal.badge, "VERIFIED");
   const disputedPal = nodePalette(
@@ -1835,6 +1846,39 @@ test("v2 checkDecompositionEligibility enforces allowlist, pilot flag, depth <= 
       }),
     /upstream-disputed.*cannot be decomposed/
   );
+});
+
+test("proven-optimal hill-climbs leave the frontier without changing verification status", () => {
+  const citation = { source: "No six-layer network exists", url: "https://example.org/theorem" };
+  const optimal = task("optimal");
+  optimal.def.best_known = {
+    value: 7, kind: "literature", source: "Known seven-layer construction",
+    url: "https://example.org/construction", checked: "2026-11-26", proven_optimal: citation,
+  };
+  const open = task("open", { status: "verified" });
+  open.def.best_known = { ...optimal.def.best_known, proven_optimal: undefined };
+  const tasks = [optimal, open];
+  assert.deepEqual(computeFrontier("hillclimb", tasks), ["open"]);
+  assert.deepEqual(computeFrontier("dag", tasks), ["optimal"]);
+  assert.equal(optimal.status, "open");
+  assert.equal(provenOptimalReason("hillclimb", optimal),
+    "task 'optimal' is closed: 7 is proven optimal (https://example.org/theorem)");
+  assert.equal(provenOptimalReason("hillclimb", open), null);
+  assert.throws(
+    () => applyClaim("hillclimb", tasks, "optimal", "alice", "token", 1, 300),
+    /is proven optimal .* and cannot be claimed/,
+  );
+  assert.equal(applyClaim("hillclimb", tasks, "open", "alice", "token", 1, 300).lease.contributor, "alice");
+  const mission = {
+    id: "sorting", title: "Sorting", tier: 2, mode: "hillclimb", score_direction: "minimize",
+    verifier: { image: "sunstead/verifier-lean4:v0.2" }, frozen_paths: [], tasks: tasks.map((t) => t.def),
+  } satisfies MissionManifest;
+  const txt = renderJoinTxt("https://sunstead.org", [{ manifest: mission, tasks }]);
+  assert.match(txt, /Open frontier tasks: open\n/);
+  assert.match(txt, /1\/2 proven optimal/);
+  const summary = { mode: "hillclimb", total_tasks: 2, verified_tasks: 2 } as const;
+  assert.equal(isMissionCompleted({ ...summary, proven_optimal_tasks: 1 }), false);
+  assert.equal(isMissionCompleted({ ...summary, proven_optimal_tasks: 2, verified_tasks: 0 }), true);
 });
 
 test("disputed tasks are excluded from computeFrontier, blocked from applyClaim, and called out in /join.txt", () => {

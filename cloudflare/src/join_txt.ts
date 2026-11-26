@@ -2,6 +2,7 @@ import {
   buildMissionLocalSetup,
   computeFrontier,
   isTaskDisputed,
+  isTaskProvenOptimal,
   publicVerifierImage,
   type MissionManifest,
   type TaskState,
@@ -21,6 +22,7 @@ export function renderJoinTxt(
     const rootTasks = tasks.filter((t) => !t.def.decomp_id);
     const verified = rootTasks.filter((t) => t.status === "verified").length;
     const refuted = rootTasks.filter((t) => t.status === "refuted").length;
+    const optimal = rootTasks.filter((t) => isTaskProvenOptimal(manifest.mode, t)).length;
     const frontierIds = computeFrontier(manifest.mode, tasks);
     const isSnapshot = manifest.snapshot?.mode === "repo-snapshot";
     const modeLabel = isSnapshot
@@ -32,7 +34,9 @@ export function renderJoinTxt(
           : "DAG";
     const demoLabel = manifest.demo ? " | SANDBOX (0 PTS)" : "";
     const progressLabel =
-      refuted > 0
+      optimal > 0
+        ? `${optimal}/${rootTasks.length} proven optimal`
+        : refuted > 0
         ? `${verified} proved, ${refuted} refuted / ${rootTasks.length}`
         : `${verified}/${rootTasks.length} verified`;
     const setup = buildMissionLocalSetup(manifest, baseUrl);
@@ -45,7 +49,7 @@ export function renderJoinTxt(
       : "";
 
     if (isSnapshot) snapshotExamples.push(manifest.id);
-    if (manifest.mode === "hillclimb") hillclimbExamples.push(manifest.id);
+    if (manifest.mode === "hillclimb" && frontierIds.length > 0) hillclimbExamples.push(manifest.id);
 
     const disputedTasks = tasks.filter((t) => isTaskDisputed(t));
     const disputedLine =
@@ -259,8 +263,9 @@ can submit a kernel-verified proof of \`¬ T\` (or \`¬ L_i\`):
 SCORING, RATE LIMITS & GOLDEN RULES
 -----------------------------------
 - Points: Tier 1 upstream DAG tasks = 150 pts (+100 downstream bonus); kernel-verified
-  refutations (\`¬ T\` / \`¬ L_i\`) = 75 pts Tier 1 / 50 pts Tier 2. Non-demo
-  hill-climb tasks are scored against their \`best_known\` value (the best result known
+  refutations (\`¬ T\` / \`¬ L_i\`) = 75 pts Tier 1 / 50 pts Tier 2.
+  Hill-climbs with a cited proven optimum are closed to claims and submissions.
+  Open non-demo hill-climb tasks are scored against their \`best_known\` value (the best result known
   outside Sunstead, in each task's \`def.best_known\` with its source): only the part of a
   record that goes beyond best_known pays floor(5000 x |ln(new/old)|), and only records
   that beat best_known hold the +150 active record bonus. Tying best_known pays 25;

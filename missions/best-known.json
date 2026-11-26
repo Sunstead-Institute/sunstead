@@ -25,24 +25,21 @@
         "kind": "collection",
         "source": "A. E. Brouwer, 'Table of general binary codes' (binary-1.html): exact value A(17, 8) = 36.",
         "url": "https://www.win.tue.nl/~aeb/codes/binary-1.html",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "code_18_8": {
         "value": 64,
         "kind": "collection",
         "source": "A. E. Brouwer, 'Table of general binary codes' (binary-1.html): exact value A(18, 8) = 64.",
         "url": "https://www.win.tue.nl/~aeb/codes/binary-1.html",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "code_19_8": {
         "value": 128,
         "kind": "collection",
         "source": "A. E. Brouwer, 'Table of general binary codes' (binary-1.html): exact value A(19, 8) = 128.",
         "url": "https://www.win.tue.nl/~aeb/codes/binary-1.html",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "code_21_10": {
         "value": 42,
@@ -98,8 +95,7 @@
         "kind": "collection",
         "source": "A. E. Brouwer, 'Bounds for binary constant weight codes' (Andw.html): exact value A(20, 8, 7) = 80 (80s, Steiner system).",
         "url": "https://aeb.win.tue.nl/codes/Andw.html",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "cwc_21_6_5": {
         "value": 110,
@@ -143,24 +139,21 @@
         "kind": "literature",
         "source": "G. Pellegrino (1970): maximum cap set size in AG(4, 3) = F_3^4 is exactly 20 (OEIS A090245).",
         "url": "https://oeis.org/A090245",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "capset_f3_5": {
         "value": 45,
         "kind": "literature",
         "source": "Y. Edel, S. Ferret, I. Landjev, L. Storme, 'The classification of the largest caps in AG(5, 3)', J. Combin. Theory Ser. A 99 (2002): maximum cap set in F_3^5 is exactly 45 (OEIS A090245).",
         "url": "https://oeis.org/A090245",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "capset_f3_6": {
         "value": 112,
         "kind": "literature",
         "source": "A. Potechin, 'Maximal caps in AG(6, 3)', Des. Codes Cryptogr. 46 (2008), arXiv:0802.0789: maximum cap set in F_3^6 is exactly 112 (OEIS A090245).",
         "url": "https://arxiv.org/abs/0802.0789",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "capset_f3_7": {
         "value": 236,
@@ -174,32 +167,28 @@
         "kind": "collection",
         "source": "OEIS A003002 (b003002.txt) / J. Dybizbanski, Electron. J. Combin. 19(2) (2012): exact value r_3(64) = 20.",
         "url": "https://oeis.org/A003002",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "ap3_n100": {
         "value": 27,
         "kind": "collection",
         "source": "OEIS A003002 (b003002.txt) / J. Dybizbanski, Electron. J. Combin. 19(2) (2012): exact value r_3(100) = 27.",
         "url": "https://oeis.org/A003002",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "ap3_n150": {
         "value": 35,
         "kind": "collection",
         "source": "OEIS A003002 (b003002.txt) / J. Dybizbanski, Electron. J. Combin. 19(2) (2012): exact value r_3(150) = 35.",
         "url": "https://oeis.org/A003002",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "ap3_n200": {
         "value": 41,
         "kind": "collection",
         "source": "OEIS A003002 (b003002.txt): exact value r_3(200) = 41 (verified through n = 211).",
         "url": "https://oeis.org/A003002",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "ap3_n300": {
         "value": 54,
@@ -214,40 +203,35 @@
         "kind": "derived",
         "source": "Exact equivalence to Optimal Golomb Rulers (OEIS A003022): G(12) = 85 <= 99 < 106 = G(13), so the largest Sidon set in {0..99} has exactly 12 elements.",
         "url": "https://oeis.org/A003022",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "sidon_n150": {
         "value": 14,
         "kind": "derived",
         "source": "Exact equivalence to Optimal Golomb Rulers (OEIS A003022): G(14) = 127 <= 149 < 151 = G(15), so the largest Sidon set in {0..149} has exactly 14 elements.",
         "url": "https://oeis.org/A003022",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "sidon_n200": {
         "value": 17,
         "kind": "derived",
         "source": "Exact equivalence to Optimal Golomb Rulers (OEIS A003022): G(17) = 199 <= 199 < 216 = G(18), so the largest Sidon set in {0..199} has exactly 17 elements.",
         "url": "https://oeis.org/A003022",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "sidon_n300": {
         "value": 20,
         "kind": "derived",
         "source": "Exact equivalence to Optimal Golomb Rulers (OEIS A003022): G(20) = 283 <= 299 < 333 = G(21), so the largest Sidon set in {0..299} has exactly 20 elements.",
         "url": "https://oeis.org/A003022",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "sidon_n500": {
         "value": 26,
         "kind": "derived",
         "source": "Exact equivalence to Optimal Golomb Rulers (OEIS A003022): G(26) = 492 <= 499 < 553 = G(27), so the largest Sidon set in {0..499} has exactly 26 elements.",
         "url": "https://oeis.org/A003022",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       }
     },
     "combinatorial-designs-opt": {
@@ -284,24 +268,21 @@
         "kind": "literature",
         "source": "Exact value CAN(3, 12, 2) = 15 (Nurmela / Colbourn Covering Array Tables; proven no 14-row strength-3 binary CA on 12 columns exists).",
         "url": "https://www.public.asu.edu/~ccolbou/src/tabby/catable.html",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "ca_3_16_2": {
         "value": 17,
         "kind": "literature",
         "source": "Exact value CAN(3, 16, 2) = 17 (Colbourn Covering Array Tables; proven optimal by exact classification of strength-3 binary covering arrays).",
         "url": "https://www.public.asu.edu/~ccolbou/src/tabby/catable.html",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "ca_3_20_2": {
         "value": 18,
         "kind": "literature",
         "source": "Exact value CAN(3, 20, 2) = 18 (Sloane / Roux / Colbourn Covering Array Tables; proven optimal for 17 <= k <= 20).",
         "url": "https://www.public.asu.edu/~ccolbou/src/tabby/catable.html",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "ca_3_10_3": {
         "value": 45,
@@ -315,40 +296,35 @@
         "kind": "literature",
         "source": "OEIS A003022 (b003022.txt) / distributed.net Project OGR: proven optimal 12-mark Golomb ruler length G(12) = 85.",
         "url": "https://oeis.org/A003022",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "golomb_k14": {
         "value": 127,
         "kind": "literature",
         "source": "OEIS A003022 (b003022.txt) / distributed.net Project OGR: proven optimal 14-mark Golomb ruler length G(14) = 127.",
         "url": "https://oeis.org/A003022",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "golomb_k16": {
         "value": 177,
         "kind": "literature",
         "source": "OEIS A003022 (b003022.txt) / distributed.net Project OGR: proven optimal 16-mark Golomb ruler length G(16) = 177.",
         "url": "https://oeis.org/A003022",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "golomb_k20": {
         "value": 283,
         "kind": "literature",
         "source": "OEIS A003022 (b003022.txt) / distributed.net Project OGR: proven optimal 20-mark Golomb ruler length G(20) = 283.",
         "url": "https://oeis.org/A003022",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "golomb_k25": {
         "value": 480,
         "kind": "literature",
         "source": "OEIS A003022 (b003022.txt) / distributed.net Project OGR-25 (2008): proven optimal 25-mark Golomb ruler length G(25) = 480.",
         "url": "https://oeis.org/A003022",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "golomb_k29": {
         "value": 623,
@@ -687,8 +663,7 @@
         "kind": "literature",
         "source": "C. Dobraunig, M. Eichlseder, F. Mendel, M. Schlaffer (Ascon / NIST SP 800-232) and K. Stoffelen (ePrint 2016/198): 5-bit quadratic Ascon S-box has optimal multiplicative complexity 5.",
         "url": "https://eprint.iacr.org/2016/198",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "keccak_chi_total_gates": {
         "value": 15,
@@ -709,8 +684,7 @@
         "kind": "literature",
         "source": "K. Stoffelen, FSE 2016 (ePrint 2016/198): PRESENT 4-bit S-box has optimal multiplicative complexity 4.",
         "url": "https://eprint.iacr.org/2016/198",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "gift_total_gates": {
         "value": 12,
@@ -724,8 +698,7 @@
         "kind": "literature",
         "source": "S. Banik et al., CHES 2017 / rweather/lightweight-crypto internal-gift128.c: GIFT 4-bit S-box has optimal multiplicative complexity 4.",
         "url": "https://github.com/rweather/lightweight-crypto/tree/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "spongent_total_gates": {
         "value": 14,
@@ -739,8 +712,7 @@
         "kind": "literature",
         "source": "A. Bogdanov et al. (SPONGENT, CHES 2011) / K. Stoffelen (ePrint 2016/198): SPONGENT 4-bit S-box has optimal multiplicative complexity 4.",
         "url": "https://eprint.iacr.org/2016/198",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "saturnin_total_gates": {
         "value": 16,
@@ -862,8 +834,7 @@
         "kind": "derived",
         "source": "ARIA S2 is affine-equivalent to GF(2^8) inversion (algebraic degree 7 => lower bound ceil(log2 7) = 3). Composing NIST usnistgov/Circuits aes-sbox-a35-ad3-g139 (AND-depth 3) with linear maps achieves optimal AND-depth 3.",
         "url": "https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "aria_invs2_total_gates": {
         "value": 103,
@@ -884,8 +855,7 @@
         "kind": "derived",
         "source": "ARIA InvS2 is affine-equivalent to GF(2^8) inversion (algebraic degree 7 => lower bound 3). Composing NIST usnistgov/Circuits aes-sbox-a35-ad3-g139 (AND-depth 3) with linear maps achieves optimal AND-depth 3.",
         "url": "https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       }
     },
     "crypto-zk-addition-chains": {
@@ -968,16 +938,14 @@
         "kind": "literature",
         "source": "B. D. McKay and Zhang Ke Min, 'The value of the Ramsey number R(3,8)', J. Graph Theory 16 (1992): R(3,8) = 28 exact, so max (3,8)-Ramsey witness graph order is 27. Listed in Radziszowski Dynamic Survey DS1.",
         "url": "https://www.combinatorics.org/ojs/index.php/eljc/article/view/DS1",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "ramsey_3_9": {
         "value": 35,
         "kind": "literature",
         "source": "C. M. Grinstead and S. M. Roberts, 'On the Ramsey numbers R(3,8) and R(3,9)', J. Combin. Theory Ser. B 33 (1982): R(3,9) = 36 exact, so max (3,9)-Ramsey witness graph order is 35. Listed in Radziszowski DS1.",
         "url": "https://www.combinatorics.org/ojs/index.php/eljc/article/view/DS1",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "ramsey_3_10": {
         "value": 39,
@@ -998,8 +966,7 @@
         "kind": "literature",
         "source": "B. D. McKay and S. P. Radziszowski, 'R(4,5) = 25', J. Graph Theory 19 (1995): R(4,5) = 25 exact, so max (4,5)-Ramsey witness graph order is 24. Listed in Radziszowski DS1.",
         "url": "https://www.combinatorics.org/ojs/index.php/eljc/article/view/DS1",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "ramsey_4_6": {
         "value": 35,
@@ -1027,64 +994,56 @@
         "kind": "collection",
         "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(25, C_4) = 63 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
         "url": "https://oeis.org/A006855",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "c4free_n27": {
         "value": 71,
         "kind": "collection",
         "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(27, C_4) = 71 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
         "url": "https://oeis.org/A006855",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "c4free_n29": {
         "value": 80,
         "kind": "collection",
         "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(29, C_4) = 80 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
         "url": "https://oeis.org/A006855",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "c4free_n32": {
         "value": 92,
         "kind": "collection",
         "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(32, C_4) = 92 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
         "url": "https://oeis.org/A006855",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "c4free_n34": {
         "value": 102,
         "kind": "collection",
         "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(34, C_4) = 102 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
         "url": "https://oeis.org/A006855",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "c4free_n36": {
         "value": 110,
         "kind": "collection",
         "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(36, C_4) = 110 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
         "url": "https://oeis.org/A006855",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "c4free_n38": {
         "value": 117,
         "kind": "collection",
         "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(38, C_4) = 117 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
         "url": "https://oeis.org/A006855",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "c4free_n40": {
         "value": 127,
         "kind": "collection",
         "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(40, C_4) = 127 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
         "url": "https://oeis.org/A006855",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       }
     },
     "matrix-rank-alphatensor-f2": {
@@ -1338,40 +1297,35 @@
         "kind": "collection",
         "source": "B. Dobbelaere, SorterHunter median selection networks table (median_networks.html, bertdobbelaere/SorterHunter@3d8b345): best known 7-input median network uses 13 compare-exchange elements (proven optimal).",
         "url": "https://bertdobbelaere.github.io/median_networks.html",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "median_n8": {
         "value": 16,
         "kind": "collection",
         "source": "B. Dobbelaere, SorterHunter median selection networks table (median_networks.html, bertdobbelaere/SorterHunter@3d8b345): best known 8-input median network uses 16 compare-exchange elements (proven optimal).",
         "url": "https://bertdobbelaere.github.io/median_networks.html",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "median_n9": {
         "value": 19,
         "kind": "collection",
         "source": "B. Dobbelaere, SorterHunter median selection networks table (median_networks.html, bertdobbelaere/SorterHunter@3d8b345): best known 9-input median network uses 19 compare-exchange elements (proven optimal).",
         "url": "https://bertdobbelaere.github.io/median_networks.html",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "median_n10": {
         "value": 22,
         "kind": "collection",
         "source": "B. Dobbelaere, SorterHunter median selection networks table (median_networks.html, bertdobbelaere/SorterHunter@3d8b345): best known 10-input median network uses 22 compare-exchange elements (proven optimal).",
         "url": "https://bertdobbelaere.github.io/median_networks.html",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "median_n11": {
         "value": 25,
         "kind": "collection",
         "source": "B. Dobbelaere, SorterHunter median selection networks table (median_networks.html, bertdobbelaere/SorterHunter@3d8b345): best known 11-input median network uses 25 compare-exchange elements (proven optimal).",
         "url": "https://bertdobbelaere.github.io/median_networks.html",
-        "checked": "2026-11-26",
-        "proven_optimal": true
+        "checked": "2026-11-26"
       },
       "median_n12": {
         "value": 29,
@@ -1416,7 +1370,10 @@
         "source": "Optimal depth 7 for n=9: I. Parberry, 'A computer-assisted optimal depth lower bound for nine-input sorting networks', Mathematical Systems Theory 24 (1991); matching networks in Knuth TAOCP vol. 3.",
         "url": "https://bertdobbelaere.github.io/sorting_networks.html",
         "checked": "2026-11-26",
-        "proven_optimal": true
+        "proven_optimal": {
+          "source": "I. Parberry (1991), A Computer Assisted Optimal Depth Lower Bound for Nine-Input Sorting Networks: no nine-input depth-six network; minimum depth at least 7 for 9 inputs by monotonicity.",
+          "url": "https://ianparberry.com/pubs/9-input.pdf"
+        }
       },
       "depth_n10": {
         "value": 7,
@@ -1424,7 +1381,10 @@
         "source": "Optimal depth 7 for n=10: I. Parberry, 'A computer-assisted optimal depth lower bound for nine-input sorting networks', Mathematical Systems Theory 24 (1991); matching networks in Knuth TAOCP vol. 3.",
         "url": "https://bertdobbelaere.github.io/sorting_networks.html",
         "checked": "2026-11-26",
-        "proven_optimal": true
+        "proven_optimal": {
+          "source": "I. Parberry (1991), A Computer Assisted Optimal Depth Lower Bound for Nine-Input Sorting Networks: no nine-input depth-six network; minimum depth at least 7 for 10 inputs by monotonicity.",
+          "url": "https://ianparberry.com/pubs/9-input.pdf"
+        }
       },
       "depth_n11": {
         "value": 8,
@@ -1432,7 +1392,10 @@
         "source": "Optimal depth 8 for n=11: D. Bundala and J. Závodný, 'Optimal Sorting Networks', LATA 2014, arXiv:1310.6271 (proves optimal depths for n <= 16).",
         "url": "https://arxiv.org/abs/1310.6271",
         "checked": "2026-11-26",
-        "proven_optimal": true
+        "proven_optimal": {
+          "source": "D. Bundala and J. Závodný (2014), Optimal Sorting Networks: no depth-seven network for 11 inputs, and no depth-eight network for 13 inputs; by monotonicity, minimum depth at least 8 for 11 inputs.",
+          "url": "https://arxiv.org/abs/1310.6271"
+        }
       },
       "depth_n12": {
         "value": 8,
@@ -1440,7 +1403,10 @@
         "source": "Optimal depth 8 for n=12: D. Bundala and J. Závodný, 'Optimal Sorting Networks', LATA 2014, arXiv:1310.6271 (proves optimal depths for n <= 16).",
         "url": "https://arxiv.org/abs/1310.6271",
         "checked": "2026-11-26",
-        "proven_optimal": true
+        "proven_optimal": {
+          "source": "D. Bundala and J. Závodný (2014), Optimal Sorting Networks: no depth-seven network for 11 inputs, and no depth-eight network for 13 inputs; by monotonicity, minimum depth at least 8 for 12 inputs.",
+          "url": "https://arxiv.org/abs/1310.6271"
+        }
       },
       "depth_n13": {
         "value": 9,
@@ -1448,7 +1414,10 @@
         "source": "Optimal depth 9 for n=13: D. Bundala and J. Závodný, 'Optimal Sorting Networks', LATA 2014, arXiv:1310.6271 (proves optimal depths for n <= 16).",
         "url": "https://arxiv.org/abs/1310.6271",
         "checked": "2026-11-26",
-        "proven_optimal": true
+        "proven_optimal": {
+          "source": "D. Bundala and J. Závodný (2014), Optimal Sorting Networks: no depth-seven network for 11 inputs, and no depth-eight network for 13 inputs; by monotonicity, minimum depth at least 9 for 13 inputs.",
+          "url": "https://arxiv.org/abs/1310.6271"
+        }
       },
       "depth_n14": {
         "value": 9,
@@ -1456,7 +1425,10 @@
         "source": "Optimal depth 9 for n=14: D. Bundala and J. Závodný, 'Optimal Sorting Networks', LATA 2014, arXiv:1310.6271 (proves optimal depths for n <= 16).",
         "url": "https://arxiv.org/abs/1310.6271",
         "checked": "2026-11-26",
-        "proven_optimal": true
+        "proven_optimal": {
+          "source": "D. Bundala and J. Závodný (2014), Optimal Sorting Networks: no depth-seven network for 11 inputs, and no depth-eight network for 13 inputs; by monotonicity, minimum depth at least 9 for 14 inputs.",
+          "url": "https://arxiv.org/abs/1310.6271"
+        }
       },
       "depth_n15": {
         "value": 9,
@@ -1464,7 +1436,10 @@
         "source": "Optimal depth 9 for n=15: D. Bundala and J. Závodný, 'Optimal Sorting Networks', LATA 2014, arXiv:1310.6271 (proves optimal depths for n <= 16).",
         "url": "https://arxiv.org/abs/1310.6271",
         "checked": "2026-11-26",
-        "proven_optimal": true
+        "proven_optimal": {
+          "source": "D. Bundala and J. Závodný (2014), Optimal Sorting Networks: no depth-seven network for 11 inputs, and no depth-eight network for 13 inputs; by monotonicity, minimum depth at least 9 for 15 inputs.",
+          "url": "https://arxiv.org/abs/1310.6271"
+        }
       },
       "depth_n16": {
         "value": 9,
@@ -1472,7 +1447,10 @@
         "source": "Optimal depth 9 for n=16: D. Bundala and J. Závodný, 'Optimal Sorting Networks', LATA 2014, arXiv:1310.6271 (proves optimal depths for n <= 16).",
         "url": "https://arxiv.org/abs/1310.6271",
         "checked": "2026-11-26",
-        "proven_optimal": true
+        "proven_optimal": {
+          "source": "D. Bundala and J. Závodný (2014), Optimal Sorting Networks: no depth-seven network for 11 inputs, and no depth-eight network for 13 inputs; by monotonicity, minimum depth at least 9 for 16 inputs.",
+          "url": "https://arxiv.org/abs/1310.6271"
+        }
       }
     },
     "sorting-networks-opt": {
@@ -1482,7 +1460,10 @@
         "source": "Best known 25 comparators (Floyd/Knuth); optimality proven by Codish, Cruz-Filipe, Frank, Schneider-Kamp, 'Twenty-Five Comparators is Optimal when Sorting Nine Inputs (and Twenty-Nine for Ten)', ICTAI 2014. Listed in B. Dobbelaere's SorterHunter table.",
         "url": "https://bertdobbelaere.github.io/sorting_networks.html",
         "checked": "2026-11-26",
-        "proven_optimal": true
+        "proven_optimal": {
+          "source": "Codish, Cruz-Filipe, Frank and Schneider-Kamp (2014), Twenty-Five Comparators is Optimal when Sorting Nine Inputs (and Twenty-Nine for Ten): at least 25 comparators for 9 inputs.",
+          "url": "https://arxiv.org/abs/1405.5754"
+        }
       },
       "sort_n10": {
         "value": 29,
@@ -1490,7 +1471,10 @@
         "source": "Best known 29 comparators (Floyd/Knuth); optimality proven by Codish, Cruz-Filipe, Frank, Schneider-Kamp, 'Twenty-Five Comparators is Optimal when Sorting Nine Inputs (and Twenty-Nine for Ten)', ICTAI 2014. Listed in B. Dobbelaere's SorterHunter table.",
         "url": "https://bertdobbelaere.github.io/sorting_networks.html",
         "checked": "2026-11-26",
-        "proven_optimal": true
+        "proven_optimal": {
+          "source": "Codish, Cruz-Filipe, Frank and Schneider-Kamp (2014), Twenty-Five Comparators is Optimal when Sorting Nine Inputs (and Twenty-Nine for Ten): at least 29 comparators for 10 inputs.",
+          "url": "https://arxiv.org/abs/1405.5754"
+        }
       },
       "sort_n11": {
         "value": 35,
@@ -1498,7 +1482,10 @@
         "source": "Best known 35 comparators; optimality proven by J. Harder, 'An Answer to the Bose-Nelson Sorting Problem for 11 and 12 Channels', arXiv:2012.04400 (2020). Listed in B. Dobbelaere's SorterHunter table.",
         "url": "https://arxiv.org/abs/2012.04400",
         "checked": "2026-11-26",
-        "proven_optimal": true
+        "proven_optimal": {
+          "source": "J. Harder (2020), An Answer to the Bose-Nelson Sorting Problem for 11 and 12 Channels: at least 35 comparators for 11 inputs.",
+          "url": "https://arxiv.org/abs/2012.04400"
+        }
       },
       "sort_n12": {
         "value": 39,
@@ -1506,7 +1493,10 @@
         "source": "Best known 39 comparators; optimality proven by J. Harder, 'An Answer to the Bose-Nelson Sorting Problem for 11 and 12 Channels', arXiv:2012.04400 (2020). Listed in B. Dobbelaere's SorterHunter table.",
         "url": "https://arxiv.org/abs/2012.04400",
         "checked": "2026-11-26",
-        "proven_optimal": true
+        "proven_optimal": {
+          "source": "J. Harder (2020), An Answer to the Bose-Nelson Sorting Problem for 11 and 12 Channels: at least 39 comparators for 12 inputs.",
+          "url": "https://arxiv.org/abs/2012.04400"
+        }
       },
       "sort_n13": {
         "value": 45,

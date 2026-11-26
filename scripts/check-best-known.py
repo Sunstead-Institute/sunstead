@@ -12,11 +12,21 @@ import json
 import os
 import re
 import sys
+from urllib.parse import urlsplit
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MISSIONS = os.path.join(ROOT, "missions")
 KINDS = {"literature", "collection", "heuristic", "derived", "proxy", "record"}
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def https_link(value: object) -> bool:
+    if not isinstance(value, str) or not value.startswith("https://") or any(c.isspace() for c in value):
+        return False
+    try:
+        return bool(urlsplit(value).hostname)
+    except ValueError:
+        return False
 
 
 def load_manifests() -> dict[str, dict]:
@@ -65,8 +75,16 @@ def check(registry: dict, manifests: dict[str, dict]) -> list[str]:
                 errors.append(f"{where}: url must be an https link to the source")
             if not isinstance(bk.get("checked"), str) or not DATE.match(bk["checked"]):
                 errors.append(f"{where}: checked must be a YYYY-MM-DD date")
-            if "proven_optimal" in bk and not isinstance(bk["proven_optimal"], bool):
-                errors.append(f"{where}: proven_optimal must be a boolean")
+            if "proven_optimal" in bk:
+                citation = bk["proven_optimal"]
+                if not isinstance(citation, dict):
+                    errors.append(f"{where}: proven_optimal must be an object with source and url")
+                else:
+                    source = citation.get("source")
+                    if not isinstance(source, str) or len(source.strip()) < 20:
+                        errors.append(f"{where}: proven_optimal.source must cite the proof of optimality")
+                    if not https_link(citation.get("url")):
+                        errors.append(f"{where}: proven_optimal.url must be an https link to that proof")
             seed = t.get("baseline_score")
             if isinstance(seed, (int, float)):
                 worse = bk["value"] > seed if direction == "minimize" else bk["value"] < seed

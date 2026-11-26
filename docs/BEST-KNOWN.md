@@ -22,8 +22,10 @@ outside Sunstead, with a citation and a link. Scoring (`computePoints` in
 | Further from best_known | 0 |
 
 Only a record that strictly beats best_known holds the +150 active-record crown on
-the leaderboard. When best_known is a proven optimum, the task can only pay the tie
-bonus; such tracks are kept as onboarding and verification exercises.
+the leaderboard. When the opposite bound is proved, mark the track `proven_optimal`.
+It leaves the open frontier and rejects claims and submissions (HTTP 409). Its optimum
+and citation remain visible on the mission page. A cited literature result is not a
+Sunstead-verified submission; previous scores, points, and proof links are preserved.
 
 Points already awarded before this rule (26 Nov 2026) were not recomputed.
 
@@ -32,7 +34,11 @@ Points already awarded before this rule (26 Nov 2026) were not recomputed.
 1. Before a task joins the pool, search the literature and public collections for the
    best known value and add an entry to `missions/best-known.json`:
    `value`, `kind`, `source` (authors, title, year, or how to reproduce it), `url`
-   (https), `checked` (YYYY-MM-DD), optional `proven_optimal` and `note`.
+   (https), `checked` (YYYY-MM-DD), and optional `note`. Set `proven_optimal` to an
+   object with `source` (citation and exact bound) and `url` (HTTPS link to the proof)
+   only if the bound rules out beating `value` in the task's actual score model.
+   A witness proves only attainability; a conjectured, weaker, or differently scoped
+   opposite bound does not close a track. Omit the field for open tracks.
 2. `kind` is one of:
    - `literature`: a paper or preprint states the value.
    - `collection`: a maintained public collection holds a circuit or scheme with the
