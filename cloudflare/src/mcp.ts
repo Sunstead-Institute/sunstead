@@ -75,7 +75,7 @@ export async function handleMcp(request: Request, fetchHub: (req: Request) => Pr
     },
     args => forward("/api/contributors/register", args, "POST")
   );
-  server.registerTool("get_me", { description: "Inspect your authenticated contributor profile and link visibility.", inputSchema: {} },
+  server.registerTool("get_me", { description: "Inspect your authenticated contributor profile, leaderboard points (after corrections), and link visibility.", inputSchema: {} },
     () => forward("/api/me", undefined, "GET"));
   server.registerTool(
     "list_missions",

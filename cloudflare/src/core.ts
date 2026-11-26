@@ -1271,7 +1271,15 @@ export function renderMbox(patches: AcceptedPatch[]): string {
 }
 
 /** One accepted patch for a task, joined with its contributor and submission rows. */
+/** Keep historical awards intact and label missing proof-to-submission joins. */
+export function publicPointFields(original_points: number | null = null, delta?: number | null) {
+  const points_delta = delta ?? 0;
+  return { original_points, points_delta, effective_points: original_points === null ? null : original_points + points_delta };
+}
+
 export type AcceptedProofRow = {
+  original_points?: number | null;
+  points_delta?: number | null;
   seq: number;
   mission_id: string;
   task_id: string;
@@ -1316,6 +1324,7 @@ export type SubmissionStatusRow = {
   accepted: number;
   score: number | null;
   points: number;
+  points_delta?: number;
   summary: string;
   patch_sha256: string;
   proof_id: string | null;
@@ -1377,6 +1386,7 @@ export function formatSubmissionStatusView(row: SubmissionStatusRow, hubOrigin: 
     accepted,
     score: row.score,
     points_awarded: row.points,
+    ...publicPointFields(row.points, row.points_delta),
     summary: row.summary,
     patch_sha256: row.patch_sha256,
     proof_id: proofId,
@@ -1518,6 +1528,9 @@ export interface SubmissionListItem {
   accepted: boolean;
   score: number | null;
   points: number;
+  original_points: number;
+  points_delta: number;
+  effective_points: number;
   summary: string;
   patch_sha256: string;
   proof_id: string | null;
@@ -1615,6 +1628,9 @@ export function querySubmissions(
       accepted: number;
       score: number | null;
       points: number;
+      original_points: number;
+      points_delta: number;
+      effective_points: number;
       summary: string;
       patch_sha256: string;
       proof_id: string | null;
@@ -1623,9 +1639,10 @@ export function querySubmissions(
       completed_at: number | null;
       is_demo: number;
     }>(
-      `SELECT id, mission_id, task_id, contributor, status, accepted, score, points, summary,
+      `SELECT id, mission_id, task_id, contributor, status, accepted, score, points,
+              original_points, points_delta, effective_points, summary,
               patch_sha256, proof_id, verify_ms, created_at, completed_at, is_demo
-       FROM submissions
+       FROM scored_submissions
        ${whereClause}
        ORDER BY created_at DESC
        LIMIT ?`,
@@ -2165,6 +2182,7 @@ export function buildProofView(
     social_links: buildSocialLinksFromHandles(social),
     summary: row.summary,
     accepted_at: row.created_at,
+    ...publicPointFields(row.original_points, row.points_delta),
     verify_ms: row.verify_ms,
     spec_sha256: row.spec_sha256,
     spec_is_current: row.spec_sha256 === opts.currentSpecSha256,
@@ -2359,6 +2377,7 @@ export function buildLedgerEntry(
     linkedin: social.linkedin,
     social_links: buildSocialLinksFromHandles(social),
     accepted_at: row.created_at,
+    ...publicPointFields(row.original_points, row.points_delta),
     verify_ms: row.verify_ms,
     scoring: row.scoring_provenance_json
       ? (JSON.parse(row.scoring_provenance_json) as ScoringProvenance)

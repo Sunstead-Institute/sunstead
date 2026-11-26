@@ -576,3 +576,12 @@ test("UI card and ledger row rendering escape all dynamic strings against XSS", 
   assert.ok(!rowHtml.includes("<script>"), "ledger row must escape <script>");
   assert.ok(!rowHtml.includes("javascript:alert"), "ledger row must reject javascript: URLs");
 });
+
+test("the ledger labels adjusted awards without replacing the historical summary", () => {
+  const { ledgerRowHtml, pointsCorrectionNote } = loadWebAppContext();
+  const record = { mission_id: "sorting-networks-opt", task_id: "sort_n10",
+    original_points: 333, points_delta: -308, effective_points: 25 };
+  assert.match(ledgerRowHtml(record), /href="\/api\/corrections">Points corrected<\/a>: 333 → 25 pts/);
+  assert.equal(pointsCorrectionNote({ ...record, points_delta: 0 }), "");
+  assert.equal(pointsCorrectionNote({}), "");
+});
