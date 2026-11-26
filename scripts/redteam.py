@@ -12,6 +12,7 @@ that MUST be accepted, run directly against `sunstead/verifier-lean4:v0.2`
 Exit code 0 only if every case gets the expected verdict.
 """
 import argparse
+import concurrent.futures
 import json
 import os
 import shutil
@@ -24,29 +25,8 @@ MISSIONS = os.path.join(ROOT, "missions")
 DEFAULT_IMAGE = "sunstead/verifier-lean4:v0.2"
 V435_IMAGE = "sunstead/verifier-lean4-v4.35.0:v0.1"
 V431_IMAGE = "sunstead/verifier-lean4-v4.31.0:v0.1"
-IMAGES = {
-    "arklib-near-capacity-primes": DEFAULT_IMAGE,
-    "ieantn-chebyshev-kernel": DEFAULT_IMAGE,
-    "ieantn-short-interval-primes": DEFAULT_IMAGE,
-    "ieantn-zeta-foundations": DEFAULT_IMAGE,
-    "ieantn-chebyshev-pipeline": DEFAULT_IMAGE,
-    "ieantn-schoenfeld-chebyshev": DEFAULT_IMAGE,
-    "ieantn-zero-free-regions": DEFAULT_IMAGE,
-    "ieantn-zeta-logderiv-values": DEFAULT_IMAGE,
-    "ieantn-buthe-prime-bounds": DEFAULT_IMAGE,
-    "ieantn-buthe-partial-rh": DEFAULT_IMAGE,
-    "ieantn-explicit-pnt-applications": DEFAULT_IMAGE,
-    "pnt-analytic-foundations": DEFAULT_IMAGE,
-    "lnsym-aes-gcm-armv8": V435_IMAGE,
-    "lnsym-gcm-gmult-armv8": V435_IMAGE,
-    "curve25519-dalek": V431_IMAGE,
-    "matrix-rank444-f2": DEFAULT_IMAGE,
-    "matrix-rank-alphatensor-f2": DEFAULT_IMAGE,
-    "aes-sbox-circuit": DEFAULT_IMAGE,
-    "crypto-sbox-circuits": DEFAULT_IMAGE,
-    "crypto-linear-xor-opt": DEFAULT_IMAGE,
-    "sorting-networks-opt": DEFAULT_IMAGE,
-    "sorting-networks-depth-opt": DEFAULT_IMAGE,
+
+SYNTHETIC_IMAGES = {
     "__synthetic_pure_lean__": DEFAULT_IMAGE,
     "__synthetic_mathlib__": DEFAULT_IMAGE,
     "__synthetic_hillclimb__": DEFAULT_IMAGE,
@@ -55,6 +35,28 @@ IMAGES = {
     "__synthetic_module_snapshot__": DEFAULT_IMAGE,
     "__synthetic_decompose__": DEFAULT_IMAGE,
 }
+
+
+def _load_mission_images():
+    """Populate mission -> verifier image map from `missions/*/sunstead.json` + synthetic fixtures."""
+    images = dict(SYNTHETIC_IMAGES)
+    if os.path.isdir(MISSIONS):
+        for name in sorted(os.listdir(MISSIONS)):
+            manifest_path = os.path.join(MISSIONS, name, "sunstead.json")
+            if not os.path.isfile(manifest_path):
+                continue
+            try:
+                with open(manifest_path, "r", encoding="utf-8") as f:
+                    manifest = json.load(f)
+                image = (manifest.get("verifier") or {}).get("image")
+                if isinstance(image, str) and image:
+                    images[name] = image
+            except (OSError, ValueError):
+                continue
+    return images
+
+
+IMAGES = _load_mission_images()
 
 HONEST_DECODER = """import SyntheticPureLean.Spec
 
@@ -688,6 +690,14 @@ with open(os.path.join(MISSIONS, "crypto-linear-xor-opt", "CryptoLinearXor", "Ar
 with open(os.path.join(MISSIONS, "crypto-linear-xor-opt", "CryptoLinearXor", "CamelliaPCircuit.lean"),
           encoding="utf-8") as f:
     CAMELLIA_P_BASELINE = f.read()
+
+with open(os.path.join(MISSIONS, "coding-theory-bounds", "CodingBounds", "Code17_8.lean"),
+          encoding="utf-8") as f:
+    CODING_17_8_BASELINE = f.read()
+
+with open(os.path.join(MISSIONS, "crypto-addition-chains", "AddChain", "ChainP192Field.lean"),
+          encoding="utf-8") as f:
+    ADDCHAIN_P192_BASELINE = f.read()
 
 CASES = [
     ("rank444-wrong-score", "matrix-rank444-f2", "reduce_rank",
@@ -2101,6 +2111,60 @@ end SnapLib
          "refute_theorem": "SnapLib.refute_target_add",
          "target_files": ["SnapLib/Target.lean"],
      })),
+
+    # --- Wave 5 arena security coverage (module-system snapshot, v4.35 snapshot, open refute, pure-Lean hillclimb) ---
+    ("wave5-sphere-packing-sorry-seed", "sphere-packing-e8-foundations", "periodic_constant_eq_constant",
+     {}, False, None,
+     "unmodified Sphere-Packing-Lean (`allow_module_system: true`) seed with `sorry` must be rejected"),
+    ("wave5-lnsym-addloop-sorry-seed", "lnsym-armv8-addloop-termination", "addloop_termination",
+     {}, False, None,
+     "unmodified LNSym ARMv8 AddLoop seed with `sorry` on `AddLoop.termination` must be rejected"),
+    ("wave5-fc-open-erdos-refute-sorry", "fc-open-erdos-combinatorics", "erdos_203_covering_primes",
+     {"FcOpenErdosComb/Refute_erdos_203.lean": """import FcOpenErdosComb.Spec
+
+namespace FcOpenErdosComb
+
+theorem refute_erdos_203 :
+    ¬ (∃ m, m.Coprime 6 ∧ ∀ k l, ¬ (2^k * 3^l * m + 1).Prime) := by
+  sorry
+
+end FcOpenErdosComb
+"""},
+     False, None,
+     "bogus `sorry` refutation of open conjecture `erdos_203_covering_primes` must be rejected",
+     ("refute", {
+         "task_id": "erdos_203_covering_primes",
+         "refute_module": "FcOpenErdosComb.Refute_erdos_203",
+         "refute_theorem": "FcOpenErdosComb.refute_erdos_203",
+     })),
+    ("wave5-coding-bounds-baseline", "coding-theory-bounds", "code_17_8",
+     {}, True, 28,
+     "honest A(17, 8) binary code seed baseline must kernel-replay at 28 codewords"),
+    ("wave5-coding-bounds-wrong-score", "coding-theory-bounds", "code_17_8",
+     {"CodingBounds/Code17_8.lean": CODING_17_8_BASELINE.replace("Nat := 28", "Nat := 29", 1)},
+     False, None,
+     "claimed score_code_17_8 must equal words_code_17_8.length"),
+    ("wave5-coding-bounds-invalid-code", "coding-theory-bounds", "code_17_8",
+     {"CodingBounds/Code17_8.lean": (
+         "def CodingBounds.score_code_17_8 : Nat := 2\n"
+         "def CodingBounds.words_code_17_8 : List Nat := [0, 1]\n"
+     )},
+     False, None,
+     "invalid binary code witness [0, 1] with Hamming distance 1 < 8 must fail decide +kernel"),
+    ("wave5-addchain-p192-baseline", "crypto-addition-chains", "p192_field_inv",
+     {}, True, 249,
+     "honest NIST P-192 addition-chain seed baseline must kernel-replay at 249 steps"),
+    ("wave5-addchain-p192-wrong-score", "crypto-addition-chains", "p192_field_inv",
+     {"AddChain/ChainP192Field.lean": ADDCHAIN_P192_BASELINE.replace("Nat := 249", "Nat := 248", 1)},
+     False, None,
+     "claimed score_p192_field_inv must equal steps_p192_field_inv.length"),
+    ("wave5-addchain-p192-invalid-chain", "crypto-addition-chains", "p192_field_inv",
+     {"AddChain/ChainP192Field.lean": (
+         "def AddChain.score_p192_field_inv : Nat := 2\n"
+         "def AddChain.steps_p192_field_inv : List (Nat × Nat) := [(0, 0), (1, 1)]\n"
+     )},
+     False, None,
+     "invalid addition chain witness evaluating to 4 != target_p192_field_inv must fail decide +kernel"),
 ]
 
 
@@ -2348,7 +2412,36 @@ def run_local(mission, task, work, timeout, action_info=None):
     return p.returncode, p.stdout, p.stderr
 
 
-def main():
+def _run_case(entry, *, local, timeout):
+    if len(entry) == 8:
+        name, mission, task, files, expect_ok, expect_score, why, action_info = entry
+    else:
+        name, mission, task, files, expect_ok, expect_score, why = entry
+        action_info = None
+    tmp, work = make_work_tree(mission, files)
+    try:
+        runner = run_local if local else run_docker
+        rc, out, err = runner(mission, task, work, timeout, action_info=action_info)
+    except subprocess.TimeoutExpired:
+        rc, out, err = -1, "", "timeout"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    verdict = parse_verdict(out)
+    ok = bool(verdict and verdict.get("ok")) and rc == 0
+    good = (verdict is not None) and (ok == expect_ok) and (
+        expect_score is None or verdict.get("score") == expect_score
+    )
+    status = "PASS" if good else "FAIL"
+    want = "accept" if expect_ok else "reject"
+    got = "no-verdict" if verdict is None else ("accept" if ok else "reject")
+    summary = (verdict or {}).get("summary", (err or out).strip()[-200:])
+    lines = [f"[{status}] {name}: expected {want}, got {got} - {summary}"]
+    if not good:
+        lines.append(f"         why this case exists: {why}")
+    return good, lines
+
+
+def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--local", action="store_true")
     ap.add_argument("--mission", action="append")
@@ -2356,15 +2449,16 @@ def main():
     ap.add_argument("--image", action="append", help="only cases targeting these verifier image(s) (repeatable)")
     ap.add_argument("--case", action="append")
     ap.add_argument("--timeout", type=int, default=300)
-    args = ap.parse_args()
+    ap.add_argument("--jobs", type=int, default=1, help="parallel red-team cases (default: 1)")
+    args = ap.parse_args(argv)
+    if args.jobs <= 0:
+        ap.error("--jobs must be positive")
+    if args.timeout <= 0:
+        ap.error("--timeout must be positive")
 
-    failures = 0
+    selected = []
     for entry in CASES:
-        if len(entry) == 8:
-            name, mission, task, files, expect_ok, expect_score, why, action_info = entry
-        else:
-            name, mission, task, files, expect_ok, expect_score, why = entry
-            action_info = None
+        name, mission = entry[0], entry[1]
         if args.mission and mission not in args.mission:
             continue
         if args.exclude_mission and mission in args.exclude_mission:
@@ -2373,27 +2467,25 @@ def main():
             continue
         if args.case and name not in args.case:
             continue
-        tmp, work = make_work_tree(mission, files)
-        try:
-            runner = run_local if args.local else run_docker
-            rc, out, err = runner(mission, task, work, args.timeout, action_info=action_info)
-        except subprocess.TimeoutExpired:
-            rc, out, err = -1, "", "timeout"
-        finally:
-            shutil.rmtree(tmp, ignore_errors=True)
-        verdict = parse_verdict(out)
-        ok = bool(verdict and verdict.get("ok")) and rc == 0
-        good = (verdict is not None) and (ok == expect_ok) and (
-            expect_score is None or verdict.get("score") == expect_score
-        )
-        failures += 0 if good else 1
-        status = "PASS" if good else "FAIL"
-        want = "accept" if expect_ok else "reject"
-        got = "no-verdict" if verdict is None else ("accept" if ok else "reject")
-        summary = (verdict or {}).get("summary", (err or out).strip()[-200:])
-        print(f"[{status}] {name}: expected {want}, got {got} - {summary}")
-        if not good:
-            print(f"         why this case exists: {why}")
+        selected.append(entry)
+
+    failures = 0
+    workers = min(args.jobs, len(selected))
+    if workers <= 1:
+        for entry in selected:
+            good, lines = _run_case(entry, local=args.local, timeout=args.timeout)
+            failures += 0 if good else 1
+            print("\n".join(lines), flush=True)
+    else:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+            futs = [
+                pool.submit(_run_case, entry, local=args.local, timeout=args.timeout)
+                for entry in selected
+            ]
+            for fut in concurrent.futures.as_completed(futs):
+                good, lines = fut.result()
+                failures += 0 if good else 1
+                print("\n".join(lines), flush=True)
     print(f"\n{failures} failure(s)")
     sys.exit(1 if failures else 0)
 

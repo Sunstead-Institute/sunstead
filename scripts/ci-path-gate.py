@@ -37,6 +37,7 @@ ALL_VERIFIER_SHARED_PREFIXES = (
 )
 ALL_VERIFIER_SHARED_FILES = {
     "cloudflare/containers/verifier_server.py",
+    "cloudflare/containers/test_verifier_server.py",
     "scripts/redteam.py",
     "scripts/check-statements.py",
     "scripts/build-verifiers.sh",
