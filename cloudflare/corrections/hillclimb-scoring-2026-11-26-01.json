@@ -1,0 +1,269 @@
+{
+  "batch_id": "hillclimb-scoring-2026-11-26-01",
+  "approved_by": "Tom (repo owner)",
+  "approved_at": "2026-11-26T21:38:08Z",
+  "references": {
+    "pull_request": "https://github.com/Sunstead-Institute/sunstead/pull/62",
+    "board_message": "msg_bfb8cbc1-36a0-4338-8195-1c6ccc1d8268_2"
+  },
+  "scoring_rule_version": "sunstead-scoring-v2",
+  "input_snapshot_sha256": "2bce4d8ec82f99d3fe42034a70f5962ee525d22c383aed23a3e82197cab2eac7",
+  "entries": [
+    {
+      "submission_id": "f9f0cb0c-9037-40d3-9eb1-779a03db08cd",
+      "contributor": "codex-dirichlet",
+      "original_points": 1164,
+      "replayed_points": 25,
+      "delta": -1139,
+      "reason": "Replace historical hill-climb award with approved best-known rule replay."
+    },
+    {
+      "submission_id": "204dc456-e9ae-4432-957b-64dbcdce3312",
+      "contributor": "codex-dirichlet",
+      "original_points": 1256,
+      "replayed_points": 25,
+      "delta": -1231,
+      "reason": "Replace historical hill-climb award with approved best-known rule replay."
+    },
+    {
+      "submission_id": "d4cd0cfa-948b-4072-9774-b61dee9a751b",
+      "contributor": "codex-dirichlet",
+      "original_points": 3465,
+      "replayed_points": 25,
+      "delta": -3440,
+      "reason": "Replace historical hill-climb award with approved best-known rule replay."
+    },
+    {
+      "submission_id": "097579e7-f1eb-465f-973c-10d6baa7df5c",
+      "contributor": "codex-dirichlet",
+      "original_points": 7164,
+      "replayed_points": 0,
+      "delta": -7164,
+      "reason": "Replace historical hill-climb award with approved best-known rule replay."
+    },
+    {
+      "submission_id": "35930d70-8616-4ac9-887d-a1296ac6a52f",
+      "contributor": "codex-dirichlet",
+      "original_points": 4054,
+      "replayed_points": 25,
+      "delta": -4029,
+      "reason": "Replace historical hill-climb award with approved best-known rule replay."
+    },
+    {
+      "submission_id": "8bd4be30-3a7c-4465-bf7d-b36e1a826dbb",
+      "contributor": "codex-dirichlet",
+      "original_points": 2402,
+      "replayed_points": 0,
+      "delta": -2402,
+      "reason": "Replace historical hill-climb award with approved best-known rule replay."
+    },
+    {
+      "submission_id": "c39c4f82-ffaa-4206-a373-98da68ba2a88",
+      "contributor": "codex-dirichlet",
+      "original_points": 53,
+      "replayed_points": 0,
+      "delta": -53,
+      "reason": "Replace historical hill-climb award with approved best-known rule replay."
+    },
+    {
+      "submission_id": "1991a9af-2b70-480b-bd4d-2f4c9173277c",
+      "contributor": "theorem-tom",
+      "original_points": 2876,
+      "replayed_points": 25,
+      "delta": -2851,
+      "reason": "Replace historical hill-climb award with approved best-known rule replay."
+    },
+    {
+      "submission_id": "dcfed27a-9ac7-4c3e-ac90-9f09954dfb14",
+      "contributor": "theorem-tom",
+      "original_points": 2554,
+      "replayed_points": 25,
+      "delta": -2529,
+      "reason": "Replace historical hill-climb award with approved best-known rule replay."
+    },
+    {
+      "submission_id": "add7d3ca-75af-46e0-966c-20d9d644ca8f",
+      "contributor": "theorem-tom",
+      "original_points": 2209,
+      "replayed_points": 25,
+      "delta": -2184,
+      "reason": "Replace historical hill-climb award with approved best-known rule replay."
+    },
+    {
+      "submission_id": "04b80362-c148-4a67-92bf-1011e205e2b2",
+      "contributor": "theorem-tom",
+      "original_points": 1838,
+      "replayed_points": 25,
+      "delta": -1813,
+      "reason": "Replace historical hill-climb award with approved best-known rule replay."
+    },
+    {
+      "submission_id": "e0c1ac7e-c547-468d-9862-0704428744eb",
+      "contributor": "theorem-tom",
+      "original_points": 2027,
+      "replayed_points": 25,
+      "delta": -2002,
+      "reason": "Replace historical hill-climb award with approved best-known rule replay."
+    },
+    {
+      "submission_id": "5f2af993-f5dc-4424-adce-0b52323a596a",
+      "contributor": "theorem-tom",
+      "original_points": 1592,
+      "replayed_points": 25,
+      "delta": -1567,
+      "reason": "Replace historical hill-climb award with approved best-known rule replay."
+    },
+    {
+      "submission_id": "582edd86-8050-45c3-9c44-6938ecb3ce9c",
+      "contributor": "theorem-tom",
+      "original_points": 1783,
+      "replayed_points": 25,
+      "delta": -1758,
+      "reason": "Replace historical hill-climb award with approved best-known rule replay."
+    },
+    {
+      "submission_id": "ed1d7db7-35a9-48e6-8f63-a4006cc03e3d",
+      "contributor": "theorem-tom",
+      "original_points": 1256,
+      "replayed_points": 25,
+      "delta": -1231,
+      "reason": "Replace historical hill-climb award with approved best-known rule replay."
+    },
+    {
+      "submission_id": "6efe6d1b-75cd-4db7-8bbd-1dc80718c64a",
+      "contributor": "theorem-tom",
+      "original_points": 243,
+      "replayed_points": 25,
+      "delta": -218,
+      "reason": "Replace historical hill-climb award with approved best-known rule replay."
+    },
+    {
+      "submission_id": "13c35dc7-e4e1-406d-b448-ae3f23844948",
+      "contributor": "theorem-tom",
+      "original_points": 260,
+      "replayed_points": 25,
+      "delta": -235,
+      "reason": "Replace historical hill-climb award with approved best-known rule replay."
+    },
+    {
+      "submission_id": "6f1c253d-d67a-40f9-bea7-48859229c62d",
+      "contributor": "theorem-tom",
+      "original_points": 25,
+      "replayed_points": 25,
+      "delta": 0,
+      "reason": "Approved replay under sunstead-scoring-v2; award unchanged."
+    },
+    {
+      "submission_id": "503ddaad-6456-4818-ba57-ff7f0dac3093",
+      "contributor": "theorem-tom",
+      "original_points": 25,
+      "replayed_points": 25,
+      "delta": 0,
+      "reason": "Approved replay under sunstead-scoring-v2; award unchanged."
+    },
+    {
+      "submission_id": "7d0f4d99-6138-4bb3-8bc6-d172108a2b92",
+      "contributor": "theorem-tom",
+      "original_points": 25,
+      "replayed_points": 25,
+      "delta": 0,
+      "reason": "Approved replay under sunstead-scoring-v2; award unchanged."
+    },
+    {
+      "submission_id": "75a076ac-4aa1-409e-bf07-3a7f3fad2c7d",
+      "contributor": "theorem-tom",
+      "original_points": 25,
+      "replayed_points": 25,
+      "delta": 0,
+      "reason": "Approved replay under sunstead-scoring-v2; award unchanged."
+    },
+    {
+      "submission_id": "2700e4fe-a395-4422-8d45-8c6a24705d1e",
+      "contributor": "theorem-tom",
+      "original_points": 10,
+      "replayed_points": 10,
+      "delta": 0,
+      "reason": "Approved replay under sunstead-scoring-v2; award unchanged."
+    },
+    {
+      "submission_id": "5f8acdfa-2126-477b-afd2-7f0b07999bfa",
+      "contributor": "theorem-tom",
+      "original_points": 25,
+      "replayed_points": 25,
+      "delta": 0,
+      "reason": "Approved replay under sunstead-scoring-v2; award unchanged."
+    },
+    {
+      "submission_id": "0a6f958f-09bd-4d57-9a57-684c59a10ef1",
+      "contributor": "theorem-tom",
+      "original_points": 10,
+      "replayed_points": 10,
+      "delta": 0,
+      "reason": "Approved replay under sunstead-scoring-v2; award unchanged."
+    },
+    {
+      "submission_id": "e0067149-dcfd-42d6-830c-4a7672e3156a",
+      "contributor": "theorem-tom",
+      "original_points": 10,
+      "replayed_points": 10,
+      "delta": 0,
+      "reason": "Approved replay under sunstead-scoring-v2; award unchanged."
+    },
+    {
+      "submission_id": "9c674584-c0cd-4d9d-ab39-88ef345e0978",
+      "contributor": "theorem-tom",
+      "original_points": 10,
+      "replayed_points": 10,
+      "delta": 0,
+      "reason": "Approved replay under sunstead-scoring-v2; award unchanged."
+    },
+    {
+      "submission_id": "bdf77b07-6e98-4a61-83c6-d76d4c62662e",
+      "contributor": "theorem-tom",
+      "original_points": 25,
+      "replayed_points": 25,
+      "delta": 0,
+      "reason": "Approved replay under sunstead-scoring-v2; award unchanged."
+    },
+    {
+      "submission_id": "723828fd-2d9c-4554-89a4-6afe85367520",
+      "contributor": "theorem-tom",
+      "original_points": 333,
+      "replayed_points": 25,
+      "delta": -308,
+      "reason": "Replace historical hill-climb award with approved best-known rule replay."
+    },
+    {
+      "submission_id": "93795ba9-9366-4fc9-9173-1ad9971225bb",
+      "contributor": "theorem-tom",
+      "original_points": 277,
+      "replayed_points": 25,
+      "delta": -252,
+      "reason": "Replace historical hill-climb award with approved best-known rule replay."
+    },
+    {
+      "submission_id": "4e624f3c-1e21-48ae-91d6-29bef47d3191",
+      "contributor": "theorem-tom",
+      "original_points": 250,
+      "replayed_points": 25,
+      "delta": -225,
+      "reason": "Replace historical hill-climb award with approved best-known rule replay."
+    },
+    {
+      "submission_id": "532f99bd-5aba-49cd-9504-3164f5cb67f9",
+      "contributor": "theorem-tom",
+      "original_points": 192,
+      "replayed_points": 25,
+      "delta": -167,
+      "reason": "Replace historical hill-climb award with approved best-known rule replay."
+    },
+    {
+      "submission_id": "18693d7d-d1fa-43b8-a95f-06ad08534db7",
+      "contributor": "theorem-tom",
+      "original_points": 196,
+      "replayed_points": 25,
+      "delta": -171,
+      "reason": "Replace historical hill-climb award with approved best-known rule replay."
+    }
+  ]
+}
