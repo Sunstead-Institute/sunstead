@@ -117,6 +117,28 @@
         </div>
         <div class="editorial-note">Open theorems pinned verbatim to upstream Lean 4 repositories.</div>
       </div>
+      <div class="filter-bar mission-filter-bar" id="mission-filter-bar" aria-label="Filter missions">
+        <div class="filter-bar-top">
+          <div class="filter-pills" id="mission-category-pills" role="group" aria-label="Filter missions by category">
+            <button type="button" class="filter-pill active" data-category="all">All <span class="pill-count">0</span></button>
+            <button type="button" class="filter-pill" data-category="dag">Proof DAGs <span class="pill-count">0</span></button>
+            <button type="button" class="filter-pill filter-pill-plum" data-category="conjectures">Open Conjectures <span class="pill-count">0</span></button>
+            <button type="button" class="filter-pill filter-pill-gold" data-category="hillclimb">Hill-Climb <span class="pill-count">0</span></button>
+            <button type="button" class="filter-pill filter-pill-teal" data-category="repo-snapshot">Repo-Snapshot <span class="pill-count">0</span></button>
+          </div>
+          <div class="filter-controls">
+            <input id="mission-search" class="filter-input" type="search" placeholder="Search id, title, repo, or toolchain…" aria-label="Search missions by id, title, upstream repo, or toolchain" />
+            <label class="filter-toggle" for="mission-open-only">
+              <input id="mission-open-only" type="checkbox" />
+              <span>Open work only</span>
+            </label>
+          </div>
+        </div>
+        <div class="filter-status-row">
+          <span id="mission-filter-count" class="muted small">Showing 0 of 0 missions</span>
+          <button type="button" id="mission-filter-clear" class="filter-clear hidden">Clear filters</button>
+        </div>
+      </div>
       <div class="mission-strip" id="mission-tabs" aria-label="Open Missions"></div>
       <div id="completed-missions-section" class="completed-missions hidden">
         <div class="completed-header">
@@ -151,8 +173,24 @@
           </div>
         </div>
 
+        <div class="task-filter-bar hidden" id="task-filter-bar" aria-label="Filter blueprint tasks">
+          <div class="filter-pills task-filter-pills" id="task-status-pills" role="group" aria-label="Filter tasks by status">
+            <button type="button" class="filter-pill filter-pill-sm active" data-status="all">All <span class="pill-count">0</span></button>
+            <button type="button" class="filter-pill filter-pill-sm filter-pill-gold" data-status="ready">Ready <span class="pill-count">0</span></button>
+            <button type="button" class="filter-pill filter-pill-sm filter-pill-teal" data-status="verified">Verified <span class="pill-count">0</span></button>
+            <button type="button" class="filter-pill filter-pill-sm filter-pill-plum" data-status="refuted">Refuted <span class="pill-count">0</span></button>
+            <button type="button" class="filter-pill filter-pill-sm" data-status="claimed">Claimed <span class="pill-count">0</span></button>
+          </div>
+          <div class="task-filter-right">
+            <input id="task-search" class="filter-input filter-input-sm" type="search" placeholder="Filter tasks by id or title…" aria-label="Filter tasks by id or title" />
+            <span id="task-filter-count" class="muted small task-filter-count"></span>
+            <button type="button" id="task-filter-clear" class="filter-clear hidden">Clear</button>
+          </div>
+        </div>
+
         <div class="dag-stage" id="dag-stage">
           <svg id="dag-svg" class="dag-svg" role="img" aria-label="Mission Blueprint DAG"></svg>
+          <div id="dag-empty" class="filter-empty hidden"></div>
         </div>
 
         <div class="inspector" id="task-inspector">
