@@ -10,6 +10,7 @@ import json
 import os
 import subprocess
 import tempfile
+import threading
 import unittest
 from unittest import mock
 
@@ -283,6 +284,159 @@ class CheckStatementsUnitTests(unittest.TestCase):
                 with self.assertRaises(SystemExit) as cm_bad:
                     cs.main(["--jobs", "0"])
             self.assertEqual(cm_bad.exception.code, 2)
+
+    def test_build_work_chunks_splits_and_orders_largest_first(self):
+        work = [
+            ("m-small", "/tmp/m-small", "img", ["s1"]),
+            ("m-empty", "/tmp/m-empty", "img", []),
+            ("m-huge", "/tmp/m-huge", "img", ["h1", "h2", "h3", "h4", "h5"]),
+            ("m-med", "/tmp/m-med", "img", ["m1", "m2", "m3"]),
+        ]
+        # batch_size=0 keeps one chunk per non-empty mission, sorted largest-first.
+        whole = cs.build_work_chunks(work, batch_size=0)
+        self.assertEqual(
+            [(name, idx, chunk) for name, _d, _img, idx, chunk in whole],
+            [
+                ("m-huge", 0, ["h1", "h2", "h3", "h4", "h5"]),
+                ("m-med", 0, ["m1", "m2", "m3"]),
+                ("m-small", 0, ["s1"]),
+            ],
+        )
+
+        # batch_size=2 splits each mission and orders globally by (-len(chunk), mission, chunk_idx).
+        chunked = cs.build_work_chunks(work, batch_size=2)
+        self.assertEqual(
+            [(name, idx, chunk) for name, _d, _img, idx, chunk in chunked],
+            [
+                ("m-huge", 0, ["h1", "h2"]),
+                ("m-huge", 1, ["h3", "h4"]),
+                ("m-med", 0, ["m1", "m2"]),
+                ("m-huge", 2, ["h5"]),
+                ("m-med", 1, ["m3"]),
+                ("m-small", 0, ["s1"]),
+            ],
+        )
+
+    def test_main_parallel_chunk_work_stealing_via_batch_size_and_jobs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            # Single 7-task mission + one 2-task mission with --batch-size 3 --jobs 3:
+            # m-big splits into chunks of [3, 3, 1] and m-two has [2]; workers must run
+            # chunks of m-big concurrently rather than serializing m-big on one worker.
+            for mid, tids in [
+                ("m-big", [f"b{i}" for i in range(7)]),
+                ("m-two", ["t1", "t2"]),
+            ]:
+                mdir = os.path.join(tmp, mid)
+                os.makedirs(mdir)
+                with open(os.path.join(mdir, "sunstead.json"), "w", encoding="utf-8") as f:
+                    json.dump({"id": mid, "verifier": {"image": "img"}, "tasks": [{"id": t} for t in tids]}, f)
+
+            lock = threading.Lock()
+            active = 0
+            peak_active = 0
+            both_big_chunks_parallel = threading.Barrier(2, timeout=5)
+            seen_chunks = []
+
+            def fake_chunk(mission_dir, image, chunk, timeout):
+                nonlocal active, peak_active
+                name = os.path.basename(mission_dir)
+                with lock:
+                    seen_chunks.append((name, list(chunk), timeout))
+                    active += 1
+                    peak_active = max(peak_active, active)
+                try:
+                    # The two 3-task chunks of m-big are scheduled first; syncing them
+                    # proves one large mission is truly fanned out across parallel workers.
+                    if name == "m-big" and len(chunk) == 3:
+                        both_big_chunks_parallel.wait()
+                    return [
+                        (tid, {"ok": tid != "b4", "summary": f"ok-{tid}" if tid != "b4" else "bad-b4"})
+                        for tid in chunk
+                    ]
+                finally:
+                    with lock:
+                        active -= 1
+
+            out = io.StringIO()
+            with mock.patch.object(cs, "MISSIONS", tmp), \
+                 mock.patch.object(cs, "_run_batch_chunk", side_effect=fake_chunk), \
+                 contextlib.redirect_stdout(out):
+                with self.assertRaises(SystemExit) as cm:
+                    cs.main(["--batch-size", "3", "--jobs", "3", "--timeout", "77"])
+
+            self.assertEqual(cm.exception.code, 1)
+            self.assertGreaterEqual(peak_active, 2, "chunks from the same mission must execute concurrently")
+            self.assertEqual(len(seen_chunks), 4)
+            self.assertEqual(
+                sorted((n, tuple(c), to) for n, c, to in seen_chunks),
+                sorted([
+                    ("m-big", ("b0", "b1", "b2"), 77),
+                    ("m-big", ("b3", "b4", "b5"), 77),
+                    ("m-two", ("t1", "t2"), 77),
+                    ("m-big", ("b6",), 77),
+                ]),
+            )
+            text = out.getvalue()
+            self.assertIn("[OK] m-big/b0: ok-b0", text)
+            self.assertIn("[FAIL] m-big/b4: bad-b4", text)
+            self.assertIn("[OK] m-two/t2: ok-t2", text)
+            self.assertIn("9 task(s) checked, 1 failure(s)", text)
+
+    def test_inside_batch_cleans_up_tmp_job_dirs_after_non_ok_verdicts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_tmp = os.path.join(tmp, "fake_tmp")
+            os.makedirs(fake_tmp)
+            keep_dir = os.path.join(fake_tmp, "unrelated-dir")
+            os.makedirs(keep_dir)
+            saw_leftover_on_next = os.path.join(tmp, "next_saw.json")
+
+            fake_script = os.path.join(tmp, "fake_child.py")
+            with open(fake_script, "w", encoding="utf-8") as f:
+                f.write(
+                    "import glob, json, os, sys\n"
+                    f"fake_tmp = {fake_tmp!r}\n"
+                    f"record_path = {saw_leftover_on_next!r}\n"
+                    "tid = sys.argv[2]\n"
+                    "if tid == 'fail_task':\n"
+                    "    d = os.path.join(fake_tmp, 'sunstead-job-fail')\n"
+                    "    os.makedirs(d, exist_ok=True)\n"
+                    "    open(os.path.join(d, 'leak.olean'), 'w').write('x')\n"
+                    "    print(json.dumps({'ok': False, 'summary': 'mismatch'}))\n"
+                    "    sys.exit(1)\n"
+                    "elif tid == 'oom_task':\n"
+                    "    # Check previous failed task's temp dir was already removed.\n"
+                    "    before = sorted(os.path.basename(p) for p in glob.glob(os.path.join(fake_tmp, 'sunstead-job-*')))\n"
+                    "    open(record_path, 'w').write(json.dumps({'before_oom': before}))\n"
+                    "    d = os.path.join(fake_tmp, 'sunstead-job-oom')\n"
+                    "    os.makedirs(d, exist_ok=True)\n"
+                    "    open(os.path.join(d, 'core.tmp'), 'w').write('y')\n"
+                    "    sys.exit(137)\n"
+                    "elif tid == 'after_oom':\n"
+                    "    cur = json.loads(open(record_path).read())\n"
+                    "    cur['before_after_oom'] = sorted(os.path.basename(p) for p in glob.glob(os.path.join(fake_tmp, 'sunstead-job-*')))\n"
+                    "    open(record_path, 'w').write(json.dumps(cur))\n"
+                    "    print(json.dumps({'ok': True, 'summary': 'clean'}))\n"
+                    "    sys.exit(0)\n"
+                )
+
+            buf = io.StringIO()
+            with mock.patch.object(cs, "JOB_TMP_DIR", fake_tmp), contextlib.redirect_stdout(buf):
+                cs.inside_batch(
+                    ["fail_task", "oom_task", "after_oom"],
+                    task_timeout=5,
+                    workdir=tmp,
+                    script_path=fake_script,
+                )
+
+            parsed = dict(cs.parse_batch_output(buf.getvalue(), "", ["fail_task", "oom_task", "after_oom"]))
+            self.assertFalse(parsed["fail_task"]["ok"])
+            self.assertFalse(parsed["oom_task"]["ok"])
+            self.assertTrue(parsed["after_oom"]["ok"])
+            with open(saw_leftover_on_next, "r", encoding="utf-8") as fh:
+                seen = json.load(fh)
+            self.assertEqual(seen["before_oom"], [], "fail_task leftover /tmp/sunstead-job-* must be removed")
+            self.assertEqual(seen["before_after_oom"], [], "oom_task leftover /tmp/sunstead-job-* must be removed")
+            self.assertTrue(os.path.isdir(keep_dir), "unrelated /tmp entries must not be touched")
 
 
 if __name__ == "__main__":

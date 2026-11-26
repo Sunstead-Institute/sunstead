@@ -38,8 +38,9 @@ Needs Python 3.9+, git, and elan (https://github.com/leanprover/elan) for
 `lake`. Building against Mathlib downloads several GB of cache.
 
 Exit status: 0 verified, 1 check failed, 2 usage or environment problem,
-3 not checkable against upstream automatically (the upstream `sorry` sits
-inside a larger declaration that the mission split out as its own theorem).
+3 not checkable against upstream automatically (e.g. a self-contained or
+hill-climb arena, a refutation/subgoal entry, or an upstream `sorry` inside a
+larger declaration that the mission split out as its own theorem).
 """
 import argparse
 import ast
@@ -53,6 +54,8 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
+import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 
@@ -65,7 +68,12 @@ COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 MISSION_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,119}$")
 SIMPLE_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z_0-9']*$")
-SCOPED_PREFIX_RE = re.compile(r"^(?:set_option|open|attribute|local|scoped)\b.*\bin\s*$")
+SCOPED_PREFIX_RE = re.compile(r"^(?:set_option|open|attribute|local|scoped|omit|include)\b.*\bin\s*$")
+IMPORT_LINE_RE = re.compile(
+    r"^(?P<prefix>(?:(?:public|private)\s+)?(?:meta\s+)?import(?:\s+all)?)\s+(?P<mods>.+)$"
+)
+TRANSIENT_HTTP_STATUSES = frozenset({429, 502, 503, 504})
+FETCH_BACKOFFS = (0.5, 1.5)
 MAX_DOWNLOAD = 64 * 1024 * 1024
 # Commands in contributed code that run arbitrary code at build time, or swap a
 # definition's runtime implementation. A proof of a theorem has no use for them.
@@ -93,9 +101,9 @@ DECL_KINDS = (
     "example", "opaque", "inductive", "axiom",
 )
 PROOF_KINDS = {"theorem", "lemma"}
-MODIFIERS = ("private", "protected", "noncomputable", "nonrec", "partial", "unsafe", "scoped", "local")
+MODIFIERS = ("public", "private", "protected", "noncomputable", "nonrec", "partial", "unsafe", "scoped", "local")
 DECL_RE = re.compile(
-    r"^(?:@\[[^\n]*?\]\s*)?(?:(?:" + "|".join(MODIFIERS) + r")\s+)*"
+    r"^(?:@\[[^\n]*?\]\s*)*(?:(?:" + "|".join(MODIFIERS) + r")\s+)*"
     r"(?P<kind>" + "|".join(DECL_KINDS) + r")\b\s*(?P<name>[^\s:({\[⦃]*)"
 )
 SORRY_RE = re.compile(r"(?<![\w.'])sorry(?![\w'])")
@@ -167,14 +175,17 @@ class Decl:
 def split_declarations(src: str):
     """Split a Lean file into top-level declarations. A declaration starts at a
     column-0 line matching DECL_RE (attributes allowed on the same line) and
-    ends where the next column-0 declaration, `namespace`, `section`, `end`,
-    `open`, `variable` or attribute line starts."""
+    ends where the next column-0 declaration, `module`, `namespace`, `section`,
+    `public section`, `end`, `open`, `variable` or attribute line starts."""
     masked = mask_comments_and_strings(src)
     raw_lines = src.split("\n")
     lines = masked.split("\n")
     starts = []
     ns_stack = []
-    boundary = re.compile(r"^(namespace|section|end|open|variable|universe|set_option|@\[|#|noncomputable section|mutual)\b")
+    boundary = re.compile(
+        r"^(module|namespace|section|end|open|variable|universe|set_option|@\[|#|"
+        r"(?:(?:public|noncomputable)\s+)+section|mutual)\b"
+    )
     ns_at = {}
     for idx, line in enumerate(lines):
         m = re.match(r"^namespace\s+([\w'.]+)", line)
@@ -274,7 +285,18 @@ def load_mission(missions_root: str, proof: dict) -> dict:
     manifest = json.loads(read(os.path.join(mdir, "sunstead.json")))
     if manifest.get("demo"):
         raise VerifyError(f"{mid} is a demo mission; it has no upstream")
-    upstream = json.loads(read(os.path.join(mdir, "UPSTREAM.json")))
+    if manifest.get("mode") == "hillclimb":
+        raise NotUpstreamCheckable(
+            f"{mid} is a self-contained hill-climb optimization arena, not an upstream Lean `sorry` proof; "
+            "verify its diff directly against the mission seed bundle"
+        )
+    upstream_path = os.path.join(mdir, "UPSTREAM.json")
+    if not os.path.isfile(upstream_path):
+        raise NotUpstreamCheckable(
+            f"{mid} has no UPSTREAM.json (self-contained arena without an upstream Lean `sorry` to splice into); "
+            "verify its diff directly against the mission seed bundle"
+        )
+    upstream = json.loads(read(upstream_path))
     for k in ("repo", "commit", "license"):
         if not upstream.get(k):
             raise VerifyError(f"UPSTREAM.json missing {k}")
@@ -285,18 +307,27 @@ def load_mission(missions_root: str, proof: dict) -> dict:
         raise VerifyError(f"task {proof.get('task_id')!r} not in {mid}/sunstead.json")
     if len(task.get("target_files", [])) != 1:
         raise VerifyError("only tasks with exactly one target file are supported")
-    repo, commit, path, line_a, line_b = parse_upstream_url(task.get("upstream_url", ""))
+    upstream_url = (task.get("upstream_url") or "").strip()
+    if not upstream_url:
+        raise NotUpstreamCheckable(
+            f"task {task['id']!r} in {mid} has no upstream_url (self-contained task with no upstream Lean `sorry` "
+            "to splice into); verify its diff directly against the mission seed bundle"
+        )
+    repo, commit, path, line_a, line_b = parse_upstream_url(upstream_url)
     if repo != upstream["repo"] or commit != upstream["commit"]:
         raise VerifyError(f"task upstream_url points at {repo}@{commit}, mission pins {upstream['repo']}@{upstream['commit']}")
     theorems = verify_theorems(read(os.path.join(mdir, "verify")))
     if task["id"] not in theorems:
         raise VerifyError(f"no theorem for task {task['id']} in {mid}/verify")
-    is_repo_snapshot = (manifest.get("snapshot") or {}).get("mode") == "repo-snapshot"
+    snapshot = manifest.get("snapshot") or {}
+    is_repo_snapshot = snapshot.get("mode") == "repo-snapshot"
+    allow_module_system = bool(snapshot.get("allow_module_system"))
     return {
         "id": mid, "dir": mdir, "manifest": manifest, "upstream": upstream, "task": task,
         "target_file": task["target_files"][0], "theorem": theorems[task["id"]],
         "upstream_path": path, "upstream_lines": (line_a, line_b),
         "is_repo_snapshot": is_repo_snapshot,
+        "allow_module_system": allow_module_system,
     }
 
 
@@ -392,11 +423,63 @@ def leading_block_start(lines, masked_lines, idx: int) -> int:
         if not raw.strip():
             break
         m = masked.strip()
-        if m == "" or m.startswith("@[") or SCOPED_PREFIX_RE.match(m):
+        if m == "" or (m.startswith("@[") and not re.search(r"\bsection\b", m)) or SCOPED_PREFIX_RE.match(m):
             j -= 1
             continue
         break
     return j
+
+
+def has_module_header(src: str) -> bool:
+    """Whether a Lean file opts into the Lean 4 module system via a top-level `module` directive."""
+    for line in mask_comments_and_strings(src).split("\n"):
+        t = line.strip()
+        if not t or t == "prelude":
+            continue
+        return bool(re.match(r"^module\b", t))
+    return False
+
+
+def parse_imports(src: str) -> list:
+    """Return `[(module_name, import_prefix), ...]` from a Lean file's header (comments ignored).
+    Handles Lean 4.36 module-system forms (`public import`, `private import`,
+    `public meta import`, `import all`, and multi-module import lines)."""
+    out = []
+    for line in mask_comments_and_strings(src).split("\n"):
+        t = line.strip()
+        if not t or t == "prelude" or re.match(r"^module\b", t):
+            continue
+        m = IMPORT_LINE_RE.match(t)
+        if not m:
+            break
+        prefix = " ".join(m.group("prefix").split())
+        for mod in m.group("mods").split():
+            if mod != "all":
+                out.append((mod, prefix))
+    return out
+
+
+def header_import_insert_line(src: str) -> int:
+    """0-based line index where new header imports should be inserted: right after
+    the last existing header import, or right after `module`/`prelude` if none, else 0."""
+    last_import = None
+    last_directive = None
+    for idx, line in enumerate(mask_comments_and_strings(src).split("\n")):
+        t = line.strip()
+        if not t:
+            continue
+        if t == "prelude" or re.match(r"^module\b", t):
+            last_directive = idx
+            continue
+        if IMPORT_LINE_RE.match(t):
+            last_import = idx
+            continue
+        break
+    if last_import is not None:
+        return last_import + 1
+    if last_directive is not None:
+        return last_directive + 1
+    return 0
 
 
 def decl_text_with_header(src: str, d) -> str:
@@ -434,8 +517,13 @@ def extract_contribution(seed: str, proved: str, theorem: str, allow_restated: b
         if h.sorry_lines:
             raise VerifyError(f"helper {h.name} contains `sorry`")
     late = [d.name for d in proved_decls if d.name not in seed_names and d.start_line > proved_target.start_line]
-    seed_imports = set(re.findall(r"^import\s+(\S+)", seed, re.M))
-    new_imports = [m for m in re.findall(r"^import\s+(\S+)", proved, re.M) if m not in seed_imports]
+    seed_imports = {mod for mod, _ in parse_imports(seed)}
+    new_imports = []
+    new_import_prefixes = {}
+    for mod, prefix in parse_imports(proved):
+        if mod not in seed_imports and mod not in new_import_prefixes:
+            new_imports.append(mod)
+            new_import_prefixes[mod] = prefix
     seed_opens = set(re.findall(r"^open\b.*$", seed, re.M))
     new_opens = [o for o in re.findall(r"^open\b.*$", proved, re.M) if o not in seed_opens]
     return {
@@ -446,6 +534,7 @@ def extract_contribution(seed: str, proved: str, theorem: str, allow_restated: b
         "helper_names": [d.name for d in helpers],
         "after_target": late,
         "new_imports": new_imports,
+        "new_import_prefixes": new_import_prefixes,
         "new_opens": new_opens,
     }
 
@@ -483,15 +572,21 @@ def transplant(upstream_src: str, mission: dict, contrib: dict) -> tuple:
     before = lines[:header_start] + helper_lines + lines[header_start:d.start_line - 1]
     decl_lines = new_decl.split("\n")
     text = "\n".join(before + decl_lines + lines[d.end_line:])
-    existing = set(re.findall(r"^import\s+(\S+)", upstream_src, re.M))
+    existing = {mod for mod, _ in parse_imports(upstream_src)}
     added_imports = [m for m in contrib["new_imports"] if m not in existing]
+    import_prefixes = contrib.get("new_import_prefixes") or {}
+    is_module = has_module_header(upstream_src)
     shift = len(added_imports)
     first = (header_start + 1 if helper_lines else len(before) + 1) + shift
     span = (first, len(before) + len(decl_lines) + shift)
     if added_imports:
-        imp = [m.end() for m in re.finditer(r"^import\s+\S+[^\n]*\n", text, re.M)]
-        at = imp[-1] if imp else 0
-        text = text[:at] + "".join(f"import {m}\n" for m in added_imports) + text[at:]
+        insert_at = header_import_insert_line(upstream_src)
+        rendered_imports = [
+            f"{import_prefixes.get(m, 'import') if is_module else 'import'} {m}"
+            for m in added_imports
+        ]
+        text_lines = text.split("\n")
+        text = "\n".join(text_lines[:insert_at] + rendered_imports + text_lines[insert_at:])
     ref = reference_statement(d, up_stmt, lines, masked, header_start)
     ref["at"] = header_start + shift  # 0-based line index in `text`, above helpers and header
     return text, d, span, ref
@@ -556,7 +651,9 @@ def lean_module(path: str) -> str:
 # elaborators, commands, `initialize` hooks or `#print` run), requires the
 # declaration to be a theorem, and lists its axioms with `collectAxioms`, so
 # nothing in the upstream or contributed source can rewrite the report (cf.
-# redteam.py's lean-spoof-axiom-report).
+# redteam.py's lean-spoof-axiom-report). For Lean 4.36+ `module` files
+# (`allow_module_system` / `module` header), `axiom_checker_source(import_all=True)`
+# adds `importAll := true` so `.olean.private` proof terms are loaded too.
 AXIOM_CHECKER = """import Lean
 open Lean
 
@@ -610,6 +707,19 @@ def main (args : List String) : IO UInt32 := do
 """
 
 
+def axiom_checker_source(import_all: bool = False) -> str:
+    """Return the standalone Lean axiom checker source. When `import_all` is True
+    (Lean 4.36+ `module` files), passes `importAll := true` to `importModules` so
+    `.olean.private` proof terms and private helpers are loaded for `collectAxioms`."""
+    if not import_all:
+        return AXIOM_CHECKER
+    return AXIOM_CHECKER.replace(
+        "#[{ module := mod }]",
+        "#[{ module := mod, importAll := true }]",
+        1,
+    )
+
+
 def tail(p, n=60) -> str:
     lines = (p.stdout + p.stderr).rstrip().splitlines()
     return "\n".join("    " + l for l in lines[-n:])
@@ -634,7 +744,7 @@ def read_axioms(output: str, decl_name: str) -> list:
 
 
 def build_and_check(updir: str, mission: dict, decl_name: str, log: list, scratch: str,
-                    ref_name: str = None) -> dict:
+                    ref_name: str = None, import_all: bool = None) -> dict:
     """Build the module and check the declaration. `ref_name` is the reference
     statement written into the file by `with_reference`; without it the type
     check against the pristine statement is skipped."""
@@ -653,8 +763,9 @@ def build_and_check(updir: str, mission: dict, decl_name: str, log: list, scratc
     )
     checks["sorry_warnings_in_file"] = [int(x) for x in sorry_warn]
     checker = os.path.join(scratch, "sunstead_axiom_check.lean")  # outside the upstream checkout
+    use_import_all = bool(mission.get("allow_module_system")) if import_all is None else bool(import_all)
     with open(checker, "w", encoding="utf-8") as f:
-        f.write(AXIOM_CHECKER)
+        f.write(axiom_checker_source(import_all=use_import_all))
     argv = ["lake", "env", "lean", "--run", checker, module, decl_name] + ([ref_name] if ref_name else [])
     p = run(argv, updir, check=False, timeout=3600, log=log)
     checks["statement_matches_upstream"] = bool(ref_name) and p.returncode == 0
@@ -678,11 +789,27 @@ def run_lints(updir: str, lint_cmds, log: list) -> list:
 
 # ---------------------------------------------------------------- public verification
 
-def fetch(url: str, limit: int = MAX_DOWNLOAD) -> bytes:
+def fetch(url: str, limit: int = MAX_DOWNLOAD, *, attempts: int = 3, sleep=time.sleep) -> bytes:
     if not url.startswith(("https://", "http://127.0.0.1", "http://localhost")):
         raise VerifyError(f"refusing non-https URL {url}")
-    with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=120) as r:
-        data = r.read(limit + 1)
+    max_attempts = max(1, attempts)
+    for attempt in range(1, max_attempts + 1):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=120) as r:
+                data = r.read(limit + 1)
+            break
+        except urllib.error.HTTPError as e:
+            if e.code not in TRANSIENT_HTTP_STATUSES or attempt >= max_attempts:
+                raise
+            try:
+                e.close()
+            except Exception:
+                pass
+            sleep(FETCH_BACKOFFS[min(attempt - 1, len(FETCH_BACKOFFS) - 1)])
+        except (urllib.error.URLError, TimeoutError, ConnectionResetError):
+            if attempt >= max_attempts:
+                raise
+            sleep(FETCH_BACKOFFS[min(attempt - 1, len(FETCH_BACKOFFS) - 1)])
     if len(data) > limit:
         raise VerifyError(f"{url} is larger than {limit} bytes")
     return data
@@ -804,7 +931,8 @@ def verify(args) -> dict:
         if not os.path.isfile(target):
             raise VerifyError(f"{mission['upstream_path']} not in upstream at the pinned commit")
         check_imports_resolve(updir, contrib)
-        new_src, decl, span, ref = transplant(read(target), mission, contrib)
+        upstream_src = read(target)
+        new_src, decl, span, ref = transplant(upstream_src, mission, contrib)
         checks = {}
         if args.no_build:
             with open(target, "w", encoding="utf-8") as f:
@@ -813,7 +941,10 @@ def verify(args) -> dict:
             with open(target, "w", encoding="utf-8") as f:
                 f.write(with_reference(new_src, ref))
             print(f"Building {lean_module(mission['upstream_path'])} (can take a while) ...", file=sys.stderr)
-            checks = build_and_check(updir, mission, decl.name, log, scratch, ref_name=ref["name"])
+            use_import_all = mission["allow_module_system"] or has_module_header(upstream_src)
+            checks = build_and_check(
+                updir, mission, decl.name, log, scratch, ref_name=ref["name"], import_all=use_import_all
+            )
             shift = len(ref["lines"])
             if any(span[0] + shift <= ln <= span[1] + shift for ln in checks["sorry_warnings_in_file"]):
                 raise VerifyError(f"{decl.name} (or a helper) still reports `sorry` after the build")

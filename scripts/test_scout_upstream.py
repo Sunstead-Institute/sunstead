@@ -127,6 +127,28 @@ class ScoutTests(unittest.TestCase):
         self.assertTrue(scout.feasibility_hints("", "theorem x : RH_up_to 3e12", ""))
         self.assertEqual(scout.feasibility_hints("", "theorem x (n : ℕ) : n + 0 = n", ""), [])
 
+    def test_lean436_module_public_declarations_and_public_section(self):
+        src = (
+            "module\n\n"
+            "public import Mathlib\n\n"
+            "namespace ModPkg\n\n"
+            "public def bad_def : Nat := sorry\n\n"
+            "public theorem pub_open (n : Nat) : n = n := by\n"
+            "  sorry\n\n"
+            "public section Sec\n\n"
+            "public lemma pub_lemma : True := by\n"
+            "  sorry\n\n"
+            "end Sec\n\n"
+            "end ModPkg\n"
+        )
+        rows = scout.analyze_file("ModPkg/Main.lean", src)
+        by_n = {d.name: (d, st, reasons) for d, _sl, st, reasons in rows}
+        self.assertEqual(by_n["ModPkg.pub_open"][1], "candidate")
+        self.assertNotIn("public section Sec", by_n["ModPkg.pub_open"][0].raw)
+        self.assertEqual(by_n["ModPkg.pub_lemma"][1], "candidate")
+        self.assertEqual(by_n["ModPkg.bad_def"][1], "excluded")
+        self.assertIn("def sorry", by_n["ModPkg.bad_def"][2][0])
+
 
 def cand(name, file="Foo/Bar.lean", line=10, status="candidate", **kw):
     return scout.Candidate("o/r", "c" * 40, file, line, "theorem", name, "", status, [], False, [], False, **kw)
