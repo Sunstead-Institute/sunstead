@@ -10,6 +10,8 @@ import {
   VERIFIER_APPS,
   buildCfDeployArgs,
   dockerfileInputs,
+  findApplication,
+  imageFromApplicationDetail,
   imageFromApplications,
   verifierInputsHash,
 } from "../scripts/deploy.mjs";
@@ -236,6 +238,65 @@ test("multi-toolchain deploy tracks v4.36.0, v4.35.0, and v4.31.0 verifier conta
             configuration: { image: v431Img },
           },
         ]),
+        "sunstead-verifier-lean4-v431"
+      ),
+    /active container rollout.*SUNSTEAD_VERIFIER_V431_IMAGE/
+  );
+});
+
+test("findApplication and imageFromApplicationDetail read authoritative single-app container state", () => {
+  const v431New = IMAGE.replace("sunstead-verifier-lean4", "sunstead-verifier-lean4-v431").replace(
+    DIGEST,
+    "c".repeat(64)
+  );
+  const app = findApplication(
+    JSON.stringify([
+      {
+        id: "a03319b6-dbe0-4f54-b965-2035d654ad0b",
+        name: "sunstead-verifier-lean4-v431",
+        active_rollout_id: "de3501c7-4844-4da7-ba38-c752776ef5ce",
+        configuration: { image: IMAGE },
+      },
+    ]),
+    "sunstead-verifier-lean4-v431"
+  );
+  assert.equal(app.id, "a03319b6-dbe0-4f54-b965-2035d654ad0b");
+
+  assert.equal(
+    imageFromApplicationDetail(
+      JSON.stringify({
+        id: app.id,
+        name: "sunstead-verifier-lean4-v431",
+        version: 6,
+        configuration: { image: v431New },
+      }),
+      "sunstead-verifier-lean4-v431"
+    ),
+    v431New
+  );
+  assert.equal(
+    imageFromApplicationDetail(
+      JSON.stringify({
+        result: {
+          id: app.id,
+          name: "sunstead-verifier-lean4-v431",
+          version: 6,
+          configuration: { image: v431New },
+        },
+      }),
+      "sunstead-verifier-lean4-v431"
+    ),
+    v431New
+  );
+  assert.throws(
+    () =>
+      imageFromApplicationDetail(
+        JSON.stringify({
+          id: app.id,
+          name: "sunstead-verifier-lean4-v431",
+          active_rollout_id: "still-rolling",
+          configuration: { image: v431New },
+        }),
         "sunstead-verifier-lean4-v431"
       ),
     /active container rollout.*SUNSTEAD_VERIFIER_V431_IMAGE/

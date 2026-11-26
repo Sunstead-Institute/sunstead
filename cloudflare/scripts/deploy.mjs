@@ -102,25 +102,20 @@ function run(cmd, args, opts = {}) {
   return r.status ?? 1;
 }
 
-/** Find the live (or active rollout target) image digest of a verifier application. */
-export function imageFromApplications(stdout, appName = APP_NAME) {
-  let parsed;
+function parseJsonFromCli(stdout, label) {
   const re = /^[ \t]*[[{]/gm;
   for (const m of stdout.matchAll(re)) {
     try {
       const candidate = JSON.parse(stdout.slice(m.index));
       if (candidate && typeof candidate === "object") {
-        parsed = candidate;
-        break;
+        return candidate;
       }
     } catch {}
   }
-  if (parsed === undefined) {
-    throw new Error("no JSON in `cf containers applications list` output");
-  }
-  const apps = Array.isArray(parsed) ? parsed : parsed.result ?? parsed.applications ?? parsed.items ?? [];
-  const app = apps.find((a) => a?.name === appName);
-  if (!app) throw new Error(`no container application named ${appName} (has a full deploy run yet?)`);
+  throw new Error(`no JSON in ${label} output`);
+}
+
+function extractImageFromApp(app, appName = APP_NAME) {
   const targetImage =
     app.target?.configuration?.image ?? app.rollout?.target_configuration?.image;
   if (typeof targetImage === "string" && targetImage.length > 0) {
@@ -130,13 +125,37 @@ export function imageFromApplications(stdout, appName = APP_NAME) {
     const envVar = VERIFIER_APPS.find((a) => a.name === appName)?.envVar ?? "SUNSTEAD_VERIFIER_IMAGE";
     throw new Error(
       `${appName} has an active container rollout (${app.active_rollout_id}) and its target image is not in ` +
-        "`cf containers applications list` yet (configuration.image may still report the pre-rollout digest). " +
+        "`cf containers applications` output yet (configuration.image may still report the pre-rollout digest). " +
         `Wait for the rollout to finish or pass ${envVar}=<registry.cloudflare.com/...@sha256:...> explicitly.`,
     );
   }
   const image = app.configuration?.image ?? app.image;
   if (typeof image !== "string") throw new Error(`${appName} has no configuration.image`);
   return image;
+}
+
+/** Find a named container application object in `cf containers applications list` output. */
+export function findApplication(stdout, appName = APP_NAME) {
+  const parsed = parseJsonFromCli(stdout, "`cf containers applications list`");
+  const apps = Array.isArray(parsed) ? parsed : parsed.result ?? parsed.applications ?? parsed.items ?? [];
+  const app = apps.find((a) => a?.name === appName);
+  if (!app) throw new Error(`no container application named ${appName} (has a full deploy run yet?)`);
+  return app;
+}
+
+/** Find the live (or active rollout target) image digest of a verifier application. */
+export function imageFromApplications(stdout, appName = APP_NAME) {
+  return extractImageFromApp(findApplication(stdout, appName), appName);
+}
+
+/** Find the live image digest from a single-application `cf containers applications get <id>` response. */
+export function imageFromApplicationDetail(stdout, appName = APP_NAME) {
+  const parsed = parseJsonFromCli(stdout, "`cf containers applications get`");
+  const app = Array.isArray(parsed) ? parsed.find((a) => a?.name === appName) : parsed.result ?? parsed;
+  if (!app || typeof app !== "object") {
+    throw new Error(`no container application detail for ${appName}`);
+  }
+  return extractImageFromApp(app, appName);
 }
 
 /** Build `cf deploy` args without duplicating `--containers-rollout` if caller supplied it. */
@@ -150,13 +169,27 @@ export function buildCfDeployArgs(cfArgs) {
 }
 
 function liveImage(appName = APP_NAME) {
-  const r = spawnSync("npx", ["cf", "containers", "applications", "list", "--name", appName], {
+  const listRes = spawnSync("npx", ["cf", "containers", "applications", "list", "--name", appName], {
     cwd: CF_ROOT,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "inherit"],
   });
-  if (r.status !== 0) throw new Error("`cf containers applications list` failed (are you logged in?)");
-  return imageFromApplications(r.stdout, appName);
+  if (listRes.status !== 0) throw new Error("`cf containers applications list` failed (are you logged in?)");
+  const app = findApplication(listRes.stdout, appName);
+  // Cloudflare's list endpoint can lag behind completed rollouts (reporting a stale
+  // `active_rollout_id` / previous version). Fetch the authoritative single-application
+  // record by ID whenever available.
+  if (typeof app.id === "string" && /^[0-9a-f-]+$/i.test(app.id)) {
+    const getRes = spawnSync("npx", ["cf", "containers", "applications", "get", app.id], {
+      cwd: CF_ROOT,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "inherit"],
+    });
+    if (getRes.status === 0) {
+      return imageFromApplicationDetail(getRes.stdout, appName);
+    }
+  }
+  return extractImageFromApp(app, appName);
 }
 
 function main(argv) {
