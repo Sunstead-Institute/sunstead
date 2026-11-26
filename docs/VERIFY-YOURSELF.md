@@ -12,10 +12,14 @@ curl -fsSLO https://sunstead.org/verify.py
 python3 verify.py <proof id>            # the hex in /proofs/<id>
 ```
 
-Each ledger entry that mirrors a single upstream `sorry` carries this command as
-`verify_command` (in `GET /api/proofs` and on its `/proofs/<id>` page). Demo and
-retired missions, hill-climb tasks, decomposition subgoals and refutations have
-none, because they have no single upstream declaration to check against.
+Each ledger entry carries a structured `verification` object (`mission_replay`
+for `bundle.tar.gz?base=seed` + `git am history.mbox`, and `upstream_replay`
+for `/verify.py` when `upstream.anchor_kind` is `in_place_sorry` or
+`challenge_node`), plus top-level `verify_command` for compatibility. Demo and
+retired missions, hill-climb optimization tracks (`optimization_spec`),
+extracted lemmas (`extracted_lemma`), decomposition subgoals, and refutations
+have `upstream_replay: null` (`verify_command: null`), because they have no
+single upstream declaration to splice into automatically.
 
 ## What it does
 
@@ -80,12 +84,12 @@ run page. Exit 3 (not upstream-checkable) is reported but does not fail the run.
 
 ## For maintainers
 
-`scripts/export-upstream.py` (see [UPSTREAM-EXPORT.md](UPSTREAM-EXPORT.md))
-uses this file as its engine, so the public check and the upstream PR bundle
-cannot disagree. The Lean declaration parser is copied from
-`scripts/scout-upstream.py` to keep `verify.py` a single file;
-`scripts/test_sunstead_verify.py` fails if the two drift apart, and `scripts/e2e.py`
-checks that `/verify.py` is served byte for byte from this repository.
+The Lean declaration parser in `scripts/sunstead_verify.py` is copied from
+`scripts/scout-upstream.py` to keep `verify.py` a single stdlib-only file;
+`scripts/test_sunstead_verify.py` fails if the two drift apart, and
+`scripts/e2e.py` checks that `/verify.py` is served byte for byte from this
+repository.
 
-Tests: `python3 scripts/test_sunstead_verify.py` (offline) and
-`python3 scripts/test_export_upstream.py` (its `BuildTests` need `lake`).
+Tests: `python3 scripts/test_sunstead_verify.py -v` (offline tests run without
+Lean; `PublicBuildTests` runs `lake build`, reference-statement comparison, and
+the standalone `AXIOM_CHECKER` whenever `lake` is on `PATH`).

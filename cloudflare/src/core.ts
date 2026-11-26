@@ -237,6 +237,20 @@ export interface DisputedCounterexample {
   created_at: number;
 }
 
+export interface UpstreamDispute {
+  source: string;
+  reason: string;
+  url?: string;
+  recorded_at: string;
+}
+
+export type UpstreamAnchorKind =
+  | "in_place_sorry"
+  | "challenge_node"
+  | "extracted_lemma"
+  | "optimization_spec"
+  | "none";
+
 export interface TaskDefinition {
   id: string;
   title: string;
@@ -251,7 +265,15 @@ export interface TaskDefinition {
    * are paid only for the part of an improvement that goes beyond it.
    */
   best_known?: BestKnown | null;
+  /**
+   * Hub-only notice that a task's pinned upstream statement is known to be false
+   * or misstated upstream. Injected from `missions/task-disputes.json` by
+   * `scripts/sync-assets.mjs` without altering any mission's `spec_sha256`.
+   */
+  upstream_disputed?: UpstreamDispute | null;
   upstream_url?: string;
+  /** Optional explicit override for how `upstream_url` anchors into the upstream repo. */
+  upstream_anchor?: UpstreamAnchorKind;
   /** Dynamic decomposition subgoal fields (v2). */
   parent_task_id?: string | null;
   root_task_id?: string | null;
@@ -507,6 +529,26 @@ export function validatePatch(
   return touched;
 }
 
+export function isTaskDisputed(
+  task: Pick<TaskState, "def" | "disputed_counterexample">
+): boolean {
+  return Boolean(task.disputed_counterexample || task.def.upstream_disputed);
+}
+
+export function taskDisputeReason(
+  task: Pick<TaskState, "def" | "disputed_counterexample">
+): string | null {
+  if (task.disputed_counterexample) {
+    const ref = task.disputed_counterexample;
+    return `task '${task.def.id}' has a kernel-verified counterexample (${ref.refutation_id} by ${ref.refuter})`;
+  }
+  if (task.def.upstream_disputed) {
+    const u = task.def.upstream_disputed;
+    return `task '${task.def.id}' is marked upstream-disputed${u.url ? ` (${u.url})` : ""}: ${u.reason}`;
+  }
+  return null;
+}
+
 export function isTaskUnlocked(task: TaskState, allTasks: TaskState[]): boolean {
   const deps = task.def.depends_on || [];
   return deps.every((depId) => {
@@ -518,6 +560,7 @@ export function isTaskUnlocked(task: TaskState, allTasks: TaskState[]): boolean 
 export function computeFrontier(mode: MissionMode, tasks: TaskState[]): string[] {
   return tasks
     .filter((t) => {
+      if (isTaskDisputed(t)) return false;
       const unlocked = isTaskUnlocked(t, tasks);
       return mode === "dag" ? unlocked && t.status !== "verified" : unlocked;
     })
@@ -535,6 +578,10 @@ export function applyClaim(
 ): { lease: Lease; updated_status: TaskStatus } {
   const task = allTasks.find((t) => t.def.id === taskId);
   if (!task) throw new Error(`task not found: ${taskId}`);
+  const disputeMsg = taskDisputeReason(task);
+  if (disputeMsg) {
+    throw new Error(`${disputeMsg} and cannot be claimed`);
+  }
   if (!isTaskUnlocked(task, allTasks)) {
     throw new Error(`task '${taskId}' is blocked on unverified dependencies`);
   }
@@ -1399,19 +1446,62 @@ export function howToRebuild(hubOrigin: string, missionId: string): string {
 }
 
 /**
+ * Classify how a task's `upstream_url` anchors into its pinned upstream repository:
+ * - `in_place_sorry`: verbatim top-level `sorry` in upstream (e.g. LNSym, PNT, curve25519-dalek).
+ * - `challenge_node`: IEANTN `Challenge.lean` node declaration (verifiable by `/verify.py`
+ *   directly against `Challenge.lean`; upstream PRs land under `Solutions/`).
+ * - `extracted_lemma`: mission extracted a nested `sorry` into its own top-level theorem
+ *   (e.g. `arklib-near-capacity-primes`); `/verify.py` cannot splice automatically.
+ * - `optimization_spec`: hill-climb optimization track pinned to an upstream specification/table.
+ * - `none`: demo/retired mission or task with no upstream link.
+ */
+export function resolveUpstreamAnchor(
+  manifest: Pick<MissionManifest, "id" | "mode" | "demo" | "upstream"> | null,
+  taskDef: Pick<TaskDefinition, "upstream_url" | "upstream_anchor"> | null
+): UpstreamAnchorKind {
+  if (!manifest || manifest.demo || !manifest.upstream || !taskDef?.upstream_url) {
+    return "none";
+  }
+  if (taskDef.upstream_anchor) {
+    return taskDef.upstream_anchor;
+  }
+  if (manifest.mode === "hillclimb") {
+    return "optimization_spec";
+  }
+  if (/\/IEANTN\/Nodes\/[^/]+\/[^/]+\/Challenge\.lean(?:#|$)/.test(taskDef.upstream_url)) {
+    return "challenge_node";
+  }
+  if (manifest.id === "arklib-near-capacity-primes") {
+    return "extracted_lemma";
+  }
+  return "in_place_sorry";
+}
+
+/**
  * Command that checks one ledger proof against its upstream repository with the
  * standalone public verifier (`/verify.py`, scripts/sunstead_verify.py), so the
  * check trusts the upstream repo and stock Lean rather than Sunstead. Null when
  * the entry has no single upstream `sorry` to check against (demo and retired
- * missions, hill-climb tasks, decomposition subgoals, refutations, assembled roots).
+ * missions, hill-climb tasks, extracted lemmas, decomposition subgoals,
+ * refutations, assembled roots).
  */
 export function verifyCommand(
   hubOrigin: string,
   proofId: string | null,
-  entry: { entry_kind: string; mission_demo: boolean; upstream: { task_url: string | null } | null }
+  entry: {
+    entry_kind: string;
+    mission_demo: boolean;
+    mission_mode?: MissionMode | null;
+    upstream: { task_url: string | null; anchor_kind?: UpstreamAnchorKind } | null;
+  }
 ): string | null {
   if (!proofId || !/^[0-9a-f]{64}$/.test(proofId)) return null;
   if (entry.entry_kind !== "proof" || entry.mission_demo || !entry.upstream?.task_url) return null;
+  if (entry.mission_mode === "hillclimb") return null;
+  const anchor = entry.upstream.anchor_kind;
+  if (anchor !== undefined && anchor !== "in_place_sorry" && anchor !== "challenge_node") {
+    return null;
+  }
   const hubArg = hubOrigin === "https://sunstead.org" ? "" : ` --hub ${shellQuote(hubOrigin)}`;
   return `curl -fsSLO ${shellQuote(`${hubOrigin}/verify.py`)} && python3 verify.py ${proofId}${hubArg}`;
 }
@@ -1581,14 +1671,38 @@ export function buildLedgerEntry(
         ? `Refutation: ¬ (${taskDef.title})`
         : taskDef?.title ?? null;
   const proofId = proofIdFromPatchSha(row.patch_sha256);
+  const anchorKind = resolveUpstreamAnchor(manifest, taskDef);
   const upstreamView = upstream
     ? {
         repo: upstream.repo,
         commit: upstream.commit,
         license: upstream.license,
         task_url: taskDef?.upstream_url ?? null,
+        anchor_kind: anchorKind,
       }
     : null;
+  const upVerifyCmd = verifyCommand(hubOrigin, proofId, {
+    entry_kind: entryKind,
+    mission_demo: isDemo,
+    mission_mode: manifest?.mode ?? null,
+    upstream: upstreamView,
+  });
+  const missionReplay =
+    manifest !== null && entryKind !== "refutation" && entryKind !== "subgoal"
+      ? {
+          bundle_url: `${hubOrigin}/api/missions/${encodeURIComponent(row.mission_id)}/bundle.tar.gz?base=seed`,
+          history_mbox_url: `${hubOrigin}/api/missions/${encodeURIComponent(row.mission_id)}/history.mbox`,
+          command: howToRebuild(hubOrigin, row.mission_id),
+        }
+      : null;
+  const upstreamReplay =
+    upVerifyCmd && (anchorKind === "in_place_sorry" || anchorKind === "challenge_node")
+      ? {
+          kind: anchorKind,
+          script_url: `${hubOrigin}/verify.py`,
+          command: upVerifyCmd,
+        }
+      : null;
   return {
     proof_id: proofId,
     patch_sha256: row.patch_sha256,
@@ -1602,11 +1716,11 @@ export function buildLedgerEntry(
     task_id: row.task_id,
     task_title: taskTitle,
     upstream: upstreamView,
-    verify_command: verifyCommand(hubOrigin, proofId, {
-      entry_kind: entryKind,
-      mission_demo: isDemo,
-      upstream: upstreamView,
-    }),
+    verify_command: upVerifyCmd,
+    verification: {
+      mission_replay: missionReplay,
+      upstream_replay: upstreamReplay,
+    },
     contributor: row.contributor,
     display_name: row.display_name || row.contributor,
     github: social.github,
@@ -1863,6 +1977,10 @@ export function checkDecompositionEligibility(opts: {
   }
   if (task.status === "verified") {
     throw new Error(`task '${task.def.id}' is already verified`);
+  }
+  const disputeMsg = taskDisputeReason(task);
+  if (disputeMsg) {
+    throw new Error(`${disputeMsg} and cannot be decomposed`);
   }
   const parentDepth = task.def.decomp_depth ?? 0;
   const maxDepth = Math.min(MAX_DECOMPOSE_DEPTH, Math.max(1, policy.max_depth ?? MAX_DECOMPOSE_DEPTH));

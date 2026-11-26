@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Offline tests for scripts/sunstead_verify.py, the public verifier served at
-https://sunstead.org/verify.py (no network, no Lean: --no-build).
+"""Tests for scripts/sunstead_verify.py, the public verifier served at
+https://sunstead.org/verify.py.
 
-The build, axiom and spoofing paths are shared with export-upstream.py and
-covered by test_export_upstream.py's BuildTests.
+Offline tests (`ParityTests`, `VerifyTests`) need no network and no Lean
+(`--no-build`). `PublicBuildTests` runs end-to-end with `lake build` and the
+standalone `AXIOM_CHECKER` whenever `lake` is on PATH.
 
-Run: python3 scripts/test_sunstead_verify.py
+Run: python3 scripts/test_sunstead_verify.py -v
 """
 import contextlib
 import hashlib
@@ -14,12 +15,14 @@ import inspect
 import io
 import json
 import os
+import subprocess
 import sys
 import tarfile
 import tempfile
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
 
 
 def load(name, filename):
@@ -32,7 +35,116 @@ def load(name, filename):
 
 sv = load("sunstead_verify_under_test", "sunstead_verify.py")
 scout = load("scout_upstream_for_parity", "scout-upstream.py")
-fx = load("export_fixtures", "test_export_upstream.py")
+
+GIT = ["git", "-c", "user.name=t", "-c", "user.email=t@localhost", "-c", "commit.gpgsign=false"]
+
+UPSTREAM_FILE = """import Mathlib
+
+namespace Up
+
+def liouville : Nat := 1
+
+/-- The Liouville function is completely multiplicative. -/
+@[simp] lemma isCM_liouville :
+    liouville = 1 := by
+  sorry
+
+lemma other_open : True := by
+  sorry
+
+end Up
+"""
+
+SEED_FILE = """import M1.Spec
+
+namespace M1
+
+/-- Open `sorry` from `Up/Ch1.lean:8`. -/
+lemma isCM_liouville :
+    liouville = 1 := by
+  sorry
+
+end M1
+"""
+
+PROVED_FILE = """import M1.Spec
+import Mathlib.Tactic.Ring
+
+namespace M1
+
+/-- A helper the contributor added. -/
+theorem helper_one : (1 : Nat) = 1 := rfl
+
+/-- Open `sorry` from `Up/Ch1.lean:8`. -/
+lemma isCM_liouville :
+    liouville = 1 := by
+  -- the actual proof
+  exact helper_one
+
+end M1
+"""
+
+VERIFY = '''#!/usr/bin/env python3
+TASKS = {
+    "is_cm": {
+        "module": "M1.Mult",
+        "theorem": "M1.isCM_liouville",
+        "statement": "def is_cm : Prop := True",
+    },
+}
+'''
+
+CORE_UPSTREAM = """namespace Up
+
+def liouville : Nat := 1
+
+/-- Upstream open lemma. -/
+theorem isCM_liouville :
+    liouville = 1 := by
+  sorry
+
+end Up
+"""
+
+CORE_SEED = """namespace M1
+
+def liouville : Nat := 1
+
+/-- Open `sorry` from `Up/Ch1.lean:6`. -/
+theorem isCM_liouville :
+    liouville = 1 := by
+  sorry
+
+end M1
+"""
+
+
+def write(path, text):
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+
+
+def read(path):
+    with open(path, encoding="utf-8") as f:
+        return f.read()
+
+
+def git(cwd, *args):
+    return subprocess.run([*GIT, *args], cwd=cwd, check=True, capture_output=True, text=True).stdout
+
+
+def make_patch(path, before, after, mode=None):
+    with tempfile.TemporaryDirectory() as d:
+        os.makedirs(os.path.join(d, os.path.dirname(path)))
+        full = os.path.join(d, path)
+        write(full, before)
+        git(d, "init", "-q")
+        git(d, "add", "-A")
+        git(d, "commit", "-q", "-m", "s")
+        write(full, after)
+        if mode:
+            os.chmod(full, int(mode, 8))
+        return git(d, "diff")
 
 
 def tar_of(directory, extra=()):
@@ -69,7 +181,7 @@ class ParityTests(unittest.TestCase):
             self.assertEqual(getattr(sv, name).pattern, getattr(scout, name).pattern)
 
     def test_stdlib_only(self):
-        src = fx.read(os.path.join(HERE, "sunstead_verify.py"))
+        src = read(os.path.join(HERE, "sunstead_verify.py"))
         for line in src.splitlines():
             if line.startswith(("import ", "from ")):
                 mod = line.split()[1].split(".")[0]
@@ -79,11 +191,52 @@ class ParityTests(unittest.TestCase):
                 }, line)
 
 
-class VerifyTests(fx.ExportTests.__base__):
-    # Reuse ExportTests' fixture (fake upstream git repo + mission m1) without its tests.
-    setUp = fx.ExportTests.setUp
-    tearDown = fx.ExportTests.tearDown
-    write_mission = fx.ExportTests.write_mission
+class VerifyTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        t = self.tmp.name
+        self.up = os.path.join(t, "upstream")
+        os.makedirs(os.path.join(self.up, "Up"))
+        write(os.path.join(self.up, "Up", "Ch1.lean"), UPSTREAM_FILE)
+        git(self.up, "init", "-q")
+        git(self.up, "add", "-A")
+        git(self.up, "commit", "-q", "-m", "upstream")
+        git(self.up, "config", "uploadpack.allowReachableSHA1InWant", "true")
+        self.sha = git(self.up, "rev-parse", "HEAD").strip()
+        self.missions = os.path.join(t, "missions")
+        self.write_mission()
+        self.proof = {
+            "proof_id": "ab" * 32,
+            "permalink": "https://sunstead.org/proofs/" + "ab" * 32,
+            "mission_id": "m1",
+            "task_id": "is_cm",
+            "contributor": "codex-dirichlet",
+            "display_name": "Codex Dirichlet",
+            "github": "codex-dirichlet",
+            "spec_is_current": True,
+            "patch": make_patch("M1/Mult.lean", SEED_FILE, PROVED_FILE),
+        }
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def write_mission(self, demo=False, seed=SEED_FILE):
+        m = os.path.join(self.missions, "m1")
+        os.makedirs(os.path.join(m, "M1"), exist_ok=True)
+        manifest = {
+            "id": "m1", "title": "M1", "tier": 1, "mode": "dag", "demo": demo,
+            "upstream": {"repo": "o/up", "commit": self.sha, "license": "Apache-2.0"},
+            "frozen_paths": ["M1/Spec.lean"],
+            "tasks": [{
+                "id": "is_cm", "title": "cm", "target_files": ["M1/Mult.lean"],
+                "upstream_url": f"https://github.com/o/up/blob/{self.sha}/Up/Ch1.lean#L8-L9",
+            }],
+        }
+        write(os.path.join(m, "sunstead.json"), json.dumps(manifest))
+        write(os.path.join(m, "UPSTREAM.json"), json.dumps({"repo": "o/up", "commit": self.sha, "license": "Apache-2.0", "checks": []}))
+        write(os.path.join(m, "verify"), VERIFY)
+        write(os.path.join(m, "M1", "Spec.lean"), "def liouville : Nat := 1\n")
+        write(os.path.join(m, "M1", "Mult.lean"), seed)
 
     def proof_with(self, patch=None, **kw):
         p = dict(self.proof)
@@ -96,7 +249,7 @@ class VerifyTests(fx.ExportTests.__base__):
     def run_verify(self, proof=None, bundle=None, extra=("--no-build",)):
         t = self.tmp.name
         pj = os.path.join(t, "proof.json")
-        fx.write(pj, json.dumps(proof or self.proof_with()))
+        write(pj, json.dumps(proof or self.proof_with()))
         bj = os.path.join(t, "seed.tar.gz")
         with open(bj, "wb") as f:
             f.write(bundle if bundle is not None else tar_of(os.path.join(self.missions, "m1")))
@@ -126,7 +279,10 @@ class VerifyTests(fx.ExportTests.__base__):
         keep = os.path.join(self.tmp.name, "kept")
         code, err, _ = self.run_verify(extra=("--no-build", "--keep", keep))
         self.assertEqual(code, 0, err)
-        self.assertIn("exact helper_one", fx.read(os.path.join(keep, "Up", "Ch1.lean")))
+        patched = read(os.path.join(keep, "Up", "Ch1.lean"))
+        self.assertIn("exact helper_one", patched)
+        self.assertIn("import Mathlib.Tactic.Ring", patched)
+        self.assertEqual(patched.count("sorry"), 1, "only other_open retains sorry")
         code, err, _ = self.run_verify(extra=("--no-build", "--keep", keep))
         self.assertEqual(code, 2, "refuses to overwrite an existing --keep dir")
 
@@ -138,29 +294,61 @@ class VerifyTests(fx.ExportTests.__base__):
     def test_restated_theorem_uses_the_upstream_statement(self):
         # Only the proof is taken: the spliced declaration keeps the upstream
         # statement verbatim, and a real build's reference check decides.
-        restated = fx.PROVED_FILE.replace("liouville = 1 := by\n  --", "M1.liouville = 1 := by\n  --")
+        restated = PROVED_FILE.replace("liouville = 1 := by\n  --", "M1.liouville = 1 := by\n  --")
         keep = os.path.join(self.tmp.name, "kept")
         code, err, out = self.run_verify(
-            self.proof_with(fx.make_patch("M1/Mult.lean", fx.SEED_FILE, restated)), extra=("--no-build", "--keep", keep)
+            self.proof_with(make_patch("M1/Mult.lean", SEED_FILE, restated)), extra=("--no-build", "--keep", keep)
         )
         self.assertEqual(code, 0, err)
         self.assertIn("restates the theorem", out)
-        self.assertIn("lemma isCM_liouville :\n    liouville = 1 := by\n  -- the actual proof", fx.read(os.path.join(keep, "Up", "Ch1.lean")))
+        self.assertIn(
+            "lemma isCM_liouville :\n    liouville = 1 := by\n  -- the actual proof",
+            read(os.path.join(keep, "Up", "Ch1.lean")),
+        )
+        # Strict mode rejects any statement text change.
+        with self.assertRaises(sv.VerifyError) as cm:
+            sv.extract_contribution(SEED_FILE, restated, "M1.isCM_liouville", allow_restated=False)
+        self.assertIn("changed the frozen statement", str(cm.exception))
 
     def test_rejects_upstream_mismatch(self):
         # A seed whose statement differs from upstream (a dishonest or stale hub) is caught upstream-side.
-        seed2 = fx.SEED_FILE.replace("liouville = 1", "liouville = 2")
+        seed2 = SEED_FILE.replace("liouville = 1", "liouville = 2")
         self.write_mission(seed=seed2)
-        proved2 = fx.PROVED_FILE.replace("liouville = 1", "liouville = 2")
-        code, err, _ = self.run_verify(self.proof_with(fx.make_patch("M1/Mult.lean", seed2, proved2)))
+        proved2 = PROVED_FILE.replace("liouville = 1", "liouville = 2")
+        code, err, _ = self.run_verify(self.proof_with(make_patch("M1/Mult.lean", seed2, proved2)))
         self.assertEqual(code, 1)
         self.assertIn("upstream statement differs", err)
 
     def test_rejects_remaining_sorry(self):
-        bad = fx.PROVED_FILE.replace("exact helper_one", "sorry")
-        code, err, _ = self.run_verify(self.proof_with(fx.make_patch("M1/Mult.lean", fx.SEED_FILE, bad)))
+        bad = PROVED_FILE.replace("exact helper_one", "sorry")
+        code, err, _ = self.run_verify(self.proof_with(make_patch("M1/Mult.lean", SEED_FILE, bad)))
         self.assertEqual(code, 1)
         self.assertIn("still contains `sorry`", err)
+
+    def test_refuses_sorry_in_a_helper(self):
+        bad = PROVED_FILE.replace("(1 : Nat) = 1 := rfl", "(1 : Nat) = 1 := by sorry")
+        code, err, _ = self.run_verify(self.proof_with(make_patch("M1/Mult.lean", SEED_FILE, bad)))
+        self.assertEqual(code, 1)
+        self.assertIn("helper M1.helper_one contains `sorry`", err)
+
+    def test_does_not_duplicate_imports_upstream_already_has(self):
+        proved = PROVED_FILE.replace("import Mathlib.Tactic.Ring\n", "import Mathlib.Tactic.Ring\nimport Mathlib\n")
+        keep = os.path.join(self.tmp.name, "kept-imports")
+        code, err, _ = self.run_verify(
+            self.proof_with(make_patch("M1/Mult.lean", SEED_FILE, proved)),
+            extra=("--no-build", "--keep", keep),
+        )
+        self.assertEqual(code, 0, err)
+        patched = read(os.path.join(keep, "Up", "Ch1.lean"))
+        self.assertEqual(patched.count("import Mathlib\n"), 1)
+        self.assertEqual(patched.count("import Mathlib.Tactic.Ring\n"), 1)
+
+    def test_refuses_mode_changes(self):
+        patch = make_patch("M1/Mult.lean", SEED_FILE, PROVED_FILE, mode="755")
+        self.assertIn("new mode 100755", patch)
+        code, err, _ = self.run_verify(self.proof_with(patch))
+        self.assertEqual(code, 1)
+        self.assertIn("changes file mode", err)
 
     def test_ledger_and_bundle_upstream_must_agree(self):
         code, err, _ = self.run_verify(self.proof_with(upstream={"repo": "evil/up", "commit": self.sha}))
@@ -170,17 +358,17 @@ class VerifyTests(fx.ExportTests.__base__):
     def test_refuses_metaprogramming_unless_allowed(self):
         for snippet in (
             'elab "cheat" : tactic => pure ()',
-            "macro \"cheat\" : tactic => `(tactic| rfl)",
+            'macro "cheat" : tactic => `(tactic| rfl)',
             "@[implemented_by foo] def bar : Nat := 1",
             "initialize counter : IO.Ref Nat ← IO.mkRef 0",
             None,  # in-proof: run_tac
         ):
             # Directly after the helper, so it rides along with what gets spliced upstream.
             if snippet is None:
-                proved = fx.PROVED_FILE.replace("  exact helper_one", "  run_tac (pure ())\n  exact helper_one")
+                proved = PROVED_FILE.replace("  exact helper_one", "  run_tac (pure ())\n  exact helper_one")
             else:
-                proved = fx.PROVED_FILE.replace(":= rfl\n", ":= rfl\n\n" + snippet + "\n")
-            proof = self.proof_with(fx.make_patch("M1/Mult.lean", fx.SEED_FILE, proved))
+                proved = PROVED_FILE.replace(":= rfl\n", ":= rfl\n\n" + snippet + "\n")
+            proof = self.proof_with(make_patch("M1/Mult.lean", SEED_FILE, proved))
             code, err, _ = self.run_verify(proof)
             self.assertEqual(code, 1, snippet)
             self.assertIn("runs code at build time", err)
@@ -188,19 +376,19 @@ class VerifyTests(fx.ExportTests.__base__):
         self.assertEqual(code, 0, err)
 
     def test_metaprogramming_words_in_comments_and_names_are_fine(self):
-        proved = fx.PROVED_FILE.replace("-- the actual proof", "-- no macro or #eval here; elab-free")
+        proved = PROVED_FILE.replace("-- the actual proof", "-- no macro or #eval here; elab-free")
         proved = proved.replace("theorem helper_one", "theorem macro_free_helper_one").replace("exact helper_one", "exact macro_free_helper_one")
-        code, err, _ = self.run_verify(self.proof_with(fx.make_patch("M1/Mult.lean", fx.SEED_FILE, proved)))
+        code, err, _ = self.run_verify(self.proof_with(make_patch("M1/Mult.lean", SEED_FILE, proved)))
         self.assertEqual(code, 0, err)
 
     def test_upstream_sorry_inside_a_larger_declaration_is_not_checkable(self):
-        up = fx.UPSTREAM_FILE.replace(
+        up = UPSTREAM_FILE.replace(
             "@[simp] lemma isCM_liouville :\n    liouville = 1 := by\n  sorry",
             "@[simp] lemma big_theorem :\n    liouville = 1 := by\n  have h : liouville = 1 := by\n    sorry\n  exact h",
         )
-        fx.write(os.path.join(self.up, "Up", "Ch1.lean"), up)
-        fx.git(self.up, "commit", "-qam", "nested")
-        self.sha = fx.git(self.up, "rev-parse", "HEAD").strip()
+        write(os.path.join(self.up, "Up", "Ch1.lean"), up)
+        git(self.up, "commit", "-qam", "nested")
+        self.sha = git(self.up, "rev-parse", "HEAD").strip()
         self.write_mission()
         code, err, _ = self.run_verify()
         self.assertEqual(code, 3, err)
@@ -239,7 +427,7 @@ class VerifyTests(fx.ExportTests.__base__):
         self.assertIn("elan", err)
 
     def test_reference_statement_is_the_pristine_upstream_statement(self):
-        src = fx.UPSTREAM_FILE
+        src = UPSTREAM_FILE
         mission = sv.load_mission(self.missions, self.proof)
         seed, proved = sv.proved_file(mission, self.proof["patch"], self.tmp.name)
         contrib = sv.extract_contribution(seed, proved, mission["theorem"])
@@ -279,10 +467,141 @@ class VerifyTests(fx.ExportTests.__base__):
 
     def test_import_of_another_task_file_is_not_upstream_checkable(self):
         # Upstream has `Up/`, so `Up.Ch2` would have to exist there; it does not.
-        proved = fx.PROVED_FILE.replace("import Mathlib.Tactic.Ring\n", "import Mathlib.Tactic.Ring\nimport Up.Ch2\n")
-        code, err, _ = self.run_verify(self.proof_with(fx.make_patch("M1/Mult.lean", fx.SEED_FILE, proved)))
+        proved = PROVED_FILE.replace("import Mathlib.Tactic.Ring\n", "import Mathlib.Tactic.Ring\nimport Up.Ch2\n")
+        code, err, _ = self.run_verify(self.proof_with(make_patch("M1/Mult.lean", SEED_FILE, proved)))
         self.assertEqual(code, 3, err)
         self.assertIn("`Up.Ch2`, which is not a module of the upstream repository", err)
+
+    def test_upstream_url_parsing_and_verify_table(self):
+        sha = "e9906138410f8f76ca66b9bc252d0993f3ee348c"
+        self.assertEqual(
+            sv.parse_upstream_url(f"https://github.com/A/B/blob/{sha}/P/Q.lean#L1787-L1788"),
+            ("A/B", sha, "P/Q.lean", 1787, 1788),
+        )
+        with self.assertRaises(sv.VerifyError):
+            sv.parse_upstream_url("https://github.com/A/B/blob/main/P/Q.lean#L1")
+        real = read(os.path.join(ROOT, "missions", "pnt-analytic-foundations", "verify"))
+        self.assertEqual(
+            sv.verify_theorems(real)["is_completely_multiplicative_liouville"],
+            "PntFoundations.isCompletelyMultiplicative_liouville",
+        )
+
+    def test_real_missions_resolve(self):
+        """Every live non-demo DAG task's upstream_url, pin and verify theorem line up."""
+        missions_dir = os.path.join(ROOT, "missions")
+        checked = []
+        for mid in sorted(os.listdir(missions_dir)):
+            mpath = os.path.join(missions_dir, mid, "sunstead.json")
+            if not os.path.isfile(mpath):
+                continue
+            manifest = json.loads(read(mpath))
+            if manifest.get("demo") or manifest.get("mode") != "dag":
+                continue
+            checked.append(mid)
+            for t in manifest["tasks"]:
+                m = sv.load_mission(missions_dir, {"mission_id": mid, "task_id": t["id"]})
+                self.assertTrue(m["upstream_path"].endswith(".lean"), (mid, t["id"]))
+                self.assertTrue(m["theorem"], (mid, t["id"]))
+        self.assertIn("pnt-analytic-foundations", checked)
+        self.assertIn("arklib-near-capacity-primes", checked)
+
+    def test_lean_module_quotes_hyphenated_segments(self):
+        self.assertEqual(sv.lean_module("Up/Ch1.lean"), "Up.Ch1")
+        self.assertEqual(
+            sv.lean_module("Proofs/AES-GCM/AESGCMEncKernelSym.lean"),
+            "Proofs.«AES-GCM».AESGCMEncKernelSym",
+        )
+        self.assertIn("loadExts := false", sv.AXIOM_CHECKER)
+        self.assertIn("parseLeanName", sv.AXIOM_CHECKER)
+
+    def test_repo_snapshot_preserves_scoped_set_option_above_helpers(self):
+        """Repo-snapshot splicing keeps `set_option ... in` attached to the theorem
+        when inserting helpers above it."""
+        snap_upstream = (
+            "import Up.«AES-GCM».Pre\n\n"
+            "namespace AESProgram\n\n"
+            "abbrev rounds : Nat := 14\n\n"
+            "set_option maxRecDepth 1000000 in\n"
+            "theorem run_kernel :\n"
+            "    rounds = 14 := by\n"
+            "  sorry\n\n"
+            "end AESProgram\n"
+        )
+        snap_proved = (
+            "import Up.«AES-GCM».Pre\n"
+            "import AESProgram.Extra\n\n"
+            "namespace AESProgram\n\n"
+            "abbrev rounds : Nat := 14\n\n"
+            "theorem helper_rounds : AESProgram.rounds = 14 := rfl\n\n"
+            "set_option maxRecDepth 1000000 in\n"
+            "theorem run_kernel :\n"
+            "    rounds = 14 := by\n"
+            "  exact AESProgram.helper_rounds\n\n"
+            "end AESProgram\n"
+        )
+        with tempfile.TemporaryDirectory() as t:
+            up = os.path.join(t, "upstream")
+            os.makedirs(os.path.join(up, "Up", "AES-GCM"))
+            write(os.path.join(up, "Up", "AES-GCM", "Kernel.lean"), snap_upstream)
+            git(up, "init", "-q")
+            git(up, "add", "-A")
+            git(up, "commit", "-q", "-m", "upstream")
+            git(up, "config", "uploadpack.allowReachableSHA1InWant", "true")
+            sha = git(up, "rev-parse", "HEAD").strip()
+
+            m = os.path.join(t, "mission")
+            os.makedirs(os.path.join(m, "Up", "AES-GCM"))
+            write(os.path.join(m, "sunstead.json"), json.dumps({
+                "id": "snap-aes", "title": "Snap AES", "tier": 1, "mode": "dag",
+                "upstream": {"repo": "o/lnsym", "commit": sha, "license": "Apache-2.0"},
+                "snapshot": {"mode": "repo-snapshot", "snapshot_id": "snap-aes"},
+                "frozen_paths": ["UPSTREAM.json"],
+                "tasks": [{
+                    "id": "run_kernel", "title": "run",
+                    "target_files": ["Up/AES-GCM/Kernel.lean"],
+                    "upstream_url": f"https://github.com/o/lnsym/blob/{sha}/Up/AES-GCM/Kernel.lean#L8-L10",
+                }],
+            }))
+            write(os.path.join(m, "UPSTREAM.json"), json.dumps({
+                "repo": "o/lnsym", "commit": sha, "license": "Apache-2.0", "checks": [],
+            }))
+            write(os.path.join(m, "verify"), (
+                'TASKS = {\n'
+                '    "run_kernel": {\n'
+                '        "theorem": "AESProgram.run_kernel",\n'
+                '        "module": "Up.«AES-GCM».Kernel",\n'
+                '        "target_files": ["Up/AES-GCM/Kernel.lean"],\n'
+                '    },\n'
+                '}\n'
+            ))
+            write(os.path.join(m, "Up", "AES-GCM", "Kernel.lean"), snap_upstream)
+
+            patch = make_patch("Up/AES-GCM/Kernel.lean", snap_upstream, snap_proved)
+            pj = os.path.join(t, "proof.json")
+            bj = os.path.join(t, "seed.tar.gz")
+            keep = os.path.join(t, "kept")
+            write(pj, json.dumps({
+                "proof_id": hashlib.sha256(patch.encode("utf-8")).hexdigest(),
+                "mission_id": "snap-aes",
+                "task_id": "run_kernel",
+                "upstream": {"repo": "o/lnsym", "commit": sha},
+                "patch": patch,
+            }))
+            with open(bj, "wb") as f:
+                f.write(tar_of(m))
+            err, stdout = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stderr(err), contextlib.redirect_stdout(stdout):
+                code = sv.main([
+                    "--proof-json", pj, "--seed-bundle", bj,
+                    "--upstream-url", "file://" + up, "--no-build", "--keep", keep,
+                ])
+            self.assertEqual(code, 0, err.getvalue())
+            patched = read(os.path.join(keep, "Up", "AES-GCM", "Kernel.lean"))
+            self.assertIn(
+                "theorem helper_rounds : AESProgram.rounds = 14 := rfl\n\nset_option maxRecDepth 1000000 in\ntheorem run_kernel :",
+                patched,
+                "helper must be inserted above `set_option ... in`, keeping it attached to `theorem run_kernel`",
+            )
 
     def test_bad_proof_id_argument(self):
         err = io.StringIO()
@@ -301,17 +620,54 @@ class VerifyTests(fx.ExportTests.__base__):
 
 @unittest.skipUnless(sv.shutil.which("lake"), "needs a Lean toolchain (lake on PATH)")
 class PublicBuildTests(unittest.TestCase):
-    """verify.py end to end with `lake build`, on export's core-Lean-only fixture."""
+    """End-to-end `verify.py` tests including `lake build`, statement-meaning
+    reference check, and standalone `AXIOM_CHECKER` on core-Lean-only fixtures."""
 
-    setUp = fx.BuildTests.setUp
-    make_fixture = fx.BuildTests.make_fixture
-    tearDown = fx.BuildTests.tearDown
+    def setUp(self):
+        self.make_fixture(CORE_UPSTREAM)
 
-    def run_public(self, proved):
-        patch = fx.make_patch("M1/Mult.lean", self.seed, proved)
+    def make_fixture(self, upstream_text, seed=None):
+        self.seed = seed or CORE_SEED
+        self.tmp = tempfile.TemporaryDirectory()
+        t = self.tmp.name
+        self.up = os.path.join(t, "upstream")
+        os.makedirs(os.path.join(self.up, "Up"))
+        write(os.path.join(self.up, "Up", "Ch1.lean"), upstream_text)
+        line = upstream_text.split("\n").index("theorem isCM_liouville :") + 1
+        write(os.path.join(self.up, "Up.lean"), "import Up.Ch1\n")
+        write(os.path.join(self.up, "lakefile.toml"), 'name = "up"\ndefaultTargets = ["Up"]\n\n[[lean_lib]]\nname = "Up"\n')
+        toolchain = os.environ.get("SUNSTEAD_TEST_TOOLCHAIN") or read(
+            os.path.join(ROOT, "missions", "pnt-analytic-foundations", "lean-toolchain")
+        ).strip()
+        write(os.path.join(self.up, "lean-toolchain"), toolchain + "\n")
+        git(self.up, "init", "-q")
+        git(self.up, "add", "-A")
+        git(self.up, "commit", "-q", "-m", "upstream")
+        git(self.up, "config", "uploadpack.allowReachableSHA1InWant", "true")
+        self.sha = git(self.up, "rev-parse", "HEAD").strip()
+        self.missions = os.path.join(t, "missions")
+        m = os.path.join(self.missions, "m1")
+        os.makedirs(os.path.join(m, "M1"))
+        write(os.path.join(m, "sunstead.json"), json.dumps({
+            "id": "m1", "title": "M1", "tier": 1, "mode": "dag",
+            "upstream": {"repo": "o/up", "commit": self.sha, "license": "Apache-2.0"},
+            "frozen_paths": [], "tasks": [{
+                "id": "is_cm", "title": "cm", "target_files": ["M1/Mult.lean"],
+                "upstream_url": f"https://github.com/o/up/blob/{self.sha}/Up/Ch1.lean#L{line}-L{line + 2}",
+            }],
+        }))
+        write(os.path.join(m, "UPSTREAM.json"), json.dumps({"repo": "o/up", "commit": self.sha, "license": "Apache-2.0"}))
+        write(os.path.join(m, "verify"), VERIFY)
+        write(os.path.join(m, "M1", "Mult.lean"), self.seed)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def run_public(self, proved, extra=()):
+        patch = make_patch("M1/Mult.lean", self.seed, proved)
         t = self.tmp.name
         pj, bj = os.path.join(t, "proof.json"), os.path.join(t, "seed.tar.gz")
-        fx.write(pj, json.dumps({
+        write(pj, json.dumps({
             "proof_id": hashlib.sha256(patch.encode()).hexdigest(), "mission_id": "m1", "task_id": "is_cm",
             "patch": patch, "upstream": {"repo": "o/up", "commit": self.sha},
         }))
@@ -319,22 +675,30 @@ class PublicBuildTests(unittest.TestCase):
             f.write(tar_of(os.path.join(self.missions, "m1")))
         err, out = io.StringIO(), io.StringIO()
         with contextlib.redirect_stderr(err), contextlib.redirect_stdout(out):
-            code = sv.main(["--proof-json", pj, "--seed-bundle", bj, "--upstream-url", "file://" + self.up, "--json"])
+            code = sv.main(["--proof-json", pj, "--seed-bundle", bj, "--upstream-url", "file://" + self.up, "--json", *extra])
         return code, err.getvalue(), out.getvalue()
 
-    def test_verifies_against_upstream(self):
-        proved = fx.CORE_SEED.replace("liouville = 1 := by\n  sorry", "liouville = 1 := by\n  rfl")
-        code, err, out = self.run_public(proved)
+    def test_verifies_against_upstream_with_helper_and_clean_keep(self):
+        proved = CORE_SEED.replace(
+            "/-- Open", "theorem helper_one : liouville = 1 := rfl\n\n/-- Open"
+        ).replace("liouville = 1 := by\n  sorry", "liouville = 1 := by\n  exact helper_one")
+        keep = os.path.join(self.tmp.name, "kept-built")
+        code, err, out = self.run_public(proved, extra=("--keep", keep))
         self.assertEqual(code, 0, err)
         r = json.loads(out)
         self.assertTrue(r["verified"])
         self.assertEqual(r["axioms"], [])
+        self.assertEqual(r["helpers"], ["M1.helper_one"])
+        self.assertNotIn("sunsteadRefStatement", read(os.path.join(keep, "Up", "Ch1.lean")))
 
     def test_rejects_meaning_changing_instance(self):
+        # A high-priority `LE Nat` instance among the helpers would make the upstream
+        # statement `liouville ≤ 0` (false) elaborate to `True`. The pristine
+        # reference copy, built above the helpers, catches it.
         self.tmp.cleanup()
         self.make_fixture(
-            fx.CORE_UPSTREAM.replace("liouville = 1 := by", "liouville ≤ 0 := by"),
-            seed=fx.CORE_SEED.replace("liouville = 1 := by", "liouville ≤ 0 := by"),
+            CORE_UPSTREAM.replace("liouville = 1 := by", "liouville ≤ 0 := by"),
+            seed=CORE_SEED.replace("liouville = 1 := by", "liouville ≤ 0 := by"),
         )
         proved = self.seed.replace(
             "/-- Open", "theorem helper_ok : True := trivial\n\n"
@@ -343,6 +707,128 @@ class PublicBuildTests(unittest.TestCase):
         code, err, _ = self.run_public(proved)
         self.assertEqual(code, 1, err)
         self.assertIn("no longer states what the upstream statement states", err)
+
+    def test_rejects_a_proof_that_does_not_compile_with_compiler_output(self):
+        proved = CORE_SEED.replace("liouville = 1 := by\n  sorry", "liouville = 1 := by\n  exact nonexistent_lemma")
+        code, err, _ = self.run_public(proved)
+        self.assertEqual(code, 1)
+        self.assertIn("lake build Up.Ch1 failed", err)
+        self.assertIn("nonexistent_lemma", err)
+
+    def test_rejects_non_standard_axioms(self):
+        proved = CORE_SEED.replace(
+            "/-- Open", "axiom cheat : liouville = 1\n\n/-- Open"
+        ).replace("liouville = 1 := by\n  sorry", "liouville = 1 := by\n  exact cheat")
+        code, err, _ = self.run_public(proved)
+        self.assertEqual(code, 1)
+        self.assertIn("non-standard axioms", err)
+
+    def test_axiom_report_cannot_be_spoofed_by_elaborators(self):
+        # A source file that rewrites `#print axioms` output (redteam.py's
+        # lean-spoof-axiom-report). The checker loads .oleans with loadExts := false
+        # and never elaborates source, so the helper axiom is still caught.
+        self.tmp.cleanup()
+        self.make_fixture(
+            "import Lean\nopen Lean Elab Command\n\n"
+            "elab_rules : command\n"
+            "  | `(#print axioms $_) => logInfo \"'Up.isCM_liouville' does not depend on any axioms\"\n\n"
+            + CORE_UPSTREAM
+        )
+        proved = CORE_SEED.replace(
+            "/-- Open", "axiom cheat : liouville = 1\n\n/-- Open"
+        ).replace("liouville = 1 := by\n  sorry", "liouville = 1 := by\n  exact cheat")
+        code, err, _ = self.run_public(proved)
+        self.assertEqual(code, 1, err)
+        self.assertIn("non-standard axioms: ['Up.cheat']", err)
+
+    def test_builds_and_checks_guillemet_module_path(self):
+        """Full `lake build` + `AXIOM_CHECKER` on a repo-snapshot mission with a
+        hyphenated directory (`Up/AES-GCM/Kernel.lean` -> `Up.«AES-GCM».Kernel`)
+        and `set_option ... in`."""
+        snap_src = (
+            "namespace AESProgram\n\n"
+            "abbrev rounds : Nat := 14\n\n"
+            "set_option maxRecDepth 1000000 in\n"
+            "theorem run_kernel :\n"
+            "    rounds = 14 := by\n"
+            "  sorry\n\n"
+            "end AESProgram\n"
+        )
+        snap_proved = (
+            "namespace AESProgram\n\n"
+            "abbrev rounds : Nat := 14\n\n"
+            "theorem helper_rounds : AESProgram.rounds = 14 := rfl\n\n"
+            "set_option maxRecDepth 1000000 in\n"
+            "theorem run_kernel :\n"
+            "    rounds = 14 := by\n"
+            "  exact AESProgram.helper_rounds\n\n"
+            "end AESProgram\n"
+        )
+        with tempfile.TemporaryDirectory() as t:
+            up = os.path.join(t, "upstream")
+            os.makedirs(os.path.join(up, "Up", "AES-GCM"))
+            write(os.path.join(up, "Up", "AES-GCM", "Kernel.lean"), snap_src)
+            write(os.path.join(up, "Up.lean"), "import Up.«AES-GCM».Kernel\n")
+            write(os.path.join(up, "lakefile.toml"), 'name = "up"\ndefaultTargets = ["Up"]\n\n[[lean_lib]]\nname = "Up"\n')
+            toolchain = os.environ.get("SUNSTEAD_TEST_TOOLCHAIN") or read(
+                os.path.join(ROOT, "missions", "pnt-analytic-foundations", "lean-toolchain")
+            ).strip()
+            write(os.path.join(up, "lean-toolchain"), toolchain + "\n")
+            git(up, "init", "-q")
+            git(up, "add", "-A")
+            git(up, "commit", "-q", "-m", "upstream")
+            git(up, "config", "uploadpack.allowReachableSHA1InWant", "true")
+            sha = git(up, "rev-parse", "HEAD").strip()
+
+            m = os.path.join(t, "mission")
+            os.makedirs(os.path.join(m, "Up", "AES-GCM"))
+            write(os.path.join(m, "sunstead.json"), json.dumps({
+                "id": "snap-aes", "title": "Snap AES", "tier": 1, "mode": "dag",
+                "upstream": {"repo": "o/lnsym", "commit": sha, "license": "Apache-2.0"},
+                "snapshot": {"mode": "repo-snapshot", "snapshot_id": "snap-aes"},
+                "frozen_paths": [],
+                "tasks": [{
+                    "id": "run_kernel", "title": "run",
+                    "target_files": ["Up/AES-GCM/Kernel.lean"],
+                    "upstream_url": f"https://github.com/o/lnsym/blob/{sha}/Up/AES-GCM/Kernel.lean#L6-L8",
+                }],
+            }))
+            write(os.path.join(m, "UPSTREAM.json"), json.dumps({
+                "repo": "o/lnsym", "commit": sha, "license": "Apache-2.0",
+            }))
+            write(os.path.join(m, "verify"), (
+                'TASKS = {\n'
+                '    "run_kernel": {\n'
+                '        "module": "Up.«AES-GCM».Kernel",\n'
+                '        "theorem": "AESProgram.run_kernel",\n'
+                '    },\n'
+                '}\n'
+            ))
+            write(os.path.join(m, "Up", "AES-GCM", "Kernel.lean"), snap_src)
+
+            patch = make_patch("Up/AES-GCM/Kernel.lean", snap_src, snap_proved)
+            pj, bj = os.path.join(t, "proof.json"), os.path.join(t, "seed.tar.gz")
+            write(pj, json.dumps({
+                "proof_id": hashlib.sha256(patch.encode()).hexdigest(),
+                "mission_id": "snap-aes", "task_id": "run_kernel",
+                "upstream": {"repo": "o/lnsym", "commit": sha},
+                "patch": patch,
+            }))
+            with open(bj, "wb") as f:
+                f.write(tar_of(m))
+            err, stdout = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stderr(err), contextlib.redirect_stdout(stdout):
+                code = sv.main([
+                    "--proof-json", pj, "--seed-bundle", bj,
+                    "--upstream-url", "file://" + up, "--json",
+                ])
+            self.assertEqual(code, 0, err.getvalue() + stdout.getvalue())
+            r = json.loads(stdout.getvalue())
+            self.assertTrue(r["verified"])
+            self.assertEqual(r["axioms"], [])
+            self.assertEqual(r["upstream_file"], "Up/AES-GCM/Kernel.lean")
+            self.assertEqual(r["upstream_declaration"], "AESProgram.run_kernel")
+            self.assertIn("Building Up.«AES-GCM».Kernel", err.getvalue())
 
 
 if __name__ == "__main__":

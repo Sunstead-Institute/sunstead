@@ -1867,29 +1867,44 @@ export function handleDirectParentBypass(
 // ---------------------------------------------------------------------------
 // 4. POST /api/missions/:id/tasks/:task/refute (open to all registered contributors!)
 
-export async function executeRefute(
-  ctx: DecomposeHubContext,
-  params: {
-    taskId: string;
-    contributor: string;
-    rawBody: unknown;
-  }
-): Promise<{ status: number; body: Record<string, unknown> }> {
+export interface PreparedRefute {
+  task: TaskState;
+  isSubgoal: boolean;
+  decomp: DecompositionRow | null;
+  subgoals: SubgoalSpec[];
+  sub: SubgoalSpec | undefined;
+  rootTaskId: string;
+  parsed: ReturnType<typeof parseRefuteRequest>;
+}
+
+export type PrepareRefuteResult =
+  | { ok: true; prepared: PreparedRefute }
+  | { ok: false; status: number; body: Record<string, unknown> };
+
+/**
+ * Synchronous pre-validation for `POST .../refute` so both sync and async
+ * (`?async=1`) handlers reject invalid targets/patches BEFORE recording rate
+ * limits, inserting a `verifying` submission, or waking a verifier container.
+ */
+export function prepareRefute(
+  ctx: Pick<DecomposeHubContext, "sql" | "mission" | "getTasks">,
+  params: { taskId: string; rawBody: unknown }
+): PrepareRefuteResult {
   const { sql, mission } = ctx;
   const missionId = mission.manifest.id;
-  const { taskId, contributor, rawBody } = params;
+  const { taskId, rawBody } = params;
 
   if (mission.manifest.mode !== "dag") {
-    return { status: 400, body: { error: "refutations are only supported on DAG missions" } };
+    return { ok: false, status: 400, body: { error: "refutations are only supported on DAG missions" } };
   }
 
   const tasks = ctx.getTasks(missionId);
   const task = tasks.find((t) => t.def.id === taskId);
   if (!task) {
-    return { status: 404, body: { error: `unknown task: ${taskId}` } };
+    return { ok: false, status: 404, body: { error: `unknown task: ${taskId}` } };
   }
   if (task.status === "verified") {
-    return { status: 409, body: { error: `task '${taskId}' is already kernel-verified` } };
+    return { ok: false, status: 409, body: { error: `task '${taskId}' is already kernel-verified` } };
   }
 
   const isSubgoal = Boolean(task.def.decomp_id && task.def.subgoal_id && task.def.root_task_id);
@@ -1899,14 +1914,18 @@ export async function executeRefute(
   if (isSubgoal) {
     decomp = getDecompositionRow(sql, missionId, task.def.root_task_id!, task.def.decomp_id!);
     if (!decomp || decomp.status !== "active") {
-      return { status: 409, body: { error: `decomposition '${task.def.decomp_id}' is not active` } };
+      return { ok: false, status: 409, body: { error: `decomposition '${task.def.decomp_id}' is not active` } };
     }
     subgoals = parseSubgoalsJson(decomp.subgoals_json);
     sub = subgoals.find((s) => s.id === task.def.subgoal_id);
     if (!sub) {
-      return { status: 404, body: { error: `subgoal '${task.def.subgoal_id}' not found` } };
+      return { ok: false, status: 404, body: { error: `subgoal '${task.def.subgoal_id}' not found` } };
     }
   } else {
+    // Note: if a root task is marked `upstream_disputed` in hub metadata, we still
+    // allow `POST .../refute` so contributors can upgrade an informal upstream
+    // notice to a kernel-verified counterexample. Only a pre-existing kernel-verified
+    // root refutation blocks further root refutations.
     const existingRootRef = sql
       .exec<{ id: string }>(
         "SELECT id FROM refutations WHERE mission_id = ? AND task_id = ? AND target_kind = 'root' LIMIT 1",
@@ -1916,6 +1935,7 @@ export async function executeRefute(
       .toArray();
     if (existingRootRef.length > 0) {
       return {
+        ok: false,
         status: 409,
         body: { error: `root task '${taskId}' already has a kernel-verified counterexample (${existingRootRef[0].id})` },
       };
@@ -1931,13 +1951,120 @@ export async function executeRefute(
   try {
     parsed = parseRefuteRequest(rawBody, { libRoot, frozenPaths });
   } catch (e) {
-    return { status: 422, body: { error: e instanceof Error ? e.message : String(e), stage: "patch" } };
+    return {
+      ok: false,
+      status: 422,
+      body: { error: e instanceof Error ? e.message : String(e), stage: "patch" },
+    };
   }
 
-  const now = ctx.now();
-  const subId = ctx.randomUUID();
-  const patchSha = await ctx.sha256Hex(parsed.patch);
   const rootTaskId = isSubgoal ? task.def.root_task_id! : task.def.id;
+  return {
+    ok: true,
+    prepared: { task, isSubgoal, decomp, subgoals, sub, rootTaskId, parsed },
+  };
+}
+
+export async function executeRefute(
+  ctx: DecomposeHubContext,
+  params: {
+    taskId: string;
+    contributor: string;
+    rawBody: unknown;
+    existingSubmissionId?: string;
+    createdAt?: number;
+    prepared?: PreparedRefute;
+  }
+): Promise<{ status: number; body: Record<string, unknown> }> {
+  const { sql, mission } = ctx;
+  const missionId = mission.manifest.id;
+  const { taskId, contributor, rawBody, existingSubmissionId } = params;
+
+  let prep = params.prepared;
+  if (!prep) {
+    const check = prepareRefute(ctx, { taskId, rawBody });
+    if (!check.ok) {
+      return { status: check.status, body: check.body };
+    }
+    prep = check.prepared;
+  }
+
+  const { isSubgoal, decomp, subgoals, sub, rootTaskId, parsed } = prep;
+  const now = params.createdAt ?? ctx.now();
+  const subId = existingSubmissionId ?? ctx.randomUUID();
+  const patchSha = await ctx.sha256Hex(parsed.patch);
+
+  const persistSubmission = (rec: {
+    status: "accepted" | "rejected" | "error";
+    accepted: boolean;
+    score: number | null;
+    points: number;
+    summary: string;
+    patch_sha256: string;
+    proof_id?: string | null;
+    verify_ms: number;
+    stage?: string | null;
+    diagnostics?: string | null;
+    error?: string | null;
+    completed_at: number;
+  }) => {
+    if (existingSubmissionId) {
+      sql.exec(
+        `UPDATE submissions
+         SET status = ?,
+             accepted = ?,
+             score = ?,
+             points = ?,
+             summary = ?,
+             patch_sha256 = ?,
+             proof_id = ?,
+             verify_ms = ?,
+             stage = ?,
+             diagnostics = ?,
+             error = ?,
+             completed_at = ?,
+             kind = 'refute'
+         WHERE id = ?`,
+        rec.status,
+        rec.accepted ? 1 : 0,
+        rec.score,
+        rec.points,
+        rec.summary,
+        rec.patch_sha256,
+        rec.proof_id ?? null,
+        rec.verify_ms,
+        rec.stage ?? null,
+        rec.diagnostics ?? null,
+        rec.error ?? null,
+        rec.completed_at,
+        subId
+      );
+    } else {
+      sql.exec(
+        `INSERT INTO submissions
+         (id, mission_id, task_id, contributor, status, accepted, score, points, summary, patch_sha256, proof_id, verify_ms, stage, diagnostics, error, created_at, completed_at, is_demo, kind)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'refute')`,
+        subId,
+        missionId,
+        taskId,
+        contributor,
+        rec.status,
+        rec.accepted ? 1 : 0,
+        rec.score,
+        rec.points,
+        rec.summary,
+        rec.patch_sha256,
+        rec.proof_id ?? null,
+        rec.verify_ms,
+        rec.stage ?? null,
+        rec.diagnostics ?? null,
+        rec.error ?? null,
+        now,
+        rec.completed_at,
+        mission.manifest.demo ? 1 : 0
+      );
+    }
+  };
 
   const verifierReq: Record<string, unknown> = {
     mission_id: missionId,
@@ -1958,7 +2085,41 @@ export async function executeRefute(
 
   const vCall = await ctx.callVerifierAction("/refute", ctx.getMissionFiles(missionId), verifierReq);
   if (!vCall.ok) {
-    return { status: vCall.status, body: { accepted: false, error: vCall.error, stage: "sandbox" } };
+    const failedAt = ctx.now();
+    if (existingSubmissionId) {
+      persistSubmission({
+        status: "error",
+        accepted: false,
+        score: null,
+        points: 0,
+        summary: vCall.error,
+        patch_sha256: patchSha,
+        verify_ms: 0,
+        stage: "sandbox",
+        error: vCall.error,
+        completed_at: failedAt,
+      });
+      ctx.emit({
+        kind: "submission_rejected",
+        submission_id: subId,
+        mission_id: missionId,
+        task_id: taskId,
+        contributor,
+        accepted: false,
+        score: null,
+        summary: `refutation error: ${vCall.error}`,
+        timestamp: failedAt,
+      });
+    }
+    return {
+      status: vCall.status,
+      body: {
+        accepted: false,
+        ...(existingSubmissionId ? { status: "error", submission_id: subId } : {}),
+        error: vCall.error,
+        stage: "sandbox",
+      },
+    };
   }
   const cRes = vCall.res;
   const finishedAt = ctx.now();
@@ -1968,24 +2129,19 @@ export async function executeRefute(
       ? cRes.summary || "refutation verification failed"
       : `spec hash mismatch: expected '${mission.spec_sha256}', got '${cRes.spec_sha256}'`;
     const diag = sanitizeFailureDiagnostics(cRes.stage, cRes.diagnostics);
-    sql.exec(
-      `INSERT INTO submissions
-       (id, mission_id, task_id, contributor, status, accepted, score, points, summary, patch_sha256, verify_ms, stage, diagnostics, error, created_at, completed_at, is_demo, kind)
-       VALUES (?, ?, ?, ?, 'rejected', 0, NULL, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'refute')`,
-      subId,
-      missionId,
-      taskId,
-      contributor,
-      reason,
-      patchSha,
-      cRes.verify_ms ?? 0,
-      diag.stage ?? null,
-      diag.diagnostics ?? null,
-      reason,
-      now,
-      finishedAt,
-      mission.manifest.demo ? 1 : 0
-    );
+    persistSubmission({
+      status: "rejected",
+      accepted: false,
+      score: null,
+      points: 0,
+      summary: reason,
+      patch_sha256: patchSha,
+      verify_ms: cRes.verify_ms ?? 0,
+      stage: diag.stage ?? null,
+      diagnostics: diag.diagnostics ?? null,
+      error: reason,
+      completed_at: finishedAt,
+    });
     ctx.emit({
       kind: "submission_rejected",
       submission_id: subId,
@@ -1999,7 +2155,14 @@ export async function executeRefute(
     });
     return {
       status: 422,
-      body: { accepted: false, submission_id: subId, error: reason, verify_ms: cRes.verify_ms ?? 0, ...diag },
+      body: {
+        accepted: false,
+        status: "rejected",
+        submission_id: subId,
+        error: reason,
+        verify_ms: cRes.verify_ms ?? 0,
+        ...diag,
+      },
     };
   }
 
@@ -2023,9 +2186,38 @@ export async function executeRefute(
     if (isSubgoal && decomp && sub) {
       const latestDecomp = getDecompositionRow(sql, missionId, rootTaskId, decomp.decomp_id);
       if (!latestDecomp || latestDecomp.status !== "active") {
+        const msg = `decomposition '${decomp.decomp_id}' was already closed`;
+        if (existingSubmissionId) {
+          persistSubmission({
+            status: "rejected",
+            accepted: false,
+            score: null,
+            points: 0,
+            summary: msg,
+            patch_sha256: storedPatchSha,
+            verify_ms: cRes.verify_ms ?? 0,
+            error: msg,
+            completed_at: ts,
+          });
+          ctx.emit({
+            kind: "submission_rejected",
+            submission_id: subId,
+            mission_id: missionId,
+            task_id: taskId,
+            contributor,
+            accepted: false,
+            score: null,
+            summary: msg,
+            timestamp: ts,
+          });
+        }
         return {
           status: 409,
-          body: { accepted: false, error: `decomposition '${decomp.decomp_id}' was already closed` },
+          body: {
+            accepted: false,
+            ...(existingSubmissionId ? { status: "rejected", submission_id: subId } : {}),
+            error: msg,
+          },
         };
       }
       invalidatedDecompId = latestDecomp.decomp_id;
@@ -2065,11 +2257,37 @@ export async function executeRefute(
         )
         .toArray();
       if (existingRootRef.length > 0) {
+        const msg = `root task '${taskId}' already has a kernel-verified counterexample (${existingRootRef[0].id})`;
+        if (existingSubmissionId) {
+          persistSubmission({
+            status: "rejected",
+            accepted: false,
+            score: null,
+            points: 0,
+            summary: msg,
+            patch_sha256: storedPatchSha,
+            verify_ms: cRes.verify_ms ?? 0,
+            error: msg,
+            completed_at: ts,
+          });
+          ctx.emit({
+            kind: "submission_rejected",
+            submission_id: subId,
+            mission_id: missionId,
+            task_id: taskId,
+            contributor,
+            accepted: false,
+            score: null,
+            summary: msg,
+            timestamp: ts,
+          });
+        }
         return {
           status: 409,
           body: {
             accepted: false,
-            error: `root task '${taskId}' already has a kernel-verified counterexample (${existingRootRef[0].id})`,
+            ...(existingSubmissionId ? { status: "rejected", submission_id: subId } : {}),
+            error: msg,
           },
         };
       }
@@ -2099,23 +2317,17 @@ export async function executeRefute(
       mission.manifest.demo ? 1 : 0
     );
 
-    sql.exec(
-      `INSERT INTO submissions
-       (id, mission_id, task_id, contributor, status, accepted, score, points, summary, patch_sha256, proof_id, verify_ms, created_at, completed_at, is_demo, kind)
-       VALUES (?, ?, ?, ?, 'accepted', 1, 1.0, ?, ?, ?, ?, ?, ?, ?, ?, 'refute')`,
-      subId,
-      missionId,
-      taskId,
-      contributor,
-      bounty,
-      cRes.summary,
-      storedPatchSha,
-      proofId,
-      cRes.verify_ms ?? 0,
-      now,
-      ts,
-      mission.manifest.demo ? 1 : 0
-    );
+    persistSubmission({
+      status: "accepted",
+      accepted: true,
+      score: 1.0,
+      points: bounty,
+      summary: cRes.summary,
+      patch_sha256: storedPatchSha,
+      proof_id: proofId,
+      verify_ms: cRes.verify_ms ?? 0,
+      completed_at: ts,
+    });
 
     // Permanently store the verified counterexample in the public ledger (`in_history = 0`).
     sql.exec(
@@ -2162,6 +2374,7 @@ export async function executeRefute(
       body: {
         refuted: true,
         accepted: true,
+        status: "accepted",
         refutation_id: refutationId,
         submission_id: subId,
         target_kind: isSubgoal ? "subgoal" : "root",

@@ -223,6 +223,15 @@ const bestKnownRegistry = JSON.parse(
   fs.readFileSync(path.join(missionsDir, "best-known.json"), "utf8")
 ).missions;
 
+// Upstream dispute notices for tasks whose pinned upstream statement is known to
+// be false or misstated upstream live outside the frozen per-mission manifests
+// (so recording a dispute never changes a mission's spec_sha256 or verifier
+// container). Merged into task.upstream_disputed below.
+const taskDisputesPath = path.join(missionsDir, "task-disputes.json");
+const taskDisputesRegistry = fs.existsSync(taskDisputesPath)
+  ? JSON.parse(fs.readFileSync(taskDisputesPath, "utf8")).missions || {}
+  : {};
+
 const missions = missionDirs.map((dirName) => {
   const fullDir = path.join(missionsDir, dirName);
   const manifest = JSON.parse(fs.readFileSync(path.join(fullDir, "sunstead.json"), "utf8"));
@@ -236,6 +245,25 @@ const missions = missionDirs.map((dirName) => {
         );
       }
       task.best_known = bk;
+    }
+  }
+  const disputeEntries = taskDisputesRegistry[manifest.id] || {};
+  for (const task of manifest.tasks) {
+    const disp = disputeEntries[task.id];
+    if (disp) {
+      if (
+        typeof disp.source !== "string" ||
+        !disp.source.trim() ||
+        typeof disp.reason !== "string" ||
+        !disp.reason.trim() ||
+        typeof disp.recorded_at !== "string" ||
+        !disp.recorded_at.trim()
+      ) {
+        throw new Error(
+          `missions/task-disputes.json has invalid dispute entry for ${manifest.id}/${task.id}`
+        );
+      }
+      task.upstream_disputed = disp;
     }
   }
   const spec_sha256 = computeSpecSha256(fullDir, manifest.frozen_paths);
@@ -279,6 +307,21 @@ const missions = missionDirs.map((dirName) => {
     ...(verify_contract ? { verify_contract } : {}),
   };
 });
+
+const knownTasksByMission = new Map(
+  missions.map((m) => [m.manifest.id, new Set(m.manifest.tasks.map((t) => t.id))])
+);
+for (const [mid, entries] of Object.entries(taskDisputesRegistry)) {
+  const taskIds = knownTasksByMission.get(mid);
+  if (!taskIds) {
+    throw new Error(`missions/task-disputes.json references unknown mission '${mid}'`);
+  }
+  for (const tid of Object.keys(entries || {})) {
+    if (!taskIds.has(tid)) {
+      throw new Error(`missions/task-disputes.json references unknown task '${mid}/${tid}'`);
+    }
+  }
+}
 
 fs.writeFileSync(
   path.join(GEN_DIR, "missions.ts"),

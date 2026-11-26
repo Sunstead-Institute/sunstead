@@ -1,0 +1,13 @@
+{
+  "$comment": "Hub-only upstream dispute notices for tasks whose pinned upstream theorem statement is known to be false or misstated upstream. Merged into task.def.upstream_disputed by cloudflare/scripts/sync-assets.mjs without changing any mission's spec_sha256 or verifier container.",
+  "missions": {
+    "ieantn-buthe-prime-bounds": {
+      "buthe_lemma_3_bounds": {
+        "source": "upstream",
+        "reason": "Upstream formalization bug tracked in teorth/IEANTN#268: Buthe.v2.lemma_3_bounds is false as stated at the pinned commit. Excluded from the open frontier; contributors may still submit a kernel-verified counterexample via POST .../refute.",
+        "url": "https://github.com/teorth/IEANTN/issues/268",
+        "recorded_at": "2026-11-26"
+      }
+    }
+  }
+}

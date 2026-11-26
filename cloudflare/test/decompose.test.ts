@@ -7,12 +7,16 @@ import crypto from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import {
+  applyClaim,
   buildLedgerEntry,
+  computeFrontier,
+  formatSubmissionStatusView,
   generateUnifiedDiff,
   parseStoredCoAuthors,
   renderMbox,
   type MissionManifest,
   type MissionVerifyContract,
+  type SubmissionStatusRow,
   type TaskState,
 } from "../src/core.ts";
 import {
@@ -28,6 +32,7 @@ import {
   listAllowlist,
   listMissionDecompositions,
   listMissionRefutations,
+  prepareRefute,
   upsertAllowlistEntry,
   type DecomposeHubContext,
   type SqlLike,
@@ -663,6 +668,24 @@ test("root task refutation flags disputed_counterexample without closing mission
   assert.equal(root.status, "open", "root task must remain open for maintainer upstream bug triage");
   assert.equal(root.disputed_counterexample?.refuter, "dave");
   assert.ok(root.disputed_counterexample?.proof_id);
+  assert.deepEqual(
+    computeFrontier("dag", getTasks("arklib-near-capacity-primes")),
+    [],
+    "disputed root task must be removed from the open frontier"
+  );
+  assert.throws(
+    () =>
+      applyClaim(
+        "dag",
+        getTasks("arklib-near-capacity-primes"),
+        "near_capacity_prime_supply",
+        "alice",
+        "tok",
+        1700000100,
+        1800
+      ),
+    /counterexample.*cannot be claimed/
+  );
 });
 
 test("direct parent bypass forfeits unvested architect share and retires open child subgoals", async () => {
@@ -842,4 +865,152 @@ test("anti-gaming: self-refutation pays 0 bounty and duplicate root refutation i
   assert.equal(rootRef2.status, 409);
   assert.match(String(rootRef2.body.error), /already has a kernel-verified counterexample/);
   assert.equal(sumPoints("bob"), 75, "duplicate root refutation must not farm additional bounty");
+});
+
+test("async refute updates pre-inserted verifying submission row on accepted, rejected, and sandbox error", async () => {
+  // 1. Accepted path with existingSubmissionId + upstream_disputed root task still allowed to upgrade to kernel counterexample!
+  {
+    const { sql, ctx, getTasks, insertVerifyingSub } = createTestHub();
+    // Mark root task upstream_disputed in def_json; frontier excludes it, but kernel refutation is still allowed!
+    const rootBefore = getTasks("arklib-near-capacity-primes")[0];
+    const updatedDef = {
+      ...rootBefore.def,
+      upstream_disputed: {
+        source: "upstream",
+        reason: "known false upstream",
+        url: "https://github.com/teorth/IEANTN/issues/268",
+        recorded_at: "2026-11-26",
+      },
+    };
+    sql.exec(
+      "UPDATE tasks SET def_json = ? WHERE mission_id = ? AND task_id = ?",
+      JSON.stringify(updatedDef),
+      "arklib-near-capacity-primes",
+      "near_capacity_prime_supply"
+    );
+    assert.deepEqual(computeFrontier("dag", getTasks("arklib-near-capacity-primes")), []);
+
+    const refPatch = generateUnifiedDiff(
+      "ArkLibNearCapacity/RefuteAsync.lean",
+      null,
+      "import ArkLibNearCapacity.Spec\n"
+    );
+    const body = {
+      refute_file: "ArkLibNearCapacity/RefuteAsync.lean",
+      refute_theorem: "ArkLibNearCapacity.refute_async",
+      patch: refPatch,
+    };
+    const prep = prepareRefute(ctx, { taskId: "near_capacity_prime_supply", rawBody: body });
+    assert.equal(prep.ok, true, "upstream-disputed root task must still allow kernel-verified refutation");
+
+    const subId = "sub-async-refute-ok";
+    insertVerifyingSub(subId, "near_capacity_prime_supply", "dave", "sha256:" + "1".repeat(64));
+    const res = await executeRefute(ctx, {
+      taskId: "near_capacity_prime_supply",
+      contributor: "dave",
+      rawBody: body,
+      existingSubmissionId: subId,
+      createdAt: 1700000010,
+      prepared: prep.ok ? prep.prepared : undefined,
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.submission_id, subId);
+
+    const row = sql
+      .exec<SubmissionStatusRow>(
+        `SELECT id, mission_id, task_id, contributor, status, accepted, score, points,
+                summary, patch_sha256, proof_id, verify_ms, stage, diagnostics, error,
+                unlocked_dependents_json, created_at, completed_at
+         FROM submissions WHERE id = ?`,
+        subId
+      )
+      .one();
+    const view = formatSubmissionStatusView(row, "https://sunstead.org");
+    assert.equal(view.status, "accepted");
+    assert.equal(view.accepted, true);
+    assert.equal(view.points_awarded, 75);
+    assert.ok(view.proof_id);
+    assert.ok(view.permalink?.includes(view.proof_id!));
+    assert.ok(view.completed_at !== null);
+  }
+
+  // 2. Rejected verification updates verifying submission row to status='rejected' with diagnostics.
+  {
+    const { sql, ctx, insertVerifyingSub } = createTestHub();
+    ctx.callVerifierAction = async () => ({
+      ok: true,
+      res: {
+        ok: false,
+        summary: "refute theorem type mismatch",
+        spec_sha256: ctx.mission.spec_sha256,
+        verify_ms: 42,
+        stage: "kernel",
+        diagnostics: "expected ¬ T",
+      },
+    });
+    const subId = "sub-async-refute-rej";
+    insertVerifyingSub(subId, "near_capacity_prime_supply", "dave", "sha256:" + "2".repeat(64));
+    const res = await executeRefute(ctx, {
+      taskId: "near_capacity_prime_supply",
+      contributor: "dave",
+      rawBody: {
+        refute_file: "ArkLibNearCapacity/RefuteBad.lean",
+        refute_theorem: "ArkLibNearCapacity.refute_bad",
+        patch: generateUnifiedDiff("ArkLibNearCapacity/RefuteBad.lean", null, "-- bad\n"),
+      },
+      existingSubmissionId: subId,
+    });
+    assert.equal(res.status, 422);
+    const row = sql
+      .exec<SubmissionStatusRow>(
+        `SELECT id, mission_id, task_id, contributor, status, accepted, score, points,
+                summary, patch_sha256, proof_id, verify_ms, stage, diagnostics, error,
+                unlocked_dependents_json, created_at, completed_at
+         FROM submissions WHERE id = ?`,
+        subId
+      )
+      .one();
+    const view = formatSubmissionStatusView(row, "https://sunstead.org");
+    assert.equal(view.status, "rejected");
+    assert.equal(view.accepted, false);
+    assert.equal(view.stage, "kernel");
+    assert.equal(view.diagnostics, "expected ¬ T");
+  }
+
+  // 3. Container failure updates verifying submission row to status='error' (never stuck in verifying).
+  {
+    const { sql, ctx, insertVerifyingSub } = createTestHub();
+    ctx.callVerifierAction = async () => ({
+      ok: false,
+      status: 503,
+      error: "verifier container unavailable",
+    });
+    const subId = "sub-async-refute-err";
+    insertVerifyingSub(subId, "near_capacity_prime_supply", "dave", "sha256:" + "3".repeat(64));
+    const res = await executeRefute(ctx, {
+      taskId: "near_capacity_prime_supply",
+      contributor: "dave",
+      rawBody: {
+        refute_file: "ArkLibNearCapacity/RefuteErr.lean",
+        refute_theorem: "ArkLibNearCapacity.refute_err",
+        patch: generateUnifiedDiff("ArkLibNearCapacity/RefuteErr.lean", null, "-- err\n"),
+      },
+      existingSubmissionId: subId,
+    });
+    assert.equal(res.status, 503);
+    const row = sql
+      .exec<SubmissionStatusRow>(
+        `SELECT id, mission_id, task_id, contributor, status, accepted, score, points,
+                summary, patch_sha256, proof_id, verify_ms, stage, diagnostics, error,
+                unlocked_dependents_json, created_at, completed_at
+         FROM submissions WHERE id = ?`,
+        subId
+      )
+      .one();
+    const view = formatSubmissionStatusView(row, "https://sunstead.org");
+    assert.equal(view.status, "error");
+    assert.equal(view.accepted, false);
+    assert.equal(view.stage, "sandbox");
+    assert.equal(view.error, "verifier container unavailable");
+  }
 });

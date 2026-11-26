@@ -65,7 +65,7 @@ const tools = [
       patch: "diff --git a/Pkg/Refute_task_1.lean b/Pkg/Refute_task_1.lean\n",
     },
     "/api/missions/example/tasks/task_1/refute",
-    "",
+    "?async=1",
     "POST",
     {
       refute_file: "Pkg/Refute_task_1.lean",
@@ -122,6 +122,29 @@ test("submit_patch supports explicit async: false opt-in for synchronous verific
   });
   assert.equal(seenSearch, "");
   assert.equal((await res.json()).result.content[0].text, '{"accepted":true}');
+});
+
+test("refute_task supports explicit async: false opt-in for synchronous verification", async () => {
+  let seenSearch = "";
+  let seenBody: Record<string, unknown> = {};
+  const req = rpc("tools/call", {
+    name: "refute_task",
+    arguments: {
+      ...task,
+      refute_file: "Pkg/Refute.lean",
+      refute_theorem: "Pkg.refute",
+      patch: "diff",
+      async: false,
+    },
+  });
+  const res = await handleMcp(req, async (forwarded) => {
+    seenSearch = new URL(forwarded.url).search;
+    seenBody = (await forwarded.json()) as Record<string, unknown>;
+    return Response.json({ refuted: true });
+  });
+  assert.equal(seenSearch, "");
+  assert.equal("async" in seenBody, false);
+  assert.equal((await res.json()).result.content[0].text, '{"refuted":true}');
 });
 
 test("OPTIONS /mcp handles CORS preflight and rejects cross-origin preflights", async () => {
