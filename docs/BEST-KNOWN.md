@@ -59,6 +59,26 @@ Points already awarded before this rule (26 Nov 2026) were not recomputed.
 The registry lives outside the frozen mission folders on purpose: updating a citation
 does not change a mission's spec hash or its verifier image.
 
+## Derived S-box optimality bounds
+
+For binary AND minimization, take the algebraic normal form (ANF) of each truth-table output
+coordinate, and remove constant and degree-one monomials. The rank over GF(2) of those output
+vectors is a lower bound: inputs and constants are affine, and XOR, XNOR and NOT keep values
+in the affine span of the inputs and the AND-gate outputs. Each AND can add at most one
+generator modulo affine functions. To reproduce the ranks from
+[`LwcSbox/Spec.lean`](../missions/crypto-lwc-sboxes/LwcSbox/Spec.lean), apply the Boolean
+Möbius transform to each bit-sliced truth table, zero entries indexed by masks of popcount
+0 or 1, then row-reduce over GF(2). This gives rank 8 for SKINNY-128 and 4 each for PRESENT,
+GIFT and SPONGENT. The pinned upstream circuits in the registry attain those bounds.
+
+The ARIA designers' S2 formula is affine-equivalent to inversion over GF(2⁸)
+(`x^247 = (x^-1)^8`, with the zero convention and linear Frobenius map). The inverse S-box
+is also affine-equivalent to inversion. Both have degree 7 (also obtained by the Möbius
+transform on [`StdSbox/Spec.lean`](../missions/crypto-std-sboxes/StdSbox/Spec.lean)).
+Each AND layer at most doubles degree, so two layers cannot suffice. The
+[pinned NIST degree-7 AES circuit](https://github.com/usnistgov/Circuits/blob/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox/aes-sbox-a35-ad3-g139-gd27-xx104-38.circ.txt)
+attains AND-depth 3, and the affine conversions add no AND layers.
+
 ## Current values (checked 26 Nov 2026)
 
 All **201 non-demo hill-climb tracks across 18 Arena Packs** are tracked in [`missions/best-known.json`](../missions/best-known.json) and enforced in CI by `scripts/check-best-known.py`. The initial Wave 1–4 tracks are listed below; see `missions/best-known.json` for the complete machine-checked table including coding theory, extremal graphs, additive combinatorics, combinatorial designs, median selection networks, extended $\mathbb{F}_2$ matrix rank, cryptographic/ZK addition chains, and LWC/ISO S-box and linear-XOR packs.

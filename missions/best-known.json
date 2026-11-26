@@ -25,21 +25,33 @@
         "kind": "collection",
         "source": "A. E. Brouwer, 'Table of general binary codes' (binary-1.html): exact value A(17, 8) = 36.",
         "url": "https://www.win.tue.nl/~aeb/codes/binary-1.html",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "P. R. J. Östergård (2011), On the Size of Optimal Three-Error-Correcting Binary Codes of Length 16: exhaustive classification proves A(16,7) = A(17,8) = 36.",
+          "url": "https://doi.org/10.1109/TIT.2011.2144955"
+        }
       },
       "code_18_8": {
         "value": 64,
         "kind": "collection",
         "source": "A. E. Brouwer, 'Table of general binary codes' (binary-1.html): exact value A(18, 8) = 64.",
         "url": "https://www.win.tue.nl/~aeb/codes/binary-1.html",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "P. R. J. Östergård (2019), The sextuply shortened binary Golay code is optimal: A(18,8) = 64.",
+          "url": "https://doi.org/10.1007/s10623-018-0532-z"
+        }
       },
       "code_19_8": {
         "value": 128,
         "kind": "collection",
         "source": "A. E. Brouwer, 'Table of general binary codes' (binary-1.html): exact value A(19, 8) = 128.",
         "url": "https://www.win.tue.nl/~aeb/codes/binary-1.html",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "P. R. J. Östergård (2019), The sextuply shortened binary Golay code is optimal: A(19,8) = 128.",
+          "url": "https://doi.org/10.1007/s10623-018-0532-z"
+        }
       },
       "code_21_10": {
         "value": 42,
@@ -93,9 +105,13 @@
       "cwc_20_8_7": {
         "value": 80,
         "kind": "collection",
-        "source": "A. E. Brouwer, 'Bounds for binary constant weight codes' (Andw.html): exact value A(20, 8, 7) = 80 (80s, Steiner system).",
+        "source": "A. E. Brouwer, Bounds for binary constant weight codes: A(20,8,7) = 80 (80s, shortening the Witt design).",
         "url": "https://aeb.win.tue.nl/codes/Andw.html",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "P. R. J. Östergård (2010), Classification of Binary Constant Weight Codes, proves A(19,8,7) = 52. In an A(20,8,7) code of size M, each of 20 coordinates is zero in at most 52 codewords (shorten at zero), and each word has 13 zeros, so 13M <= 20*52 and M <= 80.",
+          "url": "https://doi.org/10.1109/TIT.2010.2050922"
+        }
       },
       "cwc_21_6_5": {
         "value": 110,
@@ -139,21 +155,33 @@
         "kind": "literature",
         "source": "G. Pellegrino (1970): maximum cap set size in AG(4, 3) = F_3^4 is exactly 20 (OEIS A090245).",
         "url": "https://oeis.org/A090245",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "M. Thackeray, The cap set problem and standard diagrams, Theorems 4.9–4.10: AG(4,3) contains a 20-cap and no 21-cap.",
+          "url": "https://repository.up.ac.za/server/api/core/bitstreams/741750a3-39b0-4700-9269-96ac1604d031/content"
+        }
       },
       "capset_f3_5": {
         "value": 45,
         "kind": "literature",
         "source": "Y. Edel, S. Ferret, I. Landjev, L. Storme, 'The classification of the largest caps in AG(5, 3)', J. Combin. Theory Ser. A 99 (2002): maximum cap set in F_3^5 is exactly 45 (OEIS A090245).",
         "url": "https://oeis.org/A090245",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "Y. Edel, S. Ferret, I. Landjev and L. Storme, The classification of the largest caps in AG(5,3), Theorem 1.2: the maximum is 45.",
+          "url": "https://www.yvesedel.de/Papers/EFLS.pdf"
+        }
       },
       "capset_f3_6": {
         "value": 112,
         "kind": "literature",
-        "source": "A. Potechin, 'Maximal caps in AG(6, 3)', Des. Codes Cryptogr. 46 (2008), arXiv:0802.0789: maximum cap set in F_3^6 is exactly 112 (OEIS A090245).",
-        "url": "https://arxiv.org/abs/0802.0789",
-        "checked": "2026-11-26"
+        "source": "A. Potechin, Maximal caps in AG(6,3), Designs, Codes and Cryptography: the maximum is 112.",
+        "url": "https://doi.org/10.1007/s10623-007-9132-z",
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "A. Potechin, Maximal caps in AG(6,3): an affine cap in dimension six has at most 112 points.",
+          "url": "https://doi.org/10.1007/s10623-007-9132-z"
+        }
       },
       "capset_f3_7": {
         "value": 236,
@@ -167,28 +195,38 @@
         "kind": "collection",
         "source": "OEIS A003002 (b003002.txt) / J. Dybizbanski, Electron. J. Combin. 19(2) (2012): exact value r_3(64) = 20.",
         "url": "https://oeis.org/A003002",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "J. Dybizbański (2012), Sequences Containing No 3-Term Arithmetic Progressions, Table 3: r_3(64) = 20, computed exactly.",
+          "url": "https://doi.org/10.37236/2061"
+        }
       },
       "ap3_n100": {
         "value": 27,
         "kind": "collection",
         "source": "OEIS A003002 (b003002.txt) / J. Dybizbanski, Electron. J. Combin. 19(2) (2012): exact value r_3(100) = 27.",
         "url": "https://oeis.org/A003002",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "J. Dybizbański (2012), Sequences Containing No 3-Term Arithmetic Progressions, Table 3: r_3(100) = 27, computed exactly.",
+          "url": "https://doi.org/10.37236/2061"
+        }
       },
       "ap3_n150": {
         "value": 35,
         "kind": "collection",
-        "source": "OEIS A003002 (b003002.txt) / J. Dybizbanski, Electron. J. Combin. 19(2) (2012): exact value r_3(150) = 35.",
-        "url": "https://oeis.org/A003002",
-        "checked": "2026-11-26"
+        "source": "S. Cariboni's tabulation reports r_3(150) = 35; Dybizbański's published computation ends at 123.",
+        "url": "https://oeis.org/A003002/b003002.txt",
+        "checked": "2026-11-26",
+        "note": "Retain the reported value as the reference; no matching upper-bound proof was available for this audit."
       },
       "ap3_n200": {
         "value": 41,
         "kind": "collection",
-        "source": "OEIS A003002 (b003002.txt): exact value r_3(200) = 41 (verified through n = 211).",
-        "url": "https://oeis.org/A003002",
-        "checked": "2026-11-26"
+        "source": "S. Cariboni's tabulation reports r_3(200) = 41; Dybizbański's published computation ends at 123.",
+        "url": "https://oeis.org/A003002/b003002.txt",
+        "checked": "2026-11-26",
+        "note": "Retain the reported value as the reference; no matching upper-bound proof was available for this audit."
       },
       "ap3_n300": {
         "value": 54,
@@ -203,35 +241,55 @@
         "kind": "derived",
         "source": "Exact equivalence to Optimal Golomb Rulers (OEIS A003022): G(12) = 85 <= 99 < 106 = G(13), so the largest Sidon set in {0..99} has exactly 12 elements.",
         "url": "https://oeis.org/A003022",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "J. P. Robinson, 12-mark paper and 13-mark addendum: G(12) = 85 <= 99 < 106 = G(13); distinct positive differences give a Golomb ruler, so at most 12 marks fit.",
+          "url": "https://doi.org/10.1109/tc.1983.1676205"
+        }
       },
       "sidon_n150": {
         "value": 14,
         "kind": "derived",
         "source": "Exact equivalence to Optimal Golomb Rulers (OEIS A003022): G(14) = 127 <= 149 < 151 = G(15), so the largest Sidon set in {0..149} has exactly 14 elements.",
         "url": "https://oeis.org/A003022",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "J. B. Shearer, exhaustive 14–16 mark search: G(14) = 127 <= 149 < 151 = G(15); distinct positive differences give a Golomb ruler, so at most 14 marks fit.",
+          "url": "https://research.ibm.com/publications/some-new-optimum-golomb-rulers"
+        }
       },
       "sidon_n200": {
         "value": 17,
         "kind": "derived",
         "source": "Exact equivalence to Optimal Golomb Rulers (OEIS A003022): G(17) = 199 <= 199 < 216 = G(18), so the largest Sidon set in {0..199} has exactly 17 elements.",
         "url": "https://oeis.org/A003022",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "Dollas, Rankin and McCracken, exact-length table and independent verification: G(17) = 199 <= 199 < 216 = G(18); distinct positive differences give a Golomb ruler, so at most 17 marks fit.",
+          "url": "https://www.cs.toronto.edu/~apostol/golomb/main.pdf"
+        }
       },
       "sidon_n300": {
         "value": 20,
         "kind": "derived",
         "source": "Exact equivalence to Optimal Golomb Rulers (OEIS A003022): G(20) = 283 <= 299 < 333 = G(21), so the largest Sidon set in {0..299} has exactly 20 elements.",
         "url": "https://oeis.org/A003022",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "Garry–Vanderschel exhaustive project, as tabulated by Dollas, Rankin and McCracken: G(20) = 283 <= 299 < 333 = G(21); distinct positive differences give a Golomb ruler, so at most 20 marks fit.",
+          "url": "https://www.cs.toronto.edu/~apostol/golomb/main.pdf"
+        }
       },
       "sidon_n500": {
         "value": 26,
         "kind": "derived",
         "source": "Exact equivalence to Optimal Golomb Rulers (OEIS A003022): G(26) = 492 <= 499 < 553 = G(27), so the largest Sidon set in {0..499} has exactly 26 elements.",
         "url": "https://oeis.org/A003022",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "distributed.net's exhaustive OGR-26 and OGR-27 projects: G(26) = 492 <= 499 < 553 = G(27); distinct positive differences give a Golomb ruler, so at most 26 marks fit.",
+          "url": "https://blogs.distributed.net/2014/02/25/16/09/mikereed/"
+        }
       }
     },
     "combinatorial-designs-opt": {
@@ -240,14 +298,22 @@
         "kind": "collection",
         "source": "C. J. Colbourn, Covering Array Tables (CAN(2, 15, 3) <= 15); also benchmarked in Wu, Nie, Kuo, Leung, Colbourn, IEEE TEVC 19(4) (2015).",
         "url": "https://www.public.asu.edu/~ccolbou/src/tabby/catable.html",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "Kokkala et al., Section 4: no CA(14;2,11,3), and Nurmela constructs CA(15;2,20,3). Column deletion gives CAN(2,15,3) = 15.",
+          "url": "https://arxiv.org/abs/1901.03594"
+        }
       },
       "ca_2_20_3": {
         "value": 15,
         "kind": "collection",
         "source": "C. J. Colbourn, Covering Array Tables (CAN(2, 20, 3) <= 15); also benchmarked in Wu, Nie, Kuo, Leung, Colbourn, IEEE TEVC 19(4) (2015).",
         "url": "https://www.public.asu.edu/~ccolbou/src/tabby/catable.html",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "Kokkala et al., Section 4: no CA(14;2,11,3), and Nurmela constructs CA(15;2,20,3). Column deletion gives CAN(2,20,3) = 15.",
+          "url": "https://arxiv.org/abs/1901.03594"
+        }
       },
       "ca_2_15_4": {
         "value": 24,
@@ -268,21 +334,33 @@
         "kind": "literature",
         "source": "Exact value CAN(3, 12, 2) = 15 (Nurmela / Colbourn Covering Array Tables; proven no 14-row strength-3 binary CA on 12 columns exists).",
         "url": "https://www.public.asu.edu/~ccolbou/src/tabby/catable.html",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "Colbourn, Kéri, Rivas Soriano and Schlage-Puchta, Theorem 5.1 and Table 4: CAN(3,12,2) = 15; no 14-row array.",
+          "url": "https://www.mathematik.uni-rostock.de/storages/uni-rostock/Alle_MNF/Mathematik/Struktur/Lehrstuehle/Algebra/papers/Covering_array.pdf"
+        }
       },
       "ca_3_16_2": {
         "value": 17,
         "kind": "literature",
         "source": "Exact value CAN(3, 16, 2) = 17 (Colbourn Covering Array Tables; proven optimal by exact classification of strength-3 binary covering arrays).",
         "url": "https://www.public.asu.edu/~ccolbou/src/tabby/catable.html",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "Construction of non-isomorphic covering arrays: enumeration proves CAN(3,16,2) = 17.",
+          "url": "https://doi.org/10.1142/S1793830916500336"
+        }
       },
       "ca_3_20_2": {
         "value": 18,
         "kind": "literature",
-        "source": "Exact value CAN(3, 20, 2) = 18 (Sloane / Roux / Colbourn Covering Array Tables; proven optimal for 17 <= k <= 20).",
-        "url": "https://www.public.asu.edu/~ccolbou/src/tabby/catable.html",
-        "checked": "2026-11-26"
+        "source": "Roux constructed the 18-row array; Hiess and Kampel, Theorem 1 and Corollary 1, rule out 17 rows for 20 columns.",
+        "url": "https://arxiv.org/html/2510.17596v1",
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "Hiess and Kampel, Theorem 1 and Corollary 1: a strength-3 binary covering array of 17 rows has at most 16 columns, so CAN(3,20,2) >= 18.",
+          "url": "https://arxiv.org/html/2510.17596v1"
+        }
       },
       "ca_3_10_3": {
         "value": 45,
@@ -296,35 +374,55 @@
         "kind": "literature",
         "source": "OEIS A003022 (b003022.txt) / distributed.net Project OGR: proven optimal 12-mark Golomb ruler length G(12) = 85.",
         "url": "https://oeis.org/A003022",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "J. P. Robinson, original 12-mark optimality result: no 12-mark ruler is shorter than 85.",
+          "url": "https://doi.org/10.1109/tc.1979.1675287"
+        }
       },
       "golomb_k14": {
         "value": 127,
         "kind": "literature",
         "source": "OEIS A003022 (b003022.txt) / distributed.net Project OGR: proven optimal 14-mark Golomb ruler length G(14) = 127.",
         "url": "https://oeis.org/A003022",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "J. B. Shearer, Some New Optimum Golomb Rulers: no 14-mark ruler is shorter than 127.",
+          "url": "https://research.ibm.com/publications/some-new-optimum-golomb-rulers"
+        }
       },
       "golomb_k16": {
         "value": 177,
         "kind": "literature",
         "source": "OEIS A003022 (b003022.txt) / distributed.net Project OGR: proven optimal 16-mark Golomb ruler length G(16) = 177.",
         "url": "https://oeis.org/A003022",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "J. B. Shearer, Some New Optimum Golomb Rulers: no 16-mark ruler is shorter than 177.",
+          "url": "https://research.ibm.com/publications/some-new-optimum-golomb-rulers"
+        }
       },
       "golomb_k20": {
         "value": 283,
         "kind": "literature",
         "source": "OEIS A003022 (b003022.txt) / distributed.net Project OGR: proven optimal 20-mark Golomb ruler length G(20) = 283.",
         "url": "https://oeis.org/A003022",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "Garry–Vanderschel exhaustive project, as tabulated by Dollas, Rankin and McCracken: no 20-mark ruler is shorter than 283.",
+          "url": "https://www.cs.toronto.edu/~apostol/golomb/main.pdf"
+        }
       },
       "golomb_k25": {
         "value": 480,
         "kind": "literature",
         "source": "OEIS A003022 (b003022.txt) / distributed.net Project OGR-25 (2008): proven optimal 25-mark Golomb ruler length G(25) = 480.",
         "url": "https://oeis.org/A003022",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "distributed.net OGR-25 completion report (2008), exhaustive elimination of shorter rulers: no 25-mark ruler is shorter than 480.",
+          "url": "https://blogs.distributed.net/2008/10/25/23/14/bovine/"
+        }
       },
       "golomb_k29": {
         "value": 623,
@@ -640,9 +738,13 @@
       "skinny8_and_gates": {
         "value": 8,
         "kind": "literature",
-        "source": "C. Beierle et al., CRYPTO 2016 / rweather/lightweight-crypto internal-skinnyutil.h: defining 4-round SKINNY-128 S-box uses exactly 8 NOR/AND gates.",
-        "url": "https://github.com/rweather/lightweight-crypto/tree/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined",
-        "checked": "2026-11-26"
+        "source": "Pinned lightweight-crypto SKINNY-128 implementation scalarizes to 8 binary ANDs, expressing OR as XOR plus AND and treating masks, shifts and disjoint packing as wiring.",
+        "url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-skinnyutil.h#L154",
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "Derived from the pinned SKINNY-128 circuit and frozen table: the nonlinear output ANFs have GF(2)-rank 8 modulo affine functions, requiring at least 8 AND-output generators. See docs/BEST-KNOWN.md.",
+          "url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-skinnyutil.h#L154"
+        }
       },
       "skinny8_and_depth": {
         "value": 4,
@@ -663,7 +765,11 @@
         "kind": "literature",
         "source": "C. Dobraunig, M. Eichlseder, F. Mendel, M. Schlaffer (Ascon / NIST SP 800-232) and K. Stoffelen (ePrint 2016/198): 5-bit quadratic Ascon S-box has optimal multiplicative complexity 5.",
         "url": "https://eprint.iacr.org/2016/198",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "K. Stoffelen, Optimizing S-box Implementations for Several Criteria Using SAT Solvers, Section 3.2 and Table 1: Ascon needs at least five nonlinear binary gates.",
+          "url": "https://ko.stoffelen.nl/papers/fse2016-sboxoptimization.pdf"
+        }
       },
       "keccak_chi_total_gates": {
         "value": 15,
@@ -682,9 +788,13 @@
       "present_and_gates": {
         "value": 4,
         "kind": "literature",
-        "source": "K. Stoffelen, FSE 2016 (ePrint 2016/198): PRESENT 4-bit S-box has optimal multiplicative complexity 4.",
-        "url": "https://eprint.iacr.org/2016/198",
-        "checked": "2026-11-26"
+        "source": "Pinned lightweight-crypto PRESENT implementation scalarizes to 4 binary ANDs, expressing OR as XOR plus AND and treating masks, shifts and disjoint packing as wiring.",
+        "url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-photon256.c#L51",
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "Derived from the pinned PRESENT circuit and frozen table: the nonlinear output ANFs have GF(2)-rank 4 modulo affine functions, requiring at least 4 AND-output generators. See docs/BEST-KNOWN.md.",
+          "url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-photon256.c#L51"
+        }
       },
       "gift_total_gates": {
         "value": 12,
@@ -696,9 +806,13 @@
       "gift_and_gates": {
         "value": 4,
         "kind": "literature",
-        "source": "S. Banik et al., CHES 2017 / rweather/lightweight-crypto internal-gift128.c: GIFT 4-bit S-box has optimal multiplicative complexity 4.",
-        "url": "https://github.com/rweather/lightweight-crypto/tree/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined",
-        "checked": "2026-11-26"
+        "source": "Pinned lightweight-crypto GIFT implementation scalarizes to 4 binary ANDs, expressing OR as XOR plus AND and treating masks, shifts and disjoint packing as wiring.",
+        "url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-gift128.c#L480",
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "Derived from the pinned GIFT circuit and frozen table: the nonlinear output ANFs have GF(2)-rank 4 modulo affine functions, requiring at least 4 AND-output generators. See docs/BEST-KNOWN.md.",
+          "url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-gift128.c#L480"
+        }
       },
       "spongent_total_gates": {
         "value": 14,
@@ -710,9 +824,13 @@
       "spongent_and_gates": {
         "value": 4,
         "kind": "literature",
-        "source": "A. Bogdanov et al. (SPONGENT, CHES 2011) / K. Stoffelen (ePrint 2016/198): SPONGENT 4-bit S-box has optimal multiplicative complexity 4.",
-        "url": "https://eprint.iacr.org/2016/198",
-        "checked": "2026-11-26"
+        "source": "Pinned lightweight-crypto SPONGENT implementation scalarizes to 4 binary ANDs, expressing OR as XOR plus AND and treating masks, shifts and disjoint packing as wiring.",
+        "url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-spongent.c#L41",
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "Derived from the pinned SPONGENT circuit and frozen table: the nonlinear output ANFs have GF(2)-rank 4 modulo affine functions, requiring at least 4 AND-output generators. See docs/BEST-KNOWN.md.",
+          "url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-spongent.c#L41"
+        }
       },
       "saturnin_total_gates": {
         "value": 16,
@@ -834,7 +952,11 @@
         "kind": "derived",
         "source": "ARIA S2 is affine-equivalent to GF(2^8) inversion (algebraic degree 7 => lower bound ceil(log2 7) = 3). Composing NIST usnistgov/Circuits aes-sbox-a35-ad3-g139 (AND-depth 3) with linear maps achieves optimal AND-depth 3.",
         "url": "https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "Derived from the ARIA designers' S2 formula (Section 2.2): S2 has Boolean degree 7 by affine equivalence to inversion, so two AND layers (degree at most 4) cannot suffice. See docs/BEST-KNOWN.md.",
+          "url": "https://www.math.snu.ac.kr/~jinhong/04Aria.pdf"
+        }
       },
       "aria_invs2_total_gates": {
         "value": 103,
@@ -855,7 +977,11 @@
         "kind": "derived",
         "source": "ARIA InvS2 is affine-equivalent to GF(2^8) inversion (algebraic degree 7 => lower bound 3). Composing NIST usnistgov/Circuits aes-sbox-a35-ad3-g139 (AND-depth 3) with linear maps achieves optimal AND-depth 3.",
         "url": "https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "Derived from the ARIA designers' S2 formula (Section 2.2): InvS2 has Boolean degree 7 by affine equivalence to inversion, so two AND layers (degree at most 4) cannot suffice. See docs/BEST-KNOWN.md.",
+          "url": "https://www.math.snu.ac.kr/~jinhong/04Aria.pdf"
+        }
       }
     },
     "crypto-zk-addition-chains": {
@@ -938,14 +1064,22 @@
         "kind": "literature",
         "source": "B. D. McKay and Zhang Ke Min, 'The value of the Ramsey number R(3,8)', J. Graph Theory 16 (1992): R(3,8) = 28 exact, so max (3,8)-Ramsey witness graph order is 27. Listed in Radziszowski Dynamic Survey DS1.",
         "url": "https://www.combinatorics.org/ojs/index.php/eljc/article/view/DS1",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "B. D. McKay and K. M. Zhang (1992), The value of the Ramsey number R(3,8): R(3,8) = 28, so witness order at most 27.",
+          "url": "https://users.cecs.anu.edu.au/~bdm/papers/McKayRamsey_R38.pdf"
+        }
       },
       "ramsey_3_9": {
         "value": 35,
         "kind": "literature",
         "source": "C. M. Grinstead and S. M. Roberts, 'On the Ramsey numbers R(3,8) and R(3,9)', J. Combin. Theory Ser. B 33 (1982): R(3,9) = 36 exact, so max (3,9)-Ramsey witness graph order is 35. Listed in Radziszowski DS1.",
         "url": "https://www.combinatorics.org/ojs/index.php/eljc/article/view/DS1",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "C. M. Grinstead and S. M. Roberts (1982), On the Ramsey numbers R(3,8) and R(3,9): R(3,9) = 36, so witness order at most 35.",
+          "url": "https://doi.org/10.1016/0095-8956(82)90055-7"
+        }
       },
       "ramsey_3_10": {
         "value": 39,
@@ -966,7 +1100,11 @@
         "kind": "literature",
         "source": "B. D. McKay and S. P. Radziszowski, 'R(4,5) = 25', J. Graph Theory 19 (1995): R(4,5) = 25 exact, so max (4,5)-Ramsey witness graph order is 24. Listed in Radziszowski DS1.",
         "url": "https://www.combinatorics.org/ojs/index.php/eljc/article/view/DS1",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "B. D. McKay and S. P. Radziszowski (1995), R(4,5) = 25, Theorem 2: witness order at most 24.",
+          "url": "https://users.cecs.anu.edu.au/~bdm/papers/r45.pdf"
+        }
       },
       "ramsey_4_6": {
         "value": 35,
@@ -994,56 +1132,88 @@
         "kind": "collection",
         "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(25, C_4) = 63 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
         "url": "https://oeis.org/A006855",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "A. Afzaly and B. D. McKay, extremal graphs exhaustive results table (unrestricted C4-free column): maximum 63 edges for 25 vertices.",
+          "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html"
+        }
       },
       "c4free_n27": {
         "value": 71,
         "kind": "collection",
         "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(27, C_4) = 71 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
         "url": "https://oeis.org/A006855",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "A. Afzaly and B. D. McKay, extremal graphs exhaustive results table (unrestricted C4-free column): maximum 71 edges for 27 vertices.",
+          "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html"
+        }
       },
       "c4free_n29": {
         "value": 80,
         "kind": "collection",
         "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(29, C_4) = 80 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
         "url": "https://oeis.org/A006855",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "A. Afzaly and B. D. McKay, extremal graphs exhaustive results table (unrestricted C4-free column): maximum 80 edges for 29 vertices.",
+          "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html"
+        }
       },
       "c4free_n32": {
         "value": 92,
         "kind": "collection",
         "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(32, C_4) = 92 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
         "url": "https://oeis.org/A006855",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "A. Afzaly and B. D. McKay, extremal graphs exhaustive results table (unrestricted C4-free column): maximum 92 edges for 32 vertices.",
+          "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html"
+        }
       },
       "c4free_n34": {
         "value": 102,
         "kind": "collection",
         "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(34, C_4) = 102 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
         "url": "https://oeis.org/A006855",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "A. Afzaly and B. D. McKay, extremal graphs exhaustive results table (unrestricted C4-free column): maximum 102 edges for 34 vertices.",
+          "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html"
+        }
       },
       "c4free_n36": {
         "value": 110,
         "kind": "collection",
         "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(36, C_4) = 110 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
         "url": "https://oeis.org/A006855",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "A. Afzaly and B. D. McKay, extremal graphs exhaustive results table (unrestricted C4-free column): maximum 110 edges for 36 vertices.",
+          "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html"
+        }
       },
       "c4free_n38": {
         "value": 117,
         "kind": "collection",
         "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(38, C_4) = 117 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
         "url": "https://oeis.org/A006855",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "A. Afzaly and B. D. McKay, extremal graphs exhaustive results table (unrestricted C4-free column): maximum 117 edges for 38 vertices.",
+          "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html"
+        }
       },
       "c4free_n40": {
         "value": 127,
         "kind": "collection",
         "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(40, C_4) = 127 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
         "url": "https://oeis.org/A006855",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "proven_optimal": {
+          "source": "A. Afzaly and B. D. McKay, extremal graphs exhaustive results table (unrestricted C4-free column): maximum 127 edges for 40 vertices.",
+          "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html"
+        }
       }
     },
     "matrix-rank-alphatensor-f2": {
@@ -1295,35 +1465,37 @@
       "median_n7": {
         "value": 13,
         "kind": "collection",
-        "source": "B. Dobbelaere, SorterHunter median selection networks table (median_networks.html, bertdobbelaere/SorterHunter@3d8b345): best known 7-input median network uses 13 compare-exchange elements (proven optimal).",
+        "source": "B. Dobbelaere, SorterHunter median selection networks table (median_networks.html, bertdobbelaere/SorterHunter@3d8b345): best known 7-input median network uses 13 compare-exchange elements.",
         "url": "https://bertdobbelaere.github.io/median_networks.html",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "note": "MF-189 reports UNSAT at size 12, but its public bundle does not include the encoding or proof certificate. Leave open pending review of those artifacts."
       },
       "median_n8": {
         "value": 16,
         "kind": "collection",
-        "source": "B. Dobbelaere, SorterHunter median selection networks table (median_networks.html, bertdobbelaere/SorterHunter@3d8b345): best known 8-input median network uses 16 compare-exchange elements (proven optimal).",
+        "source": "B. Dobbelaere, SorterHunter median selection networks table (median_networks.html, bertdobbelaere/SorterHunter@3d8b345): best known 8-input median network uses 16 compare-exchange elements.",
         "url": "https://bertdobbelaere.github.io/median_networks.html",
         "checked": "2026-11-26"
       },
       "median_n9": {
         "value": 19,
         "kind": "collection",
-        "source": "B. Dobbelaere, SorterHunter median selection networks table (median_networks.html, bertdobbelaere/SorterHunter@3d8b345): best known 9-input median network uses 19 compare-exchange elements (proven optimal).",
+        "source": "B. Dobbelaere, SorterHunter median selection networks table (median_networks.html, bertdobbelaere/SorterHunter@3d8b345): best known 9-input median network uses 19 compare-exchange elements.",
         "url": "https://bertdobbelaere.github.io/median_networks.html",
-        "checked": "2026-11-26"
+        "checked": "2026-11-26",
+        "note": "Smith (1996) calls the 19-comparator network minimum but does not supply an opposite bound; leave open."
       },
       "median_n10": {
         "value": 22,
         "kind": "collection",
-        "source": "B. Dobbelaere, SorterHunter median selection networks table (median_networks.html, bertdobbelaere/SorterHunter@3d8b345): best known 10-input median network uses 22 compare-exchange elements (proven optimal).",
+        "source": "B. Dobbelaere, SorterHunter median selection networks table (median_networks.html, bertdobbelaere/SorterHunter@3d8b345): best known 10-input median network uses 22 compare-exchange elements.",
         "url": "https://bertdobbelaere.github.io/median_networks.html",
         "checked": "2026-11-26"
       },
       "median_n11": {
         "value": 25,
         "kind": "collection",
-        "source": "B. Dobbelaere, SorterHunter median selection networks table (median_networks.html, bertdobbelaere/SorterHunter@3d8b345): best known 11-input median network uses 25 compare-exchange elements (proven optimal).",
+        "source": "B. Dobbelaere, SorterHunter median selection networks table (median_networks.html, bertdobbelaere/SorterHunter@3d8b345): best known 11-input median network uses 25 compare-exchange elements.",
         "url": "https://bertdobbelaere.github.io/median_networks.html",
         "checked": "2026-11-26"
       },
