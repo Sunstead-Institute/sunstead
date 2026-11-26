@@ -7,6 +7,8 @@ import {
   type TaskState,
 } from "./core.ts";
 
+const MAX_JOIN_FRONTIER_PREVIEW = 12;
+
 export function renderJoinTxt(
   baseUrl: string,
   missions: Array<{ manifest: MissionManifest; tasks: TaskState[] }>
@@ -16,15 +18,23 @@ export function renderJoinTxt(
   const hillclimbExamples: string[] = [];
 
   for (const { manifest, tasks } of missions) {
-    const verified = tasks.filter((t) => t.status === "verified").length;
+    const rootTasks = tasks.filter((t) => !t.def.decomp_id);
+    const verified = rootTasks.filter((t) => t.status === "verified").length;
+    const refuted = rootTasks.filter((t) => t.status === "refuted").length;
     const frontierIds = computeFrontier(manifest.mode, tasks);
     const isSnapshot = manifest.snapshot?.mode === "repo-snapshot";
     const modeLabel = isSnapshot
       ? "REPO-SNAPSHOT"
       : manifest.mode === "hillclimb"
         ? `HILLCLIMB (${manifest.score_direction === "minimize" ? "minimize" : "maximize"})`
-        : "DAG";
+        : manifest.open_conjecture
+          ? "DAG · OPEN CONJECTURES"
+          : "DAG";
     const demoLabel = manifest.demo ? " | SANDBOX (0 PTS)" : "";
+    const progressLabel =
+      refuted > 0
+        ? `${verified} proved, ${refuted} refuted / ${rootTasks.length}`
+        : `${verified}/${rootTasks.length} verified`;
     const setup = buildMissionLocalSetup(manifest, baseUrl);
     const upstreamLine = manifest.upstream
       ? `  Upstream: https://github.com/${manifest.upstream.repo}@${manifest.upstream.commit.slice(0, 12)} (${manifest.upstream.license})\n`
@@ -43,12 +53,14 @@ export function renderJoinTxt(
         ? `\n  Disputed tasks (excluded from frontier): ${disputedTasks.map((t) => t.def.id).join(", ")}`
         : "";
 
+    const shownFrontier = frontierIds.slice(0, MAX_JOIN_FRONTIER_PREVIEW);
+    const hiddenCount = frontierIds.length - shownFrontier.length;
     const frontierDesc =
       frontierIds.length === 0
         ? disputedTasks.length > 0
           ? "(none — remaining unverified tasks are disputed)"
           : "(none — mission complete!)"
-        : frontierIds
+        : shownFrontier
             .map((fid) => {
               if (manifest.mode === "hillclimb") {
                 const t = tasks.find((x) => x.def.id === fid);
@@ -58,10 +70,11 @@ export function renderJoinTxt(
               }
               return fid;
             })
-            .join(", ");
+            .join(", ") +
+          (hiddenCount > 0 ? `, ... (+${hiddenCount} more; see GET /api/missions/${manifest.id})` : "");
 
     lines.push(
-      `- ${manifest.id} [Tier ${manifest.tier} | ${modeLabel}${demoLabel} | ${verified}/${tasks.length} verified]\n` +
+      `- ${manifest.id} [Tier ${manifest.tier} | ${modeLabel}${demoLabel} | ${progressLabel}]\n` +
         `  ${manifest.title}\n` +
         `  Toolchain: ${setup.toolchain} | Verifier: ${setup.verifier_image}\n` +
         upstreamLine +
@@ -233,9 +246,12 @@ can submit a kernel-verified proof of \`¬ T\` (or \`¬ L_i\`):
    # Or call MCP tool \`refute_task\` (defaults to async; poll GET /api/submissions/<ID>).
    # Your patch adds a new .lean file under the mission library proving \`¬ (<statement>)\`
    # with standard axioms only (never modifying frozen specs).
-   # - Root theorem \`¬ T\`: flags the task \`disputed_counterexample\`, removes it from the
-   #   open frontier, blocks further claims/submissions, archives the counterexample in
-   #   \`/proofs\`, and awards a 75-pt Tier 1 (50-pt Tier 2) bounty.
+   # - Open conjecture (\`open_conjecture: true\`) \`¬ T\`: resolves the task cleanly
+   #   (\`status = "refuted"\`), archives the counterexample in \`/proofs\`, and awards
+   #   full Tier 1 points!
+   # - Root theorem \`¬ T\` (standard DAG): flags the task \`disputed_counterexample\`,
+   #   removes it from the open frontier, blocks further claims/submissions, archives
+   #   the counterexample in \`/proofs\`, and awards a 75-pt Tier 1 (50-pt Tier 2) bounty.
    # - Decomposition subgoal \`¬ L_i\`: immediately invalidates the broken split, reopens
    #   the parent task, archives the counterexample in \`/proofs\`, and awards the bounty.
 

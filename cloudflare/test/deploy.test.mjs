@@ -15,6 +15,17 @@ import {
   imageFromApplications,
   verifierInputsHash,
 } from "../scripts/deploy.mjs";
+import {
+  REPO_ROOT,
+  WORKER_FREE_GZ_LIMIT_BYTES,
+  WORKER_PAID_GZ_LIMIT_BYTES,
+  buildMissionsBundle,
+  isWorkerServedSeedFile,
+  measureGeneratedBundle,
+  renderMissionsTs,
+  renderStaticTs,
+  syncAssets,
+} from "../scripts/sync-assets.mjs";
 
 const CF_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DIGEST = "a".repeat(64);
@@ -301,4 +312,164 @@ test("findApplication and imageFromApplicationDetail read authoritative single-a
       ),
     /active container rollout.*SUNSTEAD_VERIFIER_V431_IMAGE/
   );
+});
+
+test("sync-assets deduplicates shared blobs, preserves task-disputes.json, drops unserved files, and keeps real Worker bundle compact", () => {
+  const bundle = buildMissionsBundle(path.join(REPO_ROOT, "missions"));
+  const missionsTs = renderMissionsTs(bundle);
+  const staticTs = renderStaticTs(path.join(REPO_ROOT, "web"), REPO_ROOT);
+  const sizes = measureGeneratedBundle(missionsTs, staticTs);
+
+  assert.ok(bundle.stats.missionCount >= 22);
+  assert.ok(bundle.stats.uniqueBlobs < bundle.stats.totalFileRefs, "duplicate files across missions must be deduplicated");
+  assert.ok(bundle.stats.dedupSavedBytes > 10_000, `expected >10 KiB dedup savings, got ${bundle.stats.dedupSavedBytes}`);
+  assert.ok(bundle.stats.skippedBytes > 10_000, "unserved LICENSE copies outside frozen_paths must be excluded from Worker bundle");
+  assert.ok(sizes.missionsGz < 1024 * 1024, `real missions.ts gz (${sizes.missionsGz}) should stay compact (<1 MiB)`);
+  assert.ok(sizes.combinedGz < WORKER_FREE_GZ_LIMIT_BYTES, "real generated assets must fit comfortably within 3 MiB Free Worker limit");
+
+  // Verify missions/task-disputes.json is merged into affected tasks without changing spec hashes.
+  const butheMission = bundle.missions.find((m) => m.manifest.id === "ieantn-buthe-prime-bounds");
+  const butheLemma3 = butheMission?.manifest.tasks.find((t) => t.id === "buthe_lemma_3_bounds");
+  assert.ok(butheLemma3?.upstream_disputed, "ieantn-buthe-prime-bounds/buthe_lemma_3_bounds must carry upstream_disputed from task-disputes.json");
+
+  // Verify static.ts deduplicates shared index.html and what-is-this.html bodies.
+  assert.equal((staticTs.match(/const WHAT_IS_THIS_HTML = /g) || []).length, 1);
+  assert.equal((staticTs.match(/const INDEX_HTML = /g) || []).length, 1);
+
+  // Verify every target file is resolvable through SEED_FILE_BLOBS and verify/sunstead.json are omitted.
+  for (const m of bundle.missions) {
+    for (const t of m.manifest.tasks) {
+      for (const tf of t.target_files) {
+        const idx = m.seed_file_refs[tf];
+        assert.equal(typeof idx, "number", `${m.manifest.id}: missing seed_file_refs entry for target ${tf}`);
+        assert.equal(typeof bundle.blobs[idx], "string");
+      }
+    }
+    assert.equal("verify" in m.seed_file_refs, false);
+    assert.equal("sunstead.json" in m.seed_file_refs, false);
+  }
+});
+
+test("isWorkerServedSeedFile keeps frozen_paths and target_files while dropping dead files", () => {
+  const manifest = {
+    frozen_paths: ["Pkg/Spec.lean", "UPSTREAM.json", "lakefile.toml", "lean-toolchain", "verify", "sunstead.json"],
+    tasks: [{ id: "t1", target_files: ["Pkg/T1.lean"] }],
+  };
+  assert.equal(isWorkerServedSeedFile("Pkg/Spec.lean", manifest), true);
+  assert.equal(isWorkerServedSeedFile("Pkg/T1.lean", manifest), true);
+  assert.equal(isWorkerServedSeedFile("UPSTREAM.json", manifest), true);
+  assert.equal(isWorkerServedSeedFile("verify", manifest), false);
+  assert.equal(isWorkerServedSeedFile("sunstead.json", manifest), false);
+  assert.equal(isWorkerServedSeedFile("LICENSE", manifest), false);
+  assert.equal(isWorkerServedSeedFile("README.md", manifest), false);
+});
+
+test("sync-assets scales cleanly to 50 multi-task Arena Packs (1,000 tasks) well under Cloudflare Worker limits", () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "sunstead-scale-1k-"));
+  try {
+    const missionsDir = path.join(tmp, "missions");
+    const webDir = path.join(tmp, "web");
+    const scriptsDir = path.join(tmp, "scripts");
+    fs.mkdirSync(missionsDir, { recursive: true });
+    fs.mkdirSync(webDir, { recursive: true });
+    fs.mkdirSync(scriptsDir, { recursive: true });
+    for (const f of ["index.html", "what-is-this.html", "styles.css", "proofs.html", "app.js"]) {
+      fs.writeFileSync(path.join(webDir, f), `/* ${f} */\n`);
+    }
+    fs.writeFileSync(path.join(scriptsDir, "sunstead_verify.py"), "# verify\n");
+
+    const sharedLicense = "Apache License Version 2.0\n" + "Copyright Sunstead\n".repeat(400);
+    const sharedToolchain = "leanprover/lean4:v4.36.0\n";
+
+    // Create 50 Arena Packs × 20 tasks = 1,000 tasks.
+    for (let m = 0; m < 50; m++) {
+      const mid = `fc-arena-${String(m).padStart(2, "0")}`;
+      const lib = `FcArena${m}`;
+      const mdir = path.join(missionsDir, mid);
+      const libDir = path.join(mdir, lib);
+      fs.mkdirSync(libDir, { recursive: true });
+      fs.writeFileSync(path.join(mdir, "LICENSE"), sharedLicense);
+      fs.writeFileSync(path.join(mdir, "lean-toolchain"), sharedToolchain);
+      fs.writeFileSync(
+        path.join(mdir, "lakefile.toml"),
+        `name = "${mid.replace(/-/g, "_")}"\nversion = "0.1.0"\n\n[[require]]\nname = "mathlib"\ngit = "https://github.com/leanprover-community/mathlib4.git"\nrev = "v4.36.0"\n\n[[lean_lib]]\nname = "${lib}"\n`
+      );
+      fs.writeFileSync(
+        path.join(libDir, "Spec.lean"),
+        `import Mathlib\nnamespace ${lib}\ndef sharedParam (n : Nat) : Nat := n + ${m}\nend ${lib}\n`
+      );
+
+      const tasks = [];
+      const pyTasks = [];
+      for (let t = 0; t < 20; t++) {
+        const tid = `conjecture_${m}_${t}`;
+        const rel = `${lib}/T${t}.lean`;
+        fs.writeFileSync(
+          path.join(mdir, rel),
+          `import ${lib}.Spec\nnamespace ${lib}\ntheorem ${tid} (n : Nat) : sharedParam n ≥ ${m} := by\n  sorry\nend ${lib}\n`
+        );
+        tasks.push({
+          id: tid,
+          title: `Open conjecture ${m}.${t}`,
+          target_files: [rel],
+          depends_on: [],
+          upstream_url: `https://github.com/google-deepmind/formal-conjectures/blob/${"a".repeat(40)}/FormalConjectures/P${m}_${t}.lean#L10-L15`,
+        });
+        pyTasks.push(
+          `    "${tid}": {"module": "${lib}.T${t}", "theorem": "${lib}.${tid}", "statement": "def ${tid} : Prop := ∀ n : Nat, ${lib}.sharedParam n ≥ ${m}"},`
+        );
+      }
+
+      fs.writeFileSync(
+        path.join(mdir, "UPSTREAM.json"),
+        JSON.stringify({ repo: "google-deepmind/formal-conjectures", commit: "a".repeat(40), license: "Apache-2.0", checks: [] })
+      );
+      fs.writeFileSync(
+        path.join(mdir, "sunstead.json"),
+        JSON.stringify({
+          id: mid,
+          title: `Arena ${m}`,
+          tier: 1,
+          mode: "dag",
+          open_conjecture: true,
+          frozen_paths: [`${lib}/Spec.lean`, "UPSTREAM.json", "lakefile.toml", "lean-toolchain", "verify", "sunstead.json"],
+          verifier: { image: "sunstead/verifier-lean4:v0.2", command: ["./verify"] },
+          tasks,
+        })
+      );
+      fs.writeFileSync(
+        path.join(mdir, "verify"),
+        `LIB_ROOT = "${lib}"\nFROZEN_FILES = ["${lib}/Spec.lean"]\nSTATEMENT_PREAMBLE = ""\nTASKS = {\n${pyTasks.join("\n")}\n}\n`
+      );
+    }
+
+    const genDir = path.join(tmp, "generated");
+    const { bundle, sizes } = syncAssets({ repoRoot: tmp, genDir, silent: true });
+    assert.equal(bundle.stats.missionCount, 50);
+    assert.equal(bundle.stats.totalTasks, 1000);
+    assert.equal(bundle.stats.skippedFiles, 50, "50 unserved LICENSE files skipped");
+    assert.ok(sizes.combinedGz < WORKER_FREE_GZ_LIMIT_BYTES, `1,000-task bundle (${sizes.combinedGz} gz) must fit inside 3 MiB Free limit`);
+    assert.ok(sizes.combinedGz < WORKER_PAID_GZ_LIMIT_BYTES);
+
+    // Budget guard fails closed when maxGzBytes is exceeded.
+    assert.throws(
+      () => syncAssets({ repoRoot: tmp, genDir, maxGzBytes: 1024, silent: true }),
+      /exceeds budget/
+    );
+
+    // Unknown task in task-disputes.json fails closed.
+    fs.writeFileSync(
+      path.join(missionsDir, "task-disputes.json"),
+      JSON.stringify({
+        missions: {
+          "fc-arena-00": {
+            nonexistent_task: { source: "upstream", reason: "bad", recorded_at: "2026-11-26" },
+          },
+        },
+      })
+    );
+    assert.throws(() => buildMissionsBundle(missionsDir), /unknown task 'fc-arena-00\/nonexistent_task'/);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 });

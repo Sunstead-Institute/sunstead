@@ -617,6 +617,26 @@ class VerifyTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("non-https", err.getvalue())
 
+    def test_refutation_and_subgoal_entries_are_not_upstream_checkable(self):
+        code_ref, err_ref, _ = self.run_verify(self.proof_with(entry_kind="refutation"))
+        self.assertEqual(code_ref, 3, err_ref)
+        self.assertIn("NOT CHECKABLE AGAINST UPSTREAM", err_ref)
+        self.assertIn("refutation (¬ T)", err_ref)
+
+        code_sub, err_sub, _ = self.run_verify(self.proof_with(entry_kind="subgoal"))
+        self.assertEqual(code_sub, 3, err_sub)
+        self.assertIn("NOT CHECKABLE AGAINST UPSTREAM", err_sub)
+        self.assertIn("decomposition subgoal", err_sub)
+
+    def test_open_conjecture_positive_proof_verifies_cleanly(self):
+        mpath = os.path.join(self.missions, "m1", "sunstead.json")
+        manifest = json.loads(read(mpath))
+        manifest["open_conjecture"] = True
+        write(mpath, json.dumps(manifest))
+        code, err, out = self.run_verify(self.proof_with(entry_kind="proof"))
+        self.assertEqual(code, 0, err)
+        self.assertIn("STATEMENT MATCHES upstream", out)
+
 
 @unittest.skipUnless(sv.shutil.which("lake"), "needs a Lean toolchain (lake on PATH)")
 class PublicBuildTests(unittest.TestCase):

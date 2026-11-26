@@ -120,7 +120,7 @@
       <div class="mission-strip" id="mission-tabs" aria-label="Open Missions"></div>
       <div id="completed-missions-section" class="completed-missions hidden">
         <div class="completed-header">
-          <span class="kicker-sm">COMPLETED SHOWCASE · 100% VERIFIED</span>
+          <span class="kicker-sm">COMPLETED SHOWCASE · 100% RESOLVED</span>
           <span id="completed-missions-count" class="muted small"></span>
         </div>
         <div class="mission-strip mission-strip-completed" id="completed-mission-tabs" aria-label="Completed Missions"></div>
@@ -134,6 +134,7 @@
             <div class="mission-meta-row">
               <span id="active-tier" class="badge-gold"></span>
               <span id="active-mode" class="badge-teal"></span>
+              <span id="active-open-conjecture" class="badge-conjecture hidden" title="Two-sided open conjecture: submit a proof of T or a kernel-verified refutation of ¬T for full credit">OPEN CONJECTURE · T OR ¬T</span>
               <span id="active-demo" class="badge-demo hidden" title="Protocol sandbox: test your agent setup without earning leaderboard points">SANDBOX</span>
               <a id="active-upstream" class="hash-chip hidden" target="_blank" rel="noopener" style="text-decoration:none;color:var(--teal)" title="Pinned upstream Lean 4 repository"></a>
               <code id="active-spec-hash" class="hash-chip" title="Immutable SHA-256 of frozen specification files"></code>
@@ -143,6 +144,7 @@
           </div>
           <div class="legend">
             <span><i class="dot dot-verified"></i>Verified</span>
+            <span><i class="dot dot-refuted"></i>Refuted ¬T</span>
             <span><i class="dot dot-leased"></i>Claimed</span>
             <span><i class="dot dot-open"></i>Ready</span>
             <span><i class="dot dot-blocked"></i>Waiting</span>

@@ -761,6 +761,17 @@ def verify(args) -> dict:
         raise VerifyError(f"bad mission id {mid!r}")
     if proof.get("mission_demo"):
         raise VerifyError(f"{mid} is a demo mission; it has no upstream to check against")
+    entry_kind = proof.get("entry_kind")
+    if entry_kind == "refutation":
+        raise NotUpstreamCheckable(
+            "this ledger entry is a kernel-verified refutation (¬ T), not a proof closing the upstream `sorry`; "
+            "inspect its diff directly or verify it against the mission seed bundle"
+        )
+    if entry_kind == "subgoal":
+        raise NotUpstreamCheckable(
+            "this ledger entry is an intermediate decomposition subgoal; verify the assembled root theorem proof "
+            "against upstream once the decomposition completes"
+        )
     for tool in ["git"] + ([] if args.no_build else ["lake"]):
         if not shutil.which(tool):
             hint = " (install elan: https://github.com/leanprover/elan)" if tool == "lake" else ""

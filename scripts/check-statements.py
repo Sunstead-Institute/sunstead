@@ -13,19 +13,102 @@ and `sorryAx` because seeds are unsolved.
     python3 scripts/check-statements.py            # every mission, every task
     python3 scripts/check-statements.py --mission arklib-near-capacity-primes
 
+Each mission runs all of its task checks inside a single batched verifier
+container (one `docker create` + one `docker cp` per mission instead of one per
+task), executing each task inside an isolated child Python process with its own
+per-task timeout and fail-closed verdict parsing.
+
 The sorry-accepting path (`check_seed_statement` in the harness) is only
 reachable from this script: it swaps it in for `lean_verify` inside its own
 container process. Mission `verify` entrypoints and the verifier server take
 no option that reaches it.
 """
 import argparse
+import glob
 import json
 import os
+import shutil
 import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MISSIONS = os.path.join(ROOT, "missions")
+BATCH_RESULT_PREFIX = "SUNSTEAD_BATCH_RESULT "
+
+
+def parse_verdict(stdout, stderr="", returncode=0):
+    """Extract the last JSON verdict line from child output, failing closed."""
+    out = stdout or ""
+    err = stderr or ""
+    for line in reversed(out.splitlines()):
+        stripped = line.strip()
+        if stripped.startswith("{"):
+            try:
+                obj = json.loads(stripped)
+            except ValueError:
+                continue
+            if isinstance(obj, dict) and isinstance(obj.get("ok"), bool):
+                if obj["ok"] and returncode != 0:
+                    return {
+                        "ok": False,
+                        "summary": f"child exited {returncode} despite ok verdict: {obj.get('summary', '')}",
+                    }
+                return obj
+    tail = (out + err)[-400:]
+    return {"ok": False, "summary": f"no verdict (exit {returncode}): {tail}"}
+
+
+def _cleanup_after_timeout():
+    """Best-effort cleanup inside the container after a per-task child times out."""
+    try:
+        if "/opt/sunstead" not in sys.path:
+            sys.path.insert(0, "/opt/sunstead")
+        import sunstead_sandbox
+        for user in (
+            getattr(sunstead_sandbox, "RUNNER_USER", None),
+            getattr(sunstead_sandbox, "CHECKER_USER", None),
+        ):
+            if user:
+                try:
+                    sunstead_sandbox.ensure_no_processes(user)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    for path in glob.glob("/tmp/sunstead-job-*"):
+        shutil.rmtree(path, ignore_errors=True)
+
+
+def _maybe_warm_mission_cache(task_timeout):
+    """Best-effort prebuild of frozen `.olean` cache inside the ephemeral batch container.
+
+    On a multi-task classic mission whose cache was not yet baked into the image,
+    this compiles `<Lib>.Spec` + `<Lib>.SunsteadStatements` once instead of once
+    per task. Failures are ignored so every task still runs its own fail-closed
+    `--inside <task_id>` verification.
+    """
+    prebuild = "/opt/sunstead/prebuild_cache.py"
+    if not os.path.isfile(prebuild):
+        return
+    manifest_path = "/work/sunstead.json"
+    if os.path.isfile(manifest_path):
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                manifest = json.load(f)
+            if (manifest.get("snapshot") or {}).get("mode") == "repo-snapshot":
+                return
+        except (OSError, ValueError):
+            return
+    try:
+        subprocess.run(
+            [sys.executable, "-I", prebuild, "/work"],
+            cwd="/work",
+            capture_output=True,
+            text=True,
+            timeout=task_timeout,
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
 
 
 def inside(task_id):
@@ -41,42 +124,146 @@ def inside(task_id):
     sunstead_sandbox.emit(False, "verify exited without a verdict")
 
 
-def run_task(mission_dir, image, task_id, timeout):
-    create = ["docker", "create", "--network=none", "--cpus=2", "--memory=6144m",
-              "--pids-limit=512", "--user=0:0", "--cap-drop=ALL",
-              "--cap-add=SETUID", "--cap-add=SETGID",
-              "--security-opt=no-new-privileges", "--workdir=/work", image,
-              "python3", "-I", "/tmp/check-statements.py", "--inside", task_id]
+def inside_batch(task_ids, task_timeout, *, workdir="/work", script_path=None):
+    """Container side: verify a batch of tasks inside isolated child processes."""
+    script = script_path or os.path.abspath(__file__)
+    if len(task_ids) > 1 and workdir == "/work":
+        _maybe_warm_mission_cache(task_timeout)
+    for task_id in task_ids:
+        try:
+            p = subprocess.run(
+                [sys.executable, "-I", script, "--inside", task_id],
+                cwd=workdir,
+                capture_output=True,
+                text=True,
+                timeout=task_timeout,
+            )
+            verdict = parse_verdict(p.stdout, p.stderr, returncode=p.returncode)
+        except subprocess.TimeoutExpired:
+            _cleanup_after_timeout()
+            verdict = {"ok": False, "summary": f"timed out after {task_timeout}s"}
+        record = {"task_id": task_id, "verdict": verdict}
+        print(BATCH_RESULT_PREFIX + json.dumps(record, sort_keys=True), flush=True)
+
+
+def _as_text(val):
+    if val is None:
+        return ""
+    if isinstance(val, bytes):
+        return val.decode("utf-8", errors="replace")
+    return str(val)
+
+
+def parse_batch_output(stdout, stderr, task_ids, returncode=0, timeout_summary=None):
+    """Parse structured per-task verdicts from a batched container run, failing closed."""
+    expected = set(task_ids)
+    parsed = {}
+    duplicates = set()
+    for line in (stdout or "").splitlines():
+        if not line.startswith(BATCH_RESULT_PREFIX):
+            continue
+        raw = line[len(BATCH_RESULT_PREFIX):].strip()
+        try:
+            rec = json.loads(raw)
+        except ValueError:
+            continue
+        if not isinstance(rec, dict):
+            continue
+        tid = rec.get("task_id")
+        verdict = rec.get("verdict")
+        if (not isinstance(tid, str) or tid not in expected
+                or not isinstance(verdict, dict)
+                or not isinstance(verdict.get("ok"), bool)):
+            continue
+        if tid in parsed:
+            duplicates.add(tid)
+        else:
+            parsed[tid] = verdict
+
+    tail = ((stdout or "") + (stderr or ""))[-400:]
+    out = []
+    for tid in task_ids:
+        if tid in duplicates:
+            out.append((tid, {"ok": False, "summary": f"duplicate batch verdict for {tid}"}))
+        elif tid in parsed:
+            out.append((tid, parsed[tid]))
+        elif timeout_summary:
+            out.append((tid, {"ok": False, "summary": timeout_summary}))
+        else:
+            out.append((tid, {"ok": False, "summary": f"missing batch verdict (exit {returncode}): {tail}"}))
+    return out
+
+
+def _run_batch_chunk(mission_dir, image, chunk, timeout):
+    create = [
+        "docker", "create", "--network=none", "--cpus=2", "--memory=6144m",
+        "--pids-limit=512", "--user=0:0", "--cap-drop=ALL",
+        "--cap-add=SETUID", "--cap-add=SETGID",
+        "--security-opt=no-new-privileges", "--workdir=/work", image,
+        "python3", "-I", "/tmp/check-statements.py", "--inside-batch", str(timeout), *chunk,
+    ]
     cid = subprocess.run(create, capture_output=True, text=True, check=True).stdout.strip()
+    outer_timeout = max(timeout, timeout * len(chunk)) + 60
     try:
         subprocess.run(["docker", "cp", f"{mission_dir}/.", f"{cid}:/work"],
                        check=True, capture_output=True)
         subprocess.run(["docker", "cp", os.path.abspath(__file__), f"{cid}:/tmp/check-statements.py"],
                        check=True, capture_output=True)
-        p = subprocess.run(["docker", "start", "-a", cid], capture_output=True, text=True,
-                           timeout=timeout)
+        try:
+            p = subprocess.run(["docker", "start", "-a", cid], capture_output=True, text=True,
+                               timeout=outer_timeout)
+            return parse_batch_output(p.stdout, p.stderr, chunk, returncode=p.returncode)
+        except subprocess.TimeoutExpired as exc:
+            return parse_batch_output(
+                _as_text(exc.stdout),
+                _as_text(exc.stderr),
+                chunk,
+                returncode=-1,
+                timeout_summary=f"batch container timed out after {outer_timeout}s",
+            )
     finally:
         subprocess.run(["docker", "rm", "-f", cid], capture_output=True)
-    for line in reversed(p.stdout.splitlines()):
-        line = line.strip()
-        if line.startswith("{"):
-            try:
-                return json.loads(line)
-            except ValueError:
-                pass
-    return {"ok": False, "summary": f"no verdict: {(p.stdout + p.stderr)[-400:]}"}
 
 
-def main():
-    if len(sys.argv) == 3 and sys.argv[1] == "--inside":
-        inside(sys.argv[2])
+def run_mission_batch(mission_dir, image, task_ids, timeout, batch_size=0):
+    """Verify all `task_ids` of one mission in a single container (or chunks of `batch_size`)."""
+    ids = list(task_ids)
+    if not ids:
+        return []
+    step = batch_size if batch_size and batch_size > 0 else len(ids)
+    results = []
+    for i in range(0, len(ids), step):
+        results.extend(_run_batch_chunk(mission_dir, image, ids[i:i + step], timeout))
+    return results
+
+
+def run_task(mission_dir, image, task_id, timeout):
+    """Single-task compatibility wrapper backed by `run_mission_batch`."""
+    return run_mission_batch(mission_dir, image, [task_id], timeout)[0][1]
+
+
+def main(argv=None):
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    if len(raw_argv) == 2 and raw_argv[0] == "--inside":
+        inside(raw_argv[1])
         return
+    if len(raw_argv) >= 2 and raw_argv[0] == "--inside-batch":
+        task_timeout = int(raw_argv[1])
+        inside_batch(raw_argv[2:], task_timeout)
+        return
+
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--mission", action="append", help="only these missions (repeatable)")
     ap.add_argument("--exclude-mission", action="append", help="skip these missions (repeatable)")
     ap.add_argument("--image", action="append", help="only missions targeting these verifier image(s) (repeatable)")
     ap.add_argument("--timeout", type=int, default=900, help="seconds per task")
-    args = ap.parse_args()
+    ap.add_argument("--batch-size", type=int, default=0,
+                    help="max tasks per container (0 = all tasks of a mission in one container)")
+    args = ap.parse_args(raw_argv)
+    if args.timeout <= 0:
+        ap.error("--timeout must be positive")
+    if args.batch_size < 0:
+        ap.error("--batch-size must be >= 0")
 
     failures = 0
     checked = 0
@@ -92,12 +279,16 @@ def main():
         image = manifest["verifier"]["image"]
         if args.image and image not in args.image:
             continue
-        for task in manifest["tasks"]:
-            res = run_task(mission_dir, image, task["id"], args.timeout)
+        task_ids = [task["id"] for task in manifest["tasks"]]
+        if not task_ids:
+            continue
+        for task_id, res in run_mission_batch(
+            mission_dir, image, task_ids, args.timeout, batch_size=args.batch_size
+        ):
             checked += 1
             mark = "OK" if res.get("ok") else "FAIL"
             failures += 0 if res.get("ok") else 1
-            print(f"[{mark}] {name}/{task['id']}: {res.get('summary', '')}", flush=True)
+            print(f"[{mark}] {name}/{task_id}: {res.get('summary', '')}", flush=True)
     if checked == 0:
         print("no tasks checked")
         sys.exit(1)

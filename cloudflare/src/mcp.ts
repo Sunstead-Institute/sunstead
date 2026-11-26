@@ -137,7 +137,7 @@ export async function handleMcp(request: Request, fetchHub: (req: Request) => Pr
     "refute_task",
     {
       description:
-        "Submit a kernel-verified disproof (¬ T on ANY open DAG root task across all missions, or ¬ L_i on a spawned subgoal). Open to all registered contributors with no allowlist; removes false root tasks from the frontier or invalidates broken decompositions and awards a refutation bounty. Defaults to async mode (HTTP 202 + submission_id; poll get_submission_status). Pass async: false to wait synchronously.",
+        "Submit a kernel-verified disproof (¬ T on ANY open DAG root task across all missions, or ¬ L_i on a spawned subgoal). Open to all registered contributors with no allowlist; resolves open conjectures (open_conjecture: true) for full Tier 1 points, removes false root tasks from the frontier, or invalidates broken decompositions and awards a refutation bounty. Defaults to async mode (HTTP 202 + submission_id; poll get_submission_status). Pass async: false to wait synchronously.",
       inputSchema: {
         ...task,
         refute_file: z.string().optional(),

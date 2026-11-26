@@ -26,6 +26,7 @@ import {
   executeRefute,
   executeSubgoalSubmit,
   getDisputedRootMap,
+  getResolvedRefutationMap,
   handleDirectParentBypass,
   initDecomposeSchema,
   isAllowlisted,
@@ -227,6 +228,7 @@ function createTestHub(opts: {
 
   const getTasks = (mid: string): TaskState[] => {
     const disputed = getDisputedRootMap(sql, mid);
+    const resolved = getResolvedRefutationMap(sql, mid);
     return sql
       .exec<{
         def_json: string;
@@ -242,9 +244,17 @@ function createTestHub(opts: {
       .map((r) => {
         const def = JSON.parse(r.def_json);
         const dispute = disputed.get(def.id) ?? null;
+        const refutedRes = resolved.get(def.id) ?? null;
         return {
           def,
-          status: r.status === "verified" ? "verified" : r.status === "leased" ? "leased" : "open",
+          status:
+            r.status === "verified"
+              ? "verified"
+              : r.status === "refuted"
+                ? "refuted"
+                : r.status === "leased"
+                  ? "leased"
+                  : "open",
           best_score: r.best_score,
           verified_by: r.verified_by,
           active_lease: r.lease_contributor
@@ -257,6 +267,7 @@ function createTestHub(opts: {
             : null,
           attempts: r.attempts,
           ...(dispute ? { disputed_counterexample: dispute } : {}),
+          ...(refutedRes ? { refuted_resolution: refutedRes } : {}),
         };
       });
   };
@@ -1013,4 +1024,353 @@ test("async refute updates pre-inserted verifying submission row on accepted, re
     assert.equal(view.stage, "sandbox");
     assert.equal(view.error, "verifier container unavailable");
   }
+});
+
+test("open_conjecture mission: kernel-verified POST /refute resolves conjecture cleanly with full Tier 1 points", async () => {
+  const ocManifest = makeManifest({
+    id: "fc-open-test",
+    title: "Formal Conjectures: Open Problems",
+    open_conjecture: true,
+    tasks: [
+      {
+        id: "near_capacity_prime_supply",
+        title: "Open Conjecture A",
+        target_files: ["ArkLibNearCapacity/PrimeSupply.lean"],
+        depends_on: [],
+      },
+      {
+        id: "known_theorem_override",
+        title: "Known Theorem (open_conjecture=false override)",
+        target_files: ["ArkLibNearCapacity/Known.lean"],
+        depends_on: [],
+        open_conjecture: false,
+      },
+    ],
+  });
+  const { sql, ctx, getTasks, sumPoints } = createTestHub({ manifest: ocManifest });
+
+  // 1. Dave disproves open conjecture A -> status='refuted', full 150 pts, NOT disputed_counterexample!
+  const refFile = "ArkLibNearCapacity/RefuteConjA.lean";
+  const refRes = await executeRefute(ctx, {
+    taskId: "near_capacity_prime_supply",
+    contributor: "dave",
+    rawBody: {
+      refute_file: refFile,
+      refute_theorem: "ArkLibNearCapacity.refute_conj_a",
+      patch: generateUnifiedDiff(refFile, null, "import ArkLibNearCapacity.Spec\n-- disproof of conjecture A\n"),
+    },
+  });
+  assert.equal(refRes.status, 200);
+  assert.equal(refRes.body.refuted, true);
+  assert.equal(refRes.body.resolved, true);
+  assert.equal(refRes.body.resolution, "refuted");
+  assert.equal(refRes.body.open_conjecture, true);
+  assert.equal(refRes.body.task_status, "refuted");
+  assert.equal("disputed_counterexample" in refRes.body, false);
+  assert.equal(refRes.body.points_awarded, 150, "open conjecture refutation pays full Tier 1 points");
+  assert.equal(sumPoints("dave"), 150);
+
+  const conjA = getTasks("fc-open-test").find((t) => t.def.id === "near_capacity_prime_supply")!;
+  assert.equal(conjA.status, "refuted");
+  assert.equal(conjA.verified_by, "dave");
+  assert.equal(conjA.disputed_counterexample, undefined);
+  assert.equal(conjA.refuted_resolution?.refuter, "dave");
+  assert.ok(conjA.refuted_resolution?.proof_id);
+
+  // Duplicate refute and decompose on the already-refuted conjecture are rejected with 409.
+  const dupRef = await executeRefute(ctx, {
+    taskId: "near_capacity_prime_supply",
+    contributor: "bob",
+    rawBody: {
+      refute_file: "ArkLibNearCapacity/RefuteConjA2.lean",
+      refute_theorem: "ArkLibNearCapacity.refute_conj_a2",
+      patch: generateUnifiedDiff("ArkLibNearCapacity/RefuteConjA2.lean", null, "-- dup\n"),
+    },
+  });
+  assert.equal(dupRef.status, 409);
+  assert.match(String(dupRef.body.error), /already kernel-refuted/);
+  assert.equal(sumPoints("bob"), 0);
+
+  upsertAllowlistEntry(sql, { handle: "alice", active: true, added_by: "admin", note: "pilot", now: 100 });
+  const decAfterRef = await executeDecompose(ctx, {
+    taskId: "near_capacity_prime_supply",
+    contributor: "alice",
+    rawBody: {
+      subgoals: [
+        { id: "sub_a", title: "A", statement: "1 = 1" },
+        { id: "sub_b", title: "B", statement: "2 = 2" },
+      ],
+      reduction_file: "ArkLibNearCapacity/Decomp_after.lean",
+      reduction_theorem: "ArkLibNearCapacity.red_after",
+      patch: generateUnifiedDiff("ArkLibNearCapacity/Decomp_after.lean", null, "-- red\n"),
+    },
+  });
+  assert.equal(decAfterRef.status, 409);
+
+  // Ledger preserves permanent refutation record (`entry_kind='refutation'`, `in_history=0`, `open_conjecture=true`).
+  const refList = listMissionRefutations(sql, "fc-open-test", "https://sunstead.org");
+  assert.equal(refList.length, 1);
+  assert.equal(refList[0].resolves_conjecture, true);
+  assert.equal(refList[0].points_awarded, 150);
+  const patchMeta = JSON.parse(
+    sql.exec<{ decomp_meta_json: string }>("SELECT decomp_meta_json FROM accepted_patches LIMIT 1").one().decomp_meta_json
+  );
+  assert.equal(patchMeta.open_conjecture, true);
+  assert.equal(patchMeta.resolution, "refuted");
+
+  // 2. Sibling task with explicit `open_conjecture: false` override preserves disputed_counterexample semantics!
+  const nonOpenRef = await executeRefute(ctx, {
+    taskId: "known_theorem_override",
+    contributor: "carol",
+    rawBody: {
+      refute_file: "ArkLibNearCapacity/RefuteKnown.lean",
+      refute_theorem: "ArkLibNearCapacity.refute_known",
+      patch: generateUnifiedDiff("ArkLibNearCapacity/RefuteKnown.lean", null, "-- bug counterexample\n"),
+    },
+  });
+  assert.equal(nonOpenRef.status, 200);
+  assert.equal(nonOpenRef.body.disputed_counterexample, true);
+  assert.equal(nonOpenRef.body.points_awarded, 75);
+  const knownTask = getTasks("fc-open-test").find((t) => t.def.id === "known_theorem_override")!;
+  assert.equal(knownTask.status, "open", "non-open-conjecture task stays open as disputed_counterexample");
+  assert.equal(knownTask.disputed_counterexample?.refuter, "carol");
+});
+
+test("async open_conjecture refute updates pre-inserted verifying submission and resolves task to refuted", async () => {
+  const ocManifest = makeManifest({
+    id: "fc-open-async",
+    open_conjecture: true,
+  });
+  const { sql, ctx, getTasks, insertVerifyingSub, sumPoints } = createTestHub({ manifest: ocManifest });
+  const body = {
+    refute_file: "ArkLibNearCapacity/RefuteAsyncOpen.lean",
+    refute_theorem: "ArkLibNearCapacity.refute_async_open",
+    patch: generateUnifiedDiff("ArkLibNearCapacity/RefuteAsyncOpen.lean", null, "import ArkLibNearCapacity.Spec\n"),
+  };
+  const prep = prepareRefute(ctx, { taskId: "near_capacity_prime_supply", rawBody: body });
+  assert.equal(prep.ok, true);
+  assert.equal(prep.ok && prep.prepared.resolvesConjecture, true);
+
+  const subId = "sub-async-open-conj";
+  insertVerifyingSub(subId, "near_capacity_prime_supply", "dave", "sha256:" + "9".repeat(64));
+  const res = await executeRefute(ctx, {
+    taskId: "near_capacity_prime_supply",
+    contributor: "dave",
+    rawBody: body,
+    existingSubmissionId: subId,
+    createdAt: 1700000020,
+    prepared: prep.ok ? prep.prepared : undefined,
+  });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.status, "accepted");
+  assert.equal(res.body.resolved, true);
+  assert.equal(res.body.task_status, "refuted");
+  assert.equal(res.body.points_awarded, 150);
+  assert.equal(sumPoints("dave"), 150);
+  assert.equal(getTasks("fc-open-async")[0].status, "refuted");
+  assert.deepEqual(computeFrontier("dag", getTasks("fc-open-async")), []);
+
+  const row = sql
+    .exec<SubmissionStatusRow>(
+      `SELECT id, mission_id, task_id, contributor, status, accepted, score, points,
+              summary, patch_sha256, proof_id, verify_ms, stage, diagnostics, error,
+              unlocked_dependents_json, created_at, completed_at
+       FROM submissions WHERE id = ?`,
+      subId
+    )
+    .one();
+  const view = formatSubmissionStatusView(row, "https://sunstead.org");
+  assert.equal(view.status, "accepted");
+  assert.equal(view.accepted, true);
+  assert.equal(view.points_awarded, 150);
+  assert.ok(view.proof_id);
+});
+
+test("open_conjecture + decompose: subgoal refute invalidates split only; root refute retires split with zero strike and zero point inflation", async () => {
+  const ocManifest = makeManifest({
+    id: "fc-open-decomp",
+    open_conjecture: true,
+  });
+  const { sql, ctx, getTasks, sumPoints, insertVerifyingSub } = createTestHub({ manifest: ocManifest });
+  upsertAllowlistEntry(sql, { handle: "alice", active: true, added_by: "admin", note: "pilot", now: 100 });
+
+  // 1. Allowlisted Alice decomposes open conjecture T into 2 subgoals (works cleanly on open_conjecture missions!).
+  const dec1 = await executeDecompose(ctx, {
+    taskId: "near_capacity_prime_supply",
+    contributor: "alice",
+    rawBody: {
+      decomp_id: "d1",
+      subgoals: [
+        { id: "false_lemma", title: "False subgoal", statement: "0 = 1" },
+        { id: "other_lemma", title: "Other subgoal", statement: "1 = 1" },
+      ],
+      reduction_file: "ArkLibNearCapacity/Decomp_oc_d1.lean",
+      reduction_theorem: "ArkLibNearCapacity.red_oc_d1",
+      patch: generateUnifiedDiff("ArkLibNearCapacity/Decomp_oc_d1.lean", null, "import ArkLibNearCapacity.Spec\n"),
+    },
+  });
+  assert.equal(dec1.status, 201);
+
+  // Refuting subgoal `false_lemma` invalidates ONLY the decomposition — parent conjecture stays open!
+  const falseSub = getTasks("fc-open-decomp").find((t) => t.def.subgoal_id === "false_lemma")!;
+  const subRef = await executeRefute(ctx, {
+    taskId: falseSub.def.id,
+    contributor: "dave",
+    rawBody: {
+      refute_file: "ArkLibNearCapacity/RefuteSubOc.lean",
+      refute_theorem: "ArkLibNearCapacity.refute_sub_oc",
+      patch: generateUnifiedDiff("ArkLibNearCapacity/RefuteSubOc.lean", null, "-- ¬ L_1\n"),
+    },
+  });
+  assert.equal(subRef.status, 200);
+  assert.equal(subRef.body.target_kind, "subgoal");
+  assert.equal(subRef.body.points_awarded, 75);
+  assert.equal(getTasks("fc-open-decomp")[0].status, "open", "subgoal refute must NOT resolve parent conjecture");
+  assert.equal(listAllowlist(sql).find((a) => a.handle === "alice")?.strikes, 1);
+
+  // 2. Alice proposes a second decomposition d2, solves subgoal 1 herself (+60 pts), then disproves root T herself.
+  const dec2 = await executeDecompose(ctx, {
+    taskId: "near_capacity_prime_supply",
+    contributor: "alice",
+    rawBody: {
+      decomp_id: "d2",
+      subgoals: [
+        { id: "easy_true", title: "Easy true", statement: "1 = 1" },
+        { id: "hard_part", title: "Hard part", statement: "2 = 2" },
+      ],
+      reduction_file: "ArkLibNearCapacity/Decomp_oc_d2.lean",
+      reduction_theorem: "ArkLibNearCapacity.red_oc_d2",
+      patch: generateUnifiedDiff("ArkLibNearCapacity/Decomp_oc_d2.lean", null, "import ArkLibNearCapacity.Spec\n"),
+    },
+  });
+  assert.equal(dec2.status, 201);
+  const easySub = getTasks("fc-open-decomp").find((t) => t.def.subgoal_id === "easy_true")!;
+  const easyPatch = generateUnifiedDiff(easySub.def.target_files[0], null, "import ArkLibNearCapacity.Spec\n");
+  insertVerifyingSub("sub-easy", easySub.def.id, "alice", "sha256:easy");
+  const solveEasy = await executeSubgoalSubmit(ctx, {
+    subId: "sub-easy",
+    task: easySub,
+    contributor: "alice",
+    patch: easyPatch,
+    patchSha: "sha256:easy",
+  });
+  assert.equal(solveEasy.status, 200);
+  assert.equal(sumPoints("alice"), 60);
+
+  // Now Alice disproves root conjecture T directly:
+  // - d2 is retired cleanly WITHOUT adding a strike (strikes stays 1, not 2!)
+  // - Zero-inflation guard caps Alice's refutation payout to 150 - 60 = 90 pts (total 150, never 210!)
+  const rootRef = await executeRefute(ctx, {
+    taskId: "near_capacity_prime_supply",
+    contributor: "alice",
+    rawBody: {
+      refute_file: "ArkLibNearCapacity/RefuteRootOc.lean",
+      refute_theorem: "ArkLibNearCapacity.refute_root_oc",
+      patch: generateUnifiedDiff("ArkLibNearCapacity/RefuteRootOc.lean", null, "-- ¬ T\n"),
+    },
+  });
+  assert.equal(rootRef.status, 200);
+  assert.equal(rootRef.body.resolved, true);
+  assert.equal(rootRef.body.task_status, "refuted");
+  assert.deepEqual(rootRef.body.retired_decompositions, ["d2"]);
+  assert.equal(rootRef.body.points_awarded, 90, "zero-inflation: deducts prior 60 subgoal pts earned by Alice on same root");
+  assert.equal(sumPoints("alice"), 150, "total earned by Alice on 150-pt conjecture never exceeds 150");
+  assert.equal(listAllowlist(sql).find((a) => a.handle === "alice")?.strikes, 1, "disproving root open conjecture must not strike proposer");
+  assert.equal(getTasks("fc-open-decomp").length, 1, "active subgoals retired when root open conjecture is refuted");
+  assert.equal(getTasks("fc-open-decomp")[0].status, "refuted");
+});
+
+test("open_conjecture depth-2 zero-inflation: refuting root T deducts both subgoal and nested architect_vest points", async () => {
+  const ocManifest = makeManifest({
+    id: "fc-open-d2-anti-farm",
+    open_conjecture: true,
+  });
+  const { sql, ctx, getTasks, sumPoints, insertVerifyingSub } = createTestHub({ manifest: ocManifest });
+  upsertAllowlistEntry(sql, { handle: "alice", active: true, added_by: "admin", note: "pilot", now: 100 });
+
+  // Depth 1: Alice splits 150-pt open conjecture T -> l1, l2 (60 pts/subgoal, 30 architect unvested).
+  const d1 = await executeDecompose(ctx, {
+    taskId: "near_capacity_prime_supply",
+    contributor: "alice",
+    rawBody: {
+      decomp_id: "d1",
+      subgoals: [
+        { id: "l1", title: "L1", statement: "1 = 1" },
+        { id: "l2", title: "L2", statement: "2 = 2" },
+      ],
+      reduction_file: "ArkLibNearCapacity/Decomp_oc_d1.lean",
+      reduction_theorem: "ArkLibNearCapacity.red_oc_d1",
+      patch: generateUnifiedDiff("ArkLibNearCapacity/Decomp_oc_d1.lean", null, "import ArkLibNearCapacity.Spec\n"),
+    },
+  });
+  assert.equal(d1.status, 201);
+  const l1 = getTasks("fc-open-d2-anti-farm").find((t) => t.def.subgoal_id === "l1")!;
+
+  // Depth 2: Alice splits 60-pt l1 -> sub_a, sub_b (24 pts/subgoal, 12 architect).
+  const d2 = await executeDecompose(ctx, {
+    taskId: l1.def.id,
+    contributor: "alice",
+    rawBody: {
+      decomp_id: "d2",
+      subgoals: [
+        { id: "sub_a", title: "A", statement: "3 = 3" },
+        { id: "sub_b", title: "B", statement: "4 = 4" },
+      ],
+      reduction_file: "ArkLibNearCapacity/Decomp_oc_d2.lean",
+      reduction_theorem: "ArkLibNearCapacity.red_oc_d2",
+      patch: generateUnifiedDiff("ArkLibNearCapacity/Decomp_oc_d2.lean", null, "import ArkLibNearCapacity.Spec\n"),
+    },
+  });
+  assert.equal(d2.status, 201);
+  const subA = getTasks("fc-open-d2-anti-farm").find((t) => t.def.subgoal_id === "sub_a")!;
+  const subB = getTasks("fc-open-d2-anti-farm").find((t) => t.def.subgoal_id === "sub_b")!;
+
+  // Alice solves sub_a (+24) and sub_b (+24) -> auto-assembles l1 and vests +12 depth-2 architect share (total 60 pts).
+  for (const [id, taskObj] of [
+    ["s-d2-a", subA],
+    ["s-d2-b", subB],
+  ] as const) {
+    const f = taskObj.def.target_files[0];
+    const p = generateUnifiedDiff(f, null, "import ArkLibNearCapacity.Spec\ntheorem p : True := trivial\n");
+    insertVerifyingSub(id, taskObj.def.id, "alice", `sha256:${id}`);
+    const r = await executeSubgoalSubmit(ctx, { subId: id, task: taskObj, contributor: "alice", patch: p, patchSha: `sha256:${id}` });
+    assert.equal(r.status, 200);
+  }
+  assert.equal(sumPoints("alice"), 60, "24 + 24 subgoal + 12 depth-2 architect_vest = 60");
+
+  // Alice now refutes root conjecture T -> deducts full 60 (48 subgoal + 12 architect_vest), awarding 90 (total 150, never 162!).
+  const rootRef = await executeRefute(ctx, {
+    taskId: "near_capacity_prime_supply",
+    contributor: "alice",
+    rawBody: {
+      refute_file: "ArkLibNearCapacity/RefuteRootD2.lean",
+      refute_theorem: "ArkLibNearCapacity.refute_root_d2",
+      patch: generateUnifiedDiff("ArkLibNearCapacity/RefuteRootD2.lean", null, "-- ¬ T\n"),
+    },
+  });
+  assert.equal(rootRef.status, 200);
+  assert.equal(rootRef.body.resolved, true);
+  assert.equal(rootRef.body.points_awarded, 90, "must deduct depth-2 architect_vest (+12) as well as subgoal (+48) points");
+  assert.equal(sumPoints("alice"), 150, "total earned by Alice on 150-pt conjecture must never exceed 150");
+  assert.equal(getTasks("fc-open-d2-anti-farm").find((t) => t.def.id === "near_capacity_prime_supply")!.status, "refuted");
+});
+
+test("demo open_conjecture mission awards 0 points on refutation", async () => {
+  const { ctx, sumPoints, getTasks } = createTestHub({
+    manifest: makeManifest({ id: "fc-demo", demo: true, open_conjecture: true }),
+  });
+  const res = await executeRefute(ctx, {
+    taskId: "near_capacity_prime_supply",
+    contributor: "dave",
+    rawBody: {
+      refute_file: "ArkLibNearCapacity/RefuteDemo.lean",
+      refute_theorem: "ArkLibNearCapacity.refute_demo",
+      patch: generateUnifiedDiff("ArkLibNearCapacity/RefuteDemo.lean", null, "-- demo ¬ T\n"),
+    },
+  });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.resolved, true);
+  assert.equal(res.body.points_awarded, 0);
+  assert.equal(sumPoints("dave"), 0);
+  assert.equal(getTasks("fc-demo")[0].status, "refuted");
 });
