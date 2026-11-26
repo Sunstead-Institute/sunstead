@@ -54,10 +54,19 @@ export const VERIFIER_POOL_SIZE: Record<VerifierKind, number> = {
 };
 
 /**
+ * How long an idle verifier container stays up (`sleepAfter` in containers.ts).
+ * A slot released less than this long ago is still running with Lean and Mathlib
+ * in its page cache; a cold one has to start and read several GB of `.olean`s
+ * first, which cost 30-40 s per Mathlib submission in production (Nov 2026).
+ */
+export const VERIFIER_WARM_MS = 10 * 60 * 1000;
+
+/**
  * Affinity-aware container slot pool across each toolchain's `maxInstances`.
  * Concurrent verifications on the same mission fan out across distinct container
- * slots instead of queueing on a single per-mission container, while preferring
- * an idle slot that already holds that mission's warm state cache.
+ * slots instead of queueing on a single per-mission container. Idle slots are
+ * picked warmest first: a running container for the same mission, then the most
+ * recently used running container, and only then a cold one.
  */
 export class VerifierSlotPool {
   private readonly sizes: Record<VerifierKind, number>;
@@ -67,13 +76,23 @@ export class VerifierSlotPool {
       busy: boolean[];
       lastMission: Array<string | null>;
       lastUsed: number[];
+      releasedAt: number[];
       waiters: Array<{ missionId: string; resolve: (slot: number) => void }>;
       tick: number;
     }
   >();
 
-  constructor(sizes: Record<VerifierKind, number> = VERIFIER_POOL_SIZE) {
+  private readonly now: () => number;
+  private readonly warmMs: number;
+
+  constructor(
+    sizes: Record<VerifierKind, number> = VERIFIER_POOL_SIZE,
+    now: () => number = () => Date.now(),
+    warmMs: number = VERIFIER_WARM_MS
+  ) {
     this.sizes = { ...sizes };
+    this.now = now;
+    this.warmMs = warmMs;
   }
 
   private getPool(kind: VerifierKind, image: string) {
@@ -85,6 +104,7 @@ export class VerifierSlotPool {
         busy: Array<boolean>(size).fill(false),
         lastMission: Array<string | null>(size).fill(null),
         lastUsed: Array<number>(size).fill(0),
+        releasedAt: Array<number>(size).fill(Number.NEGATIVE_INFINITY),
         waiters: [],
         tick: 0,
       };
@@ -95,29 +115,30 @@ export class VerifierSlotPool {
 
   async acquire(kind: VerifierKind, image: string, missionId: string): Promise<number> {
     const pool = this.getPool(kind, image);
-    // 1. Prefer an idle slot already warm with this mission's accepted state.
-    let chosen = -1;
-    for (let i = 0; i < pool.busy.length; i++) {
-      if (!pool.busy[i] && pool.lastMission[i] === missionId) {
-        chosen = i;
-        break;
-      }
-    }
-    // 2. Otherwise choose the least-recently-used idle slot (unused slots have tick 0).
-    if (chosen === -1) {
+    const now = this.now();
+    const idle = (i: number) => !pool.busy[i];
+    const warm = (i: number) => now - pool.releasedAt[i] < this.warmMs;
+    const pick = (ok: (i: number) => boolean) => {
+      let best = -1;
       for (let i = 0; i < pool.busy.length; i++) {
-        if (!pool.busy[i] && (chosen === -1 || pool.lastUsed[i] < pool.lastUsed[chosen])) {
-          chosen = i;
-        }
+        if (ok(i) && (best === -1 || pool.lastUsed[i] > pool.lastUsed[best])) best = i;
       }
-    }
+      return best;
+    };
+    // 1. A still-running slot that last verified this mission.
+    let chosen = pick((i) => idle(i) && warm(i) && pool.lastMission[i] === missionId);
+    // 2. Any still-running slot, most recently used first (Lean + Mathlib stay in its page cache).
+    if (chosen === -1) chosen = pick((i) => idle(i) && warm(i));
+    // 3. A cold slot that last ran this mission, else the most recently used cold slot.
+    if (chosen === -1) chosen = pick((i) => idle(i) && pool.lastMission[i] === missionId);
+    if (chosen === -1) chosen = pick(idle);
     if (chosen !== -1) {
       pool.busy[chosen] = true;
       pool.lastMission[chosen] = missionId;
       pool.lastUsed[chosen] = ++pool.tick;
       return chosen;
     }
-    // 3. All slots busy: queue FIFO until a running verification finishes.
+    // 4. All slots busy: queue FIFO until a running verification finishes.
     return new Promise<number>((resolve) => {
       pool.waiters.push({ missionId, resolve });
     });
@@ -136,6 +157,7 @@ export class VerifierSlotPool {
       return;
     }
     pool.busy[slot] = false;
+    pool.releasedAt[slot] = this.now();
   }
 
   async withSlot<T>(

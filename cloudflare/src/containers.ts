@@ -5,7 +5,8 @@ import { Container } from "@cloudflare/containers";
  */
 export class Lean4Verifier extends Container {
   defaultPort = 8080;
-  sleepAfter = "3m";
+  // Keep in step with VERIFIER_WARM_MS in core.ts.
+  sleepAfter = "10m";
   enableInternet = false;
 }
 
@@ -14,7 +15,8 @@ export class Lean4Verifier extends Container {
  */
 export class Lean4V435Verifier extends Container {
   defaultPort = 8080;
-  sleepAfter = "3m";
+  // Keep in step with VERIFIER_WARM_MS in core.ts.
+  sleepAfter = "10m";
   enableInternet = false;
 }
 
@@ -24,6 +26,7 @@ export class Lean4V435Verifier extends Container {
  */
 export class Lean4V431Verifier extends Container {
   defaultPort = 8080;
-  sleepAfter = "3m";
+  // Keep in step with VERIFIER_WARM_MS in core.ts.
+  sleepAfter = "10m";
   enableInternet = false;
 }
