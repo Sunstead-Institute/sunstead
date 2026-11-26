@@ -222,6 +222,13 @@ export interface TaskDefinition {
   target_files: string[];
   depends_on?: string[];
   baseline_score?: number | null;
+  /**
+   * Best result known outside Sunstead for a hill-climb task (literature, public
+   * circuit collections, or a reproducible stock heuristic). Injected from
+   * `missions/best-known.json` by `scripts/sync-assets.mjs`; full log-ratio points
+   * are paid only for the part of an improvement that goes beyond it.
+   */
+  best_known?: BestKnown | null;
   upstream_url?: string;
   /** Dynamic decomposition subgoal fields (v2). */
   parent_task_id?: string | null;
@@ -236,6 +243,22 @@ export interface TaskDefinition {
   decomp_statements_module?: string | null;
   decomp_statements_namespace?: string | null;
   reduction_file?: string | null;
+}
+
+export type BestKnownKind = "literature" | "collection" | "heuristic" | "derived" | "proxy" | "record";
+
+export interface BestKnown {
+  value: number;
+  /** How the value was established; see docs/BEST-KNOWN.md. */
+  kind: BestKnownKind;
+  /** Human-readable citation (authors, title, year) or how to reproduce it. */
+  source: string;
+  url: string;
+  /** The value is a proven optimum: nothing can beat it, so the task only pays the match bonus. */
+  proven_optimal?: boolean;
+  /** Date (YYYY-MM-DD) the value was last checked against the literature. */
+  checked: string;
+  note?: string;
 }
 
 export interface MissionManifest {
@@ -596,15 +619,54 @@ export function applyVerdict(
  */
 export const HILLCLIMB_LOG_SCALE = 5000;
 
+/** Flat points for a record that reaches (ties) the best known value without beating it. */
+export const MATCH_BEST_KNOWN_POINTS = 25;
+/** Flat points for a record within NEAR_BEST_KNOWN_FRACTION of the best known value, but short of it. */
+export const NEAR_BEST_KNOWN_POINTS = 10;
+export const NEAR_BEST_KNOWN_FRACTION = 0.05;
+
+function strictlyBetter(direction: ScoreDirection, a: number, b: number): boolean {
+  return direction === "minimize" ? a < b : a > b;
+}
+
+/** True when `score` strictly beats the task's best known value (false when none is recorded). */
+export function beatsBestKnown(
+  direction: ScoreDirection,
+  bestKnown: BestKnown | null | undefined,
+  score: number | null
+): boolean {
+  if (!bestKnown || score === null || !Number.isFinite(bestKnown.value)) return false;
+  return strictlyBetter(direction, score, bestKnown.value);
+}
+
+function logRatioPoints(previous: number, next: number): number {
+  if (previous > 0 && next > 0) {
+    return Math.max(0, Math.floor(HILLCLIMB_LOG_SCALE * Math.abs(Math.log(next / previous))));
+  }
+  // Non-positive scores: fall back to relative change against |previous|.
+  const rel = Math.abs(next - previous) / Math.max(Math.abs(previous), 1);
+  return Math.max(0, Math.floor(HILLCLIMB_LOG_SCALE * rel));
+}
+
 /**
  * Points for an accepted submission.
  *
  * Demo missions (`mission.demo === true`) earn 0 leaderboard points.
- * DAG tasks pay a flat amount by tier and depth. Hill-climb records pay
- * floor(HILLCLIMB_LOG_SCALE * |ln(new / previous)|): the log ratio is additive,
- * so splitting one improvement into many tiny records never earns more than
- * making it at once (and flooring makes it earn less). The first record on a
- * task with no baseline pays 100.
+ * DAG tasks pay a flat amount by tier and depth.
+ *
+ * Hill-climb records are scored against the task's `best_known` value (the best
+ * result known outside Sunstead), not against the naive seed:
+ * - The part of an improvement that goes beyond both the previous record and
+ *   best_known pays floor(HILLCLIMB_LOG_SCALE * |ln(new / reference)|), where the
+ *   reference is whichever of the two is better. Log ratios are additive, so
+ *   splitting one improvement into many small records never earns more.
+ * - A record that ties best_known pays MATCH_BEST_KNOWN_POINTS.
+ * - A record short of best_known but within NEAR_BEST_KNOWN_FRACTION of it pays
+ *   NEAR_BEST_KNOWN_POINTS; anything further away pays 0.
+ * Reproducing a published result therefore earns a small flat amount, never a
+ * breakthrough's worth. Tasks without best_known keep the legacy rule (log ratio
+ * against the previous record; the first record with no baseline pays 100); CI
+ * requires best_known on every non-demo hill-climb task.
  */
 export function computePoints(
   mission: MissionManifest,
@@ -615,13 +677,19 @@ export function computePoints(
   if (mission.demo) return 0;
   const hasDeps = (task.def.depends_on?.length ?? 0) > 0;
   if (mission.mode === "hillclimb") {
-    if (previousBest === null || newScore === null) return 100;
-    if (previousBest > 0 && newScore > 0) {
-      return Math.max(0, Math.floor(HILLCLIMB_LOG_SCALE * Math.abs(Math.log(newScore / previousBest))));
+    const direction: ScoreDirection = mission.score_direction ?? "maximize";
+    const bestKnown = task.def.best_known;
+    if (bestKnown && Number.isFinite(bestKnown.value) && newScore !== null) {
+      const b = bestKnown.value;
+      const reference =
+        previousBest !== null && strictlyBetter(direction, previousBest, b) ? previousBest : b;
+      if (strictlyBetter(direction, newScore, reference)) return logRatioPoints(reference, newScore);
+      if (newScore === b) return MATCH_BEST_KNOWN_POINTS;
+      const gap = Math.abs(newScore - b) / Math.max(Math.abs(b), 1);
+      return gap <= NEAR_BEST_KNOWN_FRACTION ? NEAR_BEST_KNOWN_POINTS : 0;
     }
-    // Non-positive scores: fall back to relative change against |previous|.
-    const rel = Math.abs(newScore - previousBest) / Math.max(Math.abs(previousBest), 1);
-    return Math.max(0, Math.floor(HILLCLIMB_LOG_SCALE * rel));
+    if (previousBest === null || newScore === null) return 100;
+    return logRatioPoints(previousBest, newScore);
   }
   if (mission.tier === 1) {
     return hasDeps ? 250 : 150;
@@ -1256,6 +1324,7 @@ export function buildMissionLocalSetup(
     nativeSteps.push("lake build");
     notes.push(
       `Hill-climb mission (${dir}${baseline !== null && baseline !== undefined ? `, baseline: ${baseline}` : ""}): only strict improvements over the live best_score are accepted.`,
+      `Full points are paid only for beating each task's best_known value (the best result known outside Sunstead, shown in the task's \`def.best_known\`); reproducing a known result earns a small flat amount.`,
       `Edit only the task's certificate target file(s) (e.g. ${firstTarget}); never touch frozen Spec/Bound/verify files.`
     );
   } else {

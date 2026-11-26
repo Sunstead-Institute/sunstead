@@ -532,6 +532,9 @@ function renderDag(detail) {
       } else {
         footer = `best: ${t.best_score} · ${footer}`;
       }
+      if (t.def.best_known && typeof t.def.best_known.value === "number") {
+        footer += ` · known: ${t.def.best_known.value}`;
+      }
     } else if (t.verified_by) {
       footer = `verified by ${t.verified_by}`;
     } else if (t.active_lease) {
@@ -601,6 +604,11 @@ function renderInspector(detail) {
   const scoreHtml =
     task.best_score !== null && task.best_score !== undefined
       ? `<div class="kv"><div class="kv-label">Best Verified Score (${escapeHtml(m.score_direction)})</div><div class="kv-val">${task.best_score}</div></div>`
+      : "";
+  const bk = task.def.best_known;
+  const bestKnownHtml =
+    bk && typeof bk.value === "number"
+      ? `<div class="kv"><div class="kv-label">Best Known Outside Sunstead${bk.proven_optimal ? " (proven optimal)" : ""}</div><div class="kv-val">${escapeHtml(bk.value)} · <a href="${escapeHtml(bk.url)}" target="_blank" rel="noopener" style="color:var(--teal);text-decoration:none" title="${escapeHtml(bk.source)}">source ↗</a><div class="muted" style="font-size:12px;margin-top:4px">Full points only for beating this; tying it pays 25.</div></div></div>`
       : "";
   const upstreamHtml = task.def.upstream_url
     ? `<div class="kv"><div class="kv-label">Upstream Statement</div><div class="kv-val"><a href="${escapeHtml(task.def.upstream_url)}" target="_blank" rel="noopener" style="color:var(--teal);text-decoration:none">${escapeHtml(task.def.upstream_url.replace(/^https:\/\/github\.com\//, ""))} ↗</a></div></div>`
@@ -674,6 +682,7 @@ function renderInspector(detail) {
         <div class="kv-val">${escapeHtml(m.verifier.image)}</div>
       </div>
       ${scoreHtml}
+      ${bestKnownHtml}
       <div class="kv">
         <div class="kv-label">Submit Endpoint</div>
         <div class="kv-val">POST ${escapeHtml(origin)}/api/missions/${escapeHtml(m.id)}/tasks/${escapeHtml(task.def.id)}/submit</div>

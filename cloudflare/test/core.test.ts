@@ -8,6 +8,9 @@ import {
   applyVerdict,
   computeFrontier,
   computePoints,
+  beatsBestKnown,
+  MATCH_BEST_KNOWN_POINTS,
+  NEAR_BEST_KNOWN_POINTS,
   extractPatchPaths,
   filesStateSha256,
   globMatches,
@@ -62,6 +65,7 @@ import {
   extractPropStatementExpr,
   MAX_SUBGOAL_STATEMENT_BYTES,
   type AcceptedProofRow,
+  type BestKnown,
   type MissionManifest,
   type SubmissionStatusRow,
   type TaskState,
@@ -515,6 +519,74 @@ test("hill-climb points follow the log ratio, reward tight open records, and pre
   let farmed = 0;
   for (let s = 1000; s > 150; s--) farmed += computePoints(m, t, s, s - 1);
   assert.ok(farmed <= computePoints(m, t, 1000, 150), `step-by-step farming earned ${farmed}`);
+});
+
+function withBestKnown(id: string, value: number, extra: Partial<BestKnown> = {}): TaskState {
+  const t = task(id);
+  t.def.best_known = {
+    value,
+    kind: "literature",
+    source: "test fixture citation",
+    url: "https://example.org/paper",
+    checked: "2026-11-26",
+    ...extra,
+  };
+  return t;
+}
+
+test("hill-climb records pay full points only beyond best_known", () => {
+  const m = mission("hillclimb", 2); // minimize
+  const t = withBestKnown("mixcolumns", 92);
+  // The red-team case: naive seed 152 -> published 94 used to pay ~2,400 points.
+  assert.equal(computePoints(m, t, 152, 94), NEAR_BEST_KNOWN_POINTS, "94 is within 5% of 92: small flat amount");
+  assert.equal(computePoints(m, t, 152, 120), 0, "far short of best_known pays nothing");
+  assert.equal(computePoints(m, t, 152, 92), MATCH_BEST_KNOWN_POINTS, "tying best_known pays the match bonus");
+  // Beating best_known pays the log ratio from best_known, not from the seed.
+  assert.equal(computePoints(m, t, 152, 90), Math.floor(5000 * Math.log(92 / 90)));
+  assert.equal(computePoints(m, t, 94, 90), Math.floor(5000 * Math.log(92 / 90)));
+  // Once the live record is already past best_known, it becomes the reference.
+  assert.equal(computePoints(m, t, 90, 88), Math.floor(5000 * Math.log(90 / 88)));
+  // Splitting cannot beat one jump: seed -> 92 -> 91 -> 90 <= seed -> 90 (+ flat match bonus at most).
+  const split = computePoints(m, t, 152, 92) + computePoints(m, t, 92, 91) + computePoints(m, t, 91, 90);
+  assert.ok(split <= computePoints(m, t, 152, 90) + MATCH_BEST_KNOWN_POINTS, `split earned ${split}`);
+  // Walking down from the seed one step at a time earns at most a few flat amounts.
+  let farmed = 0;
+  for (let s = 152; s > 92; s--) farmed += computePoints(m, t, s, s - 1);
+  assert.ok(farmed <= MATCH_BEST_KNOWN_POINTS + 5 * NEAR_BEST_KNOWN_POINTS, `step farming earned ${farmed}`);
+});
+
+test("best_known scoring respects maximize direction and proven optima", () => {
+  const max = mission("hillclimb", 2, { score_direction: "maximize" });
+  const t = withBestKnown("x", 100);
+  assert.equal(computePoints(max, t, 10, 100), MATCH_BEST_KNOWN_POINTS);
+  assert.equal(computePoints(max, t, 10, 98), NEAR_BEST_KNOWN_POINTS);
+  assert.equal(computePoints(max, t, 10, 200), Math.floor(5000 * Math.log(2)));
+  assert.equal(beatsBestKnown("maximize", t.def.best_known, 101), true);
+  assert.equal(beatsBestKnown("maximize", t.def.best_known, 100), false);
+  const opt = withBestKnown("sort_n9", 25, { proven_optimal: true });
+  assert.equal(computePoints(mission("hillclimb", 2), opt, 26, 25), MATCH_BEST_KNOWN_POINTS);
+  assert.equal(beatsBestKnown("minimize", opt.def.best_known, 25), false);
+  assert.equal(beatsBestKnown("minimize", null, 1), false);
+  assert.equal(beatsBestKnown("minimize", opt.def.best_known, null), false);
+});
+
+test("every non-demo hill-climb seed mission carries a sourced best_known below or at its seed", () => {
+  const registry = JSON.parse(readFileSync(new URL("../../missions/best-known.json", import.meta.url), "utf8"));
+  let checked = 0;
+  for (const [missionId, tasks] of Object.entries(registry.missions as Record<string, Record<string, BestKnown>>)) {
+    const manifest = JSON.parse(
+      readFileSync(new URL(`../../missions/${missionId}/sunstead.json`, import.meta.url), "utf8")
+    ) as MissionManifest;
+    assert.equal(manifest.mode, "hillclimb");
+    for (const def of manifest.tasks) {
+      const bk = tasks[def.id];
+      assert.ok(bk, `${missionId}/${def.id} has no best_known`);
+      assert.ok(bk.source.length > 20 && bk.url.startsWith("https://"), `${missionId}/${def.id} is unsourced`);
+      if (typeof def.baseline_score === "number") assert.ok(bk.value <= def.baseline_score);
+      checked++;
+    }
+  }
+  assert.equal(checked, 37);
 });
 
 test("demo missions award 0 points in both hillclimb and dag modes", () => {

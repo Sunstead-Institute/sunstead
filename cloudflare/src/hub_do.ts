@@ -5,6 +5,7 @@ import {
   applyVerdict,
   computeFrontier,
   computePoints,
+  beatsBestKnown,
   isTaskUnlocked,
   validatePatch,
   type Lease,
@@ -965,12 +966,19 @@ export class SunsteadHub extends DurableObject<HubEnv> {
   }
 
   private computeLeaderboard(limit = 30) {
-    // Count active hill-climb crowns (+150 bonus per active non-demo hillclimb record held)
+    // Count active hill-climb crowns (+150 bonus per active non-demo hillclimb record held).
+    // A crown needs a record that strictly beats the task's best_known value; holding a
+    // reproduction of a published result is not a crown.
     const hillclimbCrowns = new Map<string, number>();
     for (const m of this.listMissionsRows()) {
       if (m.manifest.mode !== "hillclimb" || m.manifest.demo) continue;
+      const direction = m.manifest.score_direction ?? "maximize";
       for (const t of this.getTasks(m.manifest.id)) {
-        if (t.status === "verified" && t.verified_by) {
+        if (
+          t.status === "verified" &&
+          t.verified_by &&
+          (!t.def.best_known || beatsBestKnown(direction, t.def.best_known, t.best_score))
+        ) {
           hillclimbCrowns.set(t.verified_by, (hillclimbCrowns.get(t.verified_by) ?? 0) + 1);
         }
       }
