@@ -7,7 +7,8 @@ existed, fall back to non-demo, non-retired `proof` entries with an upstream
 task URL. `ONLY=<id>` narrows it to one id.
 
 `--report DIR`: read the per-proof result.json files under DIR and print a
-Markdown summary table.
+Markdown summary table. `EXPECTED_IDS=<json list>` (the list job's output) sets
+the denominator and lists selected proofs that produced no result.
 """
 import glob
 import json
@@ -39,30 +40,48 @@ def list_ids(ledger: dict, only: str = "") -> list:
     return ids
 
 
-def report(results_dir: str) -> str:
-    rows = []
+def report(results_dir: str, expected=None) -> str:
+    """Markdown summary. `expected` is the list job's selected ids: it is the
+    denominator, and any selected proof without a result.json (a job that timed
+    out or crashed before uploading) is listed as missing, never dropped."""
+    results = {}
     for path in sorted(glob.glob(os.path.join(results_dir, "**", "result.json"), recursive=True)):
-        with open(path, encoding="utf-8") as f:
-            r = json.load(f)
+        try:
+            with open(path, encoding="utf-8") as f:
+                r = json.load(f)
+        except (OSError, ValueError):
+            continue
+        if isinstance(r, dict) and r.get("proof_id"):
+            results[r["proof_id"]] = r
+    ids = list(expected) if expected is not None else sorted(results)
+    rows, ok, missing = [], 0, []
+    for pid in ids:
+        r = results.get(pid)
+        if r is None:
+            missing.append(pid)
+            rows.append(f"| `{pid[:12]}` | ⛔ no result (job timed out or crashed before uploading) | | | |")
+            continue
         code = r.get("exit_code")
+        ok += code == 0
         status = {0: "✅ verified", 3: "➖ not upstream-checkable", 1: "❌ failed", 2: "⚠️ environment"}.get(code, f"? {code}")
         where = f"{r.get('upstream_repo', '?')}@{(r.get('upstream_commit') or '')[:12]}"
         decl = r.get("upstream_declaration") or (r.get("stderr_tail") or [""])[-1][:120]
         axioms = ", ".join(r.get("axioms") or []) if code == 0 else ""
-        rows.append(f"| `{r.get('proof_id', '')[:12]}` | {status} | {where} | `{decl}` | {axioms} |")
-    ok = sum(1 for r in rows if "✅" in r)
-    head = [
-        f"## Upstream verification: {ok}/{len(rows)} verified",
-        "",
-        "| proof | result | upstream | declaration / reason | axioms |",
-        "|---|---|---|---|---|",
-    ]
+        rows.append(f"| `{pid[:12]}` | {status} | {where} | `{decl}` | {axioms} |")
+    head = [f"## Upstream verification: {ok}/{len(ids)} verified", ""]
+    if missing:
+        head += [f"**{len(missing)} selected proof(s) produced no result:** "
+                 + ", ".join(f"`{m}`" for m in missing), ""]
+    if not ids:
+        head += ["No proofs were selected.", ""]
+    head += ["| proof | result | upstream | declaration / reason | axioms |", "|---|---|---|---|---|"]
     return "\n".join(head + rows) + "\n"
 
 
 def main(argv) -> int:
     if len(argv) >= 2 and argv[0] == "--report":
-        print(report(argv[1]))
+        expected = os.environ.get("EXPECTED_IDS", "").strip()
+        print(report(argv[1], json.loads(expected) if expected else None))
         return 0
     req = urllib.request.Request(f"{HUB}/api/proofs?limit=200", headers=UA)
     with urllib.request.urlopen(req, timeout=60) as r:

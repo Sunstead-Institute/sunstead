@@ -50,6 +50,32 @@ class Tests(unittest.TestCase):
         self.assertIn("❌ failed", out)
         self.assertIn("FAILED: boom", out)
 
+    def test_report_counts_missing_results_against_selected(self):
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(os.path.join(d, A))
+            with open(os.path.join(d, A, "result.json"), "w") as f:
+                json.dump({"proof_id": A, "exit_code": 0}, f)
+            out = uvl.report(d, [A, B])
+        self.assertIn("1/2 verified", out)
+        self.assertIn("produced no result:** `" + B + "`", out)
+        self.assertIn("⛔ no result", out)
+
+    def test_report_with_no_artifacts_at_all(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = uvl.report(os.path.join(d, "absent"), [A, B])
+        self.assertIn("0/2 verified", out)
+        self.assertIn("2 selected proof(s) produced no result", out)
+
+    def test_exit_3_is_not_counted_as_missing(self):
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(os.path.join(d, A))
+            with open(os.path.join(d, A, "result.json"), "w") as f:
+                json.dump({"proof_id": A, "exit_code": 3}, f)
+            out = uvl.report(d, [A])
+        self.assertIn("0/1 verified", out)
+        self.assertIn("not upstream-checkable", out)
+        self.assertNotIn("no result", out)
+
 
 if __name__ == "__main__":
     unittest.main()

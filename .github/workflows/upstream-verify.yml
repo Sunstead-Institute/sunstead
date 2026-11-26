@@ -102,8 +102,12 @@ jobs:
         with:
           persist-credentials: false
       - uses: actions/download-artifact@v4
+        # With no artifacts at all the summary still lists every selected id as missing.
+        continue-on-error: true
         with:
           pattern: upstream-verify-*
           path: results
       - name: Summary
+        env:
+          EXPECTED_IDS: ${{ needs.list.outputs.ids }}
         run: python3 scripts/upstream-verify-list.py --report results >> "$GITHUB_STEP_SUMMARY"
