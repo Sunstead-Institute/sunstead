@@ -857,6 +857,309 @@ export function sortMissionSummaries<T extends SortableMissionSummary>(missions:
   });
 }
 
+export interface FilterableMissionSummary extends SortableMissionSummary {
+  title: string;
+  open_conjecture?: boolean;
+  upstream?: Pick<UpstreamProvenance, "repo"> | null;
+  verifier_toolchain?: string;
+  frontier_task_ids: string[];
+}
+
+export interface MissionListFilters {
+  mode?: MissionMode;
+  tier?: number;
+  open_conjecture?: boolean;
+  toolchain?: string;
+  has_frontier?: boolean;
+  demo?: boolean;
+  q?: string;
+}
+
+function parseBoolQueryParam(raw: string | null): boolean | undefined {
+  if (raw === null) return undefined;
+  const v = raw.trim().toLowerCase();
+  if (v === "true" || v === "1") return true;
+  if (v === "false" || v === "0") return false;
+  return undefined;
+}
+
+/** Parse optional filter query parameters for `GET /api/missions`. */
+export function parseMissionListFilters(params: URLSearchParams): MissionListFilters {
+  const out: MissionListFilters = {};
+  const rawMode = params.get("mode")?.trim().toLowerCase();
+  if (rawMode === "dag" || rawMode === "hillclimb") {
+    out.mode = rawMode;
+  }
+  const rawTier = params.get("tier")?.trim();
+  if (rawTier) {
+    const tier = Number(rawTier);
+    if (Number.isInteger(tier) && tier > 0) {
+      out.tier = tier;
+    }
+  }
+  const openConj = parseBoolQueryParam(params.get("open_conjecture"));
+  if (openConj !== undefined) out.open_conjecture = openConj;
+  const rawToolchain = params.get("toolchain")?.trim();
+  if (rawToolchain) out.toolchain = rawToolchain;
+  const hasFrontier = parseBoolQueryParam(params.get("has_frontier"));
+  if (hasFrontier !== undefined) out.has_frontier = hasFrontier;
+  const demo = parseBoolQueryParam(params.get("demo"));
+  if (demo !== undefined) out.demo = demo;
+  const q = params.get("q")?.trim();
+  if (q) out.q = q;
+  return out;
+}
+
+/**
+ * Filter mission summaries for `GET /api/missions`.
+ * Returns all summaries unchanged when no filters are supplied.
+ */
+export function filterMissionSummaries<T extends FilterableMissionSummary>(
+  summaries: T[],
+  filters: MissionListFilters = {}
+): T[] {
+  const tcFilter = filters.toolchain?.trim().toLowerCase() || "";
+  const qFilter = filters.q?.trim().toLowerCase() || "";
+  return summaries.filter((m) => {
+    if (filters.mode !== undefined && m.mode !== filters.mode) return false;
+    if (filters.tier !== undefined && m.tier !== filters.tier) return false;
+    if (
+      typeof filters.open_conjecture === "boolean" &&
+      Boolean(m.open_conjecture) !== filters.open_conjecture
+    ) {
+      return false;
+    }
+    if (tcFilter) {
+      const tc = (m.verifier_toolchain ?? "leanprover/lean4:v4.36.0").toLowerCase();
+      if (!tc.includes(tcFilter)) return false;
+    }
+    if (filters.has_frontier === true && m.frontier_task_ids.length === 0) {
+      return false;
+    }
+    if (typeof filters.demo === "boolean" && Boolean(m.demo) !== filters.demo) {
+      return false;
+    }
+    if (qFilter) {
+      const matched =
+        m.id.toLowerCase().includes(qFilter) ||
+        m.title.toLowerCase().includes(qFilter) ||
+        (m.upstream?.repo ?? "").toLowerCase().includes(qFilter);
+      if (!matched) return false;
+    }
+    return true;
+  });
+}
+
+export const FRONTIER_DEFAULT_LIMIT = 50;
+export const FRONTIER_MAX_LIMIT = 200;
+
+export interface MissionWithTasks {
+  manifest: MissionManifest;
+  tasks: TaskState[];
+}
+
+export interface GlobalFrontierFilters {
+  include_demo?: boolean;
+  unclaimed?: boolean;
+  mode?: MissionMode;
+  tier?: number;
+  open_conjecture?: boolean;
+  toolchain?: string;
+  mission?: string;
+  q?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface GlobalFrontierEntry {
+  mission_id: string;
+  mission_title: string;
+  task_id: string;
+  title: string;
+  mode: MissionMode;
+  tier: number;
+  open_conjecture: boolean;
+  toolchain: string;
+  verifier_image: string;
+  status: TaskStatus;
+  leased: boolean;
+  lease_contributor: string | null;
+  best_score: number | null;
+  best_known: BestKnown | null;
+  upstream_url: string | null;
+  target_files: string[];
+  depends_on: string[];
+}
+
+export interface GlobalFrontierResponse {
+  total_matching: number;
+  limit: number;
+  offset: number;
+  returned: number;
+  tasks: GlobalFrontierEntry[];
+}
+
+/** Parse query parameters for `GET /api/frontier`. */
+export function parseFrontierQuery(params: URLSearchParams): GlobalFrontierFilters {
+  const out: GlobalFrontierFilters = {};
+  const includeDemo = parseBoolQueryParam(params.get("include_demo"));
+  if (includeDemo !== undefined) out.include_demo = includeDemo;
+  const unclaimed = parseBoolQueryParam(params.get("unclaimed"));
+  if (unclaimed !== undefined) out.unclaimed = unclaimed;
+  const rawMode = params.get("mode")?.trim().toLowerCase();
+  if (rawMode === "dag" || rawMode === "hillclimb") {
+    out.mode = rawMode;
+  }
+  const rawTier = params.get("tier")?.trim();
+  if (rawTier) {
+    const tier = Number(rawTier);
+    if (Number.isInteger(tier) && tier > 0) {
+      out.tier = tier;
+    }
+  }
+  const openConj = parseBoolQueryParam(params.get("open_conjecture"));
+  if (openConj !== undefined) out.open_conjecture = openConj;
+  const rawToolchain = params.get("toolchain")?.trim();
+  if (rawToolchain) out.toolchain = rawToolchain;
+  const rawMission = (params.get("mission") ?? params.get("mission_id"))?.trim();
+  if (rawMission) out.mission = rawMission;
+  const q = params.get("q")?.trim();
+  if (q) out.q = q;
+  const rawLimit = params.get("limit")?.trim();
+  if (rawLimit) {
+    const parsed = Number(rawLimit);
+    if (Number.isFinite(parsed)) out.limit = parsed;
+  }
+  const rawOffset = params.get("offset")?.trim();
+  if (rawOffset) {
+    const parsed = Number(rawOffset);
+    if (Number.isFinite(parsed)) out.offset = parsed;
+  }
+  return out;
+}
+
+/**
+ * Build the paginated, deterministically prioritized global frontier (`GET /api/frontier`).
+ *
+ * Priority order:
+ * 1. Unclaimed tasks (`leased === false`) before leased tasks.
+ * 2. Tier 1 before Tier 2 (positive tiers ascending; Tier 0 last).
+ * 3. DAG / open-conjecture tasks before hill-climb tasks.
+ * 4. Mission order (input order) then task order within the mission.
+ */
+export function buildGlobalFrontier(
+  missionsWithTasks: MissionWithTasks[],
+  filters: GlobalFrontierFilters = {}
+): GlobalFrontierResponse {
+  const limit =
+    filters.limit !== undefined && Number.isFinite(filters.limit)
+      ? Math.max(1, Math.min(Math.floor(filters.limit), FRONTIER_MAX_LIMIT))
+      : FRONTIER_DEFAULT_LIMIT;
+  const offset =
+    filters.offset !== undefined && Number.isFinite(filters.offset)
+      ? Math.max(0, Math.floor(filters.offset))
+      : 0;
+  const tcFilter = filters.toolchain?.trim().toLowerCase() || "";
+  const missionFilter = filters.mission?.trim() || "";
+  const qFilter = filters.q?.trim().toLowerCase() || "";
+
+  const matched: Array<{
+    entry: GlobalFrontierEntry;
+    missionOrder: number;
+    taskOrder: number;
+  }> = [];
+
+  for (let missionOrder = 0; missionOrder < missionsWithTasks.length; missionOrder++) {
+    const { manifest, tasks } = missionsWithTasks[missionOrder];
+    if (!filters.include_demo && manifest.demo) continue;
+    if (missionFilter && manifest.id !== missionFilter) continue;
+    if (filters.mode !== undefined && manifest.mode !== filters.mode) continue;
+    if (filters.tier !== undefined && manifest.tier !== filters.tier) continue;
+
+    const toolchain = (manifest.verifier.toolchain ?? "leanprover/lean4:v4.36.0").trim();
+    if (tcFilter && !toolchain.toLowerCase().includes(tcFilter)) continue;
+
+    const verifierImage = publicVerifierImage(manifest.verifier.image);
+    const frontierSet = new Set(computeFrontier(manifest.mode, tasks));
+    if (frontierSet.size === 0) continue;
+
+    for (let taskOrder = 0; taskOrder < tasks.length; taskOrder++) {
+      const task = tasks[taskOrder];
+      if (!frontierSet.has(task.def.id)) continue;
+
+      const leased = task.active_lease !== null;
+      if (filters.unclaimed === true && leased) continue;
+
+      const openConjecture = isOpenConjectureTask(manifest, task.def);
+      if (
+        typeof filters.open_conjecture === "boolean" &&
+        openConjecture !== filters.open_conjecture
+      ) {
+        continue;
+      }
+
+      if (qFilter) {
+        const hay =
+          manifest.id.toLowerCase().includes(qFilter) ||
+          manifest.title.toLowerCase().includes(qFilter) ||
+          task.def.id.toLowerCase().includes(qFilter) ||
+          task.def.title.toLowerCase().includes(qFilter);
+        if (!hay) continue;
+      }
+
+      matched.push({
+        entry: {
+          mission_id: manifest.id,
+          mission_title: manifest.title,
+          task_id: task.def.id,
+          title: task.def.title,
+          mode: manifest.mode,
+          tier: manifest.tier,
+          open_conjecture: openConjecture,
+          toolchain,
+          verifier_image: verifierImage,
+          status: task.status,
+          leased,
+          lease_contributor: task.active_lease?.contributor ?? null,
+          best_score: task.best_score,
+          best_known: task.def.best_known ?? null,
+          upstream_url: task.def.upstream_url ?? null,
+          target_files: [...task.def.target_files],
+          depends_on: [...(task.def.depends_on ?? [])],
+        },
+        missionOrder,
+        taskOrder,
+      });
+    }
+  }
+
+  matched.sort((a, b) => {
+    const aLeased = a.entry.leased ? 1 : 0;
+    const bLeased = b.entry.leased ? 1 : 0;
+    if (aLeased !== bLeased) return aLeased - bLeased;
+
+    const aTier = a.entry.tier > 0 ? a.entry.tier : Number.MAX_SAFE_INTEGER;
+    const bTier = b.entry.tier > 0 ? b.entry.tier : Number.MAX_SAFE_INTEGER;
+    if (aTier !== bTier) return aTier - bTier;
+
+    const aMode = a.entry.mode === "dag" ? 0 : 1;
+    const bMode = b.entry.mode === "dag" ? 0 : 1;
+    if (aMode !== bMode) return aMode - bMode;
+
+    if (a.missionOrder !== b.missionOrder) return a.missionOrder - b.missionOrder;
+    return a.taskOrder - b.taskOrder;
+  });
+
+  const page = matched.slice(offset, offset + limit).map((m) => m.entry);
+  return {
+    total_matching: matched.length,
+    limit,
+    offset,
+    returned: page.length,
+    tasks: page,
+  };
+}
+
 /**
  * Content hash of a mission's accepted (non-seed) files, so the hub can ask a
  * warm verifier container "do you already hold this state?" instead of
@@ -1071,6 +1374,110 @@ export function formatSubmissionStatusView(row: SubmissionStatusRow, hubOrigin: 
     ...(row.error ? { error: row.error } : {}),
     created_at: row.created_at,
     completed_at: row.completed_at,
+  };
+}
+
+/**
+ * Age threshold (seconds) after which a `verifying` submission is considered
+ * orphaned across a Durable Object restart/deploy or container failure.
+ * Comfortably exceeds max 240s container timeout + slot queueing.
+ */
+export const STALE_VERIFYING_SEC = 600;
+export const STALE_VERIFYING_ERROR =
+  "Verification was interrupted before completion (hub restart or container timeout); please resubmit.";
+export const STALE_VERIFYING_SUMMARY =
+  "Verification interrupted before completion; please resubmit.";
+
+export type StaleReaperSql = Pick<SqlStorage, "exec">;
+
+/** True when a submission row has remained in `verifying` for at least `maxAgeSec`. */
+export function isSubmissionVerifyingStale(
+  row: Pick<SubmissionStatusRow, "status" | "created_at">,
+  nowUnix: number,
+  maxAgeSec = STALE_VERIFYING_SEC
+): boolean {
+  const safeMaxAge = Number.isFinite(maxAgeSec) ? Math.max(0, Math.floor(maxAgeSec)) : STALE_VERIFYING_SEC;
+  return row.status === "verifying" && nowUnix - row.created_at >= safeMaxAge;
+}
+
+/**
+ * Reap orphaned `verifying` submissions whose `created_at <= nowUnix - maxAgeSec`.
+ * Updates matching rows to `status = 'error'` (`stage = 'sandbox'`) and returns
+ * the reaped submission IDs.
+ */
+export function reapStaleVerifyingSubmissions(
+  sql: StaleReaperSql,
+  nowUnix: number,
+  maxAgeSec = STALE_VERIFYING_SEC
+): string[] {
+  const safeMaxAge = Number.isFinite(maxAgeSec) ? Math.max(0, Math.floor(maxAgeSec)) : STALE_VERIFYING_SEC;
+  const cutoff = nowUnix - safeMaxAge;
+  const stale = sql
+    .exec<{ id: string }>(
+      `SELECT id
+       FROM submissions
+       WHERE status = 'verifying' AND created_at <= ?
+       ORDER BY created_at ASC, id ASC`,
+      cutoff
+    )
+    .toArray();
+  if (stale.length === 0) return [];
+  sql.exec(
+    `UPDATE submissions
+     SET status = 'error',
+         accepted = 0,
+         points = 0,
+         stage = 'sandbox',
+         error = ?,
+         summary = ?,
+         completed_at = ?
+     WHERE status = 'verifying' AND created_at <= ?`,
+    STALE_VERIFYING_ERROR,
+    STALE_VERIFYING_SUMMARY,
+    nowUnix,
+    cutoff
+  );
+  return stale.map((r) => r.id);
+}
+
+/**
+ * Lazily reap a single fetched submission row if it is stale in `verifying`,
+ * returning the updated `error` row so polling agents never hang indefinitely.
+ */
+export function reapStaleVerifyingSubmissionById(
+  sql: StaleReaperSql,
+  row: SubmissionStatusRow,
+  nowUnix: number,
+  maxAgeSec = STALE_VERIFYING_SEC
+): SubmissionStatusRow {
+  if (!isSubmissionVerifyingStale(row, nowUnix, maxAgeSec)) return row;
+  const safeMaxAge = Number.isFinite(maxAgeSec) ? Math.max(0, Math.floor(maxAgeSec)) : STALE_VERIFYING_SEC;
+  const cutoff = nowUnix - safeMaxAge;
+  sql.exec(
+    `UPDATE submissions
+     SET status = 'error',
+         accepted = 0,
+         points = 0,
+         stage = 'sandbox',
+         error = ?,
+         summary = ?,
+         completed_at = ?
+     WHERE id = ? AND status = 'verifying' AND created_at <= ?`,
+    STALE_VERIFYING_ERROR,
+    STALE_VERIFYING_SUMMARY,
+    nowUnix,
+    row.id,
+    cutoff
+  );
+  return {
+    ...row,
+    status: "error",
+    accepted: 0,
+    points: 0,
+    stage: "sandbox",
+    error: STALE_VERIFYING_ERROR,
+    summary: STALE_VERIFYING_SUMMARY,
+    completed_at: nowUnix,
   };
 }
 

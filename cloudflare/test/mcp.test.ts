@@ -14,6 +14,7 @@ const tools = [
   ],
   ["get_me", {}, "/api/me", "", "GET", undefined],
   ["list_missions", {}, "/api/missions", "", "GET", undefined],
+  ["get_open_frontier", {}, "/api/frontier", "", "GET", undefined],
   ["get_mission_frontier", { mission_id: "example" }, "/api/missions/example", "", "GET", undefined],
   ["get_task_files", task, "/api/missions/example/tasks/task_1/files", "", "GET", undefined],
   ["get_verified_proof", task, "/api/missions/example/tasks/task_1/proof", "", "GET", undefined],
@@ -184,4 +185,87 @@ test("hub denials reach the client and invalid origins never reach the hub", asy
   assert.match(result.content[0].text, /401.*authentication required/);
   const crossOrigin = rpc("tools/list", {}, { Origin: "https://other.example" });
   assert.equal((await handleMcp(crossOrigin, unexpected)).status, 403);
+});
+
+test("get_open_frontier forwards all filter and pagination query parameters to GET /api/frontier", async () => {
+  let seenUrl: URL | null = null;
+  let seenMethod = "";
+  const req = rpc("tools/call", {
+    name: "get_open_frontier",
+    arguments: {
+      unclaimed: true,
+      mode: "dag",
+      tier: 1,
+      open_conjecture: true,
+      toolchain: "v4.36.0",
+      mission: "fc-erdos-open",
+      q: "prime",
+      limit: 25,
+      offset: 5,
+    },
+  });
+  const res = await handleMcp(req, async (forwarded) => {
+    seenUrl = new URL(forwarded.url);
+    seenMethod = forwarded.method;
+    return Response.json({ total_matching: 1, limit: 25, offset: 5, returned: 1, tasks: [] });
+  });
+  assert.equal(seenMethod, "GET");
+  assert.equal(seenUrl!.pathname, "/api/frontier");
+  assert.equal(seenUrl!.searchParams.get("unclaimed"), "true");
+  assert.equal(seenUrl!.searchParams.get("mode"), "dag");
+  assert.equal(seenUrl!.searchParams.get("tier"), "1");
+  assert.equal(seenUrl!.searchParams.get("open_conjecture"), "true");
+  assert.equal(seenUrl!.searchParams.get("toolchain"), "v4.36.0");
+  assert.equal(seenUrl!.searchParams.get("mission"), "fc-erdos-open");
+  assert.equal(seenUrl!.searchParams.get("q"), "prime");
+  assert.equal(seenUrl!.searchParams.get("limit"), "25");
+  assert.equal(seenUrl!.searchParams.get("offset"), "5");
+  assert.equal((await res.json()).result.isError, false);
+});
+
+test("list_missions forwards optional filter query parameters to GET /api/missions", async () => {
+  let seenUrl: URL | null = null;
+  const req = rpc("tools/call", {
+    name: "list_missions",
+    arguments: {
+      mode: "hillclimb",
+      tier: 2,
+      open_conjecture: false,
+      toolchain: "v4.31.0",
+      has_frontier: true,
+      q: "rank",
+    },
+  });
+  const res = await handleMcp(req, async (forwarded) => {
+    seenUrl = new URL(forwarded.url);
+    return Response.json({ missions: [] });
+  });
+  assert.equal(seenUrl!.pathname, "/api/missions");
+  assert.equal(seenUrl!.searchParams.get("mode"), "hillclimb");
+  assert.equal(seenUrl!.searchParams.get("tier"), "2");
+  assert.equal(seenUrl!.searchParams.get("open_conjecture"), "false");
+  assert.equal(seenUrl!.searchParams.get("toolchain"), "v4.31.0");
+  assert.equal(seenUrl!.searchParams.get("has_frontier"), "true");
+  assert.equal(seenUrl!.searchParams.get("q"), "rank");
+  assert.equal((await res.json()).result.isError, false);
+});
+
+test("get_open_frontier and list_missions validate Zod parameter bounds before calling hub", async () => {
+  const badLimit = await handleMcp(
+    rpc("tools/call", { name: "get_open_frontier", arguments: { limit: 500 } }),
+    unexpected
+  );
+  assert.equal((await badLimit.json()).result.isError, true);
+
+  const badMission = await handleMcp(
+    rpc("tools/call", { name: "get_open_frontier", arguments: { mission: "../escape" } }),
+    unexpected
+  );
+  assert.equal((await badMission.json()).result.isError, true);
+
+  const badMode = await handleMcp(
+    rpc("tools/call", { name: "list_missions", arguments: { mode: "unknown" } }),
+    unexpected
+  );
+  assert.equal((await badMode.json()).result.isError, true);
 });

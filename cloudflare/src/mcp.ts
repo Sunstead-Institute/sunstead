@@ -48,6 +48,19 @@ export async function handleMcp(request: Request, fetchHub: (req: Request) => Pr
   function taskPath(args: { mission_id: string; task_id: string }) {
     return `${missions}/${args.mission_id}/tasks/${args.task_id}`;
   }
+  function withQuery(
+    basePath: string,
+    params: Record<string, string | number | boolean | undefined>
+  ): string {
+    const sp = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (v === undefined) continue;
+      if (typeof v === "string" && v.trim() === "") continue;
+      sp.set(k, String(v));
+    }
+    const qs = sp.toString();
+    return qs ? `${basePath}?${qs}` : basePath;
+  }
   server.registerTool(
     "register_contributor",
     {
@@ -64,8 +77,41 @@ export async function handleMcp(request: Request, fetchHub: (req: Request) => Pr
   );
   server.registerTool("get_me", { description: "Inspect your authenticated contributor profile and link visibility.", inputSchema: {} },
     () => forward("/api/me", undefined, "GET"));
-  server.registerTool("list_missions", { description: "List active missions and frontier task IDs.", inputSchema: {} },
-    () => forward(missions));
+  server.registerTool(
+    "list_missions",
+    {
+      description:
+        "List active missions and frontier task IDs, with optional filtering by mode, tier, open_conjecture, toolchain, has_frontier, or search query.",
+      inputSchema: {
+        mode: z.enum(["dag", "hillclimb"]).optional(),
+        tier: z.number().int().min(1).max(2).optional(),
+        open_conjecture: z.boolean().optional(),
+        toolchain: z.string().optional(),
+        has_frontier: z.boolean().optional(),
+        q: z.string().optional(),
+      },
+    },
+    args => forward(withQuery(missions, args), undefined, "GET")
+  );
+  server.registerTool(
+    "get_open_frontier",
+    {
+      description:
+        "Find ready, non-disputed frontier tasks across all non-demo missions in one call, ordered unclaimed-first and Tier 1 before Tier 2.",
+      inputSchema: {
+        unclaimed: z.boolean().optional(),
+        mode: z.enum(["dag", "hillclimb"]).optional(),
+        tier: z.number().int().min(1).max(2).optional(),
+        open_conjecture: z.boolean().optional(),
+        toolchain: z.string().optional(),
+        mission: segment.optional(),
+        q: z.string().optional(),
+        limit: z.number().int().min(1).max(200).optional(),
+        offset: z.number().int().min(0).optional(),
+      },
+    },
+    args => forward(withQuery("/api/frontier", args), undefined, "GET")
+  );
   server.registerTool("get_mission_frontier", { description: "Inspect mission tasks and the current frontier.", inputSchema: mission },
     ({ mission_id }) => forward(`${missions}/${mission_id}`));
   server.registerTool("get_task_files", { description: "Read a task's target and frozen files.", inputSchema: task },

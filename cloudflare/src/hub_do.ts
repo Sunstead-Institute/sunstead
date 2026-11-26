@@ -42,6 +42,12 @@ import {
   VERIFIER_POOL_SIZE,
   verifierSlotName,
   sortMissionSummaries,
+  filterMissionSummaries,
+  parseMissionListFilters,
+  buildGlobalFrontier,
+  parseFrontierQuery,
+  reapStaleVerifyingSubmissions,
+  reapStaleVerifyingSubmissionById,
   proofIdFromPatchSha,
   constantTimeEqual,
   shouldRunAsyncSubmit,
@@ -233,6 +239,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     ctx.blockConcurrencyWhile(async () => {
       this.initSchema();
       this.seedMissions();
+      reapStaleVerifyingSubmissions(this.ctx.storage.sql, Math.floor(Date.now() / 1000));
     });
   }
 
@@ -1289,7 +1296,18 @@ export class SunsteadHub extends DurableObject<HubEnv> {
           frontier_task_ids: computeFrontier(m.manifest.mode, tasks),
         };
       });
-      return jsonResp({ missions: sortMissionSummaries(summaries) });
+      const filters = parseMissionListFilters(url.searchParams);
+      return jsonResp({ missions: sortMissionSummaries(filterMissionSummaries(summaries, filters)) });
+    }
+
+    if (method === "GET" && path === "/api/frontier") {
+      const allTasks = this.getAllTasksByMission();
+      const missionsWithTasks = this.listMissionsRows().map((m) => ({
+        manifest: m.manifest,
+        tasks: allTasks.get(m.manifest.id) ?? [],
+      }));
+      const filters = parseFrontierQuery(url.searchParams);
+      return jsonResp(buildGlobalFrontier(missionsWithTasks, filters));
     }
 
     if (method === "GET" && path === "/api/submissions") {
@@ -2109,7 +2127,12 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     if (rows.length === 0) {
       return jsonResp({ error: `unknown submission: ${id}` }, 404);
     }
-    return jsonResp(formatSubmissionStatusView(rows[0], hubOrigin), 200, {
+    const row = reapStaleVerifyingSubmissionById(
+      this.ctx.storage.sql,
+      rows[0],
+      Math.floor(Date.now() / 1000)
+    );
+    return jsonResp(formatSubmissionStatusView(row, hubOrigin), 200, {
       "Cache-Control": "no-store",
     });
   }
