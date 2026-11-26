@@ -243,6 +243,47 @@ class CheckStatementsUnitTests(unittest.TestCase):
             self.assertEqual(cm2.exception.code, 1)
             self.assertIn("no tasks checked", out2.getvalue())
 
+    def test_main_parallel_jobs_schedules_largest_first_and_aggregates_failures(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for mid, tids in [
+                ("m-small", ["s1"]),
+                ("m-large", ["l1", "l2", "l3", "l4"]),
+                ("m-med", ["m1", "m2"]),
+            ]:
+                mdir = os.path.join(tmp, mid)
+                os.makedirs(mdir)
+                with open(os.path.join(mdir, "sunstead.json"), "w", encoding="utf-8") as f:
+                    json.dump({"id": mid, "verifier": {"image": "img"}, "tasks": [{"id": t} for t in tids]}, f)
+
+            started = []
+
+            def fake_batch(mission_dir, image, task_ids, timeout, batch_size=0):
+                name = os.path.basename(mission_dir)
+                started.append(name)
+                return [
+                    (tid, {"ok": tid != "m2", "summary": f"res-{tid}"})
+                    for tid in task_ids
+                ]
+
+            out = io.StringIO()
+            with mock.patch.object(cs, "MISSIONS", tmp), \
+                 mock.patch.object(cs, "run_mission_batch", side_effect=fake_batch), \
+                 contextlib.redirect_stdout(out):
+                with self.assertRaises(SystemExit) as cm:
+                    cs.main(["--jobs", "3"])
+            self.assertEqual(cm.exception.code, 1)
+            self.assertEqual(set(started), {"m-small", "m-large", "m-med"})
+            text = out.getvalue()
+            self.assertIn("[OK] m-large/l1: res-l1", text)
+            self.assertIn("[FAIL] m-med/m2: res-m2", text)
+            self.assertIn("7 task(s) checked, 1 failure(s)", text)
+
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                with self.assertRaises(SystemExit) as cm_bad:
+                    cs.main(["--jobs", "0"])
+            self.assertEqual(cm_bad.exception.code, 2)
+
 
 if __name__ == "__main__":
     unittest.main()
