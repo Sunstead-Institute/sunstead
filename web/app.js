@@ -141,7 +141,13 @@ function isMissionCompleted(m) {
   const resolved = typeof m?.resolved_tasks === "number"
     ? m.resolved_tasks
     : (m?.verified_tasks || 0) + (m?.refuted_tasks || 0);
-  return Boolean(m && m.mode === "dag" && m.total_tasks > 0 && resolved >= m.total_tasks);
+  if (!m || m.total_tasks <= 0) return false;
+  return m.mode === "hillclimb" ? (m.proven_optimal_tasks || 0) >= m.total_tasks : resolved >= m.total_tasks;
+}
+
+function optimalityCitation(mode, task) {
+  const citation = task?.def?.best_known?.proven_optimal;
+  return mode === "hillclimb" && citation?.source && safeHttpUrl(citation.url) ? citation : null;
 }
 
 // ---------------- Pure Filter, Layout & Deep-Link Helpers ----------------
@@ -210,7 +216,7 @@ function countMissionCategories(missions, filters = {}) {
 }
 
 function isTaskReady(task, mode) {
-  if (!task || !task.unlocked) return false;
+  if (!task || !task.unlocked || optimalityCitation(mode, task)) return false;
   if (task.disputed_counterexample || (task.def && task.def.upstream_disputed)) return false;
   if (task.active_lease) return false;
   if (task.status === "refuted") return false;
@@ -224,7 +230,8 @@ function matchesTaskStatus(task, mode, status) {
   if (status === "ready") return isTaskReady(task, mode);
   if (status === "verified") return task.status === "verified";
   if (status === "refuted") return task.status === "refuted";
-  if (status === "claimed") return Boolean(task.active_lease);
+  if (status === "claimed") return !optimalityCitation(mode, task) && Boolean(task.active_lease);
+  if (status === "optimal") return Boolean(optimalityCitation(mode, task));
   return true;
 }
 
@@ -253,6 +260,7 @@ function countTaskStatuses(tasks, mode, query = "") {
     verified: base.filter((t) => matchesTaskStatus(t, mode, "verified")).length,
     refuted: base.filter((t) => matchesTaskStatus(t, mode, "refuted")).length,
     claimed: base.filter((t) => matchesTaskStatus(t, mode, "claimed")).length,
+    optimal: base.filter((t) => matchesTaskStatus(t, mode, "optimal")).length,
   };
 }
 
@@ -380,7 +388,9 @@ async function loadMissions() {
 function renderMissionCardHtml(m, completed) {
   const resolved = resolvedTaskCount(m);
   const refuted = m.refuted_tasks || 0;
-  const pct = m.total_tasks > 0 ? Math.round((resolved / m.total_tasks) * 100) : 0;
+  const optimal = m.proven_optimal_tasks || 0;
+  const progress = m.mode === "hillclimb" ? optimal : resolved;
+  const pct = m.total_tasks > 0 ? Math.round((progress / m.total_tasks) * 100) : 0;
   const active = m.id === state.activeMissionId ? "active" : "";
   const doneClass = completed ? "mission-tab-completed" : "";
   const modeLabel =
@@ -391,7 +401,9 @@ function renderMissionCardHtml(m, completed) {
         : m.open_conjecture
           ? "CONJECTURES"
           : "BLUEPRINT";
-  const countText = refuted > 0 ? `${resolved}/${m.total_tasks} (${refuted} ¬T)` : `${resolved}/${m.total_tasks}`;
+  const countText = m.mode === "hillclimb"
+    ? `${optimal}/${m.total_tasks} optimal`
+    : refuted > 0 ? `${resolved}/${m.total_tasks} (${refuted} ¬T)` : `${resolved}/${m.total_tasks}`;
   const conjectureBadge = m.open_conjecture
     ? `<span class="badge-conjecture" title="Two-sided open conjecture: prove T or refute ¬T for full credit">T OR ¬T</span>`
     : "";
@@ -676,6 +688,15 @@ function nodePalette(task, mode) {
       titleColor: "#6B1B1B",
     };
   }
+  if (optimalityCitation(mode, task)) {
+    return {
+      fill: "#EEF7F7",
+      stroke: "#2A7D7F",
+      badge: "PROVEN OPTIMAL",
+      badgeColor: "#2A7D7F",
+      titleColor: "#0D1B3D",
+    };
+  }
   if (!task.unlocked) {
     return {
       fill: "#F2EFE7",
@@ -837,6 +858,7 @@ function renderTaskFilterBar(detail) {
   if (pillsRoot) {
     pillsRoot.querySelectorAll(".filter-pill").forEach((btn) => {
       const st = btn.dataset.status || "all";
+      if (st === "optimal") btn.classList.toggle("hidden", mode !== "hillclimb");
       btn.classList.toggle("active", st === state.taskFilter.status);
       const badge = btn.querySelector(".pill-count");
       if (badge) badge.textContent = String(counts[st] ?? 0);
@@ -1099,6 +1121,8 @@ function renderDag(detail) {
       footer = `disputed ¬T by ${t.disputed_counterexample.refuter}`;
     } else if (t.def && t.def.upstream_disputed) {
       footer = `upstream disputed (${t.def.upstream_disputed.recorded_at || "excluded"})`;
+    } else if (optimalityCitation(manifest.mode, t)) {
+      footer = `optimum: ${t.def.best_known.value} · closed`;
     } else if (manifest.mode === "hillclimb" && t.best_score !== null && t.best_score !== undefined) {
       if (t.active_lease) {
         footer = `best: ${t.best_score} · claimed: ${t.active_lease.contributor}`;
@@ -1187,10 +1211,13 @@ function renderInspector(detail) {
       ? `<div class="kv"><div class="kv-label">Best Verified Score (${escapeHtml(m.score_direction)})</div><div class="kv-val">${task.best_score}</div></div>`
       : "";
   const bk = task.def.best_known;
+  const optimum = optimalityCitation(m.mode, task);
   const bestKnownHtml =
-    bk && typeof bk.value === "number"
-      ? `<div class="kv"><div class="kv-label">Best Known Outside Sunstead${bk.proven_optimal ? " (proven optimal)" : ""}</div><div class="kv-val">${escapeHtml(bk.value)} · <a href="${escapeHtml(bk.url)}" target="_blank" rel="noopener" style="color:var(--teal);text-decoration:none" title="${escapeHtml(bk.source)}">source ↗</a><div class="muted" style="font-size:12px;margin-top:4px">Full points only for beating this; tying it pays 25.</div></div></div>`
-      : "";
+    optimum
+      ? `<div class="kv"><div class="kv-label">Solved · Proven Optimal</div><div class="kv-val">${escapeHtml(bk.value)} · <a class="proof-link" href="${escapeHtml(optimum.url)}" target="_blank" rel="noopener">${escapeHtml(optimum.source)} ↗</a><div class="muted small">Closed to claims and submissions. This is a literature result, not a Sunstead verification.</div></div></div>`
+      : bk && typeof bk.value === "number"
+        ? `<div class="kv"><div class="kv-label">Best Known Outside Sunstead</div><div class="kv-val">${escapeHtml(bk.value)} · <a href="${escapeHtml(bk.url)}" target="_blank" rel="noopener" style="color:var(--teal);text-decoration:none" title="${escapeHtml(bk.source)}">source ↗</a><div class="muted" style="font-size:12px;margin-top:4px">Full points only for beating this; tying it pays 25.</div></div></div>`
+        : "";
   const upstreamHtml = task.def.upstream_url
     ? `<div class="kv"><div class="kv-label">Upstream Statement</div><div class="kv-val"><a href="${escapeHtml(task.def.upstream_url)}" target="_blank" rel="noopener" style="color:var(--teal);text-decoration:none">${escapeHtml(task.def.upstream_url.replace(/^https:\/\/github\.com\//, ""))} ↗</a></div></div>`
     : "";
@@ -1301,10 +1328,10 @@ function renderInspector(detail) {
       </div>
       ${scoreHtml}
       ${bestKnownHtml}
-      <div class="kv">
+      ${optimum ? "" : `<div class="kv">
         <div class="kv-label">Submit Endpoint${isOpenConj ? " (Prove T)" : ""}</div>
         <div class="kv-val">POST ${escapeHtml(origin)}/api/missions/${escapeHtml(m.id)}/tasks/${escapeHtml(task.def.id)}/submit</div>
-      </div>
+      </div>`}
       ${
         isOpenConj && !task.def.decomp_id
           ? `<div class="kv"><div class="kv-label">Refute Endpoint (Disprove ¬ T)</div><div class="kv-val">POST ${escapeHtml(origin)}/api/missions/${escapeHtml(m.id)}/tasks/${escapeHtml(task.def.id)}/refute (open to all)</div></div>${

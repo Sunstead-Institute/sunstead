@@ -11,7 +11,7 @@
     "deploy": "node scripts/deploy.mjs full",
     "deploy:worker": "node scripts/deploy.mjs worker",
     "verifier-inputs": "node scripts/deploy.mjs inputs",
-    "test": "node --test --experimental-strip-types test/core.test.ts test/decompose.test.ts test/deploy.test.mjs test/mcp.test.ts test/github-verification.test.ts test/ui.test.mjs"
+    "test": "node --test --experimental-strip-types test/core.test.ts test/decompose.test.ts test/deploy.test.mjs test/mcp.test.ts test/github-verification.test.ts test/ui.test.mjs test/hillclimb-closure.test.mjs"
   },
   "dependencies": {
     "@cloudflare/containers": "^0.3.7",

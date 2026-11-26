@@ -22,8 +22,10 @@ outside Sunstead, with a citation and a link. Scoring (`computePoints` in
 | Further from best_known | 0 |
 
 Only a record that strictly beats best_known holds the +150 active-record crown on
-the leaderboard. When best_known is a proven optimum, the task can only pay the tie
-bonus; such tracks are kept as onboarding and verification exercises.
+the leaderboard. When the opposite bound is proved, mark the track `proven_optimal`.
+It leaves the open frontier and rejects claims and submissions (HTTP 409). Its optimum
+and citation remain visible on the mission page. A cited literature result is not a
+Sunstead-verified submission; previous scores, points, and proof links are preserved.
 
 Points already awarded before this rule (26 Nov 2026) were not recomputed.
 
@@ -32,7 +34,11 @@ Points already awarded before this rule (26 Nov 2026) were not recomputed.
 1. Before a task joins the pool, search the literature and public collections for the
    best known value and add an entry to `missions/best-known.json`:
    `value`, `kind`, `source` (authors, title, year, or how to reproduce it), `url`
-   (https), `checked` (YYYY-MM-DD), optional `proven_optimal` and `note`.
+   (https), `checked` (YYYY-MM-DD), and optional `note`. Set `proven_optimal` to an
+   object with `source` (citation and exact bound) and `url` (HTTPS link to the proof)
+   only if the bound rules out beating `value` in the task's actual score model.
+   A witness proves only attainability; a conjectured, weaker, or differently scoped
+   opposite bound does not close a track. Omit the field for open tracks.
 2. `kind` is one of:
    - `literature`: a paper or preprint states the value.
    - `collection`: a maintained public collection holds a circuit or scheme with the
@@ -52,6 +58,37 @@ Points already awarded before this rule (26 Nov 2026) were not recomputed.
 
 The registry lives outside the frozen mission folders on purpose: updating a citation
 does not change a mission's spec hash or its verifier image.
+
+## Derived S-box optimality bounds
+
+For binary AND minimization, take the algebraic normal form (ANF) of each truth-table output
+coordinate, and remove constant and degree-one monomials. The rank over GF(2) of those output
+vectors is a lower bound: inputs and constants are affine, and XOR, XNOR and NOT keep values
+in the affine span of the inputs and the AND-gate outputs. Each AND can add at most one
+generator modulo affine functions. To reproduce the ranks from
+[`LwcSbox/Spec.lean`](../missions/crypto-lwc-sboxes/LwcSbox/Spec.lean), apply the Boolean
+Möbius transform to each bit-sliced truth table, zero entries indexed by masks of popcount
+0 or 1, then row-reduce over GF(2). This gives rank 8 for SKINNY-128, 5 for Ascon, and
+4 each for PRESENT, GIFT and SPONGENT. The constructions cited in the registry attain those bounds.
+
+The [ARIA designers' S2 formula (§2.2)](https://www.math.snu.ac.kr/~jinhong/04Aria.pdf) is affine-equivalent to inversion over GF(2⁸)
+(`x^247 = (x^-1)^8`, with the zero convention and linear Frobenius map). The inverse S-box
+is also affine-equivalent to inversion. Both have degree 7 (also obtained by the Möbius
+transform on [`StdSbox/Spec.lean`](../missions/crypto-std-sboxes/StdSbox/Spec.lean)).
+Each AND layer at most doubles degree, so two layers cannot suffice. The
+[pinned NIST degree-7 AES circuit](https://github.com/usnistgov/Circuits/blob/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox/aes-sbox-a35-ad3-g139-gd27-xx104-38.circ.txt)
+attains AND-depth 3, and the affine conversions add no AND layers.
+
+## C4-free extremal graph sources
+
+The closed C4-free tracks use the exact edge counts in the `H={C4}` table of the
+[Afzaly–McKay data page](https://users.cecs.anu.edu.au/~bdm/data/extremal.html), also indexed in
+[OEIS A006855](https://oeis.org/A006855). For n ≤ 32 the values come from refereed exhaustive
+searches: [Clapham, Flockhart and Sheehan (1989)](https://doi.org/10.1002/jgt.3190130107) for
+n ≤ 21, Yang and Rowlinson, *On extremal graphs without four-cycles*, Utilitas Math. 41 (1992)
+204–210, for 22 ≤ n ≤ 31, and Shao, Xu and Xu, *A new Turán number for quadrilateral*,
+Utilitas Math. 79 (2009) 51–58, for ex(32, C4) = 92. For n ≥ 33 the exact counts come only
+from the Afzaly–McKay data page (papers in preparation).
 
 ## Current values (checked 26 Nov 2026)
 

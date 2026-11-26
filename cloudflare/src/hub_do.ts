@@ -8,6 +8,8 @@ import {
   beatsBestKnown,
   isTaskUnlocked,
   taskDisputeReason,
+  isTaskProvenOptimal,
+  provenOptimalReason,
   validatePatch,
   type Lease,
   type MissionManifest,
@@ -1133,6 +1135,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
             total_tasks: rootTasks.length,
             verified_tasks: rootTasks.filter((t) => t.status === "verified").length,
             refuted_tasks: rootTasks.filter((t) => t.status === "refuted").length,
+            proven_optimal_tasks: rootTasks.filter((t) => isTaskProvenOptimal(m.manifest.mode, t)).length,
             manifest: m.manifest,
             tasks,
           };
@@ -1240,6 +1243,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
           total_tasks: rootTasks.length,
           verified_tasks: verifiedCount,
           refuted_tasks: refutedCount,
+          proven_optimal_tasks: rootTasks.filter((t) => isTaskProvenOptimal(m.manifest.mode, t)).length,
           resolved_tasks: verifiedCount + refutedCount,
           leased_tasks: tasks.filter((t) => t.active_lease !== null).length,
           frontier_task_ids: computeFrontier(m.manifest.mode, tasks),
@@ -2363,6 +2367,10 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         409
       );
     }
+    const optimalMsg = provenOptimalReason(mission.manifest.mode, task);
+    if (optimalMsg) {
+      return jsonResp({ error: `${optimalMsg}; new submissions are not accepted` }, 409);
+    }
     if (!isTaskUnlocked(task, tasksPre)) {
       return jsonResp({ error: `task '${taskId}' is blocked on unverified dependencies` }, 409);
     }
@@ -2576,8 +2584,9 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       });
       return { status: 404, body: { accepted: false, status: "rejected", submission_id: subId, error: reason } };
     }
-    if (!isTaskUnlocked(preVerifyTask, preVerifyTasks)) {
-      const reason = `task '${taskId}' is blocked on unverified dependencies`;
+    const optimalMsg = provenOptimalReason(mission.manifest.mode, preVerifyTask);
+    if (optimalMsg || !isTaskUnlocked(preVerifyTask, preVerifyTasks)) {
+      const reason = optimalMsg ?? `task '${taskId}' is blocked on unverified dependencies`;
       const finishedAt = Math.floor(Date.now() / 1000);
       this.updateSubmissionOutcome({
         id: subId,
