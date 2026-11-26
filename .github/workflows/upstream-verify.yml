@@ -1,0 +1,113 @@
+name: Verify published proofs against upstream
+
+# Runs the public verifier (scripts/sunstead_verify.py, served as /verify.py) on
+# every ledger proof that closes a real upstream `sorry`: clone the upstream repo
+# at its pinned commit, splice the proof in, `lake build` it with the upstream
+# toolchain, check the statement against a pristine copy and the axioms.
+# No secrets: the job only reads the public ledger and public upstream repos.
+
+on:
+  workflow_dispatch:
+    inputs:
+      proof_id:
+        description: "Only this proof id (64 hex); empty = every upstream-linked proof"
+        required: false
+        default: ""
+  schedule:
+    - cron: "17 4 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upstream-verify
+  cancel-in-progress: false
+
+jobs:
+  list:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ids: ${{ steps.ids.outputs.ids }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - id: ids
+        env:
+          ONLY: ${{ inputs.proof_id }}
+        run: python3 scripts/upstream-verify-list.py >> "$GITHUB_OUTPUT"
+
+  verify:
+    needs: list
+    if: ${{ needs.list.outputs.ids != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        proof_id: ${{ fromJSON(needs.list.outputs.ids) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Make disk headroom (Mathlib cache)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+      - name: Install elan (toolchains come from each upstream's lean-toolchain)
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+            | sh -s -- -y --no-modify-path --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: verify.py ${{ matrix.proof_id }}
+        id: run
+        run: |
+          set +e
+          python3 scripts/sunstead_verify.py "${{ matrix.proof_id }}" --json > result.json 2> stderr.txt
+          code=$?
+          set -e
+          tail -n 60 stderr.txt
+          python3 - "$code" "${{ matrix.proof_id }}" <<'PY'
+          import json, sys
+          code, pid = int(sys.argv[1]), sys.argv[2]
+          try:
+              result = json.load(open("result.json"))
+          except Exception:
+              result = {}
+          err = open("stderr.txt", encoding="utf-8", errors="replace").read().strip().splitlines()
+          result.update({"proof_id": pid, "exit_code": code, "stderr_tail": err[-15:]})
+          json.dump(result, open("result.json", "w"), indent=2)
+          PY
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: upstream-verify-${{ matrix.proof_id }}
+          path: result.json
+      - name: Fail on a real verification failure (exit 1); 3 = not upstream-checkable
+        run: |
+          case "${{ steps.run.outputs.code }}" in
+            0|3) exit 0 ;;
+            *) echo "::error::verify.py exited ${{ steps.run.outputs.code }} for ${{ matrix.proof_id }}"; exit 1 ;;
+          esac
+
+  report:
+    needs: [list, verify]
+    if: ${{ always() && needs.list.outputs.ids != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        # With no artifacts at all the summary still lists every selected id as missing.
+        continue-on-error: true
+        with:
+          pattern: upstream-verify-*
+          path: results
+      - name: Summary
+        env:
+          EXPECTED_IDS: ${{ needs.list.outputs.ids }}
+        run: python3 scripts/upstream-verify-list.py --report results >> "$GITHUB_STEP_SUMMARY"

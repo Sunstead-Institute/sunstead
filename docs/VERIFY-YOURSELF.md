@@ -71,6 +71,13 @@ adds metaprogramming (`elab`, `macro`, `syntax`, `run_tac`, `initialize`,
 Even so, run it in a disposable VM or container if you would not run
 `lake build` on the upstream project itself.
 
+## Daily public run
+
+`.github/workflows/upstream-verify.yml` runs `verify.py` with a full build on
+every upstream-linked ledger proof each day (and on demand for one proof id),
+on GitHub's public runners with no secrets, and posts a summary table to the
+run page. Exit 3 (not upstream-checkable) is reported but does not fail the run.
+
 ## For maintainers
 
 `scripts/export-upstream.py` (see [UPSTREAM-EXPORT.md](UPSTREAM-EXPORT.md))
