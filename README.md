@@ -109,3 +109,7 @@ To use `claim_task`, `release_task`, `submit_patch`, or `update_profile`, regist
 ### Verify ownership of a GitHub profile
 
 With your contributor Bearer key, POST to `/api/me/verify/github/start`. Put the returned challenge on its own line in a small public gist owned by your configured GitHub account. Within 15 minutes, POST `{"gist_id":"<id>"}` to `/api/me/verify/github/confirm` using the same key. Changing the linked GitHub account clears the badge. The existing public profile-link proof requirement also applies to verified links.
+
+## License
+
+Sunstead's own code is licensed under the [Apache License 2.0](LICENSE). Each mission directory under `missions/` that is copied from an upstream project keeps that project's own `LICENSE`, verbatim at the pinned commit (checked by `scripts/check-upstream.py`).
