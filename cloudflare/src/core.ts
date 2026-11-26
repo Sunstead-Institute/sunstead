@@ -1270,13 +1270,13 @@ export function renderMbox(patches: AcceptedPatch[]): string {
   return out.join("");
 }
 
-/** One accepted patch for a task, joined with its contributor and submission rows. */
-/** Keep historical awards intact and label missing proof-to-submission joins. */
+/** Original award, net correction and effective award for a public record (null award when a proof has no submission row). */
 export function publicPointFields(original_points: number | null = null, delta?: number | null) {
   const points_delta = delta ?? 0;
   return { original_points, points_delta, effective_points: original_points === null ? null : original_points + points_delta };
 }
 
+/** One accepted patch for a task, joined with its contributor and submission rows. */
 export type AcceptedProofRow = {
   original_points?: number | null;
   points_delta?: number | null;

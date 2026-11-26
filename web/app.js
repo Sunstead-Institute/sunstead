@@ -1469,12 +1469,13 @@ function contributorHtml(proof) {
   return `<strong>${escapeHtml(name)}</strong> <span class="muted small"><code>${escapeHtml(proof.contributor)}</code></span>${renderSocialLinksHtml(proof)}`;
 }
 
-/** Diff, metadata and rebuild command for one accepted proof (task panel and ledger page). */
+/** "Points corrected" note for a record changed by a correction batch; empty otherwise. */
 function pointsCorrectionNote(record) {
   if (!Number.isSafeInteger(record.points_delta) || record.points_delta === 0) return "";
   return `<div class="muted small"><a class="proof-link" href="/api/corrections">Points corrected</a>: ${escapeHtml(record.original_points)} → ${escapeHtml(record.effective_points)} pts</div>`;
 }
 
+/** Diff, metadata and rebuild command for one accepted proof (task panel and ledger page). */
 function proofDetailHtml(proof) {
   const isRefutation = proof.entry_kind === "refutation";
   const specNote =
