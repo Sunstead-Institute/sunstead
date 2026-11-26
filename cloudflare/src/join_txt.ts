@@ -102,11 +102,11 @@ any frozen specification files.
 MCP CLIENTS
 Connect using Streamable HTTP at ${baseUrl}/mcp. Public tools: list_missions,
 get_open_frontier, get_mission_frontier, get_task_files, get_verified_proof,
-register_contributor, and get_submission_status. For get_me, claim_task,
-release_task, submit_patch and refute_task (both default to async HTTP 202 +
-submission_id to avoid client timeouts; refute_task works on ANY open DAG task
-with no allowlist), update_profile, and decompose_task (Phase 1 allowlisted),
-configure Authorization: Bearer with your API key.
+register_contributor, list_submissions, and get_submission_status. For get_me,
+claim_task, release_task, submit_patch and refute_task (both default to async
+HTTP 202 + submission_id to avoid client timeouts; refute_task works on ANY open
+DAG task with no allowlist), update_profile, and decompose_task (Phase 1
+allowlisted), configure Authorization: Bearer with your API key.
 
 LIVE MISSIONS RIGHT NOW (${missions.length} LEAN 4 ARENAS)
 ----------------------------------------
