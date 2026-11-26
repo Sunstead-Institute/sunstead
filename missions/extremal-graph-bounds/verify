@@ -1,0 +1,294 @@
+#!/usr/bin/env python3
+"""Verify explicit Ramsey and C4-free extremal graph witnesses in Lean 4."""
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify
+
+LIB_ROOT = "ExtremalGraphs"
+FROZEN_FILES = ["ExtremalGraphs/Spec.lean", "UPSTREAM.json", "lakefile.toml", "lean-toolchain"]
+
+TASKS = {
+    "ramsey_3_8": {
+        "module": "ExtremalGraphs.BoundRamsey3_8",
+        "theorem": "ExtremalGraphs.bound_ramsey_3_8",
+        "score_const": "ExtremalGraphs.score_ramsey_3_8",
+        "statement": "def ramsey_3_8 (N : Nat) : Prop := ExtremalGraphs.ValidRamseyGraph 3 8 N",
+        "label": "{score} vertices (R(3,8) >= {score}+1)"
+    },
+    "ramsey_3_9": {
+        "module": "ExtremalGraphs.BoundRamsey3_9",
+        "theorem": "ExtremalGraphs.bound_ramsey_3_9",
+        "score_const": "ExtremalGraphs.score_ramsey_3_9",
+        "statement": "def ramsey_3_9 (N : Nat) : Prop := ExtremalGraphs.ValidRamseyGraph 3 9 N",
+        "label": "{score} vertices (R(3,9) >= {score}+1)"
+    },
+    "ramsey_3_10": {
+        "module": "ExtremalGraphs.BoundRamsey3_10",
+        "theorem": "ExtremalGraphs.bound_ramsey_3_10",
+        "score_const": "ExtremalGraphs.score_ramsey_3_10",
+        "statement": "def ramsey_3_10 (N : Nat) : Prop := ExtremalGraphs.ValidRamseyGraph 3 10 N",
+        "label": "{score} vertices (R(3,10) >= {score}+1)"
+    },
+    "ramsey_3_11": {
+        "module": "ExtremalGraphs.BoundRamsey3_11",
+        "theorem": "ExtremalGraphs.bound_ramsey_3_11",
+        "score_const": "ExtremalGraphs.score_ramsey_3_11",
+        "statement": "def ramsey_3_11 (N : Nat) : Prop := ExtremalGraphs.ValidRamseyGraph 3 11 N",
+        "label": "{score} vertices (R(3,11) >= {score}+1)"
+    },
+    "ramsey_4_5": {
+        "module": "ExtremalGraphs.BoundRamsey4_5",
+        "theorem": "ExtremalGraphs.bound_ramsey_4_5",
+        "score_const": "ExtremalGraphs.score_ramsey_4_5",
+        "statement": "def ramsey_4_5 (N : Nat) : Prop := ExtremalGraphs.ValidRamseyGraph 4 5 N",
+        "label": "{score} vertices (R(4,5) >= {score}+1)"
+    },
+    "ramsey_4_6": {
+        "module": "ExtremalGraphs.BoundRamsey4_6",
+        "theorem": "ExtremalGraphs.bound_ramsey_4_6",
+        "score_const": "ExtremalGraphs.score_ramsey_4_6",
+        "statement": "def ramsey_4_6 (N : Nat) : Prop := ExtremalGraphs.ValidRamseyGraph 4 6 N",
+        "label": "{score} vertices (R(4,6) >= {score}+1)"
+    },
+    "ramsey_4_7": {
+        "module": "ExtremalGraphs.BoundRamsey4_7",
+        "theorem": "ExtremalGraphs.bound_ramsey_4_7",
+        "score_const": "ExtremalGraphs.score_ramsey_4_7",
+        "statement": "def ramsey_4_7 (N : Nat) : Prop := ExtremalGraphs.ValidRamseyGraph 4 7 N",
+        "label": "{score} vertices (R(4,7) >= {score}+1)"
+    },
+    "ramsey_5_5": {
+        "module": "ExtremalGraphs.BoundRamsey5_5",
+        "theorem": "ExtremalGraphs.bound_ramsey_5_5",
+        "score_const": "ExtremalGraphs.score_ramsey_5_5",
+        "statement": "def ramsey_5_5 (N : Nat) : Prop := ExtremalGraphs.ValidRamseyGraph 5 5 N",
+        "label": "{score} vertices (R(5,5) >= {score}+1)"
+    },
+    "c4free_n25": {
+        "module": "ExtremalGraphs.BoundC4Free25",
+        "theorem": "ExtremalGraphs.bound_c4free_n25",
+        "score_const": "ExtremalGraphs.score_c4free_n25",
+        "statement": "def c4free_n25 (e : Nat) : Prop := ExtremalGraphs.ValidC4FreeGraph 25 e",
+        "label": "{score} edges (ex(25, C4))"
+    },
+    "c4free_n27": {
+        "module": "ExtremalGraphs.BoundC4Free27",
+        "theorem": "ExtremalGraphs.bound_c4free_n27",
+        "score_const": "ExtremalGraphs.score_c4free_n27",
+        "statement": "def c4free_n27 (e : Nat) : Prop := ExtremalGraphs.ValidC4FreeGraph 27 e",
+        "label": "{score} edges (ex(27, C4))"
+    },
+    "c4free_n29": {
+        "module": "ExtremalGraphs.BoundC4Free29",
+        "theorem": "ExtremalGraphs.bound_c4free_n29",
+        "score_const": "ExtremalGraphs.score_c4free_n29",
+        "statement": "def c4free_n29 (e : Nat) : Prop := ExtremalGraphs.ValidC4FreeGraph 29 e",
+        "label": "{score} edges (ex(29, C4))"
+    },
+    "c4free_n32": {
+        "module": "ExtremalGraphs.BoundC4Free32",
+        "theorem": "ExtremalGraphs.bound_c4free_n32",
+        "score_const": "ExtremalGraphs.score_c4free_n32",
+        "statement": "def c4free_n32 (e : Nat) : Prop := ExtremalGraphs.ValidC4FreeGraph 32 e",
+        "label": "{score} edges (ex(32, C4))"
+    },
+    "c4free_n34": {
+        "module": "ExtremalGraphs.BoundC4Free34",
+        "theorem": "ExtremalGraphs.bound_c4free_n34",
+        "score_const": "ExtremalGraphs.score_c4free_n34",
+        "statement": "def c4free_n34 (e : Nat) : Prop := ExtremalGraphs.ValidC4FreeGraph 34 e",
+        "label": "{score} edges (ex(34, C4))"
+    },
+    "c4free_n36": {
+        "module": "ExtremalGraphs.BoundC4Free36",
+        "theorem": "ExtremalGraphs.bound_c4free_n36",
+        "score_const": "ExtremalGraphs.score_c4free_n36",
+        "statement": "def c4free_n36 (e : Nat) : Prop := ExtremalGraphs.ValidC4FreeGraph 36 e",
+        "label": "{score} edges (ex(36, C4))"
+    },
+    "c4free_n38": {
+        "module": "ExtremalGraphs.BoundC4Free38",
+        "theorem": "ExtremalGraphs.bound_c4free_n38",
+        "score_const": "ExtremalGraphs.score_c4free_n38",
+        "statement": "def c4free_n38 (e : Nat) : Prop := ExtremalGraphs.ValidC4FreeGraph 38 e",
+        "label": "{score} edges (ex(38, C4))"
+    },
+    "c4free_n40": {
+        "module": "ExtremalGraphs.BoundC4Free40",
+        "theorem": "ExtremalGraphs.bound_c4free_n40",
+        "score_const": "ExtremalGraphs.score_c4free_n40",
+        "statement": "def c4free_n40 (e : Nat) : Prop := ExtremalGraphs.ValidC4FreeGraph 40 e",
+        "label": "{score} edges (ex(40, C4))"
+    }
+}
+
+GRAPH_TARGETS = {
+    "ramsey_3_8": [
+        "ramsey",
+        "ExtremalGraphs/Ramsey3_8.lean",
+        "ExtremalGraphs.score_ramsey_3_8",
+        "ExtremalGraphs.rows_ramsey_3_8",
+        0
+    ],
+    "ramsey_3_9": [
+        "ramsey",
+        "ExtremalGraphs/Ramsey3_9.lean",
+        "ExtremalGraphs.score_ramsey_3_9",
+        "ExtremalGraphs.rows_ramsey_3_9",
+        0
+    ],
+    "ramsey_3_10": [
+        "ramsey",
+        "ExtremalGraphs/Ramsey3_10.lean",
+        "ExtremalGraphs.score_ramsey_3_10",
+        "ExtremalGraphs.rows_ramsey_3_10",
+        0
+    ],
+    "ramsey_3_11": [
+        "ramsey",
+        "ExtremalGraphs/Ramsey3_11.lean",
+        "ExtremalGraphs.score_ramsey_3_11",
+        "ExtremalGraphs.rows_ramsey_3_11",
+        0
+    ],
+    "ramsey_4_5": [
+        "ramsey",
+        "ExtremalGraphs/Ramsey4_5.lean",
+        "ExtremalGraphs.score_ramsey_4_5",
+        "ExtremalGraphs.rows_ramsey_4_5",
+        0
+    ],
+    "ramsey_4_6": [
+        "ramsey",
+        "ExtremalGraphs/Ramsey4_6.lean",
+        "ExtremalGraphs.score_ramsey_4_6",
+        "ExtremalGraphs.rows_ramsey_4_6",
+        0
+    ],
+    "ramsey_4_7": [
+        "ramsey",
+        "ExtremalGraphs/Ramsey4_7.lean",
+        "ExtremalGraphs.score_ramsey_4_7",
+        "ExtremalGraphs.rows_ramsey_4_7",
+        0
+    ],
+    "ramsey_5_5": [
+        "ramsey",
+        "ExtremalGraphs/Ramsey5_5.lean",
+        "ExtremalGraphs.score_ramsey_5_5",
+        "ExtremalGraphs.rows_ramsey_5_5",
+        0
+    ],
+    "c4free_n25": [
+        "c4free",
+        "ExtremalGraphs/C4Free25.lean",
+        "ExtremalGraphs.score_c4free_n25",
+        "ExtremalGraphs.rows_c4free_n25",
+        25
+    ],
+    "c4free_n27": [
+        "c4free",
+        "ExtremalGraphs/C4Free27.lean",
+        "ExtremalGraphs.score_c4free_n27",
+        "ExtremalGraphs.rows_c4free_n27",
+        27
+    ],
+    "c4free_n29": [
+        "c4free",
+        "ExtremalGraphs/C4Free29.lean",
+        "ExtremalGraphs.score_c4free_n29",
+        "ExtremalGraphs.rows_c4free_n29",
+        29
+    ],
+    "c4free_n32": [
+        "c4free",
+        "ExtremalGraphs/C4Free32.lean",
+        "ExtremalGraphs.score_c4free_n32",
+        "ExtremalGraphs.rows_c4free_n32",
+        32
+    ],
+    "c4free_n34": [
+        "c4free",
+        "ExtremalGraphs/C4Free34.lean",
+        "ExtremalGraphs.score_c4free_n34",
+        "ExtremalGraphs.rows_c4free_n34",
+        34
+    ],
+    "c4free_n36": [
+        "c4free",
+        "ExtremalGraphs/C4Free36.lean",
+        "ExtremalGraphs.score_c4free_n36",
+        "ExtremalGraphs.rows_c4free_n36",
+        36
+    ],
+    "c4free_n38": [
+        "c4free",
+        "ExtremalGraphs/C4Free38.lean",
+        "ExtremalGraphs.score_c4free_n38",
+        "ExtremalGraphs.rows_c4free_n38",
+        38
+    ],
+    "c4free_n40": [
+        "c4free",
+        "ExtremalGraphs/C4Free40.lean",
+        "ExtremalGraphs.score_c4free_n40",
+        "ExtremalGraphs.rows_c4free_n40",
+        40
+    ]
+}
+
+MAX_BYTES = 65536
+MAX_VERTICES = 128
+
+
+def check_graph_file(kind: str, path: Path, score_name: str, rows_name: str, fixed_n: int) -> None:
+    if not path.is_file():
+        emit(False, f"Missing graph file: {path.name}", stage="lint")
+    raw = path.read_bytes()
+    if len(raw) > MAX_BYTES:
+        emit(False, f"Graph file exceeds {MAX_BYTES} bytes", stage="lint")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        emit(False, "Graph file must be valid UTF-8", stage="lint")
+
+    nat = r"(?:0|[1-9][0-9]{0,39}|0x[0-9a-fA-F]{1,32})"
+    header_re = (
+        rf"\s*def\s+{re.escape(score_name)}\s*:\s*Nat\s*:=\s*({nat})\s*\n"
+        rf"\s*def\s+{re.escape(rows_name)}\s*:\s*List\s+Nat\s*:=\s*\[\s*(.*?)\s*\]\s*"
+    )
+    match = re.fullmatch(header_re, text, re.DOTALL)
+    if not match:
+        emit(False, f"Expected only literal definitions for {score_name} and {rows_name}", stage="lint")
+    score_val = int(match.group(1), 0)
+    body = match.group(2)
+    if not body or not re.fullmatch(rf"{nat}(?:\s*,\s*{nat}){{0,{MAX_VERTICES - 1}}}", body):
+        emit(False, f"Expected 1 to {MAX_VERTICES} literal adjacency bitmask naturals", stage="lint")
+    rows = [int(tok, 0) for tok in re.findall(nat, body)]
+    n = score_val if kind == "ramsey" else fixed_n
+    if len(rows) != n:
+        emit(False, f"Row count {len(rows)} does not match vertex count {n}", stage="lint")
+    limit = 1 << n
+    for r in rows:
+        if r >= limit:
+            emit(False, f"Adjacency row exceeds n={n} vertex bit width", stage="lint")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>", stage="lint")
+    task_id = sys.argv[1]
+    if task_id in GRAPH_TARGETS:
+        kind, rel_path, score_name, rows_name, fixed_n = GRAPH_TARGETS[task_id]
+        check_graph_file(kind, Path(__file__).resolve().parent / rel_path, score_name, rows_name, fixed_n)
+    lean_verify(
+        task_id,
+        lib_root=LIB_ROOT,
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        uses_mathlib=False,
+        timeout_sec=90,
+    )

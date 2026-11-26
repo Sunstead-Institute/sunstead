@@ -1,0 +1,346 @@
+{
+  "id": "matrix-rank-f2-extended",
+  "title": "Extended Matrix Multiplication Tensor Rank over F\u2082 (26 Open Shapes, up to 6\u00d76\u00d76)",
+  "description": "Twenty-six formally verified open matrix multiplication tensor-rank hill-climb challenges over F\u2082 spanning \u27e82,4,5\u27e9 through \u27e86,6,6\u27e9 (zero overlap with `matrix-rank444-f2` or `matrix-rank-alphatensor-f2`). Implemented in pure Lean 4.36.0 (zero Mathlib) with a formalized bilinear matrix-multiplication soundness theorem and bit-packed Brent-equation `decide +kernel` verifier (<2s per track), anchored to verified MIT-licensed ternary/F\u2082 baselines from `dronperminov/FastMatrixMultiplication@f70078cd`.",
+  "tier": 2,
+  "mode": "hillclimb",
+  "repo": "https://github.com/dronperminov/FastMatrixMultiplication",
+  "upstream": {
+    "repo": "dronperminov/FastMatrixMultiplication",
+    "commit": "f70078cd9d1674cbc9c27e71011d4d6dff771d40",
+    "license": "MIT"
+  },
+  "score_direction": "minimize",
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 90,
+    "memory_mb": 2048
+  },
+  "frozen_paths": [
+    "RankF2Ext/Spec.lean",
+    "RankF2Ext/Bound2x4x5.lean",
+    "RankF2Ext/Bound2x5x5.lean",
+    "RankF2Ext/Bound2x5x6.lean",
+    "RankF2Ext/Bound3x3x5.lean",
+    "RankF2Ext/Bound3x3x6.lean",
+    "RankF2Ext/Bound3x3x7.lean",
+    "RankF2Ext/Bound3x3x8.lean",
+    "RankF2Ext/Bound3x4x6.lean",
+    "RankF2Ext/Bound3x4x7.lean",
+    "RankF2Ext/Bound3x4x8.lean",
+    "RankF2Ext/Bound3x5x6.lean",
+    "RankF2Ext/Bound3x5x7.lean",
+    "RankF2Ext/Bound3x5x8.lean",
+    "RankF2Ext/Bound3x6x6.lean",
+    "RankF2Ext/Bound3x6x7.lean",
+    "RankF2Ext/Bound4x4x6.lean",
+    "RankF2Ext/Bound4x4x7.lean",
+    "RankF2Ext/Bound4x4x8.lean",
+    "RankF2Ext/Bound4x5x5.lean",
+    "RankF2Ext/Bound4x5x6.lean",
+    "RankF2Ext/Bound4x5x7.lean",
+    "RankF2Ext/Bound4x6x6.lean",
+    "RankF2Ext/Bound5x5x5.lean",
+    "RankF2Ext/Bound5x5x6.lean",
+    "RankF2Ext/Bound5x6x6.lean",
+    "RankF2Ext/Bound6x6x6.lean",
+    "LICENSE",
+    "README.md",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "tasks": [
+    {
+      "id": "rank_2_4_5",
+      "title": "Reduce \u27e82,4,5\u27e9 rank over F\u2082 below 34",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e82,4,5\u27e9 matrix multiplication (ZT/F\u2082 seed 34 (Q literature: 32); all 1,600 Brent equations kernel-verified in pure Lean 4.36.0 with zero Mathlib). Submit bitmask triples in `RankF2Ext/Cert2x4x5.lean` (`RankF2Ext.score_2_4_5` and `RankF2Ext.cert_2_4_5`).",
+      "baseline_score": 34,
+      "target_files": [
+        "RankF2Ext/Cert2x4x5.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/schemes/results/serendipitous_base/2x4x5_m34_991dee37f3339ed663f18dcec69d6c986a4461d2_ZT.json"
+    },
+    {
+      "id": "rank_2_5_5",
+      "title": "Reduce \u27e82,5,5\u27e9 rank over F\u2082 below 40",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e82,5,5\u27e9 matrix multiplication (ZT/F\u2082 frontier seed 40; all 2,500 Brent equations kernel-verified in pure Lean 4.36.0 with zero Mathlib). Submit bitmask triples in `RankF2Ext/Cert2x5x5.lean` (`RankF2Ext.score_2_5_5` and `RankF2Ext.cert_2_5_5`).",
+      "baseline_score": 40,
+      "target_files": [
+        "RankF2Ext/Cert2x5x5.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/schemes/results/ZT/2x5x5_m40_ZT.json"
+    },
+    {
+      "id": "rank_2_5_6",
+      "title": "Reduce \u27e82,5,6\u27e9 rank over F\u2082 below 47",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e82,5,6\u27e9 matrix multiplication (ZT/F\u2082 frontier seed 47; all 3,600 Brent equations kernel-verified in pure Lean 4.36.0 with zero Mathlib). Submit bitmask triples in `RankF2Ext/Cert2x5x6.lean` (`RankF2Ext.score_2_5_6` and `RankF2Ext.cert_2_5_6`).",
+      "baseline_score": 47,
+      "target_files": [
+        "RankF2Ext/Cert2x5x6.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/schemes/known/alpha_evolve/2x5x6_m47_mod0.json"
+    },
+    {
+      "id": "rank_3_3_5",
+      "title": "Reduce \u27e83,3,5\u27e9 rank over F\u2082 below 36",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e83,3,5\u27e9 matrix multiplication (ZT/F\u2082 frontier seed 36; all 2,025 Brent equations kernel-verified in pure Lean 4.36.0 with zero Mathlib). Submit bitmask triples in `RankF2Ext/Cert3x3x5.lean` (`RankF2Ext.score_3_3_5` and `RankF2Ext.cert_3_3_5`).",
+      "baseline_score": 36,
+      "target_files": [
+        "RankF2Ext/Cert3x3x5.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/schemes/results/naive_addition_reduced_ZT/3x3x5_m36_c178_ZT.json"
+    },
+    {
+      "id": "rank_3_3_6",
+      "title": "Reduce \u27e83,3,6\u27e9 rank over F\u2082 below 42",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e83,3,6\u27e9 matrix multiplication (ZT/F\u2082 seed 42 (Q literature: 40); all 2,916 Brent equations kernel-verified in pure Lean 4.36.0 with zero Mathlib). Submit bitmask triples in `RankF2Ext/Cert3x3x6.lean` (`RankF2Ext.score_3_3_6` and `RankF2Ext.cert_3_3_6`).",
+      "baseline_score": 42,
+      "target_files": [
+        "RankF2Ext/Cert3x3x6.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/schemes/results/ZT/3x3x6_m42_ZT.json"
+    },
+    {
+      "id": "rank_3_3_7",
+      "title": "Reduce \u27e83,3,7\u27e9 rank over F\u2082 below 49",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e83,3,7\u27e9 matrix multiplication (ZT/F\u2082 frontier seed 49; all 3,969 Brent equations kernel-verified in pure Lean 4.36.0 with zero Mathlib). Submit bitmask triples in `RankF2Ext/Cert3x3x7.lean` (`RankF2Ext.score_3_3_7` and `RankF2Ext.cert_3_3_7`).",
+      "baseline_score": 49,
+      "target_files": [
+        "RankF2Ext/Cert3x3x7.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/schemes/results/ZT/3x3x7_m49_ZT.json"
+    },
+    {
+      "id": "rank_3_3_8",
+      "title": "Reduce \u27e83,3,8\u27e9 rank over F\u2082 below 56",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e83,3,8\u27e9 matrix multiplication (ZT/F\u2082 seed 56 (Q literature: 55); all 5,184 Brent equations kernel-verified in pure Lean 4.36.0 with zero Mathlib). Submit bitmask triples in `RankF2Ext/Cert3x3x8.lean` (`RankF2Ext.score_3_3_8` and `RankF2Ext.cert_3_3_8`).",
+      "baseline_score": 56,
+      "target_files": [
+        "RankF2Ext/Cert3x3x8.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/schemes/results/serendipitous_base/3x3x8_m56_895584b4d11331464d48d20debde403a3c95302f_ZT.json"
+    },
+    {
+      "id": "rank_3_4_6",
+      "title": "Reduce \u27e83,4,6\u27e9 rank over F\u2082 below 54",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e83,4,6\u27e9 matrix multiplication (ZT/F\u2082 frontier seed 54; all 5,184 Brent equations kernel-verified in pure Lean 4.36.0 with zero Mathlib). Submit bitmask triples in `RankF2Ext/Cert3x4x6.lean` (`RankF2Ext.score_3_4_6` and `RankF2Ext.cert_3_4_6`).",
+      "baseline_score": 54,
+      "target_files": [
+        "RankF2Ext/Cert3x4x6.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/schemes/results/ZT/3x4x6_m54_ZT.json"
+    },
+    {
+      "id": "rank_3_4_7",
+      "title": "Reduce \u27e83,4,7\u27e9 rank over F\u2082 below 64",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e83,4,7\u27e9 matrix multiplication (ZT/F\u2082 seed 64 (Q literature: 63); all 7,056 Brent equations kernel-verified in pure Lean 4.36.0 with zero Mathlib). Submit bitmask triples in `RankF2Ext/Cert3x4x7.lean` (`RankF2Ext.score_3_4_7` and `RankF2Ext.cert_3_4_7`).",
+      "baseline_score": 64,
+      "target_files": [
+        "RankF2Ext/Cert3x4x7.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/schemes/results/ZT/3x4x7_m64_ZT.json"
+    },
+    {
+      "id": "rank_3_4_8",
+      "title": "Reduce \u27e83,4,8\u27e9 rank over F\u2082 below 73",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e83,4,8\u27e9 matrix multiplication (ZT/F\u2082 frontier seed 73; all 9,216 Brent equations kernel-verified in pure Lean 4.36.0 with zero Mathlib). Submit bitmask triples in `RankF2Ext/Cert3x4x8.lean` (`RankF2Ext.score_3_4_8` and `RankF2Ext.cert_3_4_8`).",
+      "baseline_score": 73,
+      "target_files": [
+        "RankF2Ext/Cert3x4x8.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/schemes/results/ZT/3x4x8_m73_ZT.json"
+    },
+    {
+      "id": "rank_3_5_6",
+      "title": "Reduce \u27e83,5,6\u27e9 rank over F\u2082 below 68",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e83,5,6\u27e9 matrix multiplication (ZT/F\u2082 frontier seed 68; all 8,100 Brent equations kernel-verified in pure Lean 4.36.0 with zero Mathlib). Submit bitmask triples in `RankF2Ext/Cert3x5x6.lean` (`RankF2Ext.score_3_5_6` and `RankF2Ext.cert_3_5_6`).",
+      "baseline_score": 68,
+      "target_files": [
+        "RankF2Ext/Cert3x5x6.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/schemes/results/ZT/3x5x6_m68_ZT.json"
+    },
+    {
+      "id": "rank_3_5_7",
+      "title": "Reduce \u27e83,5,7\u27e9 rank over F\u2082 below 79",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e83,5,7\u27e9 matrix multiplication (ZT/F\u2082 frontier seed 79; all 11,025 Brent equations kernel-verified in pure Lean 4.36.0 with zero Mathlib). Submit bitmask triples in `RankF2Ext/Cert3x5x7.lean` (`RankF2Ext.score_3_5_7` and `RankF2Ext.cert_3_5_7`).",
+      "baseline_score": 79,
+      "target_files": [
+        "RankF2Ext/Cert3x5x7.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/schemes/results/ZT/3x5x7_m79_ZT.json"
+    },
+    {
+      "id": "rank_3_5_8",
+      "title": "Reduce \u27e83,5,8\u27e9 rank over F\u2082 below 90",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e83,5,8\u27e9 matrix multiplication (ZT/F\u2082 frontier seed 90; all 14,400 Brent equations kernel-verified in pure Lean 4.36.0 with zero Mathlib). Submit bitmask triples in `RankF2Ext/Cert3x5x8.lean` (`RankF2Ext.score_3_5_8` and `RankF2Ext.cert_3_5_8`).",
+      "baseline_score": 90,
+      "target_files": [
+        "RankF2Ext/Cert3x5x8.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/schemes/results/ZT/3x5x8_m90_ZT.json"
+    },
+    {
+      "id": "rank_3_6_6",
+      "title": "Reduce \u27e83,6,6\u27e9 rank over F\u2082 below 82",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e83,6,6\u27e9 matrix multiplication (ZT/F\u2082 seed 82 (Q literature: 80); all 11,664 Brent equations kernel-verified in pure Lean 4.36.0 with zero Mathlib). Submit bitmask triples in `RankF2Ext/Cert3x6x6.lean` (`RankF2Ext.score_3_6_6` and `RankF2Ext.cert_3_6_6`).",
+      "baseline_score": 82,
+      "target_files": [
+        "RankF2Ext/Cert3x6x6.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/schemes/results/ZT/3x6x6_m82_ZT.json"
+    },
+    {
+      "id": "rank_3_6_7",
+      "title": "Reduce \u27e83,6,7\u27e9 rank over F\u2082 below 96",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e83,6,7\u27e9 matrix multiplication (ZT/F\u2082 seed 96 (Q literature: 94); all 15,876 Brent equations kernel-verified in pure Lean 4.36.0 with zero Mathlib). Submit bitmask triples in `RankF2Ext/Cert3x6x7.lean` (`RankF2Ext.score_3_6_7` and `RankF2Ext.cert_3_6_7`).",
+      "baseline_score": 96,
+      "target_files": [
+        "RankF2Ext/Cert3x6x7.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/schemes/results/ZT/3x6x7_m96_ZT.json"
+    },
+    {
+      "id": "rank_4_4_6",
+      "title": "Reduce \u27e84,4,6\u27e9 rank over F\u2082 below 73",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e84,4,6\u27e9 matrix multiplication (ZT/F\u2082 frontier seed 73; all 9,216 Brent equations kernel-verified in pure Lean 4.36.0 with zero Mathlib). Submit bitmask triples in `RankF2Ext/Cert4x4x6.lean` (`RankF2Ext.score_4_4_6` and `RankF2Ext.cert_4_4_6`).",
+      "baseline_score": 73,
+      "target_files": [
+        "RankF2Ext/Cert4x4x6.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/schemes/results/naive_addition_reduced_ZT/4x4x6_m73_c534_ZT.json"
+    },
+    {
+      "id": "rank_4_4_7",
+      "title": "Reduce \u27e84,4,7\u27e9 rank over F\u2082 below 85",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e84,4,7\u27e9 matrix multiplication (ZT/F\u2082 frontier seed 85; all 12,544 Brent equations kernel-verified in pure Lean 4.36.0 with zero Mathlib). Submit bitmask triples in `RankF2Ext/Cert4x4x7.lean` (`RankF2Ext.score_4_4_7` and `RankF2Ext.cert_4_4_7`).",
+      "baseline_score": 85,
+      "target_files": [
+        "RankF2Ext/Cert4x4x7.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/schemes/known/alpha_evolve/4x4x7_m85_mod0.json"
+    },
+    {
+      "id": "rank_4_4_8",
+      "title": "Reduce \u27e84,4,8\u27e9 rank over F\u2082 below 96",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e84,4,8\u27e9 matrix multiplication (ZT/F\u2082 seed 96 (Q literature: 95); all 16,384 Brent equations kernel-verified in pure Lean 4.36.0 with zero Mathlib). Submit bitmask triples in `RankF2Ext/Cert4x4x8.lean` (`RankF2Ext.score_4_4_8` and `RankF2Ext.cert_4_4_8`).",
+      "baseline_score": 96,
+      "target_files": [
+        "RankF2Ext/Cert4x4x8.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/schemes/results/naive_addition_reduced_ZT/4x4x8_m96_c962_ZT.json"
+    },
+    {
+      "id": "rank_4_5_5",
+      "title": "Reduce \u27e84,5,5\u27e9 rank over F\u2082 below 76",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e84,5,5\u27e9 matrix multiplication (ZT/F\u2082 frontier seed 76; all 10,000 Brent equations kernel-verified in pure Lean 4.36.0 with zero Mathlib). Submit bitmask triples in `RankF2Ext/Cert4x5x5.lean` (`RankF2Ext.score_4_5_5` and `RankF2Ext.cert_4_5_5`).",
+      "baseline_score": 76,
+      "target_files": [
+        "RankF2Ext/Cert4x5x5.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/schemes/results/naive_addition_reduced_ZT/4x5x5_m76_c528_ZT.json"
+    },
+    {
+      "id": "rank_4_5_6",
+      "title": "Reduce \u27e84,5,6\u27e9 rank over F\u2082 below 90",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e84,5,6\u27e9 matrix multiplication (ZT/F\u2082 frontier seed 90; all 14,400 Brent equations kernel-verified in pure Lean 4.36.0 with zero Mathlib). Submit bitmask triples in `RankF2Ext/Cert4x5x6.lean` (`RankF2Ext.score_4_5_6` and `RankF2Ext.cert_4_5_6`).",
+      "baseline_score": 90,
+      "target_files": [
+        "RankF2Ext/Cert4x5x6.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/schemes/results/serendipitous_base/4x5x6_m90_f16ae49ca1fbd0995e52ec9bc5545819abf8c243_ZT.json"
+    },
+    {
+      "id": "rank_4_5_7",
+      "title": "Reduce \u27e84,5,7\u27e9 rank over F\u2082 below 104",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e84,5,7\u27e9 matrix multiplication (ZT/F\u2082 frontier seed 104; all 19,600 Brent equations kernel-verified in pure Lean 4.36.0 with zero Mathlib). Submit bitmask triples in `RankF2Ext/Cert4x5x7.lean` (`RankF2Ext.score_4_5_7` and `RankF2Ext.cert_4_5_7`).",
+      "baseline_score": 104,
+      "target_files": [
+        "RankF2Ext/Cert4x5x7.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/schemes/results/naive_addition_reduced_ZT/4x5x7_m104_c924_ZT.json"
+    },
+    {
+      "id": "rank_4_6_6",
+      "title": "Reduce \u27e84,6,6\u27e9 rank over F\u2082 below 105",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e84,6,6\u27e9 matrix multiplication (ZT/F\u2082 frontier seed 105; all 20,736 Brent equations kernel-verified in pure Lean 4.36.0 with zero Mathlib). Submit bitmask triples in `RankF2Ext/Cert4x6x6.lean` (`RankF2Ext.score_4_6_6` and `RankF2Ext.cert_4_6_6`).",
+      "baseline_score": 105,
+      "target_files": [
+        "RankF2Ext/Cert4x6x6.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/schemes/results/serendipitous_base/4x6x6_m105_6c1e2208258487800107a32eb5530452ac68b43d_ZT.json"
+    },
+    {
+      "id": "rank_5_5_5",
+      "title": "Reduce \u27e85,5,5\u27e9 rank over F\u2082 below 93",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e85,5,5\u27e9 matrix multiplication (ZT/F\u2082 frontier seed 93; all 15,625 Brent equations kernel-verified in pure Lean 4.36.0 with zero Mathlib). Submit bitmask triples in `RankF2Ext/Cert5x5x5.lean` (`RankF2Ext.score_5_5_5` and `RankF2Ext.cert_5_5_5`).",
+      "baseline_score": 93,
+      "target_files": [
+        "RankF2Ext/Cert5x5x5.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/schemes/known/alpha_evolve/5x5x5_m93_mod0.json"
+    },
+    {
+      "id": "rank_5_5_6",
+      "title": "Reduce \u27e85,5,6\u27e9 rank over F\u2082 below 110",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e85,5,6\u27e9 matrix multiplication (ZT/F\u2082 frontier seed 110; all 22,500 Brent equations kernel-verified in pure Lean 4.36.0 with zero Mathlib). Submit bitmask triples in `RankF2Ext/Cert5x5x6.lean` (`RankF2Ext.score_5_5_6` and `RankF2Ext.cert_5_5_6`).",
+      "baseline_score": 110,
+      "target_files": [
+        "RankF2Ext/Cert5x5x6.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/schemes/results/naive_addition_reduced_ZT/5x5x6_m110_c1192_ZT.json"
+    },
+    {
+      "id": "rank_5_6_6",
+      "title": "Reduce \u27e85,6,6\u27e9 rank over F\u2082 below 130",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e85,6,6\u27e9 matrix multiplication (ZT/F\u2082 frontier seed 130; all 32,400 Brent equations kernel-verified in pure Lean 4.36.0 with zero Mathlib). Submit bitmask triples in `RankF2Ext/Cert5x6x6.lean` (`RankF2Ext.score_5_6_6` and `RankF2Ext.cert_5_6_6`).",
+      "baseline_score": 130,
+      "target_files": [
+        "RankF2Ext/Cert5x6x6.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/schemes/results/serendipitous_base/5x6x6_m130_e9b97b46d576ee516b17abef6a7113803fc3b151_ZT.json"
+    },
+    {
+      "id": "rank_6_6_6",
+      "title": "Reduce \u27e86,6,6\u27e9 rank over F\u2082 below 153",
+      "description": "Improve the verified F\u2082 bilinear rank bound for \u27e86,6,6\u27e9 matrix multiplication (ZT/F\u2082 frontier seed 153; all 46,656 Brent equations kernel-verified in pure Lean 4.36.0 with zero Mathlib). Submit bitmask triples in `RankF2Ext/Cert6x6x6.lean` (`RankF2Ext.score_6_6_6` and `RankF2Ext.cert_6_6_6`).",
+      "baseline_score": 153,
+      "target_files": [
+        "RankF2Ext/Cert6x6x6.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/schemes/results/naive_addition_reduced_ZT/6x6x6_m153_c2171_ZT.json"
+    }
+  ]
+}

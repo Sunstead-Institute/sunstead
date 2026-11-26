@@ -1,0 +1,264 @@
+#!/usr/bin/env python3
+"""Verify explicit Cap Sets, 3-AP-free sets, and Sidon sets in Lean 4."""
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify
+
+LIB_ROOT = "AdditiveComb"
+FROZEN_FILES = ["AdditiveComb/Spec.lean", "UPSTREAM.json", "lakefile.toml", "lean-toolchain"]
+
+TASKS = {
+    "capset_f3_4": {
+        "module": "AdditiveComb.BoundCapF3_4",
+        "theorem": "AdditiveComb.bound_capset_f3_4",
+        "score_const": "AdditiveComb.score_capset_f3_4",
+        "statement": "def capset_f3_4 (M : Nat) : Prop := AdditiveComb.ValidCapSet 4 M",
+        "label": "{score}-cap in F3^4"
+    },
+    "capset_f3_5": {
+        "module": "AdditiveComb.BoundCapF3_5",
+        "theorem": "AdditiveComb.bound_capset_f3_5",
+        "score_const": "AdditiveComb.score_capset_f3_5",
+        "statement": "def capset_f3_5 (M : Nat) : Prop := AdditiveComb.ValidCapSet 5 M",
+        "label": "{score}-cap in F3^5"
+    },
+    "capset_f3_6": {
+        "module": "AdditiveComb.BoundCapF3_6",
+        "theorem": "AdditiveComb.bound_capset_f3_6",
+        "score_const": "AdditiveComb.score_capset_f3_6",
+        "statement": "def capset_f3_6 (M : Nat) : Prop := AdditiveComb.ValidCapSet 6 M",
+        "label": "{score}-cap in F3^6"
+    },
+    "capset_f3_7": {
+        "module": "AdditiveComb.BoundCapF3_7",
+        "theorem": "AdditiveComb.bound_capset_f3_7",
+        "score_const": "AdditiveComb.score_capset_f3_7",
+        "statement": "def capset_f3_7 (M : Nat) : Prop := AdditiveComb.ValidCapSet 7 M",
+        "label": "{score}-cap in F3^7"
+    },
+    "ap3_n64": {
+        "module": "AdditiveComb.BoundAP3_64",
+        "theorem": "AdditiveComb.bound_ap3_n64",
+        "score_const": "AdditiveComb.score_ap3_n64",
+        "statement": "def ap3_n64 (M : Nat) : Prop := AdditiveComb.ValidAP3Free 64 M",
+        "label": "{score} elements (r_3(64))"
+    },
+    "ap3_n100": {
+        "module": "AdditiveComb.BoundAP3_100",
+        "theorem": "AdditiveComb.bound_ap3_n100",
+        "score_const": "AdditiveComb.score_ap3_n100",
+        "statement": "def ap3_n100 (M : Nat) : Prop := AdditiveComb.ValidAP3Free 100 M",
+        "label": "{score} elements (r_3(100))"
+    },
+    "ap3_n150": {
+        "module": "AdditiveComb.BoundAP3_150",
+        "theorem": "AdditiveComb.bound_ap3_n150",
+        "score_const": "AdditiveComb.score_ap3_n150",
+        "statement": "def ap3_n150 (M : Nat) : Prop := AdditiveComb.ValidAP3Free 150 M",
+        "label": "{score} elements (r_3(150))"
+    },
+    "ap3_n200": {
+        "module": "AdditiveComb.BoundAP3_200",
+        "theorem": "AdditiveComb.bound_ap3_n200",
+        "score_const": "AdditiveComb.score_ap3_n200",
+        "statement": "def ap3_n200 (M : Nat) : Prop := AdditiveComb.ValidAP3Free 200 M",
+        "label": "{score} elements (r_3(200))"
+    },
+    "ap3_n300": {
+        "module": "AdditiveComb.BoundAP3_300",
+        "theorem": "AdditiveComb.bound_ap3_n300",
+        "score_const": "AdditiveComb.score_ap3_n300",
+        "statement": "def ap3_n300 (M : Nat) : Prop := AdditiveComb.ValidAP3Free 300 M",
+        "label": "{score} elements (r_3(300))"
+    },
+    "sidon_n100": {
+        "module": "AdditiveComb.BoundSidon100",
+        "theorem": "AdditiveComb.bound_sidon_n100",
+        "score_const": "AdditiveComb.score_sidon_n100",
+        "statement": "def sidon_n100 (M : Nat) : Prop := AdditiveComb.ValidSidonSet 100 M",
+        "label": "{score} elements (Sidon in [0,99])"
+    },
+    "sidon_n150": {
+        "module": "AdditiveComb.BoundSidon150",
+        "theorem": "AdditiveComb.bound_sidon_n150",
+        "score_const": "AdditiveComb.score_sidon_n150",
+        "statement": "def sidon_n150 (M : Nat) : Prop := AdditiveComb.ValidSidonSet 150 M",
+        "label": "{score} elements (Sidon in [0,149])"
+    },
+    "sidon_n200": {
+        "module": "AdditiveComb.BoundSidon200",
+        "theorem": "AdditiveComb.bound_sidon_n200",
+        "score_const": "AdditiveComb.score_sidon_n200",
+        "statement": "def sidon_n200 (M : Nat) : Prop := AdditiveComb.ValidSidonSet 200 M",
+        "label": "{score} elements (Sidon in [0,199])"
+    },
+    "sidon_n300": {
+        "module": "AdditiveComb.BoundSidon300",
+        "theorem": "AdditiveComb.bound_sidon_n300",
+        "score_const": "AdditiveComb.score_sidon_n300",
+        "statement": "def sidon_n300 (M : Nat) : Prop := AdditiveComb.ValidSidonSet 300 M",
+        "label": "{score} elements (Sidon in [0,299])"
+    },
+    "sidon_n500": {
+        "module": "AdditiveComb.BoundSidon500",
+        "theorem": "AdditiveComb.bound_sidon_n500",
+        "score_const": "AdditiveComb.score_sidon_n500",
+        "statement": "def sidon_n500 (M : Nat) : Prop := AdditiveComb.ValidSidonSet 500 M",
+        "label": "{score} elements (Sidon in [0,499])"
+    }
+}
+
+SET_TARGETS = {
+    "capset_f3_4": [
+        "cap",
+        "AdditiveComb/CapF3_4.lean",
+        "AdditiveComb.score_capset_f3_4",
+        "AdditiveComb.set_capset_f3_4",
+        256
+    ],
+    "capset_f3_5": [
+        "cap",
+        "AdditiveComb/CapF3_5.lean",
+        "AdditiveComb.score_capset_f3_5",
+        "AdditiveComb.set_capset_f3_5",
+        1024
+    ],
+    "capset_f3_6": [
+        "cap",
+        "AdditiveComb/CapF3_6.lean",
+        "AdditiveComb.score_capset_f3_6",
+        "AdditiveComb.set_capset_f3_6",
+        4096
+    ],
+    "capset_f3_7": [
+        "cap",
+        "AdditiveComb/CapF3_7.lean",
+        "AdditiveComb.score_capset_f3_7",
+        "AdditiveComb.set_capset_f3_7",
+        16384
+    ],
+    "ap3_n64": [
+        "ap3",
+        "AdditiveComb/AP3_64.lean",
+        "AdditiveComb.score_ap3_n64",
+        "AdditiveComb.set_ap3_n64",
+        64
+    ],
+    "ap3_n100": [
+        "ap3",
+        "AdditiveComb/AP3_100.lean",
+        "AdditiveComb.score_ap3_n100",
+        "AdditiveComb.set_ap3_n100",
+        100
+    ],
+    "ap3_n150": [
+        "ap3",
+        "AdditiveComb/AP3_150.lean",
+        "AdditiveComb.score_ap3_n150",
+        "AdditiveComb.set_ap3_n150",
+        150
+    ],
+    "ap3_n200": [
+        "ap3",
+        "AdditiveComb/AP3_200.lean",
+        "AdditiveComb.score_ap3_n200",
+        "AdditiveComb.set_ap3_n200",
+        200
+    ],
+    "ap3_n300": [
+        "ap3",
+        "AdditiveComb/AP3_300.lean",
+        "AdditiveComb.score_ap3_n300",
+        "AdditiveComb.set_ap3_n300",
+        300
+    ],
+    "sidon_n100": [
+        "sidon",
+        "AdditiveComb/Sidon100.lean",
+        "AdditiveComb.score_sidon_n100",
+        "AdditiveComb.set_sidon_n100",
+        100
+    ],
+    "sidon_n150": [
+        "sidon",
+        "AdditiveComb/Sidon150.lean",
+        "AdditiveComb.score_sidon_n150",
+        "AdditiveComb.set_sidon_n150",
+        150
+    ],
+    "sidon_n200": [
+        "sidon",
+        "AdditiveComb/Sidon200.lean",
+        "AdditiveComb.score_sidon_n200",
+        "AdditiveComb.set_sidon_n200",
+        200
+    ],
+    "sidon_n300": [
+        "sidon",
+        "AdditiveComb/Sidon300.lean",
+        "AdditiveComb.score_sidon_n300",
+        "AdditiveComb.set_sidon_n300",
+        300
+    ],
+    "sidon_n500": [
+        "sidon",
+        "AdditiveComb/Sidon500.lean",
+        "AdditiveComb.score_sidon_n500",
+        "AdditiveComb.set_sidon_n500",
+        500
+    ]
+}
+
+MAX_BYTES = 65536
+MAX_ELEMENTS = 1024
+
+
+def check_set_file(kind: str, path: Path, score_name: str, set_name: str, limit: int) -> None:
+    if not path.is_file():
+        emit(False, f"Missing witness file: {path.name}", stage="lint")
+    raw = path.read_bytes()
+    if len(raw) > MAX_BYTES:
+        emit(False, f"Witness file exceeds {MAX_BYTES} bytes", stage="lint")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        emit(False, "Witness file must be valid UTF-8", stage="lint")
+
+    nat = r"(?:0|[1-9][0-9]{0,9}|0x[0-9a-fA-F]{1,8})"
+    header_re = (
+        rf"\s*def\s+{re.escape(score_name)}\s*:\s*Nat\s*:=\s*({nat})\s*\n"
+        rf"\s*def\s+{re.escape(set_name)}\s*:\s*List\s+Nat\s*:=\s*\[\s*(.*?)\s*\]\s*"
+    )
+    match = re.fullmatch(header_re, text, re.DOTALL)
+    if not match:
+        emit(False, f"Expected only literal definitions for {score_name} and {set_name}", stage="lint")
+    score_val = int(match.group(1), 0)
+    body = match.group(2)
+    if not body or not re.fullmatch(rf"{nat}(?:\s*,\s*{nat}){{0,{MAX_ELEMENTS - 1}}}", body):
+        emit(False, f"Expected 1 to {MAX_ELEMENTS} literal natural entries", stage="lint")
+    vals = [int(tok, 0) for tok in re.findall(nat, body)]
+    if len(vals) != score_val:
+        emit(False, f"Score {score_val} does not match set length {len(vals)}", stage="lint")
+    for v in vals:
+        if v >= limit:
+            emit(False, f"Element {v} exceeds domain bound (< {limit})", stage="lint")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>", stage="lint")
+    task_id = sys.argv[1]
+    if task_id in SET_TARGETS:
+        kind, rel_path, score_name, set_name, limit = SET_TARGETS[task_id]
+        check_set_file(kind, Path(__file__).resolve().parent / rel_path, score_name, set_name, limit)
+    lean_verify(
+        task_id,
+        lib_root=LIB_ROOT,
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        uses_mathlib=False,
+        timeout_sec=90,
+    )

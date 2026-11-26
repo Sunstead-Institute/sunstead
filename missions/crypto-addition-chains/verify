@@ -1,0 +1,327 @@
+#!/usr/bin/env python3
+"""Verify shortest cryptographic addition chains in pure Lean 4.36.0 (zero Mathlib)."""
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify
+
+FROZEN_FILES = ["AddChain/Spec.lean", "UPSTREAM.json", "lakefile.toml", "lean-toolchain"]
+
+TASKS = {
+    "curve25519_field_inv": {
+        "module": "AddChain.BoundCurve25519Field",
+        "theorem": "AddChain.bound_curve25519_field_inv",
+        "score_const": "AddChain.score_curve25519_field_inv",
+        "statement": "def curve25519_field_inv (len : Nat) : Prop := AddChain.ValidAddChain AddChain.target_curve25519_field_inv len",
+        "label": "{score} steps (Curve25519 Field p-2)"
+    },
+    "curve25519_scalar_inv": {
+        "module": "AddChain.BoundCurve25519Scalar",
+        "theorem": "AddChain.bound_curve25519_scalar_inv",
+        "score_const": "AddChain.score_curve25519_scalar_inv",
+        "statement": "def curve25519_scalar_inv (len : Nat) : Prop := AddChain.ValidAddChain AddChain.target_curve25519_scalar_inv len",
+        "label": "{score} steps (Curve25519 Scalar l-2)"
+    },
+    "p256_field_inv": {
+        "module": "AddChain.BoundP256Field",
+        "theorem": "AddChain.bound_p256_field_inv",
+        "score_const": "AddChain.score_p256_field_inv",
+        "statement": "def p256_field_inv (len : Nat) : Prop := AddChain.ValidAddChain AddChain.target_p256_field_inv len",
+        "label": "{score} steps (NIST P-256 Field p-2)"
+    },
+    "p256_scalar_inv": {
+        "module": "AddChain.BoundP256Scalar",
+        "theorem": "AddChain.bound_p256_scalar_inv",
+        "score_const": "AddChain.score_p256_scalar_inv",
+        "statement": "def p256_scalar_inv (len : Nat) : Prop := AddChain.ValidAddChain AddChain.target_p256_scalar_inv len",
+        "label": "{score} steps (NIST P-256 Scalar n-2)"
+    },
+    "p384_field_inv": {
+        "module": "AddChain.BoundP384Field",
+        "theorem": "AddChain.bound_p384_field_inv",
+        "score_const": "AddChain.score_p384_field_inv",
+        "statement": "def p384_field_inv (len : Nat) : Prop := AddChain.ValidAddChain AddChain.target_p384_field_inv len",
+        "label": "{score} steps (NIST P-384 Field p-2)"
+    },
+    "p384_scalar_inv": {
+        "module": "AddChain.BoundP384Scalar",
+        "theorem": "AddChain.bound_p384_scalar_inv",
+        "score_const": "AddChain.score_p384_scalar_inv",
+        "statement": "def p384_scalar_inv (len : Nat) : Prop := AddChain.ValidAddChain AddChain.target_p384_scalar_inv len",
+        "label": "{score} steps (NIST P-384 Scalar n-2)"
+    },
+    "secp256k1_field_inv": {
+        "module": "AddChain.BoundSecp256k1Field",
+        "theorem": "AddChain.bound_secp256k1_field_inv",
+        "score_const": "AddChain.score_secp256k1_field_inv",
+        "statement": "def secp256k1_field_inv (len : Nat) : Prop := AddChain.ValidAddChain AddChain.target_secp256k1_field_inv len",
+        "label": "{score} steps (secp256k1 Field p-2)"
+    },
+    "secp256k1_scalar_inv": {
+        "module": "AddChain.BoundSecp256k1Scalar",
+        "theorem": "AddChain.bound_secp256k1_scalar_inv",
+        "score_const": "AddChain.score_secp256k1_scalar_inv",
+        "statement": "def secp256k1_scalar_inv (len : Nat) : Prop := AddChain.ValidAddChain AddChain.target_secp256k1_scalar_inv len",
+        "label": "{score} steps (secp256k1 Scalar n-2)"
+    },
+    "goldilocks_ed448_inv": {
+        "module": "AddChain.BoundGoldilocksEd448",
+        "theorem": "AddChain.bound_goldilocks_ed448_inv",
+        "score_const": "AddChain.score_goldilocks_ed448_inv",
+        "statement": "def goldilocks_ed448_inv (len : Nat) : Prop := AddChain.ValidAddChain AddChain.target_goldilocks_ed448_inv len",
+        "label": "{score} steps (Ed448-Goldilocks Field p-2)"
+    },
+    "p224_field_inv": {
+        "module": "AddChain.BoundP224Field",
+        "theorem": "AddChain.bound_p224_field_inv",
+        "score_const": "AddChain.score_p224_field_inv",
+        "statement": "def p224_field_inv (len : Nat) : Prop := AddChain.ValidAddChain AddChain.target_p224_field_inv len",
+        "label": "{score} steps (NIST P-224 Field p-2)"
+    },
+    "p192_field_inv": {
+        "module": "AddChain.BoundP192Field",
+        "theorem": "AddChain.bound_p192_field_inv",
+        "score_const": "AddChain.score_p192_field_inv",
+        "statement": "def p192_field_inv (len : Nat) : Prop := AddChain.ValidAddChain AddChain.target_p192_field_inv len",
+        "label": "{score} steps (NIST P-192 Field p-2)"
+    },
+    "secp192k1_field_inv": {
+        "module": "AddChain.BoundSecp192k1Field",
+        "theorem": "AddChain.bound_secp192k1_field_inv",
+        "score_const": "AddChain.score_secp192k1_field_inv",
+        "statement": "def secp192k1_field_inv (len : Nat) : Prop := AddChain.ValidAddChain AddChain.target_secp192k1_field_inv len",
+        "label": "{score} steps (secp192k1 Field p-2)"
+    },
+    "secp224k1_field_inv": {
+        "module": "AddChain.BoundSecp224k1Field",
+        "theorem": "AddChain.bound_secp224k1_field_inv",
+        "score_const": "AddChain.score_secp224k1_field_inv",
+        "statement": "def secp224k1_field_inv (len : Nat) : Prop := AddChain.ValidAddChain AddChain.target_secp224k1_field_inv len",
+        "label": "{score} steps (secp224k1 Field p-2)"
+    },
+    "p2213_field_inv": {
+        "module": "AddChain.BoundP2213Field",
+        "theorem": "AddChain.bound_p2213_field_inv",
+        "score_const": "AddChain.score_p2213_field_inv",
+        "statement": "def p2213_field_inv (len : Nat) : Prop := AddChain.ValidAddChain AddChain.target_p2213_field_inv len",
+        "label": "{score} steps (M-221 Field p-2)"
+    },
+    "p222117_field_inv": {
+        "module": "AddChain.BoundP222117Field",
+        "theorem": "AddChain.bound_p222117_field_inv",
+        "score_const": "AddChain.score_p222117_field_inv",
+        "statement": "def p222117_field_inv (len : Nat) : Prop := AddChain.ValidAddChain AddChain.target_p222117_field_inv len",
+        "label": "{score} steps (E-222 Field p-2)"
+    },
+    "p2519_field_inv": {
+        "module": "AddChain.BoundP2519Field",
+        "theorem": "AddChain.bound_p2519_field_inv",
+        "score_const": "AddChain.score_p2519_field_inv",
+        "statement": "def p2519_field_inv (len : Nat) : Prop := AddChain.ValidAddChain AddChain.target_p2519_field_inv len",
+        "label": "{score} steps (Curve1174 Field p-2)"
+    },
+    "p382105_field_inv": {
+        "module": "AddChain.BoundP382105Field",
+        "theorem": "AddChain.bound_p382105_field_inv",
+        "score_const": "AddChain.score_p382105_field_inv",
+        "statement": "def p382105_field_inv (len : Nat) : Prop := AddChain.ValidAddChain AddChain.target_p382105_field_inv len",
+        "label": "{score} steps (E-382 Field p-2)"
+    },
+    "p383187_field_inv": {
+        "module": "AddChain.BoundP383187Field",
+        "theorem": "AddChain.bound_p383187_field_inv",
+        "score_const": "AddChain.score_p383187_field_inv",
+        "statement": "def p383187_field_inv (len : Nat) : Prop := AddChain.ValidAddChain AddChain.target_p383187_field_inv len",
+        "label": "{score} steps (M-383 Field p-2)"
+    },
+    "p41417_field_inv": {
+        "module": "AddChain.BoundP41417Field",
+        "theorem": "AddChain.bound_p41417_field_inv",
+        "score_const": "AddChain.score_p41417_field_inv",
+        "statement": "def p41417_field_inv (len : Nat) : Prop := AddChain.ValidAddChain AddChain.target_p41417_field_inv len",
+        "label": "{score} steps (Curve41417 Field p-2)"
+    },
+    "p511187_field_inv": {
+        "module": "AddChain.BoundP511187Field",
+        "theorem": "AddChain.bound_p511187_field_inv",
+        "score_const": "AddChain.score_p511187_field_inv",
+        "statement": "def p511187_field_inv (len : Nat) : Prop := AddChain.ValidAddChain AddChain.target_p511187_field_inv len",
+        "label": "{score} steps (M-511 Field p-2)"
+    }
+}
+
+CHAIN_SPECS = {
+    "curve25519_field_inv": {
+        "file": "AddChain/ChainCurve25519Field.lean",
+        "score_name": "AddChain.score_curve25519_field_inv",
+        "steps_name": "AddChain.steps_curve25519_field_inv",
+        "max_steps": 1024
+    },
+    "curve25519_scalar_inv": {
+        "file": "AddChain/ChainCurve25519Scalar.lean",
+        "score_name": "AddChain.score_curve25519_scalar_inv",
+        "steps_name": "AddChain.steps_curve25519_scalar_inv",
+        "max_steps": 1024
+    },
+    "p256_field_inv": {
+        "file": "AddChain/ChainP256Field.lean",
+        "score_name": "AddChain.score_p256_field_inv",
+        "steps_name": "AddChain.steps_p256_field_inv",
+        "max_steps": 1024
+    },
+    "p256_scalar_inv": {
+        "file": "AddChain/ChainP256Scalar.lean",
+        "score_name": "AddChain.score_p256_scalar_inv",
+        "steps_name": "AddChain.steps_p256_scalar_inv",
+        "max_steps": 1024
+    },
+    "p384_field_inv": {
+        "file": "AddChain/ChainP384Field.lean",
+        "score_name": "AddChain.score_p384_field_inv",
+        "steps_name": "AddChain.steps_p384_field_inv",
+        "max_steps": 1024
+    },
+    "p384_scalar_inv": {
+        "file": "AddChain/ChainP384Scalar.lean",
+        "score_name": "AddChain.score_p384_scalar_inv",
+        "steps_name": "AddChain.steps_p384_scalar_inv",
+        "max_steps": 1024
+    },
+    "secp256k1_field_inv": {
+        "file": "AddChain/ChainSecp256k1Field.lean",
+        "score_name": "AddChain.score_secp256k1_field_inv",
+        "steps_name": "AddChain.steps_secp256k1_field_inv",
+        "max_steps": 1024
+    },
+    "secp256k1_scalar_inv": {
+        "file": "AddChain/ChainSecp256k1Scalar.lean",
+        "score_name": "AddChain.score_secp256k1_scalar_inv",
+        "steps_name": "AddChain.steps_secp256k1_scalar_inv",
+        "max_steps": 1024
+    },
+    "goldilocks_ed448_inv": {
+        "file": "AddChain/ChainGoldilocksEd448.lean",
+        "score_name": "AddChain.score_goldilocks_ed448_inv",
+        "steps_name": "AddChain.steps_goldilocks_ed448_inv",
+        "max_steps": 1024
+    },
+    "p224_field_inv": {
+        "file": "AddChain/ChainP224Field.lean",
+        "score_name": "AddChain.score_p224_field_inv",
+        "steps_name": "AddChain.steps_p224_field_inv",
+        "max_steps": 1024
+    },
+    "p192_field_inv": {
+        "file": "AddChain/ChainP192Field.lean",
+        "score_name": "AddChain.score_p192_field_inv",
+        "steps_name": "AddChain.steps_p192_field_inv",
+        "max_steps": 1024
+    },
+    "secp192k1_field_inv": {
+        "file": "AddChain/ChainSecp192k1Field.lean",
+        "score_name": "AddChain.score_secp192k1_field_inv",
+        "steps_name": "AddChain.steps_secp192k1_field_inv",
+        "max_steps": 1024
+    },
+    "secp224k1_field_inv": {
+        "file": "AddChain/ChainSecp224k1Field.lean",
+        "score_name": "AddChain.score_secp224k1_field_inv",
+        "steps_name": "AddChain.steps_secp224k1_field_inv",
+        "max_steps": 1024
+    },
+    "p2213_field_inv": {
+        "file": "AddChain/ChainP2213Field.lean",
+        "score_name": "AddChain.score_p2213_field_inv",
+        "steps_name": "AddChain.steps_p2213_field_inv",
+        "max_steps": 1024
+    },
+    "p222117_field_inv": {
+        "file": "AddChain/ChainP222117Field.lean",
+        "score_name": "AddChain.score_p222117_field_inv",
+        "steps_name": "AddChain.steps_p222117_field_inv",
+        "max_steps": 1024
+    },
+    "p2519_field_inv": {
+        "file": "AddChain/ChainP2519Field.lean",
+        "score_name": "AddChain.score_p2519_field_inv",
+        "steps_name": "AddChain.steps_p2519_field_inv",
+        "max_steps": 1024
+    },
+    "p382105_field_inv": {
+        "file": "AddChain/ChainP382105Field.lean",
+        "score_name": "AddChain.score_p382105_field_inv",
+        "steps_name": "AddChain.steps_p382105_field_inv",
+        "max_steps": 1024
+    },
+    "p383187_field_inv": {
+        "file": "AddChain/ChainP383187Field.lean",
+        "score_name": "AddChain.score_p383187_field_inv",
+        "steps_name": "AddChain.steps_p383187_field_inv",
+        "max_steps": 1024
+    },
+    "p41417_field_inv": {
+        "file": "AddChain/ChainP41417Field.lean",
+        "score_name": "AddChain.score_p41417_field_inv",
+        "steps_name": "AddChain.steps_p41417_field_inv",
+        "max_steps": 1024
+    },
+    "p511187_field_inv": {
+        "file": "AddChain/ChainP511187Field.lean",
+        "score_name": "AddChain.score_p511187_field_inv",
+        "steps_name": "AddChain.steps_p511187_field_inv",
+        "max_steps": 1024
+    }
+}
+
+
+def check_chain(task_id, base_dir):
+    spec = CHAIN_SPECS.get(task_id)
+    if spec is None:
+        emit(False, f"unknown task id: {task_id}", stage="lint")
+    path = base_dir / spec["file"]
+    if not path.is_file():
+        emit(False, f"Missing chain file: {path.name}", stage="lint")
+    raw = path.read_bytes()
+    if len(raw) > 32768:
+        emit(False, "Chain file exceeds 32768 bytes", stage="lint")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        emit(False, "Chain file must be valid UTF-8", stage="lint")
+    nat = r"(?:0|[1-9][0-9]{0,3})"
+    pair = rf"\(\s*{nat}\s*,\s*{nat}\s*\)"
+    header_re = (
+        rf"\s*def\s+{re.escape(spec['score_name'])}\s*:\s*Nat\s*:=\s*({nat})\s*\n"
+        rf"\s*def\s+{re.escape(spec['steps_name'])}\s*:\s*List\s*\(Nat\s*×\s*Nat\)\s*:=\s*\[\s*(.*?)\s*\]\s*"
+    )
+    m = re.fullmatch(header_re, text, re.DOTALL)
+    if not m:
+        emit(False, f"Expected only literal definitions for {spec['score_name']} and {spec['steps_name']}", stage="lint")
+    score = int(m.group(1))
+    max_s = spec["max_steps"]
+    if score < 1 or score > max_s:
+        emit(False, f"Score must be in 1..{max_s}", stage="lint")
+    body = m.group(2)
+    if not body or not re.fullmatch(rf"{pair}(?:\s*,\s*{pair}){{0,{max_s - 1}}}", body):
+        emit(False, f"Expected 1 to {max_s} literal (i, j) step pairs", stage="lint")
+    pairs = re.findall(pair, body)
+    if len(pairs) != score:
+        emit(False, f"Score {score} does not match step count {len(pairs)}", stage="lint")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>", stage="lint")
+    tid = sys.argv[1]
+    if tid in CHAIN_SPECS:
+        check_chain(tid, Path(__file__).resolve().parent)
+    lean_verify(
+        tid,
+        lib_root="AddChain",
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        uses_mathlib=False,
+        timeout_sec=50,
+    )

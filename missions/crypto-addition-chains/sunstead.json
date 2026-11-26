@@ -1,0 +1,274 @@
+{
+  "id": "crypto-addition-chains",
+  "title": "Cryptographic Elliptic-Curve Addition Chains (20 Production Curves)",
+  "description": "Twenty pure Lean 4.36.0 (zero Mathlib) kernel-verified shortest addition-chain hill-climb tracks for real production elliptic-curve field and scalar inversion exponents (Curve25519, NIST P-256/P-384/P-224/P-192, secp256k1/secp224k1/secp192k1, Ed448-Goldilocks, Curve41417, M-221/E-222/Curve1174/E-382/M-383/M-511), pinned verbatim to `mmcloughlin/addchain@6c4dbba3ac` (BSD-3-Clause). Every track starts from a clean 4-bit windowed baseline strictly above published `addchain` / Brian Smith frontiers.",
+  "tier": 2,
+  "mode": "hillclimb",
+  "repo": "https://github.com/mmcloughlin/addchain",
+  "upstream": {
+    "repo": "mmcloughlin/addchain",
+    "commit": "6c4dbba3acc1bf0269d4a90bb9cdfdf865017601",
+    "license": "BSD-3-Clause"
+  },
+  "score_direction": "minimize",
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 60,
+    "memory_mb": 2048
+  },
+  "frozen_paths": [
+    "AddChain/Spec.lean",
+    "AddChain/BoundCurve25519Field.lean",
+    "AddChain/BoundCurve25519Scalar.lean",
+    "AddChain/BoundP256Field.lean",
+    "AddChain/BoundP256Scalar.lean",
+    "AddChain/BoundP384Field.lean",
+    "AddChain/BoundP384Scalar.lean",
+    "AddChain/BoundSecp256k1Field.lean",
+    "AddChain/BoundSecp256k1Scalar.lean",
+    "AddChain/BoundGoldilocksEd448.lean",
+    "AddChain/BoundP224Field.lean",
+    "AddChain/BoundP192Field.lean",
+    "AddChain/BoundSecp192k1Field.lean",
+    "AddChain/BoundSecp224k1Field.lean",
+    "AddChain/BoundP2213Field.lean",
+    "AddChain/BoundP222117Field.lean",
+    "AddChain/BoundP2519Field.lean",
+    "AddChain/BoundP382105Field.lean",
+    "AddChain/BoundP383187Field.lean",
+    "AddChain/BoundP41417Field.lean",
+    "AddChain/BoundP511187Field.lean",
+    "LICENSE",
+    "README.md",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "tasks": [
+    {
+      "id": "curve25519_field_inv",
+      "title": "Curve25519 Field p-2: minimize addition-chain length (baseline 329)",
+      "description": "Find a shorter addition chain for the Curve25519 Field p-2 inversion exponent (seeded with a 4-bit fixed-window chain of 329 steps; `addchain`/Brian Smith frontier: 265). Edit `AddChain/ChainCurve25519Field.lean` (`AddChain.score_curve25519_field_inv` and `AddChain.steps_curve25519_field_inv`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 329,
+      "target_files": [
+        "AddChain/ChainCurve25519Field.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/prime/distinguished.go"
+    },
+    {
+      "id": "curve25519_scalar_inv",
+      "title": "Curve25519 Scalar l-2: minimize addition-chain length (baseline 298)",
+      "description": "Find a shorter addition chain for the Curve25519 Scalar l-2 inversion exponent (seeded with a 4-bit fixed-window chain of 298 steps; `addchain`/Brian Smith frontier: 283). Edit `AddChain/ChainCurve25519Scalar.lean` (`AddChain.score_curve25519_scalar_inv` and `AddChain.steps_curve25519_scalar_inv`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 298,
+      "target_files": [
+        "AddChain/ChainCurve25519Scalar.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/results/results.go"
+    },
+    {
+      "id": "p256_field_inv",
+      "title": "NIST P-256 Field p-2: minimize addition-chain length (baseline 298)",
+      "description": "Find a shorter addition chain for the NIST P-256 Field p-2 inversion exponent (seeded with a 4-bit fixed-window chain of 298 steps; `addchain`/Brian Smith frontier: 267). Edit `AddChain/ChainP256Field.lean` (`AddChain.score_p256_field_inv` and `AddChain.steps_p256_field_inv`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 298,
+      "target_files": [
+        "AddChain/ChainP256Field.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/prime/distinguished.go"
+    },
+    {
+      "id": "p256_scalar_inv",
+      "title": "NIST P-256 Scalar n-2: minimize addition-chain length (baseline 321)",
+      "description": "Find a shorter addition chain for the NIST P-256 Scalar n-2 inversion exponent (seeded with a 4-bit fixed-window chain of 321 steps; `addchain`/Brian Smith frontier: 292). Edit `AddChain/ChainP256Scalar.lean` (`AddChain.score_p256_scalar_inv` and `AddChain.steps_p256_scalar_inv`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 321,
+      "target_files": [
+        "AddChain/ChainP256Scalar.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/results/results.go"
+    },
+    {
+      "id": "p384_field_inv",
+      "title": "NIST P-384 Field p-2: minimize addition-chain length (baseline 473)",
+      "description": "Find a shorter addition chain for the NIST P-384 Field p-2 inversion exponent (seeded with a 4-bit fixed-window chain of 473 steps; `addchain`/Brian Smith frontier: 397). Edit `AddChain/ChainP384Field.lean` (`AddChain.score_p384_field_inv` and `AddChain.steps_p384_field_inv`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 473,
+      "target_files": [
+        "AddChain/ChainP384Field.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/prime/distinguished.go"
+    },
+    {
+      "id": "p384_scalar_inv",
+      "title": "NIST P-384 Scalar n-2: minimize addition-chain length (baseline 487)",
+      "description": "Find a shorter addition chain for the NIST P-384 Scalar n-2 inversion exponent (seeded with a 4-bit fixed-window chain of 487 steps; `addchain`/Brian Smith frontier: 433). Edit `AddChain/ChainP384Scalar.lean` (`AddChain.score_p384_scalar_inv` and `AddChain.steps_p384_scalar_inv`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 487,
+      "target_files": [
+        "AddChain/ChainP384Scalar.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/results/results.go"
+    },
+    {
+      "id": "secp256k1_field_inv",
+      "title": "secp256k1 Field p-2: minimize addition-chain length (baseline 329)",
+      "description": "Find a shorter addition chain for the secp256k1 Field p-2 inversion exponent (seeded with a 4-bit fixed-window chain of 329 steps; `addchain`/Brian Smith frontier: 270). Edit `AddChain/ChainSecp256k1Field.lean` (`AddChain.score_secp256k1_field_inv` and `AddChain.steps_secp256k1_field_inv`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 329,
+      "target_files": [
+        "AddChain/ChainSecp256k1Field.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/prime/distinguished.go"
+    },
+    {
+      "id": "secp256k1_scalar_inv",
+      "title": "secp256k1 Scalar n-2: minimize addition-chain length (baseline 327)",
+      "description": "Find a shorter addition chain for the secp256k1 Scalar n-2 inversion exponent (seeded with a 4-bit fixed-window chain of 327 steps; `addchain`/Brian Smith frontier: 290). Edit `AddChain/ChainSecp256k1Scalar.lean` (`AddChain.score_secp256k1_scalar_inv` and `AddChain.steps_secp256k1_scalar_inv`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 327,
+      "target_files": [
+        "AddChain/ChainSecp256k1Scalar.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/results/results.go"
+    },
+    {
+      "id": "goldilocks_ed448_inv",
+      "title": "Ed448-Goldilocks Field p-2: minimize addition-chain length (baseline 569)",
+      "description": "Find a shorter addition chain for the Ed448-Goldilocks Field p-2 inversion exponent (seeded with a 4-bit fixed-window chain of 569 steps; `addchain`/Brian Smith frontier: 460). Edit `AddChain/ChainGoldilocksEd448.lean` (`AddChain.score_goldilocks_ed448_inv` and `AddChain.steps_goldilocks_ed448_inv`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 569,
+      "target_files": [
+        "AddChain/ChainGoldilocksEd448.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/prime/distinguished.go"
+    },
+    {
+      "id": "p224_field_inv",
+      "title": "NIST P-224 Field p-2: minimize addition-chain length (baseline 289)",
+      "description": "Find a shorter addition chain for the NIST P-224 Field p-2 inversion exponent (seeded with a 4-bit fixed-window chain of 289 steps; `addchain`/Brian Smith frontier: 234). Edit `AddChain/ChainP224Field.lean` (`AddChain.score_p224_field_inv` and `AddChain.steps_p224_field_inv`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 289,
+      "target_files": [
+        "AddChain/ChainP224Field.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/prime/distinguished.go"
+    },
+    {
+      "id": "p192_field_inv",
+      "title": "NIST P-192 Field p-2: minimize addition-chain length (baseline 249)",
+      "description": "Find a shorter addition chain for the NIST P-192 Field p-2 inversion exponent (seeded with a 4-bit fixed-window chain of 249 steps; `addchain`/Brian Smith frontier: 203). Edit `AddChain/ChainP192Field.lean` (`AddChain.score_p192_field_inv` and `AddChain.steps_p192_field_inv`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 249,
+      "target_files": [
+        "AddChain/ChainP192Field.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/prime/distinguished.go"
+    },
+    {
+      "id": "secp192k1_field_inv",
+      "title": "secp192k1 Field p-2: minimize addition-chain length (baseline 249)",
+      "description": "Find a shorter addition chain for the secp192k1 Field p-2 inversion exponent (seeded with a 4-bit fixed-window chain of 249 steps; `addchain`/Brian Smith frontier: 205). Edit `AddChain/ChainSecp192k1Field.lean` (`AddChain.score_secp192k1_field_inv` and `AddChain.steps_secp192k1_field_inv`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 249,
+      "target_files": [
+        "AddChain/ChainSecp192k1Field.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/prime/distinguished.go"
+    },
+    {
+      "id": "secp224k1_field_inv",
+      "title": "secp224k1 Field p-2: minimize addition-chain length (baseline 289)",
+      "description": "Find a shorter addition chain for the secp224k1 Field p-2 inversion exponent (seeded with a 4-bit fixed-window chain of 289 steps; `addchain`/Brian Smith frontier: 238). Edit `AddChain/ChainSecp224k1Field.lean` (`AddChain.score_secp224k1_field_inv` and `AddChain.steps_secp224k1_field_inv`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 289,
+      "target_files": [
+        "AddChain/ChainSecp224k1Field.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/prime/distinguished.go"
+    },
+    {
+      "id": "p2213_field_inv",
+      "title": "M-221 Field p-2: minimize addition-chain length (baseline 289)",
+      "description": "Find a shorter addition chain for the M-221 Field p-2 inversion exponent (seeded with a 4-bit fixed-window chain of 289 steps; `addchain`/Brian Smith frontier: 231). Edit `AddChain/ChainP2213Field.lean` (`AddChain.score_p2213_field_inv` and `AddChain.steps_p2213_field_inv`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 289,
+      "target_files": [
+        "AddChain/ChainP2213Field.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/prime/distinguished.go"
+    },
+    {
+      "id": "p222117_field_inv",
+      "title": "E-222 Field p-2: minimize addition-chain length (baseline 289)",
+      "description": "Find a shorter addition chain for the E-222 Field p-2 inversion exponent (seeded with a 4-bit fixed-window chain of 289 steps; `addchain`/Brian Smith frontier: 233). Edit `AddChain/ChainP222117Field.lean` (`AddChain.score_p222117_field_inv` and `AddChain.steps_p222117_field_inv`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 289,
+      "target_files": [
+        "AddChain/ChainP222117Field.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/prime/distinguished.go"
+    },
+    {
+      "id": "p2519_field_inv",
+      "title": "Curve1174 Field p-2: minimize addition-chain length (baseline 324)",
+      "description": "Find a shorter addition chain for the Curve1174 Field p-2 inversion exponent (seeded with a 4-bit fixed-window chain of 324 steps; `addchain`/Brian Smith frontier: 263). Edit `AddChain/ChainP2519Field.lean` (`AddChain.score_p2519_field_inv` and `AddChain.steps_p2519_field_inv`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 324,
+      "target_files": [
+        "AddChain/ChainP2519Field.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/prime/distinguished.go"
+    },
+    {
+      "id": "p382105_field_inv",
+      "title": "E-382 Field p-2: minimize addition-chain length (baseline 489)",
+      "description": "Find a shorter addition chain for the E-382 Field p-2 inversion exponent (seeded with a 4-bit fixed-window chain of 489 steps; `addchain`/Brian Smith frontier: 395). Edit `AddChain/ChainP382105Field.lean` (`AddChain.score_p382105_field_inv` and `AddChain.steps_p382105_field_inv`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 489,
+      "target_files": [
+        "AddChain/ChainP382105Field.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/prime/distinguished.go"
+    },
+    {
+      "id": "p383187_field_inv",
+      "title": "M-383 Field p-2: minimize addition-chain length (baseline 489)",
+      "description": "Find a shorter addition chain for the M-383 Field p-2 inversion exponent (seeded with a 4-bit fixed-window chain of 489 steps; `addchain`/Brian Smith frontier: 396). Edit `AddChain/ChainP383187Field.lean` (`AddChain.score_p383187_field_inv` and `AddChain.steps_p383187_field_inv`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 489,
+      "target_files": [
+        "AddChain/ChainP383187Field.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/prime/distinguished.go"
+    },
+    {
+      "id": "p41417_field_inv",
+      "title": "Curve41417 Field p-2: minimize addition-chain length (baseline 529)",
+      "description": "Find a shorter addition chain for the Curve41417 Field p-2 inversion exponent (seeded with a 4-bit fixed-window chain of 529 steps; `addchain`/Brian Smith frontier: 426). Edit `AddChain/ChainP41417Field.lean` (`AddChain.score_p41417_field_inv` and `AddChain.steps_p41417_field_inv`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 529,
+      "target_files": [
+        "AddChain/ChainP41417Field.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/prime/distinguished.go"
+    },
+    {
+      "id": "p511187_field_inv",
+      "title": "M-511 Field p-2: minimize addition-chain length (baseline 649)",
+      "description": "Find a shorter addition chain for the M-511 Field p-2 inversion exponent (seeded with a 4-bit fixed-window chain of 649 steps; `addchain`/Brian Smith frontier: 525). Edit `AddChain/ChainP511187Field.lean` (`AddChain.score_p511187_field_inv` and `AddChain.steps_p511187_field_inv`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 649,
+      "target_files": [
+        "AddChain/ChainP511187Field.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/prime/distinguished.go"
+    }
+  ]
+}

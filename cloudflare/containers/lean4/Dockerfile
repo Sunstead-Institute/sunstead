@@ -47,6 +47,30 @@ COPY missions/crypto-sbox-circuits /missions/crypto-sbox-circuits
 COPY missions/crypto-linear-xor-opt /missions/crypto-linear-xor-opt
 COPY missions/sorting-networks-opt /missions/sorting-networks-opt
 COPY missions/sorting-networks-depth-opt /missions/sorting-networks-depth-opt
+COPY missions/flt-standalone-foundations /missions/flt-standalone-foundations
+COPY missions/fate-x-ideal-theory /missions/fate-x-ideal-theory
+COPY missions/fate-x-dimension-and-geometry /missions/fate-x-dimension-and-geometry
+COPY missions/fate-x-fields-rings-groups /missions/fate-x-fields-rings-groups
+COPY missions/fate-h-fields-and-groups /missions/fate-h-fields-and-groups
+COPY missions/verina-algorithms-pure-lean /missions/verina-algorithms-pure-lean
+COPY missions/fc-solved-number-theory /missions/fc-solved-number-theory
+COPY missions/fc-solved-combinatorics /missions/fc-solved-combinatorics
+COPY missions/fc-solved-algebra-analysis /missions/fc-solved-algebra-analysis
+COPY missions/fc-open-erdos-number-theory /missions/fc-open-erdos-number-theory
+COPY missions/fc-open-erdos-combinatorics /missions/fc-open-erdos-combinatorics
+COPY missions/fc-open-oeis-classics /missions/fc-open-oeis-classics
+COPY missions/coding-theory-bounds /missions/coding-theory-bounds
+COPY missions/extremal-graph-bounds /missions/extremal-graph-bounds
+COPY missions/combinatorial-additive-opt /missions/combinatorial-additive-opt
+COPY missions/combinatorial-designs-opt /missions/combinatorial-designs-opt
+COPY missions/selection-networks-opt /missions/selection-networks-opt
+COPY missions/matrix-rank-f2-extended /missions/matrix-rank-f2-extended
+COPY missions/crypto-addition-chains /missions/crypto-addition-chains
+COPY missions/crypto-zk-addition-chains /missions/crypto-zk-addition-chains
+COPY missions/crypto-lwc-sboxes /missions/crypto-lwc-sboxes
+COPY missions/crypto-std-sboxes /missions/crypto-std-sboxes
+COPY missions/crypto-lwc-linear-xor /missions/crypto-lwc-linear-xor
+COPY missions/sphere-packing-e8-foundations /missions/sphere-packing-e8-foundations
 COPY missions/verifier-common/sunstead_sandbox.py missions/verifier-common/SunsteadCheck.lean missions/verifier-common/prebuild_cache.py missions/verifier-common/prebuild_snapshot.py /opt/sunstead/
 COPY cloudflare/containers/verifier_server.py /opt/verifier_server.py
 
@@ -62,6 +86,7 @@ RUN SYSROOT="$(lean --print-prefix)" \
     && rm -rf /tmp/scbuild \
     && /opt/sunstead/sunstead-check selftest | grep -q '"selftest":"ok"' \
     && python3 /opt/sunstead/prebuild_cache.py /missions/* \
+    && python3 /opt/sunstead/prebuild_snapshot.py /missions/* \
     && chmod -R a-w,a+rX /missions /opt/sunstead /opt/verifier_server.py \
     && useradd -M -d /nonexistent -s /usr/sbin/nologin -u 10002 sunstead-runner \
     && useradd -M -d /nonexistent -s /usr/sbin/nologin -u 10003 sunstead-checker \

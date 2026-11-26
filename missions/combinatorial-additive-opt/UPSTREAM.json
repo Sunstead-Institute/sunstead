@@ -1,0 +1,23 @@
+{
+  "repo": "google-deepmind/funsearch",
+  "commit": "cc53f274237d7ab05c19df939edbc1f9616a7c19",
+  "license": "Apache-2.0",
+  "specialization": "Sunstead pins Google DeepMind's FunSearch (Apache-2.0, Nature 2023) cap-set benchmarks and formalizes Cap Sets in F_3^n (with carry-free SWAR 2-bit-per-trit verification), 3-AP-free Salem\u2013Spencer sets, and Sidon (B_2) sets in pure Lean 4.36.0 across 14 maximization tracks.",
+  "checks": [
+    {
+      "local_file": "LICENSE",
+      "upstream_file": "LICENSE",
+      "verbatim_snippet": "Apache License\n                           Version 2.0, January 2004"
+    },
+    {
+      "local_file": "README.md",
+      "upstream_file": "README.md",
+      "upstream_anchor": "`cap_set` contains functions discovered by FunSearch that construct large cap"
+    },
+    {
+      "local_file": "AdditiveComb/Spec.lean",
+      "upstream_file": "cap_set/cap_set.ipynb",
+      "upstream_anchor": "Checking the cap set property naively takes O(c^3 n) time"
+    }
+  ]
+}

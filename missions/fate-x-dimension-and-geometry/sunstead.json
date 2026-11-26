@@ -1,0 +1,342 @@
+{
+  "id": "fate-x-dimension-and-geometry",
+  "title": "FATE-X Research Algebra: Dimension Theory, Smoothness, Cohen–Macaulay & Schemes",
+  "description": "31 research-level algebraic geometry & homological commutative algebra `sorry` theorems copied verbatim from frenzymath/FATE-X (a6fb49ee, MIT) and kernel-verified on Lean v4.36.0 + Mathlib v4.36.0: Cohen–Macaulay and Gorenstein local rings, regular sequences, complete intersections, Hilbert–Kunz / dimension theory, étale endomorphisms, and scheme-theoretic invariants.",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/frenzymath/FATE-X",
+  "upstream": {
+    "repo": "frenzymath/FATE-X",
+    "commit": "a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d",
+    "license": "MIT"
+  },
+  "frozen_paths": [
+    "FateXDimGeom/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 240,
+    "memory_mb": 6144
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "fatex_10_isPrincipalIdealRing_quot_X_pow_two_plus_Y_pow_tw",
+      "title": "FATEX #10 (Other Topics / Algebraic Number Theory and Valuation Theory): `isPrincipalIdealRing_quot_X_pow_two_plus_Y_pow_two_plus_one`",
+      "description": "Closes `FATEX/10.lean:8-11` (`Problem10.isPrincipalIdealRing_quot_X_pow_two_plus_Y_pow_two_plus_one`): Let \\( A = \\mathbb{R}[X, Y]/(X^2 + Y^2 + 1) \\). Then it is a principal ideal domain. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P10.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/10.lean#L8-L11"
+    },
+    {
+      "id": "fatex_19_galoisGroup_iso_quaternion_group",
+      "title": "FATEX #19 (Other Topics / Algebraic Number Theory and Valuation Theory): `galoisGroup_iso_quaternion_group`",
+      "description": "Closes `FATEX/19.lean:14-15` (`Problem19.galoisGroup_iso_quaternion_group`): Let $\\alpha = \\sqrt{(2+\\sqrt 2)(3+\\sqrt 3)}$ and consider the extension $E =\\mathbb{Q}(\\alpha)$. Show that… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P19.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/19.lean#L14-L15"
+    },
+    {
+      "id": "fatex_39_finite_primes_lies_over_of_finite_extension",
+      "title": "FATEX #39 (Dimension Theory and Smoothness / Heights and Dimensions): `finite_primes_lies_over_of_finite_extension`",
+      "description": "Closes `FATEX/39.lean:11-16` (`Problem39.finite_primes_lies_over_of_finite_extension`): Let \\( R \\) be a normal Noetherian domain, \\( K \\) its fraction field, \\( L/K \\) a finite field extension, and \\( \\overline{R} \\)… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P39.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/39.lean#L11-L16"
+    },
+    {
+      "id": "fatex_40_free_of_rank_iff",
+      "title": "FATEX #40 (Dimension Theory and Smoothness / Regular Sequences and Regular Local Rings): `free_of_rank_iff`",
+      "description": "Closes `FATEX/40.lean:14-20` (`Problem40.free_of_rank_iff`): Let $A$ be a reduced local ring with residue field $k$ and finite set $\\Sigma$ of minimal primes. For each… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P40.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/40.lean#L14-L20"
+    },
+    {
+      "id": "fatex_44_quot_x2_sub_y2_y2_sub_z2_xy_yz_zx_not_global_comp",
+      "title": "FATEX #44 (Other Topics / Completions and Hensel's lemma): `quot_x2_sub_y2_y2_sub_z2_xy_yz_zx_not_global_complete_intersection`",
+      "description": "Closes `FATEX/44.lean:21-25` (`Problem44.quot_x2_sub_y2_y2_sub_z2_xy_yz_zx_not_global_complete_intersection`): Let \\( k \\) be a field, and set \\( A = k[X, Y, Z]/(X^2 - Y^2, Y^2 - Z^2, XY, YZ, ZX) \\). Show that \\( A \\) is not a global… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P44.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/44.lean#L21-L25"
+    },
+    {
+      "id": "fatex_45_free_of_free_resolution",
+      "title": "FATEX #45 (Other Topics / Completions and Hensel's lemma): `free_of_free_resolution`",
+      "description": "Closes `FATEX/45.lean:22-32` (`Problem45.free_of_free_resolution`): Let $k$ be a field and $A = k[x_1, \\dots, x_r]$ the polynomial ring in $r$ variables. Let $M$ be a graded module over $A$, and… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P45.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/45.lean#L22-L32"
+    },
+    {
+      "id": "fatex_47_isEmpty_isomorphism_UFD_of_quotient",
+      "title": "FATEX #47 (Dimension Theory and Smoothness / Depth, Cohen-Macaulay Rings and Gorenstein rings): `isEmpty_isomorphism_UFD_of_quotient`",
+      "description": "Closes `FATEX/47.lean:18-21` (`Problem47.isEmpty_isomorphism_UFD_of_quotient`): Show that the ring \\(A = k[x,y]/(y^{2} - f(x))\\) is a Dedekind domain and the class group of the ring \\(A\\) is not trivial, where… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P47.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/47.lean#L18-L21"
+    },
+    {
+      "id": "fatex_48_isAbsolutelyFlat_iff_principal_ideal_idempotent",
+      "title": "FATEX #48 (Dimension Theory and Smoothness / Smoothness and the Module of Differentials): `isAbsolutelyFlat_iff_principal_ideal_idempotent`",
+      "description": "Closes `FATEX/48.lean:14-16` (`Problem48.isAbsolutelyFlat_iff_principal_ideal_idempotent`): A commutative ring \\( A \\) is \\textit{absolutely flat} if every \\( A \\)-module is flat. Prove that \\( A \\) is absolutely flat if… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P48.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/48.lean#L14-L16"
+    },
+    {
+      "id": "fatex_52_generate_unit_ideal_of_quotient",
+      "title": "FATEX #52 (Dimension Theory and Smoothness / Regular Sequences and Regular Local Rings): `generate_unit_ideal_of_quotient`",
+      "description": "Closes `FATEX/52.lean:11-15` (`Problem52.generate_unit_ideal_of_quotient`): Let $R$ be a ring, \\( \\mathfrak{m} \\) is an ideal in the Jacobson radical of \\( R \\), and \\( G_{1}, G_{2} \\in R[x] \\) are… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P52.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/52.lean#L11-L15"
+    },
+    {
+      "id": "fatex_56_projective_of_faithfullyFlat_base_change",
+      "title": "FATEX #56 (Dimension Theory and Smoothness / Smoothness and the Module of Differentials): `projective_of_faithfullyFlat_base_change`",
+      "description": "Closes `FATEX/56.lean:9-12` (`Problem56.projective_of_faithfullyFlat_base_change`): Let \\( R \\to S \\) be a faithfully flat ring map. Let \\( M \\) be an \\( R \\)-module. If the \\( S \\)-module \\( S \\otimes_{R} M \\) is… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P56.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/56.lean#L9-L12"
+    },
+    {
+      "id": "fatex_58_flat_of_flat_over_quotient",
+      "title": "FATEX #58 (Other Topics / Homological Methods): `flat_of_flat_over_quotient`",
+      "description": "Closes `FATEX/58.lean:14-20` (`Problem58.flat_of_flat_over_quotient`): Suppose that $(R, \\mathfrak{P})$ is a local Noetherian ring, and let $(S, \\mathfrak{Q})$ be a local Noetherian $R$-algebra such… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P58.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/58.lean#L14-L20"
+    },
+    {
+      "id": "fatex_60_invertible_iff_codimension_one",
+      "title": "FATEX #60 (Dimension Theory and Smoothness / Depth, Cohen-Macaulay Rings and Gorenstein rings): `invertible_iff_codimension_one`",
+      "description": "Closes `FATEX/60.lean:22-25` (`Problem60.invertible_iff_codimension_one`): Let $R$ be a Noetherian domain, and suppose that for every maximal ideal $P$ of $R$ the ring $R_P$ is factorial. Let $I \\subset… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P60.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/60.lean#L22-L25"
+    },
+    {
+      "id": "fatex_61_formallySmooth_of_formallySmooth_quotient",
+      "title": "FATEX #61 (Dimension Theory and Smoothness / Heights and Dimensions): `formallySmooth_of_formallySmooth_quotient`",
+      "description": "Closes `FATEX/61.lean:14-18` (`Problem61.formallySmooth_of_formallySmooth_quotient`): Let \\( R \\to S \\) be a ring map. Let \\( I \\subset R \\) be an ideal. Assume \\begin{enumerate} \\item \\( I^{2} = 0 \\), \\item \\( R… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P61.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/61.lean#L14-L18"
+    },
+    {
+      "id": "fatex_64_homogeneous_coordinate_ring_not_isCohenMacaulayRi",
+      "title": "FATEX #64 (Dimension Theory and Smoothness / Depth, Cohen-Macaulay Rings and Gorenstein rings): `homogeneous_coordinate_ring_not_isCohenMacaulayRing`",
+      "description": "Closes `FATEX/64.lean:42-45` (`Problem64.homogeneous_coordinate_ring_not_isCohenMacaulayRing`): Prove that the homogeneous coordinate ring of a smooth rational quartic in three-space \\[ R=k[s^4, s^3t, st^3, t^4] \\subset… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P64.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/64.lean#L42-L45"
+    },
+    {
+      "id": "fatex_65_Polynomial_isGorensteinRing",
+      "title": "FATEX #65 (Other Topics / Homological Methods): `Polynomial.isGorensteinRing`",
+      "description": "Closes `FATEX/65.lean:30-32` (`Problem65.Polynomial.isGorensteinRing`): If \\( A \\) is a Neotherian Gorenstein ring, then so is the polynomial ring \\( A[X] \\). Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P65.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/65.lean#L30-L32"
+    },
+    {
+      "id": "fatex_66_exists_eq_ofList_and_isRegular_of_perm",
+      "title": "FATEX #66 (Dimension Theory and Smoothness / Depth, Cohen-Macaulay Rings and Gorenstein rings): `exists_eq_ofList_and_isRegular_of_perm`",
+      "description": "Closes `FATEX/66.lean:11-14` (`Problem66.exists_eq_ofList_and_isRegular_of_perm`): Show that if an ideal \\( I \\) in a Noetherian ring \\( R \\) can be generated by a regular sequence, then it can be generated by a… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P66.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/66.lean#L11-L14"
+    },
+    {
+      "id": "fatex_67_isEmpty_mvPowerSeries_tensor_mvPowerSeries_algEqu",
+      "title": "FATEX #67 (Dimension Theory and Smoothness / Heights and Dimensions): `isEmpty_mvPowerSeries_tensor_mvPowerSeries_algEquiv`",
+      "description": "Closes `FATEX/67.lean:14-18` (`Problem67.isEmpty_mvPowerSeries_tensor_mvPowerSeries_algEquiv`): Let $A$ be the ring $k[[x_1, \\dots, x_n]]$, where $k$ is a field, $n \\in \\mathbb{N}$, $n \\ne 0$. Show that there is \\textbf{no}… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P67.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/67.lean#L14-L18"
+    },
+    {
+      "id": "fatex_68_localization_jacobson_of_one_lt_ringKrullDim",
+      "title": "FATEX #68 (Dimension Theory and Smoothness / Depth, Cohen-Macaulay Rings and Gorenstein rings): `localization_jacobson_of_one_lt_ringKrullDim`",
+      "description": "Closes `FATEX/68.lean:9-12` (`Problem68.localization_jacobson_of_one_lt_ringKrullDim`): Let $A$ be a Noetherian local ring with maximal ideal $\\mathfrak{m}$. For any $f\\in \\mathfrak{m}$ such that $f$ is not nilpotent,… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P68.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/68.lean#L9-L12"
+    },
+    {
+      "id": "fatex_69_IsRegularLocalRing_regularAtPrime",
+      "title": "FATEX #69 (Dimension Theory and Smoothness / Depth, Cohen-Macaulay Rings and Gorenstein rings): `IsRegularLocalRing.regularAtPrime`",
+      "description": "Closes `FATEX/69.lean:20-23` (`Problem69.IsRegularLocalRing.regularAtPrime`): If \\( R \\) is a regular local ring with maximal ideal \\( \\mathfrak{m} \\) and \\( P \\in \\operatorname{Spec}(R[x]) \\) is a prime… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P69.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/69.lean#L20-L23"
+    },
+    {
+      "id": "fatex_70_exists_minimalPrime_map_zero",
+      "title": "FATEX #70 (Dimension Theory and Smoothness / Regular Sequences and Regular Local Rings): `exists_minimalPrime_map_zero`",
+      "description": "Closes `FATEX/70.lean:10-13` (`Problem70.exists_minimalPrime_map_zero`): All rings considered are noetherian. Show that if \\( R \\) is an integral domain contained in the local ring \\( (S, Q) \\), then… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P70.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/70.lean#L10-L13"
+    },
+    {
+      "id": "fatex_71_fixedPoints_isCohenMacaulayRing",
+      "title": "FATEX #71 (Dimension Theory and Smoothness / Regular Sequences and Regular Local Rings): `fixedPoints_isCohenMacaulayRing`",
+      "description": "Closes `FATEX/71.lean:60-64` (`Problem71.fixedPoints_isCohenMacaulayRing`): Let \\( G \\) be a finite group acting as automorphisms of an algebra \\( R \\) over a field of characteristic \\( 0 \\). Show that if… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P71.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/71.lean#L60-L64"
+    },
+    {
+      "id": "fatex_72_isCohenMacaulay_extendScalars_over_mvPolynomial_o",
+      "title": "FATEX #72 (Other Topics / Completions and Hensel's lemma): `isCohenMacaulay_extendScalars_over_mvPolynomial_of_isCohenMacaulay`",
+      "description": "Closes `FATEX/72.lean:50-54` (`Problem72.isCohenMacaulay_extendScalars_over_mvPolynomial_of_isCohenMacaulay`): Let \\( R \\) be a Noetherian ring. Let \\( M \\) be a Cohen-Macaulay module over \\( R \\). Then \\( M \\otimes_R R[x_1, \\dots, x_n] \\)… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P72.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/72.lean#L50-L54"
+    },
+    {
+      "id": "fatex_74_IsRegularLocalRing_gorensteinAtRegularSequence",
+      "title": "FATEX #74 (Dimension Theory and Smoothness / Depth, Cohen-Macaulay Rings and Gorenstein rings): `IsRegularLocalRing.gorensteinAtRegularSequence`",
+      "description": "Closes `FATEX/74.lean:40-43` (`Problem74.IsRegularLocalRing.gorensteinAtRegularSequence`): Let $R$ be a regular local ring and let $x_1, \\dots, x_c$ be a regular sequence in $R$. Let $y \\in R$, $y \\notin (x_1, \\dots,… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P74.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/74.lean#L40-L43"
+    },
+    {
+      "id": "fatex_76_IsCatenary_of_noetherian_ufd_of_dim_le_three",
+      "title": "FATEX #76 (Dimension Theory and Smoothness / Heights and Dimensions): `IsCatenary.of_noetherian_ufd_of_dim_le_three`",
+      "description": "Closes `FATEX/76.lean:22-24` (`Problem76.IsCatenary.of_noetherian_ufd_of_dim_le_three`): Let $A$ be a Noetherian UFD of dimension $d \\leq 3$. Prove that $A$ is catenary. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P76.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/76.lean#L22-L24"
+    },
+    {
+      "id": "fatex_81_generated_by_regular_sequence_iff",
+      "title": "FATEX #81 (Other Topics / Homological Methods): `generated_by_regular_sequence_iff`",
+      "description": "Closes `FATEX/81.lean:10-15` (`Problem81.generated_by_regular_sequence_iff`): Let \\( A \\) be a local Noetherian ring, \\( I \\subset A \\) an ideal. Show that \\( I \\) is generated by a regular sequence if and… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P81.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/81.lean#L10-L15"
+    },
+    {
+      "id": "fatex_82_subring_iso_mvPowerSeries_over_DVR",
+      "title": "FATEX #82 (Dimension Theory and Smoothness / Heights and Dimensions): `subring_iso_mvPowerSeries_over_DVR`",
+      "description": "Closes `FATEX/82.lean:17-24` (`Problem82.subring_iso_mvPowerSeries_over_DVR`): Let \\( A \\) be a Noetherian complete local ring of dimension \\( d \\), of mixed characteristic (i.e., $\\mathrm{Char} A = 0$ and… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P82.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/82.lean#L17-L24"
+    },
+    {
+      "id": "fatex_83_IsRegularLocalRing_flat_local_of_regular",
+      "title": "FATEX #83 (Dimension Theory and Smoothness / Heights and Dimensions): `IsRegularLocalRing.flat_local_of_regular`",
+      "description": "Closes `FATEX/83.lean:19-22` (`Problem83.IsRegularLocalRing.flat_local_of_regular`): Let \\( f \\colon A \\to B \\) be a flat local homomorphism of Noetherian rings, having maximal ideals \\( \\mathfrak{M}_A \\) and \\(… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P83.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/83.lean#L19-L22"
+    },
+    {
+      "id": "fatex_84_exists_directSum_free_free_of_projective",
+      "title": "FATEX #84 (Other Topics / Algebraic and Arithmetic Dynamics): `exists_directSum_free_free_of_projective`",
+      "description": "Closes `FATEX/84.lean:9-12` (`Problem84.exists_directSum_free_free_of_projective`): For a projective module \\(M\\) over a commutative ring \\(R\\), there exists a free \\(R\\)-module \\(N\\), such that \\(M \\oplus N\\) is… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P84.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/84.lean#L9-L12"
+    },
+    {
+      "id": "fatex_85_exist_euclideanDomain_not_norm_nat",
+      "title": "FATEX #85 (Other Topics / Algebraic and Arithmetic Dynamics): `exist_euclideanDomain_not_norm_nat`",
+      "description": "Closes `FATEX/85.lean:21-23` (`Problem85.exist_euclideanDomain_not_norm_nat`): There exists a transfinite Euclidean domain such that it cannot be given a Euclidean norm taking value in \\(\\mathbb{N}\\). Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P85.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/85.lean#L21-L23"
+    },
+    {
+      "id": "fatex_86_dimension_convex",
+      "title": "FATEX #86 (Other Topics / Algebraic and Arithmetic Dynamics): `dimension_convex`",
+      "description": "Closes `FATEX/86.lean:8-10` (`Problem86.dimension_convex`): For a commutative ring \\( A \\), \\( dim A[x, y] + dim A \\le 2 * dim A[x]\\). Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P86.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/86.lean#L8-L10"
+    },
+    {
+      "id": "fatex_87_exists_polynomial_ringEquiv_isEmpty_ringEquiv",
+      "title": "FATEX #87 (Other Topics / Algebraic and Arithmetic Dynamics): `exists_polynomial_ringEquiv_isEmpty_ringEquiv`",
+      "description": "Closes `FATEX/87.lean:9-12` (`Problem87.exists_polynomial_ringEquiv_isEmpty_ringEquiv`): There exists two commutative rings \\(R, S\\), such that \\(R[x]\\) is isomorphic to \\(S[x]\\) but \\(R\\) is not isomorphic to \\(S\\). Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXDimGeom/P87.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/87.lean#L9-L12"
+    }
+  ]
+}

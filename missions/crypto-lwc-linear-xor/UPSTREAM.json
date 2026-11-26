@@ -1,0 +1,73 @@
+{
+  "repo": "rweather/lightweight-crypto",
+  "commit": "fa4ec9a021b9233263de77e7dd971de8c9761495",
+  "license": "MIT",
+  "specialization": "Sunstead pins verbatim C implementations of Pyjamask-128's nine 32\u00d732 forward/inverse circulants, PHOTON-256's 8\u00d78 GF(2^4) MDS matrix, Clyde-128's 64\u00d764 L-box, and Ascon's 64\u00d764 diffusion layers from `rweather/lightweight-crypto` (MIT), formally proves GF(2)-linearity, Pyjamask forward/inverse cancellation, and single-pass basis-mask verification soundness over all 2^n inputs in pure Lean 4.36.0 (zero Mathlib).",
+  "checks": [
+    {
+      "local_file": "LICENSE",
+      "upstream_file": "COPYING",
+      "verbatim_snippet": "Copyright (C) 2020 Southern Storm Software, Pty Ltd."
+    },
+    {
+      "local_file": "LwcLinearXor/Spec.lean",
+      "upstream_file": "src/combined/internal-pyjamask.c",
+      "verbatim_snippet": "#define pyjamask_matrix_multiply_b881b9ca(y) \\\n    do { \\\n        uint32_t result; \\\n        result  = (y); \\\n        result ^= rightRotate2((y)); \\\n        result ^= rightRotate3((y)); \\\n        result ^= rightRotate4((y)); \\\n        result ^= rightRotate8((y)); \\\n        result ^= rightRotate15((y)); \\\n        result ^= rightRotate16((y)); \\\n        result ^= rightRotate18((y)); \\\n        result ^= rightRotate19((y)); \\\n        result ^= rightRotate20((y)); \\\n        result ^= rightRotate23((y)); \\\n        result ^= rightRotate24((y)); \\\n        result ^= rightRotate25((y)); \\\n        result ^= rightRotate28((y)); \\\n        result ^= rightRotate30((y)); \\\n        (y) = result; \\\n    } while (0)"
+    },
+    {
+      "local_file": "LwcLinearXor/Spec.lean",
+      "upstream_file": "src/combined/internal-pyjamask.c",
+      "verbatim_snippet": "#define pyjamask_matrix_multiply_a3861085(y) \\\n    do { \\\n        uint32_t result; \\\n        result  = (y); \\\n        result ^= rightRotate2((y)); \\\n        result ^= rightRotate6((y)); \\\n        result ^= rightRotate7((y)); \\\n        result ^= rightRotate8((y)); \\\n        result ^= rightRotate13((y)); \\\n        result ^= rightRotate14((y)); \\\n        result ^= rightRotate19((y)); \\\n        result ^= rightRotate24((y)); \\\n        result ^= rightRotate29((y)); \\\n        result ^= rightRotate31((y)); \\\n        (y) = result; \\\n    } while (0)"
+    },
+    {
+      "local_file": "LwcLinearXor/Spec.lean",
+      "upstream_file": "src/combined/internal-pyjamask.c",
+      "verbatim_snippet": "#define pyjamask_matrix_multiply_63417021(y) \\\n    do { \\\n        uint32_t result; \\\n        result  = rightRotate1((y)); \\\n        result ^= rightRotate2((y)); \\\n        result ^= rightRotate6((y)); \\\n        result ^= rightRotate7((y)); \\\n        result ^= rightRotate9((y)); \\\n        result ^= rightRotate15((y)); \\\n        result ^= rightRotate17((y)); \\\n        result ^= rightRotate18((y)); \\\n        result ^= rightRotate19((y)); \\\n        result ^= rightRotate26((y)); \\\n        result ^= rightRotate31((y)); \\\n        (y) = result; \\\n    } while (0)"
+    },
+    {
+      "local_file": "LwcLinearXor/Spec.lean",
+      "upstream_file": "src/combined/internal-pyjamask.c",
+      "verbatim_snippet": "#define pyjamask_matrix_multiply_692cf280(y) \\\n    do { \\\n        uint32_t result; \\\n        result  = rightRotate1((y)); \\\n        result ^= rightRotate2((y)); \\\n        result ^= rightRotate4((y)); \\\n        result ^= rightRotate7((y)); \\\n        result ^= rightRotate10((y)); \\\n        result ^= rightRotate12((y)); \\\n        result ^= rightRotate13((y)); \\\n        result ^= rightRotate16((y)); \\\n        result ^= rightRotate17((y)); \\\n        result ^= rightRotate18((y)); \\\n        result ^= rightRotate19((y)); \\\n        result ^= rightRotate22((y)); \\\n        result ^= rightRotate24((y)); \\\n        (y) = result; \\\n    } while (0)"
+    },
+    {
+      "local_file": "LwcLinearXor/Spec.lean",
+      "upstream_file": "src/combined/internal-pyjamask.c",
+      "verbatim_snippet": "#define pyjamask_matrix_multiply_48a54813(y) \\\n    do { \\\n        uint32_t result; \\\n        result  = rightRotate1((y)); \\\n        result ^= rightRotate4((y)); \\\n        result ^= rightRotate8((y)); \\\n        result ^= rightRotate10((y)); \\\n        result ^= rightRotate13((y)); \\\n        result ^= rightRotate15((y)); \\\n        result ^= rightRotate17((y)); \\\n        result ^= rightRotate20((y)); \\\n        result ^= rightRotate27((y)); \\\n        result ^= rightRotate30((y)); \\\n        result ^= rightRotate31((y)); \\\n        (y) = result; \\\n    } while (0)"
+    },
+    {
+      "local_file": "LwcLinearXor/Spec.lean",
+      "upstream_file": "src/combined/internal-pyjamask.c",
+      "verbatim_snippet": "#define pyjamask_matrix_multiply_2037a121(y) \\\n    do { \\\n        uint32_t result; \\\n        result  = rightRotate2((y)); \\\n        result ^= rightRotate10((y)); \\\n        result ^= rightRotate11((y)); \\\n        result ^= rightRotate13((y)); \\\n        result ^= rightRotate14((y)); \\\n        result ^= rightRotate15((y)); \\\n        result ^= rightRotate16((y)); \\\n        result ^= rightRotate18((y)); \\\n        result ^= rightRotate23((y)); \\\n        result ^= rightRotate26((y)); \\\n        result ^= rightRotate31((y)); \\\n        (y) = result; \\\n    } while (0)"
+    },
+    {
+      "local_file": "LwcLinearXor/Spec.lean",
+      "upstream_file": "src/combined/internal-pyjamask.c",
+      "verbatim_snippet": "#define pyjamask_matrix_multiply_108ff2a0(y) \\\n    do { \\\n        uint32_t result; \\\n        result  = rightRotate3((y)); \\\n        result ^= rightRotate8((y)); \\\n        result ^= rightRotate12((y)); \\\n        result ^= rightRotate13((y)); \\\n        result ^= rightRotate14((y)); \\\n        result ^= rightRotate15((y)); \\\n        result ^= rightRotate16((y)); \\\n        result ^= rightRotate17((y)); \\\n        result ^= rightRotate18((y)); \\\n        result ^= rightRotate19((y)); \\\n        result ^= rightRotate22((y)); \\\n        result ^= rightRotate24((y)); \\\n        result ^= rightRotate26((y)); \\\n        (y) = result; \\\n    } while (0)"
+    },
+    {
+      "local_file": "LwcLinearXor/Spec.lean",
+      "upstream_file": "src/combined/internal-pyjamask.c",
+      "verbatim_snippet": "#define pyjamask_matrix_multiply_9054d8c0(y) \\\n    do { \\\n        uint32_t result; \\\n        result  = (y); \\\n        result ^= rightRotate3((y)); \\\n        result ^= rightRotate9((y)); \\\n        result ^= rightRotate11((y)); \\\n        result ^= rightRotate13((y)); \\\n        result ^= rightRotate16((y)); \\\n        result ^= rightRotate17((y)); \\\n        result ^= rightRotate19((y)); \\\n        result ^= rightRotate20((y)); \\\n        result ^= rightRotate24((y)); \\\n        result ^= rightRotate25((y)); \\\n        (y) = result; \\\n    } while (0)"
+    },
+    {
+      "local_file": "LwcLinearXor/Spec.lean",
+      "upstream_file": "src/combined/internal-pyjamask.c",
+      "verbatim_snippet": "#define pyjamask_matrix_multiply_3354b117(y) \\\n    do { \\\n        uint32_t result; \\\n        result  = rightRotate2((y)); \\\n        result ^= rightRotate3((y)); \\\n        result ^= rightRotate6((y)); \\\n        result ^= rightRotate7((y)); \\\n        result ^= rightRotate9((y)); \\\n        result ^= rightRotate11((y)); \\\n        result ^= rightRotate13((y)); \\\n        result ^= rightRotate16((y)); \\\n        result ^= rightRotate18((y)); \\\n        result ^= rightRotate19((y)); \\\n        result ^= rightRotate23((y)); \\\n        result ^= rightRotate27((y)); \\\n        result ^= rightRotate29((y)); \\\n        result ^= rightRotate30((y)); \\\n        result ^= rightRotate31((y)); \\\n        (y) = result; \\\n    } while (0)"
+    },
+    {
+      "local_file": "LwcLinearXor/Spec.lean",
+      "upstream_file": "src/combined/internal-photon256.c",
+      "verbatim_snippet": "        t8 = MUL(0x02, t0) ^ MUL(0x04, t1) ^ MUL(0x02, t2) ^ MUL(0x0b, t3) ^\n             MUL(0x02, t4) ^ MUL(0x08, t5) ^ MUL(0x05, t6) ^ MUL(0x06, t7);\n        WRITE_ROW(0, t8);\n        t8 = MUL(0x0c, t0) ^ MUL(0x09, t1) ^ MUL(0x08, t2) ^ MUL(0x0d, t3) ^\n             MUL(0x07, t4) ^ MUL(0x07, t5) ^ MUL(0x05, t6) ^ MUL(0x02, t7);\n        WRITE_ROW(1, t8);\n        t8 = MUL(0x04, t0) ^ MUL(0x04, t1) ^ MUL(0x0d, t2) ^ MUL(0x0d, t3) ^\n             MUL(0x09, t4) ^ MUL(0x04, t5) ^ MUL(0x0d, t6) ^ MUL(0x09, t7);\n        WRITE_ROW(2, t8);\n        t8 = MUL(0x01, t0) ^ MUL(0x06, t1) ^ MUL(0x05, t2) ^ MUL(0x01, t3) ^\n             MUL(0x0c, t4) ^ MUL(0x0d, t5) ^ MUL(0x0f, t6) ^ MUL(0x0e, t7);\n        WRITE_ROW(3, t8);\n        t8 = MUL(0x0f, t0) ^ MUL(0x0c, t1) ^ MUL(0x09, t2) ^ MUL(0x0d, t3) ^\n             MUL(0x0e, t4) ^ MUL(0x05, t5) ^ MUL(0x0e, t6) ^ MUL(0x0d, t7);\n        WRITE_ROW(4, t8);\n        t8 = MUL(0x09, t0) ^ MUL(0x0e, t1) ^ MUL(0x05, t2) ^ MUL(0x0f, t3) ^\n             MUL(0x04, t4) ^ MUL(0x0c, t5) ^ MUL(0x09, t6) ^ MUL(0x06, t7);\n        WRITE_ROW(5, t8);\n        t8 = MUL(0x0c, t0) ^ MUL(0x02, t1) ^ MUL(0x02, t2) ^ MUL(0x0a, t3) ^\n             MUL(0x03, t4) ^ MUL(0x01, t5) ^ MUL(0x01, t6) ^ MUL(0x0e, t7);\n        WRITE_ROW(6, t8);\n        t8 = MUL(0x0f, t0) ^ MUL(0x01, t1) ^ MUL(0x0d, t2) ^ MUL(0x0a, t3) ^\n             MUL(0x05, t4) ^ MUL(0x0a, t5) ^ MUL(0x02, t6) ^ MUL(0x03, t7);\n        WRITE_ROW(7, t8);"
+    },
+    {
+      "local_file": "LwcLinearXor/Spec.lean",
+      "upstream_file": "src/combined/internal-spook.c",
+      "verbatim_snippet": "        #define clyde128_lbox(x, y) \\\n            do { \\\n                c = x ^ rightRotate12(x); \\\n                d = y ^ rightRotate12(y); \\\n                c ^= rightRotate3(c); \\\n                d ^= rightRotate3(d); \\\n                x = c ^ leftRotate15(x); \\\n                y = d ^ leftRotate15(y); \\\n                c = x ^ leftRotate1(x); \\\n                d = y ^ leftRotate1(y); \\\n                x ^= leftRotate6(d); \\\n                y ^= leftRotate7(c); \\\n                x ^= rightRotate15(c); \\\n                y ^= rightRotate15(d); \\\n            } while (0)"
+    },
+    {
+      "local_file": "LwcLinearXor/Spec.lean",
+      "upstream_file": "src/combined/internal-ascon.c",
+      "verbatim_snippet": "        /* Linear diffusion layer */\n        x0 ^= rightRotate19_64(x0) ^ rightRotate28_64(x0);\n        x1 ^= rightRotate61_64(x1) ^ rightRotate39_64(x1);\n        x2 ^= rightRotate1_64(x2)  ^ rightRotate6_64(x2);\n        x3 ^= rightRotate10_64(x3) ^ rightRotate17_64(x3);\n        x4 ^= rightRotate7_64(x4)  ^ rightRotate41_64(x4);"
+    }
+  ]
+}

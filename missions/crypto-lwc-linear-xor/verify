@@ -1,0 +1,246 @@
+#!/usr/bin/env python3
+"""Verify explicit straight-line F_2-linear XOR circuits for lightweight cipher diffusion layers."""
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify
+
+FROZEN_FILES = ["LwcLinearXor/Spec.lean", "UPSTREAM.json", "lakefile.toml", "lean-toolchain"]
+
+TASKS = {
+    "pyjamask_m0_xor": {
+        "module": "LwcLinearXor.PyjamaskM0Bound",
+        "theorem": "LwcLinearXor.pyjamask_m0_xor_bound",
+        "score_const": "LwcLinearXor.pyjamaskM0Score",
+        "statement": "def pyjamask_m0_xor (k : Nat) : Prop := LwcLinearXor.ValidXorCircuit 32 LwcLinearXor.pyjamaskM0_32 k",
+        "label": "{score} XOR gates (Pyjamask-128 M0 (0xa3861085))"
+    },
+    "pyjamask_m1_xor": {
+        "module": "LwcLinearXor.PyjamaskM1Bound",
+        "theorem": "LwcLinearXor.pyjamask_m1_xor_bound",
+        "score_const": "LwcLinearXor.pyjamaskM1Score",
+        "statement": "def pyjamask_m1_xor (k : Nat) : Prop := LwcLinearXor.ValidXorCircuit 32 LwcLinearXor.pyjamaskM1_32 k",
+        "label": "{score} XOR gates (Pyjamask-128 M1 (0x63417021))"
+    },
+    "pyjamask_m2_xor": {
+        "module": "LwcLinearXor.PyjamaskM2Bound",
+        "theorem": "LwcLinearXor.pyjamask_m2_xor_bound",
+        "score_const": "LwcLinearXor.pyjamaskM2Score",
+        "statement": "def pyjamask_m2_xor (k : Nat) : Prop := LwcLinearXor.ValidXorCircuit 32 LwcLinearXor.pyjamaskM2_32 k",
+        "label": "{score} XOR gates (Pyjamask-128 M2 (0x692cf280))"
+    },
+    "pyjamask_m3_xor": {
+        "module": "LwcLinearXor.PyjamaskM3Bound",
+        "theorem": "LwcLinearXor.pyjamask_m3_xor_bound",
+        "score_const": "LwcLinearXor.pyjamaskM3Score",
+        "statement": "def pyjamask_m3_xor (k : Nat) : Prop := LwcLinearXor.ValidXorCircuit 32 LwcLinearXor.pyjamaskM3_32 k",
+        "label": "{score} XOR gates (Pyjamask-128 M3 (0x48a54813))"
+    },
+    "pyjamask_mk_xor": {
+        "module": "LwcLinearXor.PyjamaskMKBound",
+        "theorem": "LwcLinearXor.pyjamask_mk_xor_bound",
+        "score_const": "LwcLinearXor.pyjamaskMKScore",
+        "statement": "def pyjamask_mk_xor (k : Nat) : Prop := LwcLinearXor.ValidXorCircuit 32 LwcLinearXor.pyjamaskMK_32 k",
+        "label": "{score} XOR gates (Pyjamask-128 Key M_K (0xb881b9ca))"
+    },
+    "pyjamask_inv_m0_xor": {
+        "module": "LwcLinearXor.PyjamaskInvM0Bound",
+        "theorem": "LwcLinearXor.pyjamask_inv_m0_xor_bound",
+        "score_const": "LwcLinearXor.pyjamaskInvM0Score",
+        "statement": "def pyjamask_inv_m0_xor (k : Nat) : Prop := LwcLinearXor.ValidXorCircuit 32 LwcLinearXor.pyjamaskInvM0_32 k",
+        "label": "{score} XOR gates (Pyjamask-128 InvM0 (0x2037a121))"
+    },
+    "pyjamask_inv_m1_xor": {
+        "module": "LwcLinearXor.PyjamaskInvM1Bound",
+        "theorem": "LwcLinearXor.pyjamask_inv_m1_xor_bound",
+        "score_const": "LwcLinearXor.pyjamaskInvM1Score",
+        "statement": "def pyjamask_inv_m1_xor (k : Nat) : Prop := LwcLinearXor.ValidXorCircuit 32 LwcLinearXor.pyjamaskInvM1_32 k",
+        "label": "{score} XOR gates (Pyjamask-128 InvM1 (0x108ff2a0))"
+    },
+    "pyjamask_inv_m2_xor": {
+        "module": "LwcLinearXor.PyjamaskInvM2Bound",
+        "theorem": "LwcLinearXor.pyjamask_inv_m2_xor_bound",
+        "score_const": "LwcLinearXor.pyjamaskInvM2Score",
+        "statement": "def pyjamask_inv_m2_xor (k : Nat) : Prop := LwcLinearXor.ValidXorCircuit 32 LwcLinearXor.pyjamaskInvM2_32 k",
+        "label": "{score} XOR gates (Pyjamask-128 InvM2 (0x9054d8c0))"
+    },
+    "pyjamask_inv_m3_xor": {
+        "module": "LwcLinearXor.PyjamaskInvM3Bound",
+        "theorem": "LwcLinearXor.pyjamask_inv_m3_xor_bound",
+        "score_const": "LwcLinearXor.pyjamaskInvM3Score",
+        "statement": "def pyjamask_inv_m3_xor (k : Nat) : Prop := LwcLinearXor.ValidXorCircuit 32 LwcLinearXor.pyjamaskInvM3_32 k",
+        "label": "{score} XOR gates (Pyjamask-128 InvM3 (0x3354b117))"
+    },
+    "photon256_mds_xor": {
+        "module": "LwcLinearXor.Photon256MdsBound",
+        "theorem": "LwcLinearXor.photon256_mds_xor_bound",
+        "score_const": "LwcLinearXor.photon256MdsScore",
+        "statement": "def photon256_mds_xor (k : Nat) : Prop := LwcLinearXor.ValidXorCircuit 32 LwcLinearXor.photon256Mds32 k",
+        "label": "{score} XOR gates (PHOTON-256 8\u00d78 GF(2^4) MDS)"
+    },
+    "clyde128_lbox_xor": {
+        "module": "LwcLinearXor.Clyde128LboxBound",
+        "theorem": "LwcLinearXor.clyde128_lbox_xor_bound",
+        "score_const": "LwcLinearXor.clyde128LboxScore",
+        "statement": "def clyde128_lbox_xor (k : Nat) : Prop := LwcLinearXor.ValidXorCircuit 64 LwcLinearXor.clyde128Lbox64 k",
+        "label": "{score} XOR gates (Clyde-128 / Spook 64-bit L-box)"
+    },
+    "ascon_sigma0_xor": {
+        "module": "LwcLinearXor.AsconSigma0Bound",
+        "theorem": "LwcLinearXor.ascon_sigma0_xor_bound",
+        "score_const": "LwcLinearXor.asconSigma0Score",
+        "statement": "def ascon_sigma0_xor (k : Nat) : Prop := LwcLinearXor.ValidXorCircuit 64 LwcLinearXor.asconSigma0_64 k",
+        "label": "{score} XOR gates (Ascon \u03a30 (rot 19, 28))"
+    },
+    "ascon_sigma2_xor": {
+        "module": "LwcLinearXor.AsconSigma2Bound",
+        "theorem": "LwcLinearXor.ascon_sigma2_xor_bound",
+        "score_const": "LwcLinearXor.asconSigma2Score",
+        "statement": "def ascon_sigma2_xor (k : Nat) : Prop := LwcLinearXor.ValidXorCircuit 64 LwcLinearXor.asconSigma2_64 k",
+        "label": "{score} XOR gates (Ascon \u03a32 (rot 1, 6))"
+    }
+}
+
+CIRCUIT_TARGETS = {
+    "pyjamask_m0_xor": [
+        "LwcLinearXor/PyjamaskM0Circuit.lean",
+        "LwcLinearXor.pyjamaskM0Score",
+        "LwcLinearXor.pyjamaskM0Gates",
+        "LwcLinearXor.pyjamaskM0Outputs",
+        32
+    ],
+    "pyjamask_m1_xor": [
+        "LwcLinearXor/PyjamaskM1Circuit.lean",
+        "LwcLinearXor.pyjamaskM1Score",
+        "LwcLinearXor.pyjamaskM1Gates",
+        "LwcLinearXor.pyjamaskM1Outputs",
+        32
+    ],
+    "pyjamask_m2_xor": [
+        "LwcLinearXor/PyjamaskM2Circuit.lean",
+        "LwcLinearXor.pyjamaskM2Score",
+        "LwcLinearXor.pyjamaskM2Gates",
+        "LwcLinearXor.pyjamaskM2Outputs",
+        32
+    ],
+    "pyjamask_m3_xor": [
+        "LwcLinearXor/PyjamaskM3Circuit.lean",
+        "LwcLinearXor.pyjamaskM3Score",
+        "LwcLinearXor.pyjamaskM3Gates",
+        "LwcLinearXor.pyjamaskM3Outputs",
+        32
+    ],
+    "pyjamask_mk_xor": [
+        "LwcLinearXor/PyjamaskMKCircuit.lean",
+        "LwcLinearXor.pyjamaskMKScore",
+        "LwcLinearXor.pyjamaskMKGates",
+        "LwcLinearXor.pyjamaskMKOutputs",
+        32
+    ],
+    "pyjamask_inv_m0_xor": [
+        "LwcLinearXor/PyjamaskInvM0Circuit.lean",
+        "LwcLinearXor.pyjamaskInvM0Score",
+        "LwcLinearXor.pyjamaskInvM0Gates",
+        "LwcLinearXor.pyjamaskInvM0Outputs",
+        32
+    ],
+    "pyjamask_inv_m1_xor": [
+        "LwcLinearXor/PyjamaskInvM1Circuit.lean",
+        "LwcLinearXor.pyjamaskInvM1Score",
+        "LwcLinearXor.pyjamaskInvM1Gates",
+        "LwcLinearXor.pyjamaskInvM1Outputs",
+        32
+    ],
+    "pyjamask_inv_m2_xor": [
+        "LwcLinearXor/PyjamaskInvM2Circuit.lean",
+        "LwcLinearXor.pyjamaskInvM2Score",
+        "LwcLinearXor.pyjamaskInvM2Gates",
+        "LwcLinearXor.pyjamaskInvM2Outputs",
+        32
+    ],
+    "pyjamask_inv_m3_xor": [
+        "LwcLinearXor/PyjamaskInvM3Circuit.lean",
+        "LwcLinearXor.pyjamaskInvM3Score",
+        "LwcLinearXor.pyjamaskInvM3Gates",
+        "LwcLinearXor.pyjamaskInvM3Outputs",
+        32
+    ],
+    "photon256_mds_xor": [
+        "LwcLinearXor/Photon256MdsCircuit.lean",
+        "LwcLinearXor.photon256MdsScore",
+        "LwcLinearXor.photon256MdsGates",
+        "LwcLinearXor.photon256MdsOutputs",
+        32
+    ],
+    "clyde128_lbox_xor": [
+        "LwcLinearXor/Clyde128LboxCircuit.lean",
+        "LwcLinearXor.clyde128LboxScore",
+        "LwcLinearXor.clyde128LboxGates",
+        "LwcLinearXor.clyde128LboxOutputs",
+        64
+    ],
+    "ascon_sigma0_xor": [
+        "LwcLinearXor/AsconSigma0Circuit.lean",
+        "LwcLinearXor.asconSigma0Score",
+        "LwcLinearXor.asconSigma0Gates",
+        "LwcLinearXor.asconSigma0Outputs",
+        64
+    ],
+    "ascon_sigma2_xor": [
+        "LwcLinearXor/AsconSigma2Circuit.lean",
+        "LwcLinearXor.asconSigma2Score",
+        "LwcLinearXor.asconSigma2Gates",
+        "LwcLinearXor.asconSigma2Outputs",
+        64
+    ]
+}
+
+MAX_BYTES = 32768
+MAX_GATES = 1024
+
+
+def check_circuit(path, score_name, gates_name, outputs_name, width):
+    if not path.is_file():
+        emit(False, f"Missing circuit file: {path.name}", stage="lint")
+    raw = path.read_bytes()
+    if len(raw) > MAX_BYTES:
+        emit(False, f"Circuit file exceeds {MAX_BYTES} bytes", stage="lint")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        emit(False, "Circuit file must be valid UTF-8", stage="lint")
+    nat = r"(?:0|[1-9][0-9]{0,3})"
+    pair = rf"\(\s*{nat}\s*,\s*{nat}\s*\)"
+    header_re = (
+        rf"\s*def\s+{re.escape(score_name)}\s*:\s*Nat\s*:=\s*({nat})\s*\n"
+        rf"\s*def\s+{re.escape(gates_name)}\s*:\s*List\s*\(Nat\s*×\s*Nat\)\s*:=\s*\[\s*(.*?)\s*\]\s*\n"
+        rf"\s*def\s+{re.escape(outputs_name)}\s*:\s*List\s+Nat\s*:=\s*\[\s*(.*?)\s*\]\s*"
+    )
+    match = re.fullmatch(header_re, text, re.DOTALL)
+    if not match:
+        emit(False, f"Expected only literal definitions for {score_name}, {gates_name}, and {outputs_name}", stage="lint")
+    gates_body = match.group(2)
+    outputs_body = match.group(3)
+    if not gates_body or not re.fullmatch(rf"{pair}(?:\s*,\s*{pair}){{0,{MAX_GATES - 1}}}", gates_body):
+        emit(False, f"Expected 1 to {MAX_GATES} literal (w1, w2) XOR gate pairs", stage="lint")
+    if not re.fullmatch(rf"{nat}(?:\s*,\s*{nat}){{{width - 1}}}", outputs_body):
+        emit(False, f"Expected exactly {width} literal output wire indices", stage="lint")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>", stage="lint")
+    tid = sys.argv[1]
+    if tid in CIRCUIT_TARGETS:
+        rel_path, score_name, gates_name, outputs_name, width = CIRCUIT_TARGETS[tid]
+        check_circuit(Path(__file__).resolve().parent / rel_path, score_name, gates_name, outputs_name, width)
+    lean_verify(
+        tid,
+        lib_root="LwcLinearXor",
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        uses_mathlib=False,
+        timeout_sec=80,
+    )

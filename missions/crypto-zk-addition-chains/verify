@@ -1,0 +1,197 @@
+#!/usr/bin/env python3
+"""Verify shortest cryptographic addition chains in pure Lean 4.36.0 (zero Mathlib)."""
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify
+
+FROZEN_FILES = ["ZkAddChain/Spec.lean", "UPSTREAM.json", "lakefile.toml", "lean-toolchain"]
+
+TASKS = {
+    "goldilocks_inv": {
+        "module": "ZkAddChain.BoundGoldilocksInv",
+        "theorem": "ZkAddChain.bound_goldilocks_inv",
+        "score_const": "ZkAddChain.score_goldilocks_inv",
+        "statement": "def goldilocks_inv (len : Nat) : Prop := ZkAddChain.ValidAddChain ZkAddChain.target_goldilocks_inv len",
+        "label": "{score} steps (Goldilocks p-2)"
+    },
+    "goldilocks_inv_d7": {
+        "module": "ZkAddChain.BoundGoldilocksInvD7",
+        "theorem": "ZkAddChain.bound_goldilocks_inv_d7",
+        "score_const": "ZkAddChain.score_goldilocks_inv_d7",
+        "statement": "def goldilocks_inv_d7 (len : Nat) : Prop := ZkAddChain.ValidAddChain ZkAddChain.target_goldilocks_inv_d7 len",
+        "label": "{score} steps (Goldilocks 1/7 (x^10540996611094048183))"
+    },
+    "babybear_inv": {
+        "module": "ZkAddChain.BoundBabyBearInv",
+        "theorem": "ZkAddChain.bound_babybear_inv",
+        "score_const": "ZkAddChain.score_babybear_inv",
+        "statement": "def babybear_inv (len : Nat) : Prop := ZkAddChain.ValidAddChain ZkAddChain.target_babybear_inv len",
+        "label": "{score} steps (BabyBear p-2)"
+    },
+    "babybear_inv_d7": {
+        "module": "ZkAddChain.BoundBabyBearInvD7",
+        "theorem": "ZkAddChain.bound_babybear_inv_d7",
+        "score_const": "ZkAddChain.score_babybear_inv_d7",
+        "statement": "def babybear_inv_d7 (len : Nat) : Prop := ZkAddChain.ValidAddChain ZkAddChain.target_babybear_inv_d7 len",
+        "label": "{score} steps (BabyBear 1/7 (x^1725656503))"
+    },
+    "koalabear_inv": {
+        "module": "ZkAddChain.BoundKoalaBearInv",
+        "theorem": "ZkAddChain.bound_koalabear_inv",
+        "score_const": "ZkAddChain.score_koalabear_inv",
+        "statement": "def koalabear_inv (len : Nat) : Prop := ZkAddChain.ValidAddChain ZkAddChain.target_koalabear_inv len",
+        "label": "{score} steps (KoalaBear p-2)"
+    },
+    "koalabear_inv_d3": {
+        "module": "ZkAddChain.BoundKoalaBearInvD3",
+        "theorem": "ZkAddChain.bound_koalabear_inv_d3",
+        "score_const": "ZkAddChain.score_koalabear_inv_d3",
+        "statement": "def koalabear_inv_d3 (len : Nat) : Prop := ZkAddChain.ValidAddChain ZkAddChain.target_koalabear_inv_d3 len",
+        "label": "{score} steps (KoalaBear 1/3 (x^1420470955))"
+    },
+    "mersenne31_inv": {
+        "module": "ZkAddChain.BoundMersenne31Inv",
+        "theorem": "ZkAddChain.bound_mersenne31_inv",
+        "score_const": "ZkAddChain.score_mersenne31_inv",
+        "statement": "def mersenne31_inv (len : Nat) : Prop := ZkAddChain.ValidAddChain ZkAddChain.target_mersenne31_inv len",
+        "label": "{score} steps (Mersenne31 p-2)"
+    },
+    "mersenne31_inv_d5": {
+        "module": "ZkAddChain.BoundMersenne31InvD5",
+        "theorem": "ZkAddChain.bound_mersenne31_inv_d5",
+        "score_const": "ZkAddChain.score_mersenne31_inv_d5",
+        "statement": "def mersenne31_inv_d5 (len : Nat) : Prop := ZkAddChain.ValidAddChain ZkAddChain.target_mersenne31_inv_d5 len",
+        "label": "{score} steps (Mersenne31 1/5 (x^1717986917))"
+    },
+    "bn254_inv": {
+        "module": "ZkAddChain.BoundBn254Inv",
+        "theorem": "ZkAddChain.bound_bn254_inv",
+        "score_const": "ZkAddChain.score_bn254_inv",
+        "statement": "def bn254_inv (len : Nat) : Prop := ZkAddChain.ValidAddChain ZkAddChain.target_bn254_inv len",
+        "label": "{score} steps (BN254 Field p-2)"
+    },
+    "bn254_inv_d5": {
+        "module": "ZkAddChain.BoundBn254InvD5",
+        "theorem": "ZkAddChain.bound_bn254_inv_d5",
+        "score_const": "ZkAddChain.score_bn254_inv_d5",
+        "statement": "def bn254_inv_d5 (len : Nat) : Prop := ZkAddChain.ValidAddChain ZkAddChain.target_bn254_inv_d5 len",
+        "label": "{score} steps (BN254 Rescue/Poseidon 1/5)"
+    }
+}
+
+CHAIN_SPECS = {
+    "goldilocks_inv": {
+        "file": "ZkAddChain/ChainGoldilocksInv.lean",
+        "score_name": "ZkAddChain.score_goldilocks_inv",
+        "steps_name": "ZkAddChain.steps_goldilocks_inv",
+        "max_steps": 1024
+    },
+    "goldilocks_inv_d7": {
+        "file": "ZkAddChain/ChainGoldilocksInvD7.lean",
+        "score_name": "ZkAddChain.score_goldilocks_inv_d7",
+        "steps_name": "ZkAddChain.steps_goldilocks_inv_d7",
+        "max_steps": 1024
+    },
+    "babybear_inv": {
+        "file": "ZkAddChain/ChainBabyBearInv.lean",
+        "score_name": "ZkAddChain.score_babybear_inv",
+        "steps_name": "ZkAddChain.steps_babybear_inv",
+        "max_steps": 1024
+    },
+    "babybear_inv_d7": {
+        "file": "ZkAddChain/ChainBabyBearInvD7.lean",
+        "score_name": "ZkAddChain.score_babybear_inv_d7",
+        "steps_name": "ZkAddChain.steps_babybear_inv_d7",
+        "max_steps": 1024
+    },
+    "koalabear_inv": {
+        "file": "ZkAddChain/ChainKoalaBearInv.lean",
+        "score_name": "ZkAddChain.score_koalabear_inv",
+        "steps_name": "ZkAddChain.steps_koalabear_inv",
+        "max_steps": 1024
+    },
+    "koalabear_inv_d3": {
+        "file": "ZkAddChain/ChainKoalaBearInvD3.lean",
+        "score_name": "ZkAddChain.score_koalabear_inv_d3",
+        "steps_name": "ZkAddChain.steps_koalabear_inv_d3",
+        "max_steps": 1024
+    },
+    "mersenne31_inv": {
+        "file": "ZkAddChain/ChainMersenne31Inv.lean",
+        "score_name": "ZkAddChain.score_mersenne31_inv",
+        "steps_name": "ZkAddChain.steps_mersenne31_inv",
+        "max_steps": 1024
+    },
+    "mersenne31_inv_d5": {
+        "file": "ZkAddChain/ChainMersenne31InvD5.lean",
+        "score_name": "ZkAddChain.score_mersenne31_inv_d5",
+        "steps_name": "ZkAddChain.steps_mersenne31_inv_d5",
+        "max_steps": 1024
+    },
+    "bn254_inv": {
+        "file": "ZkAddChain/ChainBn254Inv.lean",
+        "score_name": "ZkAddChain.score_bn254_inv",
+        "steps_name": "ZkAddChain.steps_bn254_inv",
+        "max_steps": 1024
+    },
+    "bn254_inv_d5": {
+        "file": "ZkAddChain/ChainBn254InvD5.lean",
+        "score_name": "ZkAddChain.score_bn254_inv_d5",
+        "steps_name": "ZkAddChain.steps_bn254_inv_d5",
+        "max_steps": 1024
+    }
+}
+
+
+def check_chain(task_id, base_dir):
+    spec = CHAIN_SPECS.get(task_id)
+    if spec is None:
+        emit(False, f"unknown task id: {task_id}", stage="lint")
+    path = base_dir / spec["file"]
+    if not path.is_file():
+        emit(False, f"Missing chain file: {path.name}", stage="lint")
+    raw = path.read_bytes()
+    if len(raw) > 32768:
+        emit(False, "Chain file exceeds 32768 bytes", stage="lint")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        emit(False, "Chain file must be valid UTF-8", stage="lint")
+    nat = r"(?:0|[1-9][0-9]{0,3})"
+    pair = rf"\(\s*{nat}\s*,\s*{nat}\s*\)"
+    header_re = (
+        rf"\s*def\s+{re.escape(spec['score_name'])}\s*:\s*Nat\s*:=\s*({nat})\s*\n"
+        rf"\s*def\s+{re.escape(spec['steps_name'])}\s*:\s*List\s*\(Nat\s*×\s*Nat\)\s*:=\s*\[\s*(.*?)\s*\]\s*"
+    )
+    m = re.fullmatch(header_re, text, re.DOTALL)
+    if not m:
+        emit(False, f"Expected only literal definitions for {spec['score_name']} and {spec['steps_name']}", stage="lint")
+    score = int(m.group(1))
+    max_s = spec["max_steps"]
+    if score < 1 or score > max_s:
+        emit(False, f"Score must be in 1..{max_s}", stage="lint")
+    body = m.group(2)
+    if not body or not re.fullmatch(rf"{pair}(?:\s*,\s*{pair}){{0,{max_s - 1}}}", body):
+        emit(False, f"Expected 1 to {max_s} literal (i, j) step pairs", stage="lint")
+    pairs = re.findall(pair, body)
+    if len(pairs) != score:
+        emit(False, f"Score {score} does not match step count {len(pairs)}", stage="lint")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>", stage="lint")
+    tid = sys.argv[1]
+    if tid in CHAIN_SPECS:
+        check_chain(tid, Path(__file__).resolve().parent)
+    lean_verify(
+        tid,
+        lib_root="ZkAddChain",
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        uses_mathlib=False,
+        timeout_sec=50,
+    )

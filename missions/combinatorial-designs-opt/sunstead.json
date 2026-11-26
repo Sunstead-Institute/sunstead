@@ -1,0 +1,202 @@
+{
+  "id": "combinatorial-designs-opt",
+  "title": "Combinatorial Designs: Covering Arrays CAN(t, k, v) & Optimal Golomb Rulers G(k)",
+  "description": "Pure Lean 4.36.0 (zero Mathlib) certified minimization across 14 classical combinatorial design frontiers: 8 strength-2 and strength-3 Covering Array tracks CAN(t, k, v) (Colbourn benchmark tables) and 6 Optimal Golomb Ruler tracks G(k) for k = 12..29 (including the open OGR-29 frontier). `CombDesigns/Spec.lean` formally proves soundness of a bit-sliced column-mask covering array verifier (`checkCA2`, `checkCA3`) and a pairwise-difference Golomb ruler verifier (`checkGolombRuler`). Pinned to `huayaow/DPSO@e28d4f2` (MIT, Wu\u2013Nie\u2013Kuo\u2013Leung\u2013Colbourn, IEEE TEVC 2015).",
+  "tier": 2,
+  "mode": "hillclimb",
+  "repo": "https://github.com/huayaow/DPSO",
+  "upstream": {
+    "repo": "huayaow/DPSO",
+    "commit": "e28d4f2c4e2f989e5d9ff5f78c5214a3331fe2dc",
+    "license": "MIT"
+  },
+  "score_direction": "minimize",
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 90,
+    "memory_mb": 2048
+  },
+  "frozen_paths": [
+    "CombDesigns/Spec.lean",
+    "CombDesigns/BoundCA_2_15_3.lean",
+    "CombDesigns/BoundCA_2_20_3.lean",
+    "CombDesigns/BoundCA_2_15_4.lean",
+    "CombDesigns/BoundCA_2_20_4.lean",
+    "CombDesigns/BoundCA_3_12_2.lean",
+    "CombDesigns/BoundCA_3_16_2.lean",
+    "CombDesigns/BoundCA_3_20_2.lean",
+    "CombDesigns/BoundCA_3_10_3.lean",
+    "CombDesigns/BoundGolomb12.lean",
+    "CombDesigns/BoundGolomb14.lean",
+    "CombDesigns/BoundGolomb16.lean",
+    "CombDesigns/BoundGolomb20.lean",
+    "CombDesigns/BoundGolomb25.lean",
+    "CombDesigns/BoundGolomb29.lean",
+    "LICENSE",
+    "README.md",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "tasks": [
+    {
+      "id": "ca_2_15_3",
+      "title": "Minimize Covering Array rows CAN(2, 15, 3) (baseline 20)",
+      "description": "Submit an N \u00d7 15 covering array over {0..2} of strength t = 2 in `CombDesigns/CA_2_15_3.lean` (`CombDesigns.score_ca_2_15_3` and `CombDesigns.arr_ca_2_15_3`), seeded with a constructive greedy AETG array of 20 rows (frontier: 15 (Colbourn table)). Frozen `CombDesigns/BoundCA_2_15_3.lean` kernel-verifies matrix shape, alphabet bounds, and full 2-wise coverage of all 3^2 tuples across every 2-tuple of columns via bit-sliced column masks (`decide +kernel`).",
+      "baseline_score": 20,
+      "target_files": [
+        "CombDesigns/CA_2_15_3.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/huayaow/DPSO/blob/e28d4f2c4e2f989e5d9ff5f78c5214a3331fe2dc/README.md"
+    },
+    {
+      "id": "ca_2_20_3",
+      "title": "Minimize Covering Array rows CAN(2, 20, 3) (baseline 22)",
+      "description": "Submit an N \u00d7 20 covering array over {0..2} of strength t = 2 in `CombDesigns/CA_2_20_3.lean` (`CombDesigns.score_ca_2_20_3` and `CombDesigns.arr_ca_2_20_3`), seeded with a constructive greedy AETG array of 22 rows (frontier: 15 (Colbourn table)). Frozen `CombDesigns/BoundCA_2_20_3.lean` kernel-verifies matrix shape, alphabet bounds, and full 2-wise coverage of all 3^2 tuples across every 2-tuple of columns via bit-sliced column masks (`decide +kernel`).",
+      "baseline_score": 22,
+      "target_files": [
+        "CombDesigns/CA_2_20_3.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/huayaow/DPSO/blob/e28d4f2c4e2f989e5d9ff5f78c5214a3331fe2dc/README.md"
+    },
+    {
+      "id": "ca_2_15_4",
+      "title": "Minimize Covering Array rows CAN(2, 15, 4) (baseline 34)",
+      "description": "Submit an N \u00d7 15 covering array over {0..3} of strength t = 2 in `CombDesigns/CA_2_15_4.lean` (`CombDesigns.score_ca_2_15_4` and `CombDesigns.arr_ca_2_15_4`), seeded with a constructive greedy AETG array of 34 rows (frontier: 24 (Colbourn table)). Frozen `CombDesigns/BoundCA_2_15_4.lean` kernel-verifies matrix shape, alphabet bounds, and full 2-wise coverage of all 4^2 tuples across every 2-tuple of columns via bit-sliced column masks (`decide +kernel`).",
+      "baseline_score": 34,
+      "target_files": [
+        "CombDesigns/CA_2_15_4.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/huayaow/DPSO/blob/e28d4f2c4e2f989e5d9ff5f78c5214a3331fe2dc/README.md"
+    },
+    {
+      "id": "ca_2_20_4",
+      "title": "Minimize Covering Array rows CAN(2, 20, 4) (baseline 41)",
+      "description": "Submit an N \u00d7 20 covering array over {0..3} of strength t = 2 in `CombDesigns/CA_2_20_4.lean` (`CombDesigns.score_ca_2_20_4` and `CombDesigns.arr_ca_2_20_4`), seeded with a constructive greedy AETG array of 41 rows (frontier: 28 (Colbourn table)). Frozen `CombDesigns/BoundCA_2_20_4.lean` kernel-verifies matrix shape, alphabet bounds, and full 2-wise coverage of all 4^2 tuples across every 2-tuple of columns via bit-sliced column masks (`decide +kernel`).",
+      "baseline_score": 41,
+      "target_files": [
+        "CombDesigns/CA_2_20_4.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/huayaow/DPSO/blob/e28d4f2c4e2f989e5d9ff5f78c5214a3331fe2dc/README.md"
+    },
+    {
+      "id": "ca_3_12_2",
+      "title": "Minimize Covering Array rows CAN(3, 12, 2) (baseline 23)",
+      "description": "Submit an N \u00d7 12 covering array over {0..1} of strength t = 3 in `CombDesigns/CA_3_12_2.lean` (`CombDesigns.score_ca_3_12_2` and `CombDesigns.arr_ca_3_12_2`), seeded with a constructive greedy AETG array of 23 rows (frontier: 15 (exact/Colbourn)). Frozen `CombDesigns/BoundCA_3_12_2.lean` kernel-verifies matrix shape, alphabet bounds, and full 3-wise coverage of all 2^3 tuples across every 3-tuple of columns via bit-sliced column masks (`decide +kernel`).",
+      "baseline_score": 23,
+      "target_files": [
+        "CombDesigns/CA_3_12_2.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/huayaow/DPSO/blob/e28d4f2c4e2f989e5d9ff5f78c5214a3331fe2dc/README.md"
+    },
+    {
+      "id": "ca_3_16_2",
+      "title": "Minimize Covering Array rows CAN(3, 16, 2) (baseline 27)",
+      "description": "Submit an N \u00d7 16 covering array over {0..1} of strength t = 3 in `CombDesigns/CA_3_16_2.lean` (`CombDesigns.score_ca_3_16_2` and `CombDesigns.arr_ca_3_16_2`), seeded with a constructive greedy AETG array of 27 rows (frontier: 17 (Colbourn frontier)). Frozen `CombDesigns/BoundCA_3_16_2.lean` kernel-verifies matrix shape, alphabet bounds, and full 3-wise coverage of all 2^3 tuples across every 3-tuple of columns via bit-sliced column masks (`decide +kernel`).",
+      "baseline_score": 27,
+      "target_files": [
+        "CombDesigns/CA_3_16_2.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/huayaow/DPSO/blob/e28d4f2c4e2f989e5d9ff5f78c5214a3331fe2dc/README.md"
+    },
+    {
+      "id": "ca_3_20_2",
+      "title": "Minimize Covering Array rows CAN(3, 20, 2) (baseline 29)",
+      "description": "Submit an N \u00d7 20 covering array over {0..1} of strength t = 3 in `CombDesigns/CA_3_20_2.lean` (`CombDesigns.score_ca_3_20_2` and `CombDesigns.arr_ca_3_20_2`), seeded with a constructive greedy AETG array of 29 rows (frontier: 18 (open Colbourn frontier)). Frozen `CombDesigns/BoundCA_3_20_2.lean` kernel-verifies matrix shape, alphabet bounds, and full 3-wise coverage of all 2^3 tuples across every 3-tuple of columns via bit-sliced column masks (`decide +kernel`).",
+      "baseline_score": 29,
+      "target_files": [
+        "CombDesigns/CA_3_20_2.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/huayaow/DPSO/blob/e28d4f2c4e2f989e5d9ff5f78c5214a3331fe2dc/README.md"
+    },
+    {
+      "id": "ca_3_10_3",
+      "title": "Minimize Covering Array rows CAN(3, 10, 3) (baseline 77)",
+      "description": "Submit an N \u00d7 10 covering array over {0..2} of strength t = 3 in `CombDesigns/CA_3_10_3.lean` (`CombDesigns.score_ca_3_10_3` and `CombDesigns.arr_ca_3_10_3`), seeded with a constructive greedy AETG array of 77 rows (frontier: 45 (Colbourn frontier)). Frozen `CombDesigns/BoundCA_3_10_3.lean` kernel-verifies matrix shape, alphabet bounds, and full 3-wise coverage of all 3^3 tuples across every 3-tuple of columns via bit-sliced column masks (`decide +kernel`).",
+      "baseline_score": 77,
+      "target_files": [
+        "CombDesigns/CA_3_10_3.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/huayaow/DPSO/blob/e28d4f2c4e2f989e5d9ff5f78c5214a3331fe2dc/README.md"
+    },
+    {
+      "id": "golomb_k12",
+      "title": "Minimize 12-mark Golomb Ruler length G(12) (baseline 122)",
+      "description": "Submit a strictly increasing 12-mark Golomb ruler in {0..L} in `CombDesigns/Golomb12.lean` (`CombDesigns.score_golomb_k12` and `CombDesigns.marks_golomb_k12`), seeded with the Mian\u2013Chowla greedy ruler of length 122 (frontier: 85 (exact OGR-12)). Frozen `CombDesigns/BoundGolomb12.lean` kernel-verifies mark count `12`, strict ordering, bound `\u2264 L`, and pairwise distinctness of all C(12, 2) positive differences (`decide +kernel`).",
+      "baseline_score": 122,
+      "target_files": [
+        "CombDesigns/Golomb12.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/huayaow/DPSO/blob/e28d4f2c4e2f989e5d9ff5f78c5214a3331fe2dc/README.md"
+    },
+    {
+      "id": "golomb_k14",
+      "title": "Minimize 14-mark Golomb Ruler length G(14) (baseline 181)",
+      "description": "Submit a strictly increasing 14-mark Golomb ruler in {0..L} in `CombDesigns/Golomb14.lean` (`CombDesigns.score_golomb_k14` and `CombDesigns.marks_golomb_k14`), seeded with the Mian\u2013Chowla greedy ruler of length 181 (frontier: 127 (exact OGR-14)). Frozen `CombDesigns/BoundGolomb14.lean` kernel-verifies mark count `14`, strict ordering, bound `\u2264 L`, and pairwise distinctness of all C(14, 2) positive differences (`decide +kernel`).",
+      "baseline_score": 181,
+      "target_files": [
+        "CombDesigns/Golomb14.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/huayaow/DPSO/blob/e28d4f2c4e2f989e5d9ff5f78c5214a3331fe2dc/README.md"
+    },
+    {
+      "id": "golomb_k16",
+      "title": "Minimize 16-mark Golomb Ruler length G(16) (baseline 251)",
+      "description": "Submit a strictly increasing 16-mark Golomb ruler in {0..L} in `CombDesigns/Golomb16.lean` (`CombDesigns.score_golomb_k16` and `CombDesigns.marks_golomb_k16`), seeded with the Mian\u2013Chowla greedy ruler of length 251 (frontier: 177 (exact OGR-16)). Frozen `CombDesigns/BoundGolomb16.lean` kernel-verifies mark count `16`, strict ordering, bound `\u2264 L`, and pairwise distinctness of all C(16, 2) positive differences (`decide +kernel`).",
+      "baseline_score": 251,
+      "target_files": [
+        "CombDesigns/Golomb16.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/huayaow/DPSO/blob/e28d4f2c4e2f989e5d9ff5f78c5214a3331fe2dc/README.md"
+    },
+    {
+      "id": "golomb_k20",
+      "title": "Minimize 20-mark Golomb Ruler length G(20) (baseline 474)",
+      "description": "Submit a strictly increasing 20-mark Golomb ruler in {0..L} in `CombDesigns/Golomb20.lean` (`CombDesigns.score_golomb_k20` and `CombDesigns.marks_golomb_k20`), seeded with the Mian\u2013Chowla greedy ruler of length 474 (frontier: 283 (exact OGR-20)). Frozen `CombDesigns/BoundGolomb20.lean` kernel-verifies mark count `20`, strict ordering, bound `\u2264 L`, and pairwise distinctness of all C(20, 2) positive differences (`decide +kernel`).",
+      "baseline_score": 474,
+      "target_files": [
+        "CombDesigns/Golomb20.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/huayaow/DPSO/blob/e28d4f2c4e2f989e5d9ff5f78c5214a3331fe2dc/README.md"
+    },
+    {
+      "id": "golomb_k25",
+      "title": "Minimize 25-mark Golomb Ruler length G(25) (baseline 821)",
+      "description": "Submit a strictly increasing 25-mark Golomb ruler in {0..L} in `CombDesigns/Golomb25.lean` (`CombDesigns.score_golomb_k25` and `CombDesigns.marks_golomb_k25`), seeded with the Mian\u2013Chowla greedy ruler of length 821 (frontier: 480 (exact OGR-25)). Frozen `CombDesigns/BoundGolomb25.lean` kernel-verifies mark count `25`, strict ordering, bound `\u2264 L`, and pairwise distinctness of all C(25, 2) positive differences (`decide +kernel`).",
+      "baseline_score": 821,
+      "target_files": [
+        "CombDesigns/Golomb25.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/huayaow/DPSO/blob/e28d4f2c4e2f989e5d9ff5f78c5214a3331fe2dc/README.md"
+    },
+    {
+      "id": "golomb_k29",
+      "title": "Minimize 29-mark Golomb Ruler length G(29) (baseline 1158)",
+      "description": "Submit a strictly increasing 29-mark Golomb ruler in {0..L} in `CombDesigns/Golomb29.lean` (`CombDesigns.score_golomb_k29` and `CombDesigns.marks_golomb_k29`), seeded with the Mian\u2013Chowla greedy ruler of length 1158 (frontier: 620 (open research frontier OGR-29)). Frozen `CombDesigns/BoundGolomb29.lean` kernel-verifies mark count `29`, strict ordering, bound `\u2264 L`, and pairwise distinctness of all C(29, 2) positive differences (`decide +kernel`).",
+      "baseline_score": 1158,
+      "target_files": [
+        "CombDesigns/Golomb29.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/huayaow/DPSO/blob/e28d4f2c4e2f989e5d9ff5f78c5214a3331fe2dc/README.md"
+    }
+  ]
+}

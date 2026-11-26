@@ -1,0 +1,142 @@
+{
+  "id": "crypto-std-sboxes",
+  "title": "ISO/RFC 8-Bit S-box Circuits (Whirlpool, ARIA S2 & InvS2): Total Gates, AND Gates & AND-Depth",
+  "description": "Nine pure Lean 4.36.0 (zero Mathlib) certified Boolean-circuit hill-climb tracks minimizing total gates, multiplicative complexity (AND gates), and multiplicative depth (AND-depth for masked/MPC/FHE implementations) for Whirlpool (ISO/IEC 10118-3) and ARIA S2 / InvS2 (RFC 5794 / ISO 18033-3), pinned verbatim to `openssl/openssl@d94024ff` (Apache-2.0).",
+  "tier": 2,
+  "mode": "hillclimb",
+  "repo": "https://github.com/openssl/openssl",
+  "upstream": {
+    "repo": "openssl/openssl",
+    "commit": "d94024ffc7e726566a6255228ad0a7de4cfc956d",
+    "license": "Apache-2.0"
+  },
+  "score_direction": "minimize",
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 60,
+    "memory_mb": 2048
+  },
+  "frozen_paths": [
+    "StdSbox/Spec.lean",
+    "StdSbox/WhirlpoolTotalBound.lean",
+    "StdSbox/WhirlpoolAndBound.lean",
+    "StdSbox/WhirlpoolDepthBound.lean",
+    "StdSbox/AriaS2TotalBound.lean",
+    "StdSbox/AriaS2AndBound.lean",
+    "StdSbox/AriaS2DepthBound.lean",
+    "StdSbox/AriaInvS2TotalBound.lean",
+    "StdSbox/AriaInvS2AndBound.lean",
+    "StdSbox/AriaInvS2DepthBound.lean",
+    "LICENSE",
+    "README.md",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "tasks": [
+    {
+      "id": "whirlpool_total_gates",
+      "title": "Whirlpool (8-bit S-box): minimize total gate count over {xor, xnor, and, not} (baseline 202)",
+      "description": "Minimize total gate count over {xor, xnor, and, not} for the Whirlpool 8-bit S-box (baseline 202, open frontier: ~100-120). Submit a straight-line Boolean circuit in `StdSbox/WhirlpoolTotalCircuit.lean` (`StdSbox.whirlpoolTotalScore`, `StdSbox.whirlpoolTotalGates`, `StdSbox.whirlpoolTotalOutputs`). Frozen pure Lean 4.36.0 kernel proofs verify well-formedness, cost metric, and exact equivalence on all 256 bytes.",
+      "baseline_score": 202,
+      "target_files": [
+        "StdSbox/WhirlpoolTotalCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/openssl/openssl/blob/d94024ffc7e726566a6255228ad0a7de4cfc956d/crypto/whrlpool/wp_block.c#L215-L476"
+    },
+    {
+      "id": "whirlpool_and_gates",
+      "title": "Whirlpool (8-bit S-box): minimize multiplicative complexity (AND gate count) (baseline 50)",
+      "description": "Minimize multiplicative complexity (AND gate count) for the Whirlpool 8-bit S-box (baseline 50, open frontier: ~28-34). Submit a straight-line Boolean circuit in `StdSbox/WhirlpoolAndCircuit.lean` (`StdSbox.whirlpoolAndScore`, `StdSbox.whirlpoolAndGates`, `StdSbox.whirlpoolAndOutputs`). Frozen pure Lean 4.36.0 kernel proofs verify well-formedness, cost metric, and exact equivalence on all 256 bytes.",
+      "baseline_score": 50,
+      "target_files": [
+        "StdSbox/WhirlpoolAndCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/openssl/openssl/blob/d94024ffc7e726566a6255228ad0a7de4cfc956d/crypto/whrlpool/wp_block.c#L215-L476"
+    },
+    {
+      "id": "whirlpool_and_depth",
+      "title": "Whirlpool (8-bit S-box): minimize multiplicative depth (AND-depth) (baseline 6)",
+      "description": "Minimize multiplicative depth (AND-depth) for the Whirlpool 8-bit S-box (baseline 6, open frontier: 3-4). Submit a straight-line Boolean circuit in `StdSbox/WhirlpoolDepthCircuit.lean` (`StdSbox.whirlpoolDepthScore`, `StdSbox.whirlpoolDepthGates`, `StdSbox.whirlpoolDepthOutputs`). Frozen pure Lean 4.36.0 kernel proofs verify well-formedness, cost metric, and exact equivalence on all 256 bytes.",
+      "baseline_score": 6,
+      "target_files": [
+        "StdSbox/WhirlpoolDepthCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/openssl/openssl/blob/d94024ffc7e726566a6255228ad0a7de4cfc956d/crypto/whrlpool/wp_block.c#L215-L476"
+    },
+    {
+      "id": "aria_s2_total_gates",
+      "title": "ARIA S2 (8-bit S-box): minimize total gate count over {xor, xnor, and, not} (baseline 292)",
+      "description": "Minimize total gate count over {xor, xnor, and, not} for the ARIA S2 8-bit S-box (baseline 292, open frontier: ~113-120). Submit a straight-line Boolean circuit in `StdSbox/AriaS2TotalCircuit.lean` (`StdSbox.ariaS2TotalScore`, `StdSbox.ariaS2TotalGates`, `StdSbox.ariaS2TotalOutputs`). Frozen pure Lean 4.36.0 kernel proofs verify well-formedness, cost metric, and exact equivalence on all 256 bytes.",
+      "baseline_score": 292,
+      "target_files": [
+        "StdSbox/AriaS2TotalCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/openssl/openssl/blob/d94024ffc7e726566a6255228ad0a7de4cfc956d/crypto/aria/aria.c#L722-L755"
+    },
+    {
+      "id": "aria_s2_and_gates",
+      "title": "ARIA S2 (8-bit S-box): minimize multiplicative complexity (AND gate count) (baseline 45)",
+      "description": "Minimize multiplicative complexity (AND gate count) for the ARIA S2 8-bit S-box (baseline 45, open frontier: 32-34). Submit a straight-line Boolean circuit in `StdSbox/AriaS2AndCircuit.lean` (`StdSbox.ariaS2AndScore`, `StdSbox.ariaS2AndGates`, `StdSbox.ariaS2AndOutputs`). Frozen pure Lean 4.36.0 kernel proofs verify well-formedness, cost metric, and exact equivalence on all 256 bytes.",
+      "baseline_score": 45,
+      "target_files": [
+        "StdSbox/AriaS2AndCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/openssl/openssl/blob/d94024ffc7e726566a6255228ad0a7de4cfc956d/crypto/aria/aria.c#L722-L755"
+    },
+    {
+      "id": "aria_s2_and_depth",
+      "title": "ARIA S2 (8-bit S-box): minimize multiplicative depth (AND-depth) (baseline 6)",
+      "description": "Minimize multiplicative depth (AND-depth) for the ARIA S2 8-bit S-box (baseline 6, open frontier: 3-4). Submit a straight-line Boolean circuit in `StdSbox/AriaS2DepthCircuit.lean` (`StdSbox.ariaS2DepthScore`, `StdSbox.ariaS2DepthGates`, `StdSbox.ariaS2DepthOutputs`). Frozen pure Lean 4.36.0 kernel proofs verify well-formedness, cost metric, and exact equivalence on all 256 bytes.",
+      "baseline_score": 6,
+      "target_files": [
+        "StdSbox/AriaS2DepthCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/openssl/openssl/blob/d94024ffc7e726566a6255228ad0a7de4cfc956d/crypto/aria/aria.c#L722-L755"
+    },
+    {
+      "id": "aria_invs2_total_gates",
+      "title": "ARIA InvS2 (8-bit S-box): minimize total gate count over {xor, xnor, and, not} (baseline 285)",
+      "description": "Minimize total gate count over {xor, xnor, and, not} for the ARIA InvS2 8-bit S-box (baseline 285, open frontier: ~113-120). Submit a straight-line Boolean circuit in `StdSbox/AriaInvS2TotalCircuit.lean` (`StdSbox.ariaInvS2TotalScore`, `StdSbox.ariaInvS2TotalGates`, `StdSbox.ariaInvS2TotalOutputs`). Frozen pure Lean 4.36.0 kernel proofs verify well-formedness, cost metric, and exact equivalence on all 256 bytes.",
+      "baseline_score": 285,
+      "target_files": [
+        "StdSbox/AriaInvS2TotalCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/openssl/openssl/blob/d94024ffc7e726566a6255228ad0a7de4cfc956d/crypto/aria/aria.c#L792-L825"
+    },
+    {
+      "id": "aria_invs2_and_gates",
+      "title": "ARIA InvS2 (8-bit S-box): minimize multiplicative complexity (AND gate count) (baseline 45)",
+      "description": "Minimize multiplicative complexity (AND gate count) for the ARIA InvS2 8-bit S-box (baseline 45, open frontier: 32-34). Submit a straight-line Boolean circuit in `StdSbox/AriaInvS2AndCircuit.lean` (`StdSbox.ariaInvS2AndScore`, `StdSbox.ariaInvS2AndGates`, `StdSbox.ariaInvS2AndOutputs`). Frozen pure Lean 4.36.0 kernel proofs verify well-formedness, cost metric, and exact equivalence on all 256 bytes.",
+      "baseline_score": 45,
+      "target_files": [
+        "StdSbox/AriaInvS2AndCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/openssl/openssl/blob/d94024ffc7e726566a6255228ad0a7de4cfc956d/crypto/aria/aria.c#L792-L825"
+    },
+    {
+      "id": "aria_invs2_and_depth",
+      "title": "ARIA InvS2 (8-bit S-box): minimize multiplicative depth (AND-depth) (baseline 6)",
+      "description": "Minimize multiplicative depth (AND-depth) for the ARIA InvS2 8-bit S-box (baseline 6, open frontier: 3-4). Submit a straight-line Boolean circuit in `StdSbox/AriaInvS2DepthCircuit.lean` (`StdSbox.ariaInvS2DepthScore`, `StdSbox.ariaInvS2DepthGates`, `StdSbox.ariaInvS2DepthOutputs`). Frozen pure Lean 4.36.0 kernel proofs verify well-formedness, cost metric, and exact equivalence on all 256 bytes.",
+      "baseline_score": 6,
+      "target_files": [
+        "StdSbox/AriaInvS2DepthCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/openssl/openssl/blob/d94024ffc7e726566a6255228ad0a7de4cfc956d/crypto/aria/aria.c#L792-L825"
+    }
+  ]
+}

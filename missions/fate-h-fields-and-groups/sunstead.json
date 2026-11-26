@@ -1,0 +1,532 @@
+{
+  "id": "fate-h-fields-and-groups",
+  "title": "FATE-H Graduate Algebra: Field Extensions, Galois Theory & Group Theory",
+  "description": "50 graduate-level Field Theory (32) and Group Theory (18) `sorry` theorems copied verbatim from frenzymath/FATE-H (17967b31, MIT) and kernel-verified on Lean v4.36.0 + Mathlib v4.36.0: Sylow theory, solvable & nilpotent groups, normal cores, Galois correspondence, splitting fields, cyclotomic & finite field extensions, and transcendence degree.",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/frenzymath/FATE-H",
+  "upstream": {
+    "repo": "frenzymath/FATE-H",
+    "commit": "17967b3118082adfba7c5a5fc03b5f4a53717b59",
+    "license": "MIT"
+  },
+  "frozen_paths": [
+    "FateHFieldsGroups/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 240,
+    "memory_mb": 6144
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "fateh_1_subgroup_normal_index_le_factorial",
+      "title": "FATEH #1 (Group Theory / Group Actions and Sylow theorems): `subgroup_normal_index_le_factorial`",
+      "description": "Closes `FATEH/1.lean:7-10` (`subgroup_normal_index_le_factorial`): Prove that if $H$ is a subgroup of $G$ of index $n$, then there is a normal subgroup $K$ of $G$ such that $K\\leq H$ and… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P1.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/1.lean#L7-L10"
+    },
+    {
+      "id": "fateh_2_not_isSimpleGroup_of_card_eq_56",
+      "title": "FATEH #2 (Group Theory / Group Actions and Sylow theorems): `not_isSimpleGroup_of_card_eq_56`",
+      "description": "Closes `FATEH/2.lean:6-8` (`not_isSimpleGroup_of_card_eq_56`): Prove that if $\\#G = 56$ then $G$ is not simple. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P2.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/2.lean#L6-L8"
+    },
+    {
+      "id": "fateh_3_not_isSimpleGroup_of_card_eq_3393",
+      "title": "FATEH #3 (Group Theory / Group Actions and Sylow theorems): `not_isSimpleGroup_of_card_eq_3393`",
+      "description": "Closes `FATEH/3.lean:6-7` (`not_isSimpleGroup_of_card_eq_3393`): Prove that if $\\#G = 3393$ then $G$ is not simple. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P3.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/3.lean#L6-L7"
+    },
+    {
+      "id": "fateh_4_nonempty_mulEquiv_zMod_prod_zMod",
+      "title": "FATEH #4 (Group Theory / p-Groups, Nilpotent Groups and Solvable Groups): `nonempty_mulEquiv_zMod_prod_zMod`",
+      "description": "Closes `FATEH/4.lean:7-10` (`nonempty_mulEquiv_zMod_prod_zMod`): Prove that if $p$ is a prime and $P$ is a non-abelian group of order $p^3$, then $|Z(P)| = p$ and $P/Z(P) \\cong… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P4.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/4.lean#L7-L10"
+    },
+    {
+      "id": "fateh_7_le_centralizer_centralizer_of_centralizer_eq_bot",
+      "title": "FATEH #7 (Group Theory / Basic Axioms and Examples): `le_centralizer_centralizer_of_centralizer_eq_bot`",
+      "description": "Closes `FATEH/7.lean:9-13` (`le_centralizer_centralizer_of_centralizer_eq_bot`): Let $G$ be a group and let $K\\subseteq H$ be subgroups of $G$ with $K \\lhd H$. If $H \\lhd G$ and $C_H(K)=1$, prove that $H$… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P7.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/7.lean#L9-L13"
+    },
+    {
+      "id": "fateh_8_exists_index_two_of_sylow_two_isCyclic",
+      "title": "FATEH #8 (Group Theory / Group Actions and Sylow theorems): `exists_index_two_of_sylow_two_isCyclic`",
+      "description": "Closes `FATEH/8.lean:7-9` (`exists_index_two_of_sylow_two_isCyclic`): Show that if a Sylow $2$-subgroup of $G$ is nontrivial and cyclic, then $G$ has a subgroup $H$ with $[G:H] =2$. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P8.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/8.lean#L7-L9"
+    },
+    {
+      "id": "fateh_9_DihedralGroup_centralizer_eq_bot",
+      "title": "FATEH #9 (Group Theory / Basic Axioms and Examples): `DihedralGroup.centralizer_eq_bot`",
+      "description": "Closes `FATEH/9.lean:7-9` (`DihedralGroup.centralizer_eq_bot`): If \\( n \\) is odd and \\( n \\geq 3 \\), show that the identity is the only element of \\( D_{2n} \\) which commutes with all elements… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P9.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/9.lean#L7-L9"
+    },
+    {
+      "id": "fateh_11_le_center_of_card_eq_17_of_card_eq_3825",
+      "title": "FATEH #11 (Group Theory / Subgroups and Quotient groups): `le_center_of_card_eq_17_of_card_eq_3825`",
+      "description": "Closes `FATEH/11.lean:7-9` (`le_center_of_card_eq_17_of_card_eq_3825`): Let \\( G \\) be a group of order \\( 3825 \\). Prove that if \\( H \\) is a normal subgroup of order \\( 17 \\) in \\( G \\), then \\( H… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P11.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/11.lean#L7-L9"
+    },
+    {
+      "id": "fateh_12_exists_sl_quot_center_monoidHom_alternatingGroup",
+      "title": "FATEH #12 (Group Theory / Group Actions and Sylow theorems): `exists_sl_quot_center_monoidHom_alternatingGroup`",
+      "description": "Closes `FATEH/12.lean:8-11` (`exists_sl_quot_center_monoidHom_alternatingGroup`): Prove that \\( SL_2(\\mathbb{F}_3) / Z(SL_2(\\mathbb{F}_3)) \\le A_4 \\). Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P12.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/12.lean#L8-L11"
+    },
+    {
+      "id": "fateh_13_card_sylow_gl_two_eq_add_one",
+      "title": "FATEH #13 (Group Theory / Group Actions and Sylow theorems): `card_sylow_gl_two_eq_add_one`",
+      "description": "Closes `FATEH/13.lean:8-10` (`card_sylow_gl_two_eq_add_one`): Prove that the number of Sylow $p$-subgroups of $\\operatorname{GL}_2(\\mathbb{F}_p)$ is $p + 1$. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P13.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/13.lean#L8-L10"
+    },
+    {
+      "id": "fateh_19_exists_subgroup_alternatingGroup_mulEquiv",
+      "title": "FATEH #19 (Group Theory / Group Actions and Sylow theorems): `exists_subgroup_alternatingGroup_mulEquiv`",
+      "description": "Closes `FATEH/19.lean:6-8` (`exists_subgroup_alternatingGroup_mulEquiv`): Prove that any finite group is isomorphic to a subgroup of $A_n$ for some $n$. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P19.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/19.lean#L6-L8"
+    },
+    {
+      "id": "fateh_20_center_eq_commutator_of_pow_three_eq_card",
+      "title": "FATEH #20 (Group Theory / p-Groups, Nilpotent Groups and Solvable Groups): `center_eq_commutator_of_pow_three_eq_card`",
+      "description": "Closes `FATEH/20.lean:8-11` (`center_eq_commutator_of_pow_three_eq_card`): Prove that if \\( G \\) is a nonabelian group of order \\( p^3 \\) (\\( p \\) prime), then the center of \\( G \\) is the subgroup… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P20.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/20.lean#L8-L11"
+    },
+    {
+      "id": "fateh_21_card_addAut_eq_108",
+      "title": "FATEH #21 (Group Theory / Basic Axioms and Examples): `card_addAut_eq_108`",
+      "description": "Closes `FATEH/21.lean:6-7` (`card_addAut_eq_108`): Prove that the order of $\\mathrm{Aut}(\\mathbb{Z}_3 \\times \\mathbb{Z}_9)$ is 108. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P21.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/21.lean#L6-L7"
+    },
+    {
+      "id": "fateh_22_nonempty_mulAut_dihedralGroup_four",
+      "title": "FATEH #22 (Group Theory / Basic Axioms and Examples): `nonempty_mulAut_dihedralGroup_four`",
+      "description": "Closes `FATEH/22.lean:6-7` (`nonempty_mulAut_dihedralGroup_four`): Let $D_8$ be the dihedral group with $8$ elements. Prove that $\\mathrm{Aut}(D_8) \\cong D_8$. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P22.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/22.lean#L6-L7"
+    },
+    {
+      "id": "fateh_23_not_isSimpleGroup_of_card_eq_1053",
+      "title": "FATEH #23 (Group Theory / Group Actions and Sylow theorems): `not_isSimpleGroup_of_card_eq_1053`",
+      "description": "Closes `FATEH/23.lean:6-8` (`not_isSimpleGroup_of_card_eq_1053`): Prove that if $\\#G = 1053$ then $G$ is not simple. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P23.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/23.lean#L6-L8"
+    },
+    {
+      "id": "fateh_24_eq_top_of_finiteIndex",
+      "title": "FATEH #24 (Group Theory / Subgroups and Quotient groups): `eq_top_of_finiteIndex`",
+      "description": "Closes `FATEH/24.lean:6-8` (`eq_top_of_finiteIndex`): Prove that $\\mathbb{Q}/\\mathbb{Z}$ has no proper subgroups of finite index. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P24.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/24.lean#L6-L8"
+    },
+    {
+      "id": "fateh_26_center_le_or_commutator_le_of_isCoatom",
+      "title": "FATEH #26 (Group Theory / Subgroups and Quotient groups): `center_le_or_commutator_le_of_isCoatom`",
+      "description": "Closes `FATEH/26.lean:8-10` (`center_le_or_commutator_le_of_isCoatom`): Suppose \\( G \\) is a group and \\( H \\) is a maximal subgroup of \\( G \\). Show that either \\( Z(G) \\leq H \\) or \\( [G,G] \\leq H… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P26.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/26.lean#L8-L10"
+    },
+    {
+      "id": "fateh_28_exists_ratFunc_adjoin_eq_top",
+      "title": "FATEH #28 (Field Theory / Field Extensions): `exists_ratFunc_adjoin_eq_top`",
+      "description": "Closes `FATEH/28.lean:11-14` (`exists_ratFunc_adjoin_eq_top`): Let $k$ be a perfect field of characteristic $p > 0$. Let $F = k(t)$ be the field of rational functions in one variable over $k$.… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P28.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/28.lean#L11-L14"
+    },
+    {
+      "id": "fateh_29_exists_nonempty_adjoin_root_X_pow_p_sub_X_sub_C",
+      "title": "FATEH #29 (Field Theory / Galois theory): `exists_nonempty_adjoin_root_X_pow_p_sub_X_sub_C`",
+      "description": "Closes `FATEH/29.lean:9-13` (`exists_nonempty_adjoin_root_X_pow_p_sub_X_sub_C`): Show that if $F$ has characteristic $p$, then all degree $p$ Galois extension of $F$ are obtained by adjoining a zero of… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P29.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/29.lean#L9-L13"
+    },
+    {
+      "id": "fateh_30_nonempty_ringEquiv_adjoin_pow_two_add_seven",
+      "title": "FATEH #30 (Field Theory / Explicit Computations): `nonempty_ringEquiv_adjoin_pow_two_add_seven`",
+      "description": "Closes `FATEH/30.lean:15-19` (`nonempty_ringEquiv_adjoin_pow_two_add_seven`): Let \\( E \\) be the splitting field of \\[ f(x) = \\frac{x^7 - 1}{x - 1} = x^6 + x^5 + x^4 + x^3 + x^2 + x + 1 \\] over \\( \\mathbb{Q}… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P30.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/30.lean#L15-L19"
+    },
+    {
+      "id": "fateh_31_exists_basis_primitiveRoots_iff_squarefree",
+      "title": "FATEH #31 (Field Theory / Field Extensions): `exists_basis_primitiveRoots_iff_squarefree`",
+      "description": "Closes `FATEH/31.lean:9-12` (`exists_basis_primitiveRoots_iff_squarefree`): Prove that the primitive $n^{\\textrm{th}}$ roots of unity form a basis over $\\mathbb{Q}$ for the cyclotomic field of… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P31.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/31.lean#L9-L12"
+    },
+    {
+      "id": "fateh_32_nonempty_galois_mulEquiv_dihedralGroup_four",
+      "title": "FATEH #32 (Field Theory / Explicit Computations): `nonempty_galois_mulEquiv_dihedralGroup_four`",
+      "description": "Closes `FATEH/32.lean:9-11` (`nonempty_galois_mulEquiv_dihedralGroup_four`): Prove that the splitting field of $x^4 - 2x^2 - 2$ over $\\mathbb{Q}$ is of degree $8$ with dihedral Galois group Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P32.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/32.lean#L9-L11"
+    },
+    {
+      "id": "fateh_33_card_gal_map_eq_eq_factorial",
+      "title": "FATEH #33 (Group Theory / Group Actions and Sylow theorems): `card_gal_map_eq_eq_factorial`",
+      "description": "Closes `FATEH/33.lean:11-15` (`card_gal_map_eq_eq_factorial`): Let $f(x) \\in \\mathbb{Q}[x]$ be a polynomial of degree $n$ ($n>4$) and the splitting field $E$ of $f(x)$ has Galois group $S_n$… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P33.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/33.lean#L11-L15"
+    },
+    {
+      "id": "fateh_34_not_irreducible_iff_finrank_lt",
+      "title": "FATEH #34 (Field Theory / Field Extensions): `not_irreducible_iff_finrank_lt`",
+      "description": "Closes `FATEH/34.lean:9-13` (`not_irreducible_iff_finrank_lt`): Let \\( E \\) be a field of characteristic zero. Consider a prime \\( q \\) and an element \\( b \\in E^\\times \\) that isn’t a \\( q… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P34.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/34.lean#L9-L13"
+    },
+    {
+      "id": "fateh_35_isEmpty_adjoinRoot_zMod_four",
+      "title": "FATEH #35 (Field Theory / Explicit Computations): `isEmpty_adjoinRoot_zMod_four`",
+      "description": "Closes `FATEH/35.lean:10-13` (`isEmpty_adjoinRoot_zMod_four`): Let $D \\in \\mathbb{Z}$ be a squarefree integer and let $a \\in \\mathbb{Q}$ be a nonzero rational number. Show that… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P35.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/35.lean#L10-L13"
+    },
+    {
+      "id": "fateh_36_card_intermediateField_splittingField_eq_ten",
+      "title": "FATEH #36 (Field Theory / Galois theory): `card_intermediateField_splittingField_eq_ten`",
+      "description": "Closes `FATEH/36.lean:9-11` (`card_intermediateField_splittingField_eq_ten`): Let $f(X)=X^4-X^2-1\\in \\mathbb{Q}[X]$, $K$ is the splitting field of $f$ over $\\mathbb{Q}$, prove that the number of intermediate… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P36.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/36.lean#L9-L11"
+    },
+    {
+      "id": "fateh_37_adjoin_add_eq_top_of_fixedField_zpowers",
+      "title": "FATEH #37 (Field Theory / Galois theory): `adjoin_add_eq_top_of_fixedField_zpowers`",
+      "description": "Closes `FATEH/37.lean:11-17` (`adjoin_add_eq_top_of_fixedField_zpowers`): Let $L/K$ be a Galois extension of fields such that $\\mathrm{Gal}(L/K)$ is cyclic of order $n$, generated by $\\sigma$. Write $n =… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P37.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/37.lean#L11-L17"
+    },
+    {
+      "id": "fateh_38_exists_pow_p_mem_algebraMap_and_adjoin_eq_top",
+      "title": "FATEH #38 (Field Theory / Galois theory): `exists_pow_p_mem_algebraMap_and_adjoin_eq_top`",
+      "description": "Closes `FATEH/38.lean:11-16` (`exists_pow_p_mem_algebraMap_and_adjoin_eq_top`): Let $p$ be a prime number and let $F$ be a field containing $p$-th roots of unity. Let $K$ be a Galois extension of $F$ with… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P38.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/38.lean#L11-L16"
+    },
+    {
+      "id": "fateh_39_exists_isPrimitiveRoot_and_adjoin_eq_top",
+      "title": "FATEH #39 (Field Theory / Explicit Computations): `exists_isPrimitiveRoot_and_adjoin_eq_top`",
+      "description": "Closes `FATEH/39.lean:8-12` (`exists_isPrimitiveRoot_and_adjoin_eq_top`): Prove that a splitting field of \\( X^{15} - 2 \\) over \\( \\mathbb{F}_7 \\) is generated by a primitive \\( 45 \\)-th root of unity. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P39.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/39.lean#L8-L12"
+    },
+    {
+      "id": "fateh_40_nonempty_gal_mulEquiv_perm_fin_five",
+      "title": "FATEH #40 (Field Theory / Galois theory): `nonempty_gal_mulEquiv_perm_fin_five`",
+      "description": "Closes `FATEH/40.lean:10-16` (`nonempty_gal_mulEquiv_perm_fin_five`): Let $K$ be the splitting field of an irreducible quintic polynomial $f(x) \\in \\mathbb{Q} [x]$ and let $\\{\\alpha_1, \\dots,… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P40.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/40.lean#L10-L16"
+    },
+    {
+      "id": "fateh_41_exists_finrank_eq_pow_of_dvd_finrank",
+      "title": "FATEH #41 (Field Theory / Galois theory): `exists_finrank_eq_pow_of_dvd_finrank`",
+      "description": "Closes `FATEH/41.lean:7-12` (`exists_finrank_eq_pow_of_dvd_finrank`): Let $p$ be a prime integer. Suppose that the degree of every finite extension of a field $F$ is divisible by $p$. Prove that the… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P41.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/41.lean#L7-L12"
+    },
+    {
+      "id": "fateh_42_isGalois_adjoin_iff_isSquare",
+      "title": "FATEH #42 (Field Theory / Galois theory): `isGalois_adjoin_iff_isSquare`",
+      "description": "Closes `FATEH/42.lean:12-16` (`isGalois_adjoin_iff_isSquare`): Let \\( K \\) be a field with \\( \\operatorname{char}(K) \\neq 2 \\). Consider Galois extensions \\( L/K \\) with \\(… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P42.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/42.lean#L12-L16"
+    },
+    {
+      "id": "fateh_43_norm_eq_one_of_mem_rootSet",
+      "title": "FATEH #43 (Field Theory / Galois theory): `norm_eq_one_of_mem_rootSet`",
+      "description": "Closes `FATEH/43.lean:11-15` (`norm_eq_one_of_mem_rootSet`): Let $F$ be a field with $\\mathbb{Q} \\subseteq F \\subseteq \\mathbb{C}$, where $F/\\mathbb{Q}$ is a finite \\emph{abelian} Galois… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P43.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/43.lean#L11-L15"
+    },
+    {
+      "id": "fateh_44_card_monic_and_irreducible_and_natDegree_eq_19",
+      "title": "FATEH #44 (Field Theory / Field Extensions): `card_monic_and_irreducible_and_natDegree_eq_19`",
+      "description": "Closes `FATEH/44.lean:9-13` (`card_monic_and_irreducible_and_natDegree_eq_19`): Let \\( k \\) be a finite field of size \\( q \\). Show that the number of degree-\\( 19 \\) monic irreducible polynomials over \\( k \\)… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P44.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/44.lean#L9-L13"
+    },
+    {
+      "id": "fateh_46_finrank_dvd_eight_of_add_inv_eq_algebraMap",
+      "title": "FATEH #46 (Field Theory / Explicit Computations): `finrank_dvd_eight_of_add_inv_eq_algebraMap`",
+      "description": "Closes `FATEH/46.lean:9-12` (`finrank_dvd_eight_of_add_inv_eq_algebraMap`): Let \\( \\alpha \\) be a non-zero complex number such that \\( \\alpha + \\alpha^{-1} \\) is contained in a quadratic number field. Let… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P46.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/46.lean#L9-L12"
+    },
+    {
+      "id": "fateh_48_infinite_complex_algEquiv",
+      "title": "FATEH #48 (Field Theory / Explicit Computations): `infinite_complex_algEquiv`",
+      "description": "Closes `FATEH/48.lean:7-8` (`infinite_complex_algEquiv`): Prove that the cardinality $\\mathrm{Aut}(\\mathbb{C})$ (i.e. the group of field automorphism of $\\mathbb{C}$) is infinite. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P48.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/48.lean#L7-L8"
+    },
+    {
+      "id": "fateh_49_exists_algHom_complex_injective",
+      "title": "FATEH #49 (Field Theory / Explicit Computations): `exists_algHom_complex_injective`",
+      "description": "Closes `FATEH/49.lean:6-8` (`exists_algHom_complex_injective`): Prove that every finitely generated extension of $\\mathbb{Q}$ can be embeded into $\\mathbb{C}$. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P49.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/49.lean#L6-L8"
+    },
+    {
+      "id": "fateh_52_isGalois_galoisField_X_pow_iff_modEq_one",
+      "title": "FATEH #52 (Field Theory / Field Extensions): `isGalois_galoisField_X_pow_iff_modEq_one`",
+      "description": "Closes `FATEH/52.lean:9-12` (`isGalois_galoisField_X_pow_iff_modEq_one`): Let $q$ denote a power of a prime $p$. Show that the extension $\\mathbb{F}_q(t^{1/n})$ over $\\mathbb{F}_q(t)$ is Galois if and… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P52.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/52.lean#L9-L12"
+    },
+    {
+      "id": "fateh_53_real_algEquiv_eq_one",
+      "title": "FATEH #53 (Field Theory / Explicit Computations): `real_algEquiv_eq_one`",
+      "description": "Closes `FATEH/53.lean:6-7` (`real_algEquiv_eq_one`): Prove that every field automorphism of $\\mathbb{R}$ that fixes $\\mathbb{Q}$ is trivial. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P53.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/53.lean#L6-L7"
+    },
+    {
+      "id": "fateh_54_isGalois_galoisField_adjoin_X_pow_four_add_X",
+      "title": "FATEH #54 (Field Theory / Field Extensions): `isGalois_galoisField_adjoin_X_pow_four_add_X`",
+      "description": "Closes `FATEH/54.lean:9-12` (`isGalois_galoisField_adjoin_X_pow_four_add_X`): Let $\\mathbb{F}_4$ be the field with $4$ elements, $t$ a transcendental over $\\mathbb{F}_4$, and $F =\\mathbb{F}_4(t^4 + t)$ and… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P54.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/54.lean#L9-L12"
+    },
+    {
+      "id": "fateh_55_exists_pow_two_eq_algebraMap_and_adjoin_eq_top",
+      "title": "FATEH #55 (Field Theory / Explicit Computations): `exists_pow_two_eq_algebraMap_and_adjoin_eq_top`",
+      "description": "Closes `FATEH/55.lean:11-15` (`exists_pow_two_eq_algebraMap_and_adjoin_eq_top`): Let $K$ be a field with $\\operatorname{char}(K) \\neq 2$. Consider a Galois extension $L/K$. Show that $\\operatorname{Gal}(L/K)… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P55.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/55.lean#L11-L15"
+    },
+    {
+      "id": "fateh_56_cyclotomic_two_mul_eq_cyclotomic_comp_neg",
+      "title": "FATEH #56 (Field Theory / Field Extensions): `cyclotomic_two_mul_eq_cyclotomic_comp_neg`",
+      "description": "Closes `FATEH/56.lean:9-11` (`cyclotomic_two_mul_eq_cyclotomic_comp_neg`): Prove that for $n$ odd, $n>1$, $\\Phi_{2n}(x) = \\Phi_n(-x)$, where $\\Phi_n$ is the $n$th cyclotomic polynomial over $\\mathbb{Q}$. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P56.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/56.lean#L9-L11"
+    },
+    {
+      "id": "fateh_57_exists_isPurelyInseparable_and_bot_lt",
+      "title": "FATEH #57 (Field Theory / Field Extensions): `exists_isPurelyInseparable_and_bot_lt`",
+      "description": "Closes `FATEH/57.lean:7-9` (`exists_isPurelyInseparable_and_bot_lt`): If $F$ is a field that is not perfect, show that $F$ has a nontrivial purely inseparable extension. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P57.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/57.lean#L7-L9"
+    },
+    {
+      "id": "fateh_58_exists_eq_adjoin_and_pow_four_mem_bot_and_not_pow",
+      "title": "FATEH #58 (Field Theory / Explicit Computations): `exists_eq_adjoin_and_pow_four_mem_bot_and_not_pow_two_mem_bot`",
+      "description": "Closes `FATEH/58.lean:8-12` (`exists_eq_adjoin_and_pow_four_mem_bot_and_not_pow_two_mem_bot`): Show that there is at most one extension \\( F(\\alpha) \\) of a field \\( F \\) such that \\( \\alpha^4 \\in F \\), \\( \\alpha^2 \\notin F… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P58.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/58.lean#L8-L12"
+    },
+    {
+      "id": "fateh_60_isSolvable_X_pow_six_add_gal",
+      "title": "FATEH #60 (Field Theory / Galois theory): `isSolvable_X_pow_six_add_gal`",
+      "description": "Closes `FATEH/60.lean:8-10` (`isSolvable_X_pow_six_add_gal`): For a positive integer $a$, consider the polynomial $$ f_a = x^6 + 3ax^4 + 3x^3 + 3ax^2 + 1. $$ Let $F$ be the splitting field of… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P60.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/60.lean#L8-L10"
+    },
+    {
+      "id": "fateh_62_primitiveRoots_not_empty",
+      "title": "FATEH #62 (Field Theory / Field Extensions): `primitiveRoots_not_empty`",
+      "description": "Closes `FATEH/62.lean:9-14` (`primitiveRoots_not_empty`): Let $F$ be a field and let $f(x) \\in F[x]$ be an irreducible polynomial with splitting field $E$ over $F$. Choose $\\alpha \\in E$… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P62.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/62.lean#L9-L14"
+    },
+    {
+      "id": "fateh_63_eval_algebraMap_ne_two_pow_one_dvd_four",
+      "title": "FATEH #63 (Field Theory / Galois theory): `eval₂_algebraMap_ne_two_pow_one_dvd_four`",
+      "description": "Closes `FATEH/63.lean:7-9` (`eval₂_algebraMap_ne_two_pow_one_dvd_four`): Let \\( f \\in \\mathbb{Q}[X] \\) and \\( \\xi \\in \\mathbb{C} \\) be a root of unity. Show that \\( f(\\xi) \\neq 2^{\\frac{1}{4}} \\). Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P63.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/63.lean#L7-L9"
+    },
+    {
+      "id": "fateh_65_isSquare_discriminant_of_irreducible",
+      "title": "FATEH #65 (Field Theory / Galois theory): `isSquare_discriminant_of_irreducible`",
+      "description": "Closes `FATEH/65.lean:8-11` (`isSquare_discriminant_of_irreducible`): Prove that for any $a,b \\in \\mathbb{F}_{p^n}$ that if $x^3+ax+b$ is irreducible then $-4a^3-27b^2$ is a square in… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P65.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/65.lean#L8-L11"
+    },
+    {
+      "id": "fateh_66_not_irreducible_X_pow_two_pow_add_X_add_C_one",
+      "title": "FATEH #66 (Field Theory / Field Extensions): `not_irreducible_X_pow_two_pow_add_X_add_C_one`",
+      "description": "Closes `FATEH/66.lean:7-9` (`not_irreducible_X_pow_two_pow_add_X_add_C_one`): Prove that, if $n \\geq 3$, then $x^{2^n}+x+1$ is \\emph{reducible} in $\\mathbb{F}_2$. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P66.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/66.lean#L7-L9"
+    },
+    {
+      "id": "fateh_97_isAlgebraic_sin_pi_div_180",
+      "title": "FATEH #97 (Field Theory / Explicit Computations): `isAlgebraic_sin_pi_div_180`",
+      "description": "Closes `FATEH/97.lean:8-9` (`isAlgebraic_sin_pi_div_180`): Prove that $\\sin 1^{\\circ}$ is algebraic over $\\mathbb{Q}$. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateHFieldsGroups/P97.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-H/blob/17967b3118082adfba7c5a5fc03b5f4a53717b59/FATEH/97.lean#L8-L9"
+    }
+  ]
+}

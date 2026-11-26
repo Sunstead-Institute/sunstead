@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+"""Frozen verifier for `flt-standalone-foundations`.
+
+Uses the shared trusted harness baked into `/opt/sunstead/sunstead_sandbox.py`
+with Lean 4.36.0 + read-only Mathlib v4.36.0.
+"""
+import sys
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify  # noqa: E402
+
+LIB_ROOT = "FltFoundations"
+FROZEN_FILES = [
+    "FltFoundations/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+]
+
+STATEMENT_PREAMBLE = """
+open scoped WeierstrassCurve.Affine
+"""
+
+TASKS = {
+    "weierstrass_curve_torsion_rank_two": {
+        "module": "FltFoundations.EllipticTorsion",
+        "theorem": "WeierstrassCurve.torsion_rank_two",
+        "statement": """
+def weierstrass_curve_torsion_rank_two : Prop :=
+    ∀ (k : Type*) [Field k] [IsSepClosed k] [DecidableEq k]
+      (E : WeierstrassCurve k) [E.IsElliptic] (n : ℕ) [NeZero (n : k)],
+      Nonempty (AddSubgroup.torsionBy (E⁄k).Point (n : ℤ) ≃+ (ZMod n) × (ZMod n))
+""",
+    },
+    "group_subsingleton_of_pow_prime_eq_one": {
+        "module": "FltFoundations.CompactHausdorff",
+        "theorem": "Group.subsingleton_of_pow_prime_eq_one",
+        "statement": """
+def group_subsingleton_of_pow_prime_eq_one : Prop :=
+    ∀ (A : Type*) [CommGroup A] [TopologicalSpace A] [IsTopologicalGroup A]
+      [ConnectedSpace A] [CompactSpace A] [T2Space A]
+      (p : ℕ), p.Prime → (∀ a : A, a ^ p = 1) → Subsingleton A
+""",
+    },
+}
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>")
+    lean_verify(
+        sys.argv[1],
+        lib_root=LIB_ROOT,
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        uses_mathlib=True,
+        statement_preamble=STATEMENT_PREAMBLE,
+        timeout_sec=230,
+    )

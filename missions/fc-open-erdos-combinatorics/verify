@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+"""Frozen verifier for `fc-open-erdos-combinatorics`.
+
+Uses the shared trusted harness baked into `/opt/sunstead/sunstead_sandbox.py`
+with Lean 4.36.0 + read-only Mathlib v4.36.0.
+"""
+import sys
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify  # noqa: E402
+
+LIB_ROOT = 'FcOpenErdosComb'
+FROZEN_FILES = [
+    "FcOpenErdosComb/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain"
+]
+STATEMENT_PREAMBLE = ""
+TASKS = {
+    "erdos_212_dense_rational_dist": {
+        "module": "FcOpenErdosComb.Erdos212Ulam",
+        "theorem": "FcOpenErdosComb.Erdos212Ulam.erdos_212",
+        "statement": "\ndef erdos_212_dense_rational_dist : Prop :=\n  ∃ u : Set ℂ, Dense u ∧ u.Pairwise fun c₁ c₂ => dist c₁ c₂ ∈ Set.range Rat.cast\n"
+    },
+    "erdos_714_krr_extremal_lb": {
+        "module": "FcOpenErdosComb.Erdos714Krr",
+        "theorem": "FcOpenErdosComb.Erdos714Krr.erdos_714",
+        "statement": "\ndef erdos_714_krr_extremal_lb : Prop :=\n  open Filter SimpleGraph in\n  ∀ r : ℕ, 2 ≤ r → ∃ c : ℝ, 0 < c ∧ ∀ᶠ n : ℕ in atTop,\n        c * (n : ℝ) ^ ((2 : ℝ) - 1 / (r : ℝ)) ≤\n          (extremalNumber n (completeBipartiteGraph (Fin r) (Fin r)) : ℝ)\n"
+    },
+    "erdos_572_even_cycle_extremal": {
+        "module": "FcOpenErdosComb.Erdos572EvenCycle",
+        "theorem": "FcOpenErdosComb.Erdos572EvenCycle.erdos_572",
+        "statement": "\ndef erdos_572_even_cycle_extremal : Prop :=\n  open Filter in\n  ∀ (k : ℕ) (hk : 3 ≤ k),\n    ∃ c > (0 : ℝ), ∀ᶠ (n : ℕ) in atTop,\n        c * (n : ℝ) ^ (1 + 1 / (k : ℝ)) ≤\n          (SimpleGraph.extremalNumber n (SimpleGraph.cycleGraph (2 * k)) : ℝ)\n"
+    },
+    "reed_omega_delta_chi": {
+        "module": "FcOpenErdosComb.ReedOmegaDeltaChi",
+        "theorem": "FcOpenErdosComb.ReedOmegaDeltaChi.reed_omega_delta_chi_conjecture_for_finite_graphs",
+        "statement": "\ndef reed_omega_delta_chi : Prop :=\n  open scoped Finset in\n  ∀ {V : Type} [Fintype V] [DecidableEq V] (G : SimpleGraph V) [DecidableRel G.Adj],\n      let χ := G.chromaticNumber\n      let ω := G.cliqueNum\n      let Δ := G.maxDegree\n      2 * χ ≤ ω + Δ + 2\n"
+    },
+    "beck_fiala_conjecture": {
+        "module": "FcOpenErdosComb.BeckFiala",
+        "theorem": "FcOpenErdosComb.BeckFiala.beck_fiala_conjecture",
+        "statement": "\ndef beck_fiala_conjecture : Prop :=\n  ∃ C : ℝ, 0 < C ∧ ∀ (n m t : ℕ) (S : Fin m → Finset (Fin n)),\n        (∀ j, (Finset.univ.filter fun i => j ∈ S i).card ≤ t) →\n        ∃ χ : Fin n → ℝ, (∀ j, χ j = 1 ∨ χ j = -1) ∧\n          ∀ i, |∑ j ∈ S i, χ j| ≤ C * Real.sqrt t\n"
+    },
+    "conjecture_1_3_to_2_3": {
+        "module": "FcOpenErdosComb.ConjectureOneThirdTwoThirds",
+        "theorem": "FcOpenErdosComb.ConjectureOneThirdTwoThirds.conjecture_1_3_to_2_3",
+        "statement": "\ndef conjecture_1_3_to_2_3 : Prop :=\n  ∀ (P : Type) [Finite P] [PartialOrder P]\n      (not_total : ¬ Std.Total (α := P) (· ≤ ·)) (total_ext : Set <| OrderHom P ℕ)\n      (total_ext_def : ∀ σ, σ ∈ total_ext ↔ Set.range σ = Set.Icc 1 (Nat.card P)),\n      ∃ x y : P, ({σ ∈ total_ext | σ x < σ y}.ncard / total_ext.ncard : ℚ)\n        ∈ Set.Icc (1/3) (2/3)\n"
+    },
+    "babai_seress_diameter": {
+        "module": "FcOpenErdosComb.BabaiSeress",
+        "theorem": "FcOpenErdosComb.BabaiSeress.babai_seress_conjecture",
+        "statement": "\ndef babai_seress_diameter : Prop :=\n  open FcOpenErdosComb.BabaiSeress in\n  ∃ C : ℕ,\n      ∀ (G : Type) [Group G] [Fintype G] [IsSimpleGroup G],\n      (∃ a b : G, a * b ≠ b * a) →\n      (groupDiam G : ℝ) ≤ (Real.log (Fintype.card G : ℝ)) ^ C\n"
+    },
+    "green_61_squares_sumset_cover": {
+        "module": "FcOpenErdosComb.Green61SquaresBasis",
+        "theorem": "FcOpenErdosComb.Green61SquaresBasis.green_61",
+        "statement": "\ndef green_61_squares_sumset_cover : Prop :=\n  open scoped Pointwise Topology in\n  open Filter in\n  ∃ f : ℕ → ℝ, Tendsto f atTop (𝓝 0) ∧\n        ∀ n : ℕ, n ≥ 1 → ∀ (A : Finset ℕ),\n          (Finset.Icc 1 n).image (· ^ 2) ⊆ A + A →\n            (n : ℝ) ^ (1 - f n) ≤ A.card\n"
+    },
+    "erdos_203_covering_primes": {
+        "module": "FcOpenErdosComb.Erdos203Covering",
+        "theorem": "FcOpenErdosComb.Erdos203Covering.erdos_203",
+        "statement": "\ndef erdos_203_covering_primes : Prop :=\n  ∃ m, m.Coprime 6 ∧ ∀ k l, ¬ (2^k * 3^l * m + 1).Prime\n"
+    },
+    "erdos_949_sumfree_complement": {
+        "module": "FcOpenErdosComb.Erdos949SumFree",
+        "theorem": "FcOpenErdosComb.Erdos949SumFree.erdos_949",
+        "statement": "\ndef erdos_949_sumfree_complement : Prop :=\n  open Cardinal Filter in\n  open scoped Pointwise Topology in\n  ∀ S : Set ℝ, (∀ a ∈ S, ∀ b ∈ S, a + b ∉ S) → ∃ A ⊆ Sᶜ, #A = 𝔠 ∧ A + A ⊆ Sᶜ\n"
+    },
+    "erdos_1199_hindman_sumset": {
+        "module": "FcOpenErdosComb.Erdos1199Hindman",
+        "theorem": "FcOpenErdosComb.Erdos1199Hindman.erdos_1199",
+        "statement": "\ndef erdos_1199_hindman_sumset : Prop :=\n  open Pointwise in\n  ∀ (color : ℕ → Fin 2), ∃ (A : Set ℕ),\n      A.Infinite ∧ ∀ n ∈ (A+A), ∀ m ∈ (A+A), color n = color m\n"
+    },
+    "green_45_prime_congruences": {
+        "module": "FcOpenErdosComb.Green45Congruences",
+        "theorem": "FcOpenErdosComb.Green45Congruences.green_45",
+        "statement": "\ndef green_45_prime_congruences : Prop :=\n  ∀ᶠ N in .atTop, ∃ a : ℕ → ℕ, ∀ m ∈ Finset.Icc 1 N,\n        10 ≤ (Finset.Icc 1 N |>.filter fun p => p.Prime ∧ a p ≡ m [MOD p]).card\n"
+    },
+    "green_60_squares_sumset_growth": {
+        "module": "FcOpenErdosComb.Green60SquaresSumset",
+        "theorem": "FcOpenErdosComb.Green60SquaresSumset.green_60",
+        "statement": "\ndef green_60_squares_sumset_growth : Prop :=\n  open scoped Pointwise in\n  ∃ c > (0 : ℝ),\n        ∀ (A : Finset ℕ),\n          (∀ a ∈ A, IsSquare a) →\n          2 ≤ A.card →\n            ((A + A).card : ℝ) ≥ (A.card : ℝ) ^ (1 + c)\n"
+    },
+    "green_33_zmod_basis_density": {
+        "module": "FcOpenErdosComb.Green33ZModBasis",
+        "theorem": "FcOpenErdosComb.Green33ZModBasis.green_33",
+        "statement": "\ndef green_33_zmod_basis_density : Prop :=\n  open Filter in\n  open scoped Pointwise in\n  ∀ ε : ℝ, 0 < ε →\n        ∃ᶠ q : ℕ+ in atTop,\n          ∃ A : Finset (ZMod q),\n            A + A = Finset.univ ∧\n            |((A.card : ℝ) / Real.sqrt q - Real.sqrt 2)| < ε\n"
+    },
+    "green_62_primes_product_mod_p": {
+        "module": "FcOpenErdosComb.Green62PrimeProd",
+        "theorem": "FcOpenErdosComb.Green62PrimeProd.green_62",
+        "statement": "\ndef green_62_primes_product_mod_p : Prop :=\n  open Filter in\n  ∀ᶠ p in atTop, p.Prime →\n        let A := (Finset.range p).filter Nat.Prime\n        ∀ x : ℕ, 1 ≤ x ∧ x < p →\n          ∃ a₁ ∈ A, ∃ a₂ ∈ A, (x : ZMod p) = (a₁ * a₂ : ZMod p)\n"
+    },
+    "erdos_1159_projective_plane_blocking": {
+        "module": "FcOpenErdosComb.Erdos1159Blocking",
+        "theorem": "FcOpenErdosComb.Erdos1159Blocking.erdos_1159",
+        "statement": "\ndef erdos_1159_projective_plane_blocking : Prop :=\n  open Configuration in\n  ∃ C : ℕ, 1 < C ∧\n        ∀ (P L : Type) (_ : Membership P L) (_ : Fintype P) (_ : Fintype L),\n          ∀ _ : ProjectivePlane P L, ∃ S : Set P, ∀ l : L,\n            1 ≤ (S ∩ {p : P | p ∈ l}).ncard ∧ (S ∩ {p : P | p ∈ l}).ncard ≤ C\n"
+    },
+    "green_85_axis_aligned_rectangle": {
+        "module": "FcOpenErdosComb.Green85Rectangle",
+        "theorem": "FcOpenErdosComb.Green85Rectangle.green_85",
+        "statement": "\ndef green_85_axis_aligned_rectangle : Prop :=\n  open Filter MeasureTheory Set Topology in\n  ∃ c > 0, ∀ A : Set (ℝ × ℝ),\n      IsOpen A →\n      A ⊆ Icc 0 1 ×ˢ Icc 0 1 →\n      A.Nonempty →\n      let α := (volume A).toReal\n      ∃ x₁ x₂ y₁ y₂,\n        {(x₁, y₁), (x₂, y₁), (x₂, y₂), (x₁, y₂)} ⊆ A ∧\n        c * α ^ 2 ≤ |x₁ - x₂| * |y₁ - y₂|\n"
+    },
+    "ringel_tree_decomposition": {
+        "module": "FcOpenErdosComb.RingelConjecture",
+        "theorem": "FcOpenErdosComb.RingelConjecture.ringel_conjecture",
+        "statement": "\ndef ringel_tree_decomposition : Prop :=\n  open SimpleGraph in\n  ∀ {V : Type} [Finite V]\n      (T : SimpleGraph V) (hT : T.IsTree)\n      (n : ℕ) (hn : T.edgeSet.ncard = n),\n    ∃ f : Fin (2 * n + 1) → (V ↪ Fin (2 * n + 1)),\n        Pairwise (fun i j => Disjoint (T.map (f i)).edgeSet (T.map (f j)).edgeSet) ∧\n        ⨆ i, T.map (f i) = (⊤ : SimpleGraph (Fin (2 * n + 1)))\n"
+    },
+    "kotzig_cyclic_tree_decomposition": {
+        "module": "FcOpenErdosComb.KotzigConjecture",
+        "theorem": "FcOpenErdosComb.KotzigConjecture.kotzig_conjecture",
+        "statement": "\ndef kotzig_cyclic_tree_decomposition : Prop :=\n  open SimpleGraph in\n  ∀ {V : Type} [Finite V]\n      (T : SimpleGraph V) (hT : T.IsTree)\n      (n : ℕ) (hn : T.edgeSet.ncard = n),\n    ∃ f : Fin (2 * n + 1) → (V ↪ Fin (2 * n + 1)),\n        (∀ i v, f i v = f 0 v + i) ∧\n        Pairwise (fun i j => Disjoint (T.map (f i)).edgeSet (T.map (f j)).edgeSet) ∧\n        ⨆ i, T.map (f i) = (⊤ : SimpleGraph (Fin (2 * n + 1)))\n"
+    },
+    "barker_sequence_length": {
+        "module": "FcOpenErdosComb.BarkerSequence",
+        "theorem": "FcOpenErdosComb.BarkerSequence.barker_conjecture",
+        "statement": "\ndef barker_sequence_length : Prop :=\n  open FcOpenErdosComb.BarkerSequence in\n  ∀ (a : List ℤ) (ha : IsBarkerSequence a),\n    a.length ≤ 13\n"
+    },
+    "green_76_rectangle_hitting_set": {
+        "module": "FcOpenErdosComb.Green76HittingSet",
+        "theorem": "FcOpenErdosComb.Green76HittingSet.green_76",
+        "statement": "\ndef green_76_rectangle_hitting_set : Prop :=\n  open FcOpenErdosComb.Green76HittingSet in\n  open scoped Finset in\n  ∀ A : Finset (ℝ × ℝ), ∃ A', #A' ≤ #A / 2 ∧ HitsRichRectangles 1000 A A'\n"
+    },
+    "weighing_matrix_conjecture": {
+        "module": "FcOpenErdosComb.WeighingMatrix",
+        "theorem": "FcOpenErdosComb.WeighingMatrix.weighing_matrix_conjecture",
+        "statement": "\ndef weighing_matrix_conjecture : Prop :=\n  open FcOpenErdosComb.WeighingMatrix in\n  ∀ (m w : ℕ) (hm : 1 ≤ m) (hw : w ≤ 4 * m),\n    ∃ W, IsWeighingMatrix (n := 4 * m) w W\n"
+    },
+    "manickam_miklos_singhi": {
+        "module": "FcOpenErdosComb.ManickamMiklosSinghi",
+        "theorem": "FcOpenErdosComb.ManickamMiklosSinghi.manickam_miklos_singhi_conjecture",
+        "statement": "\ndef manickam_miklos_singhi : Prop :=\n  open FcOpenErdosComb.ManickamMiklosSinghi in\n  open Finset in\n  ∀ (n k : ℕ), 1 ≤ k → 4 * k ≤ n → ∀ x : Fin n → ℝ, ∑ i, x i = 0 →\n        (n - 1).choose (k - 1) ≤ nonnegSubsetCount n k x\n"
+    },
+    "gyarfas_sumner_conjecture": {
+        "module": "FcOpenErdosComb.GyarfasSumner",
+        "theorem": "FcOpenErdosComb.GyarfasSumner.gyarfas_sumner_conjecture",
+        "statement": "\ndef gyarfas_sumner_conjecture : Prop :=\n  open FcOpenErdosComb.GyarfasSumner in\n  open SimpleGraph in\n  ∀ {W : Type} [Fintype W] [DecidableEq W] (T : SimpleGraph W) [DecidableRel T.Adj],\n        T.IsTree → ∃ f : ℕ → ℕ, IsChiBoundedBy T f\n"
+    },
+    "green_59_smooth_goldbach": {
+        "module": "FcOpenErdosComb.Green59SmoothSum",
+        "theorem": "FcOpenErdosComb.Green59SmoothSum.green_59",
+        "statement": "\ndef green_59_smooth_goldbach : Prop :=\n  open FcOpenErdosComb.Green59SmoothSum in\n  open Filter in\n  ∀ ε : ℝ, 0 < ε → ∀ᶠ N : ℕ in atTop, ∀ n ∈ Finset.Icc 2 N, ∃ a b : ℕ, 0 < a ∧ 0 < b ∧\n        a + b = n ∧ IsSmooth ((N : ℝ) ^ ε) a ∧ IsSmooth ((N : ℝ) ^ ε) b\n"
+    }
+}
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>")
+    lean_verify(
+        sys.argv[1],
+        lib_root=LIB_ROOT,
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        uses_mathlib=True,
+        statement_preamble=STATEMENT_PREAMBLE,
+        timeout_sec=230,
+    )

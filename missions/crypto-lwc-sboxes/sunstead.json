@@ -1,0 +1,226 @@
+{
+  "id": "crypto-lwc-sboxes",
+  "title": "Lightweight Cipher S-box Circuits (SKINNY-128, Ascon, Keccak-\u03c7, PRESENT, GIFT, Spongent, Saturnin, KNOT, Clyde, Pyjamask)",
+  "description": "Sixteen pure Lean 4.36.0 (zero Mathlib) certified Boolean-circuit hill-climb tracks minimizing total gates, multiplicative complexity (AND gates), and multiplicative depth (AND-depth for masked/MPC/FHE implementations) across ten NIST Lightweight Cryptography, FIPS 202, and ISO 29192-2 cipher S-boxes, pinned verbatim to `rweather/lightweight-crypto@fa4ec9a021` (MIT).",
+  "tier": 2,
+  "mode": "hillclimb",
+  "repo": "https://github.com/rweather/lightweight-crypto",
+  "upstream": {
+    "repo": "rweather/lightweight-crypto",
+    "commit": "fa4ec9a021b9233263de77e7dd971de8c9761495",
+    "license": "MIT"
+  },
+  "score_direction": "minimize",
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 60,
+    "memory_mb": 2048
+  },
+  "frozen_paths": [
+    "LwcSbox/Spec.lean",
+    "LwcSbox/Skinny8TotalBound.lean",
+    "LwcSbox/Skinny8AndBound.lean",
+    "LwcSbox/Skinny8DepthBound.lean",
+    "LwcSbox/AsconTotalBound.lean",
+    "LwcSbox/AsconAndBound.lean",
+    "LwcSbox/KeccakChiTotalBound.lean",
+    "LwcSbox/PresentTotalBound.lean",
+    "LwcSbox/PresentAndBound.lean",
+    "LwcSbox/GiftTotalBound.lean",
+    "LwcSbox/GiftAndBound.lean",
+    "LwcSbox/SpongentTotalBound.lean",
+    "LwcSbox/SpongentAndBound.lean",
+    "LwcSbox/SaturninTotalBound.lean",
+    "LwcSbox/KnotTotalBound.lean",
+    "LwcSbox/ClydeTotalBound.lean",
+    "LwcSbox/PyjamaskTotalBound.lean",
+    "LICENSE",
+    "README.md",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "tasks": [
+    {
+      "id": "skinny8_total_gates",
+      "title": "SKINNY-128 (8-bit S-box): minimize total gate count over {xor, xnor, and, not} (baseline 252)",
+      "description": "Minimize total gate count over {xor, xnor, and, not} for the SKINNY-128 8-bit S-box (baseline 252, literature frontier: ~24). Submit a straight-line Boolean circuit in `LwcSbox/Skinny8TotalCircuit.lean` (`LwcSbox.skinny8TotalScore`, `LwcSbox.skinny8TotalGates`, `LwcSbox.skinny8TotalOutputs`). Frozen pure Lean 4.36.0 kernel proofs verify well-formedness, cost metric, and exact equivalence on all 2^8 inputs.",
+      "baseline_score": 252,
+      "target_files": [
+        "LwcSbox/Skinny8TotalCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-skinnyutil.h"
+    },
+    {
+      "id": "skinny8_and_gates",
+      "title": "SKINNY-128 (8-bit S-box): minimize multiplicative complexity (AND gate count) (baseline 96)",
+      "description": "Minimize multiplicative complexity (AND gate count) for the SKINNY-128 8-bit S-box (baseline 96, literature frontier: 8). Submit a straight-line Boolean circuit in `LwcSbox/Skinny8AndCircuit.lean` (`LwcSbox.skinny8AndScore`, `LwcSbox.skinny8AndGates`, `LwcSbox.skinny8AndOutputs`). Frozen pure Lean 4.36.0 kernel proofs verify well-formedness, cost metric, and exact equivalence on all 2^8 inputs.",
+      "baseline_score": 96,
+      "target_files": [
+        "LwcSbox/Skinny8AndCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-skinnyutil.h"
+    },
+    {
+      "id": "skinny8_and_depth",
+      "title": "SKINNY-128 (8-bit S-box): minimize multiplicative depth (AND-depth) (baseline 5)",
+      "description": "Minimize multiplicative depth (AND-depth) for the SKINNY-128 8-bit S-box (baseline 5, literature frontier: 3-4). Submit a straight-line Boolean circuit in `LwcSbox/Skinny8DepthCircuit.lean` (`LwcSbox.skinny8DepthScore`, `LwcSbox.skinny8DepthGates`, `LwcSbox.skinny8DepthOutputs`). Frozen pure Lean 4.36.0 kernel proofs verify well-formedness, cost metric, and exact equivalence on all 2^8 inputs.",
+      "baseline_score": 5,
+      "target_files": [
+        "LwcSbox/Skinny8DepthCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-skinnyutil.h"
+    },
+    {
+      "id": "ascon_total_gates",
+      "title": "Ascon 5-bit (5-bit S-box): minimize total gate count over {xor, xnor, and, not} (baseline 46)",
+      "description": "Minimize total gate count over {xor, xnor, and, not} for the Ascon 5-bit 5-bit S-box (baseline 46, literature frontier: ~16-20). Submit a straight-line Boolean circuit in `LwcSbox/AsconTotalCircuit.lean` (`LwcSbox.asconTotalScore`, `LwcSbox.asconTotalGates`, `LwcSbox.asconTotalOutputs`). Frozen pure Lean 4.36.0 kernel proofs verify well-formedness, cost metric, and exact equivalence on all 2^5 inputs.",
+      "baseline_score": 46,
+      "target_files": [
+        "LwcSbox/AsconTotalCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-ascon.c"
+    },
+    {
+      "id": "ascon_and_gates",
+      "title": "Ascon 5-bit (5-bit S-box): minimize multiplicative complexity (AND gate count) (baseline 19)",
+      "description": "Minimize multiplicative complexity (AND gate count) for the Ascon 5-bit 5-bit S-box (baseline 19, literature frontier: 5). Submit a straight-line Boolean circuit in `LwcSbox/AsconAndCircuit.lean` (`LwcSbox.asconAndScore`, `LwcSbox.asconAndGates`, `LwcSbox.asconAndOutputs`). Frozen pure Lean 4.36.0 kernel proofs verify well-formedness, cost metric, and exact equivalence on all 2^5 inputs.",
+      "baseline_score": 19,
+      "target_files": [
+        "LwcSbox/AsconAndCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-ascon.c"
+    },
+    {
+      "id": "keccak_chi_total_gates",
+      "title": "Keccak-\u03c7 5-bit (5-bit S-box): minimize total gate count over {xor, xnor, and, not} (baseline 20)",
+      "description": "Minimize total gate count over {xor, xnor, and, not} for the Keccak-\u03c7 5-bit 5-bit S-box (baseline 20, literature frontier: 15). Submit a straight-line Boolean circuit in `LwcSbox/KeccakChiTotalCircuit.lean` (`LwcSbox.keccakChiTotalScore`, `LwcSbox.keccakChiTotalGates`, `LwcSbox.keccakChiTotalOutputs`). Frozen pure Lean 4.36.0 kernel proofs verify well-formedness, cost metric, and exact equivalence on all 2^5 inputs.",
+      "baseline_score": 20,
+      "target_files": [
+        "LwcSbox/KeccakChiTotalCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-keccak.c"
+    },
+    {
+      "id": "present_total_gates",
+      "title": "PRESENT/PHOTON (4-bit S-box): minimize total gate count over {xor, xnor, and, not} (baseline 57)",
+      "description": "Minimize total gate count over {xor, xnor, and, not} for the PRESENT/PHOTON 4-bit S-box (baseline 57, literature frontier: 14). Submit a straight-line Boolean circuit in `LwcSbox/PresentTotalCircuit.lean` (`LwcSbox.presentTotalScore`, `LwcSbox.presentTotalGates`, `LwcSbox.presentTotalOutputs`). Frozen pure Lean 4.36.0 kernel proofs verify well-formedness, cost metric, and exact equivalence on all 2^4 inputs.",
+      "baseline_score": 57,
+      "target_files": [
+        "LwcSbox/PresentTotalCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-photon256.c"
+    },
+    {
+      "id": "present_and_gates",
+      "title": "PRESENT/PHOTON (4-bit S-box): minimize multiplicative complexity (AND gate count) (baseline 34)",
+      "description": "Minimize multiplicative complexity (AND gate count) for the PRESENT/PHOTON 4-bit S-box (baseline 34, literature frontier: 4). Submit a straight-line Boolean circuit in `LwcSbox/PresentAndCircuit.lean` (`LwcSbox.presentAndScore`, `LwcSbox.presentAndGates`, `LwcSbox.presentAndOutputs`). Frozen pure Lean 4.36.0 kernel proofs verify well-formedness, cost metric, and exact equivalence on all 2^4 inputs.",
+      "baseline_score": 34,
+      "target_files": [
+        "LwcSbox/PresentAndCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-photon256.c"
+    },
+    {
+      "id": "gift_total_gates",
+      "title": "GIFT-128 (4-bit S-box): minimize total gate count over {xor, xnor, and, not} (baseline 33)",
+      "description": "Minimize total gate count over {xor, xnor, and, not} for the GIFT-128 4-bit S-box (baseline 33, literature frontier: 11-13). Submit a straight-line Boolean circuit in `LwcSbox/GiftTotalCircuit.lean` (`LwcSbox.giftTotalScore`, `LwcSbox.giftTotalGates`, `LwcSbox.giftTotalOutputs`). Frozen pure Lean 4.36.0 kernel proofs verify well-formedness, cost metric, and exact equivalence on all 2^4 inputs.",
+      "baseline_score": 33,
+      "target_files": [
+        "LwcSbox/GiftTotalCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-gift128.c"
+    },
+    {
+      "id": "gift_and_gates",
+      "title": "GIFT-128 (4-bit S-box): minimize multiplicative complexity (AND gate count) (baseline 18)",
+      "description": "Minimize multiplicative complexity (AND gate count) for the GIFT-128 4-bit S-box (baseline 18, literature frontier: 4). Submit a straight-line Boolean circuit in `LwcSbox/GiftAndCircuit.lean` (`LwcSbox.giftAndScore`, `LwcSbox.giftAndGates`, `LwcSbox.giftAndOutputs`). Frozen pure Lean 4.36.0 kernel proofs verify well-formedness, cost metric, and exact equivalence on all 2^4 inputs.",
+      "baseline_score": 18,
+      "target_files": [
+        "LwcSbox/GiftAndCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-gift128.c"
+    },
+    {
+      "id": "spongent_total_gates",
+      "title": "Spongent/Elephant (4-bit S-box): minimize total gate count over {xor, xnor, and, not} (baseline 48)",
+      "description": "Minimize total gate count over {xor, xnor, and, not} for the Spongent/Elephant 4-bit S-box (baseline 48, literature frontier: 14-16). Submit a straight-line Boolean circuit in `LwcSbox/SpongentTotalCircuit.lean` (`LwcSbox.spongentTotalScore`, `LwcSbox.spongentTotalGates`, `LwcSbox.spongentTotalOutputs`). Frozen pure Lean 4.36.0 kernel proofs verify well-formedness, cost metric, and exact equivalence on all 2^4 inputs.",
+      "baseline_score": 48,
+      "target_files": [
+        "LwcSbox/SpongentTotalCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-spongent.c"
+    },
+    {
+      "id": "spongent_and_gates",
+      "title": "Spongent/Elephant (4-bit S-box): minimize multiplicative complexity (AND gate count) (baseline 28)",
+      "description": "Minimize multiplicative complexity (AND gate count) for the Spongent/Elephant 4-bit S-box (baseline 28, literature frontier: 4). Submit a straight-line Boolean circuit in `LwcSbox/SpongentAndCircuit.lean` (`LwcSbox.spongentAndScore`, `LwcSbox.spongentAndGates`, `LwcSbox.spongentAndOutputs`). Frozen pure Lean 4.36.0 kernel proofs verify well-formedness, cost metric, and exact equivalence on all 2^4 inputs.",
+      "baseline_score": 28,
+      "target_files": [
+        "LwcSbox/SpongentAndCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-spongent.c"
+    },
+    {
+      "id": "saturnin_total_gates",
+      "title": "Saturnin (4-bit S-box): minimize total gate count over {xor, xnor, and, not} (baseline 61)",
+      "description": "Minimize total gate count over {xor, xnor, and, not} for the Saturnin 4-bit S-box (baseline 61, literature frontier: ~15). Submit a straight-line Boolean circuit in `LwcSbox/SaturninTotalCircuit.lean` (`LwcSbox.saturninTotalScore`, `LwcSbox.saturninTotalGates`, `LwcSbox.saturninTotalOutputs`). Frozen pure Lean 4.36.0 kernel proofs verify well-formedness, cost metric, and exact equivalence on all 2^4 inputs.",
+      "baseline_score": 61,
+      "target_files": [
+        "LwcSbox/SaturninTotalCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-saturnin.c"
+    },
+    {
+      "id": "knot_total_gates",
+      "title": "KNOT (4-bit S-box): minimize total gate count over {xor, xnor, and, not} (baseline 40)",
+      "description": "Minimize total gate count over {xor, xnor, and, not} for the KNOT 4-bit S-box (baseline 40, literature frontier: ~14). Submit a straight-line Boolean circuit in `LwcSbox/KnotTotalCircuit.lean` (`LwcSbox.knotTotalScore`, `LwcSbox.knotTotalGates`, `LwcSbox.knotTotalOutputs`). Frozen pure Lean 4.36.0 kernel proofs verify well-formedness, cost metric, and exact equivalence on all 2^4 inputs.",
+      "baseline_score": 40,
+      "target_files": [
+        "LwcSbox/KnotTotalCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-knot.c"
+    },
+    {
+      "id": "clyde_total_gates",
+      "title": "Clyde-128/Spook (4-bit S-box): minimize total gate count over {xor, xnor, and, not} (baseline 27)",
+      "description": "Minimize total gate count over {xor, xnor, and, not} for the Clyde-128/Spook 4-bit S-box (baseline 27, literature frontier: ~12). Submit a straight-line Boolean circuit in `LwcSbox/ClydeTotalCircuit.lean` (`LwcSbox.clydeTotalScore`, `LwcSbox.clydeTotalGates`, `LwcSbox.clydeTotalOutputs`). Frozen pure Lean 4.36.0 kernel proofs verify well-formedness, cost metric, and exact equivalence on all 2^4 inputs.",
+      "baseline_score": 27,
+      "target_files": [
+        "LwcSbox/ClydeTotalCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-spook.c"
+    },
+    {
+      "id": "pyjamask_total_gates",
+      "title": "Pyjamask-128 (4-bit S-box): minimize total gate count over {xor, xnor, and, not} (baseline 42)",
+      "description": "Minimize total gate count over {xor, xnor, and, not} for the Pyjamask-128 4-bit S-box (baseline 42, literature frontier: ~14). Submit a straight-line Boolean circuit in `LwcSbox/PyjamaskTotalCircuit.lean` (`LwcSbox.pyjamaskTotalScore`, `LwcSbox.pyjamaskTotalGates`, `LwcSbox.pyjamaskTotalOutputs`). Frozen pure Lean 4.36.0 kernel proofs verify well-formedness, cost metric, and exact equivalence on all 2^4 inputs.",
+      "baseline_score": 42,
+      "target_files": [
+        "LwcSbox/PyjamaskTotalCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-pyjamask.c"
+    }
+  ]
+}

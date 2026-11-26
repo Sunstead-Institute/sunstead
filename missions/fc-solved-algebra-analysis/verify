@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+"""Frozen verifier for `fc-solved-algebra-analysis`.
+
+Uses the shared trusted harness baked into `/opt/sunstead/sunstead_sandbox.py`
+with Lean 4.36.0 + read-only Mathlib v4.36.0.
+"""
+import sys
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify  # noqa: E402
+
+LIB_ROOT = 'FcSolvedAlgAnal'
+FROZEN_FILES = [
+    "FcSolvedAlgAnal/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain"
+]
+STATEMENT_PREAMBLE = ""
+TASKS = {
+    "erdos_114_lemniscate_large_n": {
+        "module": "FcSolvedAlgAnal.Erdos114Lemniscate",
+        "theorem": "FcSolvedAlgAnal.Erdos114Lemniscate.erdos_114.variants.large_n",
+        "statement": "\ndef erdos_114_lemniscate_large_n : Prop :=\n  open FcSolvedAlgAnal.Erdos114Lemniscate in\n  open Polynomial MeasureTheory Filter in\n  ∀ᶠ n in atTop, ∀ p : ℂ[X], p.Monic → p.natDegree = n →\n      lemniscateLength p ≤ lemniscateLength (X ^ n - 1)\n"
+    },
+    "transcendental_gamma_one_third": {
+        "module": "FcSolvedAlgAnal.GammaOneThird",
+        "theorem": "FcSolvedAlgAnal.GammaOneThird.transcendental_gamma_one_div_three",
+        "statement": "\ndef transcendental_gamma_one_third : Prop :=\n  open Real in\n  Transcendental ℚ (1 / 3 : ℝ).Gamma\n"
+    },
+    "kourovka_8_8a_finitely_gen_conjugate": {
+        "module": "FcSolvedAlgAnal.Kourovka8_8a",
+        "theorem": "FcSolvedAlgAnal.Kourovka8_8a.kourovka_8_8a",
+        "statement": "\ndef kourovka_8_8a_finitely_gen_conjugate : Prop :=\n  ∃ (G : Type) (_ : Group G), ¬ IsCyclic G ∧ Group.FG G ∧\n        ∃ a : G, ∀ g : G, ∃ n : ℤ, IsConj g (a ^ n)\n"
+    },
+    "conj_class_sizes_sym_three": {
+        "module": "FcSolvedAlgAnal.ConjClassSizesS3",
+        "theorem": "FcSolvedAlgAnal.ConjClassSizesS3.conjClassSizes_iff_sym_three_solvable",
+        "statement": "\ndef conj_class_sizes_sym_three : Prop :=\n  open FcSolvedAlgAnal.ConjClassSizesS3 in\n  open ConjClasses in\n  ∀ (G : Type) [Group G] [Fintype G] [Group.IsSolvable G] [Nontrivial G]\n      (h : HasDistinctConjClassSizes (G := G)),\n    Nonempty (G ≃* Equiv.Perm (Fin 3))\n"
+    },
+    "green_54_gaussian_convex_hull": {
+        "module": "FcSolvedAlgAnal.Green54Gaussian",
+        "theorem": "FcSolvedAlgAnal.Green54Gaussian.green_54",
+        "statement": "\ndef green_54_gaussian_convex_hull : Prop :=\n  open FcSolvedAlgAnal.Green54Gaussian in\n  open MeasureTheory ProbabilityTheory in\n  open scoped Pointwise ENNReal in\n  ∀ K : Set (ℕ → ℝ), IsCompact K → Balanced ℝ K → (0.99 : ℝ≥0∞) ≤\n      gaussianMeasureInf K → ∃ C : Set (ℕ → ℝ), IsCompact C ∧ Convex ℝ C ∧ C ⊆ (10 : ℕ) • K ∧\n      (0.01 : ℝ≥0∞) ≤ gaussianMeasureInf C\n"
+    },
+    "pierce_birkhoff_dim_two": {
+        "module": "FcSolvedAlgAnal.PierceBirkhoffDim2",
+        "theorem": "FcSolvedAlgAnal.PierceBirkhoffDim2.pierce_birkhoff_conjecture_dim_two",
+        "statement": "\ndef pierce_birkhoff_dim_two : Prop :=\n  open FcSolvedAlgAnal.PierceBirkhoffDim2 in\n  open scoped Polynomial in\n  ∀ (f : (Fin 2 → ℝ) → ℝ) (hf : IsPiecewiseMvPolynomial f),\n    ∃ (ι κ : Type) (g : ι → κ → MvPolynomial (Fin 2) ℝ), Finite ι ∧ Finite κ ∧\n        ∀ x, f x = ⨆ i, ⨅ j, MvPolynomial.eval x (g i j)\n"
+    },
+    "shelah_spencer_zero_one_law": {
+        "module": "FcSolvedAlgAnal.ShelahSpencer01",
+        "theorem": "FcSolvedAlgAnal.ShelahSpencer01.zeroOne_irrational",
+        "statement": "\ndef shelah_spencer_zero_one_law : Prop :=\n  open FcSolvedAlgAnal.ShelahSpencer01 in\n  open FirstOrder Filter MeasureTheory Topology in\n  ∀ (α : ℝ) (hα : 0 < α ∧ α < 1) (hirr : Irrational α) (φ : Language.graph.Sentence),\n    Tendsto (fun n =>\n       sparseRandomGraph n α hα.1\n         {G | @Language.Sentence.Realize Language.graph (Fin n) G.structure φ}) atTop (𝓝 0) ∨\n     Tendsto (fun n =>\n       sparseRandomGraph n α hα.1\n         {G | @Language.Sentence.Realize Language.graph (Fin n) G.structure φ}) atTop (𝓝 1)\n"
+    },
+    "erdos_1038_monic_poly_measure": {
+        "module": "FcSolvedAlgAnal.Erdos1038Measure",
+        "theorem": "FcSolvedAlgAnal.Erdos1038Measure.erdos_1038.parts.ii",
+        "statement": "\ndef erdos_1038_monic_poly_measure : Prop :=\n  open scoped Real ENNReal in\n  open MeasureTheory Set in\n  2 * 2 ^ (1 / 2 : ℝ) =\n      ⨆ f : {f : Polynomial ℝ // f.Monic ∧\n      (f.roots.filter fun x => x ∈ Set.Icc (-1 : ℝ) 1).card = f.natDegree},\n      volume {x | |f.1.eval x| < 1}\n"
+    },
+    "erdos_120_steinhaus_finite": {
+        "module": "FcSolvedAlgAnal.Erdos120Finite",
+        "theorem": "FcSolvedAlgAnal.Erdos120Finite.erdos_120.variants.finite_set",
+        "statement": "\ndef erdos_120_steinhaus_finite : Prop :=\n  open FcSolvedAlgAnal.Erdos120Finite in\n  open Set MeasureTheory in\n  ∀ {A : Set ℝ} (h : A.Finite),\n    ¬ Erdos120For A\n"
+    },
+    "cprank_three_slices": {
+        "module": "FcSolvedAlgAnal.TensorRankThreeSlices",
+        "theorem": "FcSolvedAlgAnal.TensorRankThreeSlices.cprank_le_of_three_slices",
+        "statement": "\ndef cprank_three_slices : Prop :=\n  ∀ {n : ℕ} (hn : 1 ≤ n) (T : Holor ℂ [n, n, 3]),\n    T.cprank ≤ 2 * n - 1\n"
+    },
+    "erdos_1119_entire_functions_card": {
+        "module": "FcSolvedAlgAnal.Erdos1119Entire",
+        "theorem": "FcSolvedAlgAnal.Erdos1119Entire.erdos_1119",
+        "statement": "\ndef erdos_1119_entire_functions_card : Prop :=\n  open Cardinal Order in\n  open scoped Cardinal in\n  ∀ (m : Cardinal.{0}), ℵ₀ < m → m < 𝔠 →\n      ∀ F : Set (ℂ → ℂ), (∀ f ∈ F, Differentiable ℂ f) →\n        (∀ z₀ : ℂ, #{y : ℂ | ∃ f ∈ F, f z₀ = y} ≤ m) →\n        #F ≤ m\n"
+    },
+    "semiring_unique_left_not_right_maximal": {
+        "module": "FcSolvedAlgAnal.SemiringMaxIdeals",
+        "theorem": "FcSolvedAlgAnal.SemiringMaxIdeals.exists_semiring_unique_left_maximal_not_unique_right_maximal",
+        "statement": "\ndef semiring_unique_left_not_right_maximal : Prop :=\n  ∃ (R : Type) (_ : Semiring R), (∃! I : Ideal R, I.IsMaximal) ∧\n        ∃ I J : Ideal Rᵐᵒᵖ, I.IsMaximal ∧ J.IsMaximal ∧ I ≠ J\n"
+    },
+    "kourovka_19_25_order_sum_simple": {
+        "module": "FcSolvedAlgAnal.Kourovka19_25",
+        "theorem": "FcSolvedAlgAnal.Kourovka19_25.kourovka_19_25",
+        "statement": "\ndef kourovka_19_25_order_sum_simple : Prop :=\n  open scoped Nat Group in\n  ¬ ∀ (G H : Type) [Group G] [Group H] [Fintype G] [Fintype H],\n         Fintype.card G = Fintype.card H →\n         ∑ g : G, φ (orderOf g) = ∑ h : H, φ (orderOf h) →\n         IsSimpleGroup G → IsSimpleGroup H\n"
+    },
+    "kourovka_20_76_pgroup_abelian_bound": {
+        "module": "FcSolvedAlgAnal.Kourovka20_76",
+        "theorem": "FcSolvedAlgAnal.Kourovka20_76.kourovka_20_76",
+        "statement": "\ndef kourovka_20_76_pgroup_abelian_bound : Prop :=\n  ¬ (∀ᵉ (p : ℕ) (hp : p.Prime) (G : Type) (_ : Group G) (hg : IsPGroup p G) (_ : Finite G) (k : ℕ)\n      (h : ∀ H: Subgroup G, H.Normal ∧ IsMulCommutative H → Nat.card H ≤ p ^ k),\n      (∀ H : Subgroup G, IsMulCommutative H → Nat.card H ≤ p ^ (2 * k)))\n"
+    },
+    "green_85_loose_axis_rectangle": {
+        "module": "FcSolvedAlgAnal.Green85Loose",
+        "theorem": "FcSolvedAlgAnal.Green85Loose.green_85_loose",
+        "statement": "\ndef green_85_loose_axis_rectangle : Prop :=\n  open Filter MeasureTheory Set Topology in\n  ∃ c > 0, ∀ᶠ α in 𝓝[>] 0,\n      ∀ A : Set (ℝ × ℝ),\n      IsOpen A →\n      A ⊆ Icc 0 1 ×ˢ Icc 0 1 →\n      A.Nonempty →\n      α = (volume A).toReal →\n      ∃ x₁ x₂ y₁ y₂,\n        {(x₁, y₁), (x₂, y₁), (x₂, y₂), (x₁, y₂)} ⊆ A ∧\n        c * α ^ 2 * (Real.log (1/α))⁻¹ ≤ |x₁ - x₂| * |y₁ - y₂|\n"
+    },
+    "erdos_1133_polynomial_interpolation": {
+        "module": "FcSolvedAlgAnal.Erdos1133Interp",
+        "theorem": "FcSolvedAlgAnal.Erdos1133Interp.erdos_1133",
+        "statement": "\ndef erdos_1133_polynomial_interpolation : Prop :=\n  open Filter Set in\n  ∀ C > (0 : ℝ), ∃ ε > (0 : ℝ), ∀ᶠ n : ℕ in atTop,\n        ∀ x : Fin n → Icc (-1 : ℝ) 1,\n          ∃ y : Fin n → Icc (-1 : ℝ) 1,\n            ∀ P : Polynomial ℝ,\n              (P.natDegree : ℝ) < (1 + ε) * (n : ℝ) →\n              ((Finset.univ.filter (fun i ↦ P.eval (x i : ℝ) = (y i : ℝ))).card : ℝ) ≥\n                (1 - ε) * (n : ℝ) →\n              ∃ z ∈ Icc (-1 : ℝ) 1, |P.eval z| > C\n"
+    },
+    "hilbert17_motzkin_not_sos": {
+        "module": "FcSolvedAlgAnal.Hilbert17Motzkin",
+        "theorem": "FcSolvedAlgAnal.Hilbert17Motzkin.f_not_sum_of_squares",
+        "statement": "\ndef hilbert17_motzkin_not_sos : Prop :=\n  open FcSolvedAlgAnal.Hilbert17Motzkin in\n  open Real MvPolynomial in\n  ¬∃ (n : ℕ) (hn : 0 < n) (S : Fin n → MvPolynomial (Fin 2) ℝ), f = ∑ i, S i ^ 2\n"
+    },
+    "voronovskaja_bernstein": {
+        "module": "FcSolvedAlgAnal.VoronovskajaBernstein",
+        "theorem": "FcSolvedAlgAnal.VoronovskajaBernstein.voronovskaja_theorem.bernstein_operators",
+        "statement": "\ndef voronovskaja_bernstein : Prop :=\n  open FcSolvedAlgAnal.VoronovskajaBernstein in\n  open Topology Filter MeasureTheory ProbabilityTheory Real unitInterval Polynomial in\n  ∀ (f : ℝ → ℝ) (x : ℝ) (hx : x ∈ I)\n      (hf : ContDiffOn ℝ 2 f I),\n    let f'' : ℝ := iteratedDerivWithin 2 f I x;\n    Tendsto (fun (n : ℕ) => (n : ℝ) * (bezierBernstein n 1 f x - f x))\n      atTop\n      (𝓝 ((1 / 2) * x * (1 - x) * f''))\n"
+    },
+    "erdos_1154_hausdorff_dim_subgroup": {
+        "module": "FcSolvedAlgAnal.Erdos1154Subgroup",
+        "theorem": "FcSolvedAlgAnal.Erdos1154Subgroup.erdos_1154.variants.group",
+        "statement": "\ndef erdos_1154_hausdorff_dim_subgroup : Prop :=\n  open scoped ENNReal Cardinal in\n  open Set MeasureTheory in\n  ∀ {a : ℝ≥0∞} (ha : a ∈ Icc 0 1),\n    ∃ R : AddSubgroup ℝ, dimH (R : Set ℝ) = a\n"
+    },
+    "erdos_477_squares_unique_rep": {
+        "module": "FcSolvedAlgAnal.Erdos477Squares",
+        "theorem": "FcSolvedAlgAnal.Erdos477Squares.erdos_477.variants.S_sq",
+        "statement": "\ndef erdos_477_squares_unique_rep : Prop :=\n  open Polynomial Set in\n  letI f := X ^ 2;\n  ∀ A : Set ℤ, ∃ z, ¬ ∃! a ∈ A ×ˢ (Set.range f.eval), z = a.1 + a.2\n"
+    },
+    "erdos_ulam_solymosi_de_zeeuw": {
+        "module": "FcSolvedAlgAnal.ErdosUlamSolymosi",
+        "theorem": "FcSolvedAlgAnal.ErdosUlamSolymosi.erdos_ulam_problem.variants.solymosi_de_zeeuw",
+        "statement": "\ndef erdos_ulam_solymosi_de_zeeuw : Prop :=\n  open FcSolvedAlgAnal.ErdosUlamSolymosi in\n  open EuclideanSpace in\n  ∀ (S : Set (EuclideanSpace ℝ (Fin 2))) (hd : PairwiseRationalDistances S)\n      (hstructure :\n        (∃ a b : EuclideanSpace ℝ (Fin 2), a ≠ b ∧\n          {x ∈ S | ∃ t : ℝ, x = a + t • (b - a)}.Infinite) ∨\n        (∃ (c : EuclideanSpace ℝ (Fin 2)) (ρ : ℝ), 0 < ρ ∧\n          {x ∈ S | dist x c = ρ}.Infinite)),\n    (∃ a b : EuclideanSpace ℝ (Fin 2), a ≠ b ∧\n          {x ∈ S | ¬ ∃ t : ℝ, x = a + t • (b - a)}.Finite) ∨\n      (∃ (c : EuclideanSpace ℝ (Fin 2)) (ρ : ℝ), 0 < ρ ∧\n          {x ∈ S | dist x c ≠ ρ}.Finite)\n"
+    },
+    "green_87_perm_fixed_set_limit": {
+        "module": "FcSolvedAlgAnal.Green87PermLimit",
+        "theorem": "FcSolvedAlgAnal.Green87PermLimit.green_87.variants.exists_tendsto",
+        "statement": "\ndef green_87_perm_fixed_set_limit : Prop :=\n  open FcSolvedAlgAnal.Green87PermLimit in\n  open Filter Asymptotics Topology in\n  ∀ (k : ℕ),\n    ∃ L : ℝ, Tendsto (fun n ↦ i n k) atTop (𝓝 L)\n"
+    },
+    "gamma_subgroup_rank_3_3": {
+        "module": "FcSolvedAlgAnal.GammaSubgroup33",
+        "theorem": "FcSolvedAlgAnal.GammaSubgroup33.conjecture_1.variants.rank_3_3",
+        "statement": "\ndef gamma_subgroup_rank_3_3 : Prop :=\n  open FcSolvedAlgAnal.GammaSubgroup33 in\n  open Equiv.Perm in\n  ∀ h₁ h₂ : gammaSubgroup 3 3, Subgroup.closure {h₁, h₂} ≠ ⊤\n"
+    },
+    "erdos_1046_lemniscate_diameter": {
+        "module": "FcSolvedAlgAnal.Erdos1046Diameter",
+        "theorem": "FcSolvedAlgAnal.Erdos1046Diameter.erdos_1046.variants.diameter",
+        "statement": "\ndef erdos_1046_lemniscate_diameter : Prop :=\n  open FcSolvedAlgAnal.Erdos1046Diameter in\n  open Polynomial Metric in\n  ∀ f : ℂ[X], f.Monic →\n      IsConnected (closedLemniscate f) → 2 ≤ Metric.ediam (closedLemniscate f)\n"
+    },
+    "erdos_1132_lebesgue_function_max": {
+        "module": "FcSolvedAlgAnal.Erdos1132Lebesgue",
+        "theorem": "FcSolvedAlgAnal.Erdos1132Lebesgue.erdos_1132.variants.erdos_max",
+        "statement": "\ndef erdos_1132_lebesgue_function_max : Prop :=\n  open FcSolvedAlgAnal.Erdos1132Lebesgue in\n  open Filter MeasureTheory in\n  ∃ C : ℝ, ∀ n : ℕ, 1 ≤ n → ∀ x : ℕ → ℝ, (∀ k < n, x k ∈ Set.Icc (-1 : ℝ) 1) →\n        Set.InjOn x (Set.Iio n) →\n          ∃ t ∈ Set.Icc (-1 : ℝ) 1, 2 / Real.pi * Real.log n - C < lebesgueFunction n x t\n"
+    }
+}
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>")
+    lean_verify(
+        sys.argv[1],
+        lib_root=LIB_ROOT,
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        uses_mathlib=True,
+        statement_preamble=STATEMENT_PREAMBLE,
+        timeout_sec=230,
+    )

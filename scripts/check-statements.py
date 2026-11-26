@@ -24,6 +24,7 @@ container process. Mission `verify` entrypoints and the verifier server take
 no option that reaches it.
 """
 import argparse
+import concurrent.futures
 import glob
 import json
 import os
@@ -259,14 +260,17 @@ def main(argv=None):
     ap.add_argument("--timeout", type=int, default=900, help="seconds per task")
     ap.add_argument("--batch-size", type=int, default=0,
                     help="max tasks per container (0 = all tasks of a mission in one container)")
+    ap.add_argument("--jobs", type=int, default=1,
+                    help="parallel mission verifier containers (default: 1)")
     args = ap.parse_args(raw_argv)
     if args.timeout <= 0:
         ap.error("--timeout must be positive")
     if args.batch_size < 0:
         ap.error("--batch-size must be >= 0")
+    if args.jobs <= 0:
+        ap.error("--jobs must be positive")
 
-    failures = 0
-    checked = 0
+    work = []
     for name in sorted(os.listdir(MISSIONS)):
         mission_dir = os.path.join(MISSIONS, name)
         manifest_path = os.path.join(mission_dir, "sunstead.json")
@@ -282,13 +286,50 @@ def main(argv=None):
         task_ids = [task["id"] for task in manifest["tasks"]]
         if not task_ids:
             continue
-        for task_id, res in run_mission_batch(
-            mission_dir, image, task_ids, args.timeout, batch_size=args.batch_size
-        ):
+        work.append((name, mission_dir, image, task_ids))
+
+    if not work:
+        print("no tasks checked")
+        sys.exit(1)
+
+    failures = 0
+    checked = 0
+
+    def _emit_mission(name, results):
+        nonlocal checked, failures
+        for task_id, res in results:
             checked += 1
             mark = "OK" if res.get("ok") else "FAIL"
             failures += 0 if res.get("ok") else 1
             print(f"[{mark}] {name}/{task_id}: {res.get('summary', '')}", flush=True)
+
+    workers = min(args.jobs, len(work))
+    if workers <= 1:
+        for name, mission_dir, image, task_ids in work:
+            _emit_mission(
+                name,
+                run_mission_batch(
+                    mission_dir, image, task_ids, args.timeout, batch_size=args.batch_size
+                ),
+            )
+    else:
+        # Longest-processing-time-first (most tasks first) minimizes tail latency.
+        ordered = sorted(work, key=lambda item: (-len(item[3]), item[0]))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+            futs = {
+                pool.submit(
+                    run_mission_batch,
+                    mission_dir,
+                    image,
+                    task_ids,
+                    args.timeout,
+                    batch_size=args.batch_size,
+                ): name
+                for name, mission_dir, image, task_ids in ordered
+            }
+            for fut in concurrent.futures.as_completed(futs):
+                _emit_mission(futs[fut], fut.result())
+
     if checked == 0:
         print("no tasks checked")
         sys.exit(1)

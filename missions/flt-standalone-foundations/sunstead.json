@@ -1,0 +1,52 @@
+{
+  "id": "flt-standalone-foundations",
+  "title": "Fermat's Last Theorem (FLT): Elliptic n-Torsion & Compact Hausdorff Groups",
+  "description": "Two genuine, non-PR-conflicted standalone Mathlib open `sorry` theorems copied verbatim from Imperial College London's Fermat's Last Theorem formalization (ImperialCollegeLondon/FLT@01980581, Apache-2.0), verified verbatim on Lean v4.36.0 + Mathlib v4.36.0: rank-2 structure of the n-torsion subgroup of an elliptic curve over a separably closed field (`WeierstrassCurve.torsion_rank_two`, Kevin Buzzard) and triviality of connected compact Hausdorff `\ud835\udd3d_p`-vector spaces (`Group.subsingleton_of_pow_prime_eq_one`, Thomas Browning & Kevin Buzzard).",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/ImperialCollegeLondon/FLT",
+  "upstream": {
+    "repo": "ImperialCollegeLondon/FLT",
+    "commit": "019805815d7da565ed1e9f427b6fbd0cbc9d00d3",
+    "license": "Apache-2.0"
+  },
+  "frozen_paths": [
+    "FltFoundations/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 240,
+    "memory_mb": 6144
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "weierstrass_curve_torsion_rank_two",
+      "title": "Prove n-torsion of an elliptic curve over a separably closed field is (\u2124/n\u2124)\u00b2",
+      "description": "Closes the open `sorry` at `FLT/KnownIn1980s/EllipticCurves/Torsion.lean:36-38` (`WeierstrassCurve.torsion_rank_two`): for an elliptic curve `E` over a separably closed field `k` and `n : \u2115` nonzero in `k`, prove `Nonempty (AddSubgroup.torsionBy (E\u2044k).Point (n : \u2124) \u2243+ (ZMod n) \u00d7 (ZMod n))` with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FltFoundations/EllipticTorsion.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/ImperialCollegeLondon/FLT/blob/019805815d7da565ed1e9f427b6fbd0cbc9d00d3/FLT/KnownIn1980s/EllipticCurves/Torsion.lean#L36-L38"
+    },
+    {
+      "id": "group_subsingleton_of_pow_prime_eq_one",
+      "title": "Prove connected compact Hausdorff abelian group of prime exponent p is trivial",
+      "description": "Closes the open `sorry` at `FLT/Patching/Utils/CompactHausdorffRings.lean:37-42` (`Group.subsingleton_of_pow_prime_eq_one`): prove every connected compact Hausdorff abelian topological group `A` satisfying `\u2200 a : A, a ^ p = 1` for prime `p` is a `Subsingleton` (from which FLT already derives total disconnectedness of compact Hausdorff rings), with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FltFoundations/CompactHausdorff.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/ImperialCollegeLondon/FLT/blob/019805815d7da565ed1e9f427b6fbd0cbc9d00d3/FLT/Patching/Utils/CompactHausdorffRings.lean#L37-L42"
+    }
+  ]
+}

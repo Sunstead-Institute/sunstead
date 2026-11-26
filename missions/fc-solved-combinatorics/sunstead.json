@@ -1,0 +1,288 @@
+{
+  "id": "fc-solved-combinatorics",
+  "title": "Formal Conjectures (Solved Literature): Combinatorics & Graph Theory",
+  "description": "Twenty-five known-in-literature, unproved-in-Lean combinatorics, graph theory, Ramsey, and discrete geometry theorems extracted verbatim from google-deepmind/formal-conjectures@5bd8bfb9 (Apache-2.0), including Spencer's Six Standard Deviations, Montgomery–Pokrovskiy–Sudakov's Ringel/Kotzig theorem for large trees, Aharoni–Berger's infinite Menger theorem (Erdős #599), Nguyen–Scott–Seymour Erdős–Hajnal for P₅ (#61), Kim's triangle-free chromatic asymptotic (#920), Bucić–Sudakov (#813), and Pokrovskiy's Manickam–Miklós–Singhi bound. All statements compile cleanly on Lean 4.36.0 + Mathlib v4.36.0.",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/google-deepmind/formal-conjectures",
+  "upstream": {
+    "repo": "google-deepmind/formal-conjectures",
+    "commit": "5bd8bfb9def462c19a87d2d275af3db3341dc727",
+    "license": "Apache-2.0"
+  },
+  "frozen_paths": [
+    "FcSolvedComb/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 240,
+    "memory_mb": 6144
+  },
+  "decomposition": {
+    "enabled": true,
+    "require_allowlist": true,
+    "allow_direct_bypass": true,
+    "max_depth": 2
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "six_standard_deviations",
+      "title": "Spencer (1985): Six Standard Deviations Suffice discrepancy theorem",
+      "description": "Verbatim statement `six_standard_deviations` from `FormalConjectures/Wikipedia/SixStandardDeviations.lean#L63-L67` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedComb/SixStdDev.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/SixStandardDeviations.lean#L63-L67"
+    },
+    {
+      "id": "kotzig_ringel_large",
+      "title": "Montgomery–Pokrovskiy–Sudakov: Kotzig/Ringel cyclic tree decomposition for large n",
+      "description": "Verbatim statement `kotzig_conjecture_large` from `FormalConjectures/Arxiv/2001.02665/RingelConjecture.lean#L72-L79` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedComb/KotzigLarge.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Arxiv/2001.02665/RingelConjecture.lean#L72-L79"
+    },
+    {
+      "id": "erdos_723_projective_planes_le_11",
+      "title": "Erdős #723 (Lam–Thiel–Swiercz): finite projective planes of order ≤ 11 have prime-power order",
+      "description": "Verbatim statement `erdos_723.variants.leq_11` from `FormalConjectures/ErdosProblems/723.lean#L54-L56` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedComb/Erdos723ProjPlane.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/723.lean#L54-L56"
+    },
+    {
+      "id": "erdos_813_bucic_sudakov",
+      "title": "Erdős #813 (Bucić–Sudakov): clique number when every 7 vertices contain a triangle",
+      "description": "Verbatim statement `erdos_813.variants.bucic_sudakov` from `FormalConjectures/ErdosProblems/813.lean#L131-L133` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedComb/Erdos813BucicSudakov.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/813.lean#L131-L133"
+    },
+    {
+      "id": "erdos_920_triangle_free_chromatic",
+      "title": "Erdős #920 (Kim / AKS): max chromatic number of triangle-free graphs Θ(√(n/log n))",
+      "description": "Verbatim statement `erdos_920.variants.k_eq_3` from `FormalConjectures/ErdosProblems/920.lean#L78-L80` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedComb/Erdos920TriangleFree.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/920.lean#L78-L80"
+    },
+    {
+      "id": "erdos_295_egyptian_fractions",
+      "title": "Erdős #295 (Erdős–Straus): asymptotic length of unit-fraction decompositions ≥ N",
+      "description": "Verbatim statement `erdos_295.variants.erdos_straus` from `FormalConjectures/ErdosProblems/295.lean#L67-L70` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedComb/Erdos295Straus.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/295.lean#L67-L70"
+    },
+    {
+      "id": "erdos_494_product_multiset",
+      "title": "Erdős #494: distinct complex finite sets with identical 3-subset product multisets",
+      "description": "Verbatim statement `erdos_494.variants.product` from `FormalConjectures/ErdosProblems/494.lean#L156-L159` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedComb/Erdos494ProdMultiset.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/494.lean#L156-L159"
+    },
+    {
+      "id": "erdos_88_erdos_mckay",
+      "title": "Erdős #88 (Alon–Krivelevich–Sudakov): induced subgraph edge-count diversity in Ramsey graphs",
+      "description": "Verbatim statement `erdos_88.variants.erdos_mckay` from `FormalConjectures/ErdosProblems/88.lean#L67-L72` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedComb/Erdos88McKay.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/88.lean#L67-L72"
+    },
+    {
+      "id": "erdos_245_sumset_limsup",
+      "title": "Erdős #245 (Freiman): limsup |A+A|/|A| ≥ 3 for zero-density infinite sets",
+      "description": "Verbatim statement `erdos_245` from `FormalConjectures/ErdosProblems/245.lean#L46-L52` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedComb/Erdos245Sumset.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/245.lean#L46-L52"
+    },
+    {
+      "id": "green_23_pythagorean_colouring",
+      "title": "Ben Green #23: every finite colouring of ℕ contains a monochromatic x² + y² = z² pair",
+      "description": "Verbatim statement `green_23` from `FormalConjectures/GreensOpenProblems/23.lean#L39-L48` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedComb/Green23Pythagorean.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/GreensOpenProblems/23.lean#L39-L48"
+    },
+    {
+      "id": "erdos_599_infinite_menger",
+      "title": "Erdős #599 (Aharoni–Berger): infinite Menger theorem for vertex-disjoint paths",
+      "description": "Verbatim statement `erdos_599` from `FormalConjectures/ErdosProblems/599.lean#L47-L56` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedComb/Erdos599Menger.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/599.lean#L47-L56"
+    },
+    {
+      "id": "erdos_882_subset_sum_antichain",
+      "title": "Erdős #882: asymptotic size of largest subset-sum divisibility antichain in [1, n]",
+      "description": "Verbatim statement `erdos_882` from `FormalConjectures/ErdosProblems/882.lean#L64-L67` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedComb/Erdos882Antichain.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/882.lean#L64-L67"
+    },
+    {
+      "id": "tu_deng_conjecture",
+      "title": "Tu–Deng binary-weight sumset bound in Z/(2^k - 1)Z",
+      "description": "Verbatim statement `tu_deng_conjecture` from `FormalConjectures/Paper/TuDengConjecture.lean#L66-L70` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedComb/TuDeng.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Paper/TuDengConjecture.lean#L66-L70"
+    },
+    {
+      "id": "tx_graffiti_conjecture_2",
+      "title": "TxGraffiti Conjecture 2 (refuted): counterexample to zero-forcing ≤ α + 1 for Δ ≤ 3",
+      "description": "Verbatim statement `tx_graffiti_conjecture_2` from `FormalConjectures/Arxiv/2507.17780/2.lean#L73-L79` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedComb/TxGraffiti2.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Arxiv/2507.17780/2.lean#L73-L79"
+    },
+    {
+      "id": "erdos_1033_fan_triangle_degree",
+      "title": "Erdős #1033 (Fan): triangle degree-sum bound ≥ 21n/16 above Turán threshold",
+      "description": "Verbatim statement `erdos_1033.variants.fan` from `FormalConjectures/ErdosProblems/1033.lean#L80-L83` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedComb/Erdos1033Fan.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/1033.lean#L80-L83"
+    },
+    {
+      "id": "erdos_627_triangle_free_chromatic_lb",
+      "title": "Erdős #627 (Erdős 1961): triangle-free graphs with χ ≥ c√n/log n",
+      "description": "Verbatim statement `erdos_627.variants.erdos_1961` from `FormalConjectures/ErdosProblems/627.lean#L161-L165` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedComb/Erdos627Chromatic.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/627.lean#L161-L165"
+    },
+    {
+      "id": "erdos_780_kneser_sharp",
+      "title": "Erdős #780: sharpness construction for Kneser hypergraph colouring",
+      "description": "Verbatim statement `erdos_780.variants.sharp` from `FormalConjectures/ErdosProblems/780.lean#L61-L65` (`category textbook`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedComb/Erdos780Sharp.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/780.lean#L61-L65"
+    },
+    {
+      "id": "erdos_1009_sauer_triangles",
+      "title": "Erdős #1009 (Sauer): extremal construction limiting edge-disjoint triangles",
+      "description": "Verbatim statement `erdos_1009.variants.sauer` from `FormalConjectures/ErdosProblems/1009.lean#L67-L72` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedComb/Erdos1009Sauer.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/1009.lean#L67-L72"
+    },
+    {
+      "id": "erdos_915_edge_disjoint_paths",
+      "title": "Erdős #915: m edge-disjoint paths between two vertices from edge density",
+      "description": "Verbatim statement `erdos_915.variants.edge_disjoint` from `FormalConjectures/ErdosProblems/915.lean#L81-L86` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedComb/Erdos915Paths.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/915.lean#L81-L86"
+    },
+    {
+      "id": "gyarfas_sumner_path",
+      "title": "Gyárfás–Sumner for paths: P_n-free graphs are χ-bounded",
+      "description": "Verbatim statement `gyarfas_sumner_conjecture.variants.path` from `FormalConjectures/Wikipedia/GyarfasSumnerConjecture.lean#L72-L74` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedComb/GyarfasSumnerPath.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/GyarfasSumnerConjecture.lean#L72-L74"
+    },
+    {
+      "id": "erdos_61_erdos_hajnal_p5",
+      "title": "Erdős #61 (Nguyen–Scott–Seymour): Erdős–Hajnal conjecture holds for P₅",
+      "description": "Verbatim statement `erdos_61.variants.p5` from `FormalConjectures/ErdosProblems/61.lean#L87-L89` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedComb/Erdos61P5.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/61.lean#L87-L89"
+    },
+    {
+      "id": "green_76_rich_rectangles",
+      "title": "Ben Green #76 (Pach–Tardos): no universal k allows halving hitting sets for k-rich rectangles",
+      "description": "Verbatim statement `green_76.variants.subset` from `FormalConjectures/GreensOpenProblems/76.lean#L105-L107` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedComb/Green76Rectangles.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/GreensOpenProblems/76.lean#L105-L107"
+    },
+    {
+      "id": "erdos_926_aks_extremal",
+      "title": "Erdős #926 (Alon–Krivelevich–Sudakov): Turán bound O(k n^{3/2}) for the 1-subdivision star H_k",
+      "description": "Verbatim statement `erdos_926.variants.aks` from `FormalConjectures/ErdosProblems/926.lean#L88-L90` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedComb/Erdos926AKS.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/926.lean#L88-L90"
+    },
+    {
+      "id": "erdos_781_descending_wave",
+      "title": "Erdős #781 (Brown–Erdős–Freedman): quadratic/cubic bounds for monochromatic descending waves",
+      "description": "Verbatim statement `erdos_781.variants.brown_erdos_freedman` from `FormalConjectures/ErdosProblems/781.lean#L77-L79` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedComb/Erdos781Wave.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/781.lean#L77-L79"
+    },
+    {
+      "id": "manickam_miklos_singhi_pokrovskiy",
+      "title": "Pokrovskiy (2015): Manickam–Miklós–Singhi conjecture holds for n ≥ Ck",
+      "description": "Verbatim statement `manickam_miklos_singhi_conjecture.variants.pokrovskiy` from `FormalConjectures/Paper/ManickamMiklosSinghiConjecture.lean#L69-L72` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedComb/MmsPokrovskiy.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Paper/ManickamMiklosSinghiConjecture.lean#L69-L72"
+    }
+  ]
+}

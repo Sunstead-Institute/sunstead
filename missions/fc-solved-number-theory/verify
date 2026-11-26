@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+"""Frozen verifier for `fc-solved-number-theory`.
+
+Uses the shared trusted harness baked into `/opt/sunstead/sunstead_sandbox.py`
+with Lean 4.36.0 + read-only Mathlib v4.36.0.
+"""
+import sys
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify  # noqa: E402
+
+LIB_ROOT = 'FcSolvedNT'
+FROZEN_FILES = [
+    "FcSolvedNT/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain"
+]
+STATEMENT_PREAMBLE = ""
+TASKS = {
+    "infinite_irrational_at_odd": {
+        "module": "FcSolvedNT.InfiniteIrrationalAtOdd",
+        "theorem": "FcSolvedNT.InfiniteIrrationalAtOdd.infinite_irrational_at_odd",
+        "statement": "\ndef infinite_irrational_at_odd : Prop :=\n  { n : ℕ | ∃ x, Irrational x ∧ riemannZeta (2 * n + 1) = x }.Infinite\n"
+    },
+    "gourevitch_series_identity": {
+        "module": "FcSolvedNT.GourevitchSeries",
+        "theorem": "FcSolvedNT.GourevitchSeries.gourevitch_series_identity",
+        "statement": "\ndef gourevitch_series_identity : Prop :=\n  ∑' n : ℕ, ((1 + 14 * n + 76 * n ^ 2 + 168 * n ^ 3) / (2 ^ (20 * n)) : ℝ)\n        * Nat.centralBinom n ^ 7 = 32 / (Real.pi ^ 3)\n"
+    },
+    "boshernitzan_equidistribution": {
+        "module": "FcSolvedNT.Boshernitzan",
+        "theorem": "FcSolvedNT.Boshernitzan.boshernitzan",
+        "statement": "\ndef boshernitzan_equidistribution : Prop :=\n  open Filter in\n  ∀ (r : ℕ → ℝ) (hr : ∀ n, 0 < r n) (hunb : ¬ BddAbove (Set.range r))\n      (hsub : Tendsto (fun n => r (n + 1) / r n) atTop (nhds 1)),\n    dimH {ξ : ℝ | ¬ Dense (Set.range fun n => (↑(ξ * r n) : AddCircle (1 : ℝ)))} = 0\n"
+    },
+    "divisor_error_hardy": {
+        "module": "FcSolvedNT.DivisorErrorHardy",
+        "theorem": "FcSolvedNT.DivisorErrorHardy.divisor_error_hardy",
+        "statement": "\ndef divisor_error_hardy : Prop :=\n  open FcSolvedNT.DivisorErrorHardy in\n  open Filter Asymptotics Real in\n  ¬ (divisorError =o[atTop] fun x => x ^ ((1 : ℝ) / 4))\n"
+    },
+    "carmichael_totient_bound": {
+        "module": "FcSolvedNT.CarmichaelTotientBound",
+        "theorem": "FcSolvedNT.CarmichaelTotientBound.carchimaelTotient_bound",
+        "statement": "\ndef carmichael_totient_bound : Prop :=\n  open FcSolvedNT.CarmichaelTotientBound in\n  open Nat in\n  ∀ {n : ℕ} (hn : 0 < n) (hn' : n < 10 ^ (10 ^ 10)),\n    CarmichaelTotientFor n\n"
+    },
+    "erdos_408_ford_konyagin_luca": {
+        "module": "FcSolvedNT.Erdos408FKL",
+        "theorem": "FcSolvedNT.Erdos408FKL.erdos_408.variants.ford_konyagin_luca",
+        "statement": "\ndef erdos_408_ford_konyagin_luca : Prop :=\n  open Filter in\n  open scoped Topology in\n  ∀ (ε δ : ℝ) (hε : 0 < ε) (hδ : 0 < δ),\n    ∃ k : ℕ, ∀ᶠ x : ℝ in atTop, (1 - ε) * x ≤\n        ((Finset.Icc 1 ⌊x⌋₊).filter fun n ↦\n          ((Nat.totient^[k] n).maxPrimeFac : ℝ) ≤ x ^ δ).card\n"
+    },
+    "darmon_granville_fermat_catalan": {
+        "module": "FcSolvedNT.DarmonGranville",
+        "theorem": "FcSolvedNT.DarmonGranville.fermat_catalan.variants.darmon_granville",
+        "statement": "\ndef darmon_granville_fermat_catalan : Prop :=\n  open scoped Function in\n  ∀ (m n k : ℕ) (hm : 0 < m) (hn : 0 < n) (hk : 0 < k)\n      (H : (1 / m : ℝ) + 1 / n + 1 / k < 1),\n    {(a, b, c) : ℕ × ℕ × ℕ | 0 < a ∧ 0 < b ∧ 0 < c ∧ a^m + b^n = c^k ∧\n        ({a, b, c} : Set _).Pairwise Nat.Coprime}.Finite\n"
+    },
+    "erdos_1057_agp_carmichael": {
+        "module": "FcSolvedNT.Erdos1057AGP",
+        "theorem": "FcSolvedNT.Erdos1057AGP.erdos_1057.variants.agp_lower_bound",
+        "statement": "\ndef erdos_1057_agp_carmichael : Prop :=\n  open FcSolvedNT.Erdos1057AGP in\n  open Nat Real Filter Set in\n  open scoped Topology Asymptotics in\n  ∀ᶠ x in atTop, carmichaelCounting x > x ^ (2 / 7 : ℝ)\n"
+    },
+    "erdos_325_wooley_cubes": {
+        "module": "FcSolvedNT.Erdos325Wooley",
+        "theorem": "FcSolvedNT.Erdos325Wooley.erdos_325.variants.wooley",
+        "statement": "\ndef erdos_325_wooley_cubes : Prop :=\n  open FcSolvedNT.Erdos325Wooley in\n  open Asymptotics Filter in\n  (fun x : ℕ => (x : ℝ) ^ (0.91709477 : ℝ)) =O[atTop]\n        (fun x => (cardIsSumThreePowerBelow 3 x : ℝ))\n"
+    },
+    "imaginary_class_number_one": {
+        "module": "FcSolvedNT.ImaginaryClassNumberOne",
+        "theorem": "FcSolvedNT.ImaginaryClassNumberOne.class_number_problem.variants.imaginary",
+        "statement": "\ndef imaginary_class_number_one : Prop :=\n  open FcSolvedNT.ImaginaryClassNumberOne in\n  open Polynomial in\n  { d : ℤ | Squarefree d ∧ d < 0 ∧ IsClassNumberOne d } =\n      {-1, -2, -3, -7, -11, -19, -43, -67, -163}\n"
+    },
+    "lonely_runner_tao_2017": {
+        "module": "FcSolvedNT.LonelyRunnerTao2017",
+        "theorem": "FcSolvedNT.LonelyRunnerTao2017.lonely_runner_conjecture.variants.tao_2017",
+        "statement": "\ndef lonely_runner_tao_2017 : Prop :=\n  open FcSolvedNT.LonelyRunnerTao2017 in\n  ∃ c : ℝ, 0 < c ∧\n        (∀ᶠ n : ℕ in Filter.atTop,\n          deltaGap n ≥\n            ((1 : ℝ) / (2 * (n : ℝ))\n              + c * Real.log (n : ℝ) /\n                  ((n : ℝ) ^ 2 * (Real.log (Real.log (n : ℝ))) ^ 2)))\n"
+    },
+    "erdos_12_erdos_sarkozy": {
+        "module": "FcSolvedNT.Erdos12Sarkozy",
+        "theorem": "FcSolvedNT.Erdos12Sarkozy.erdos_12.variants.erdos_sarkozy",
+        "statement": "\ndef erdos_12_erdos_sarkozy : Prop :=\n  open FcSolvedNT.Erdos12Sarkozy in\n  open Filter Set in\n  ∀ (f : ℕ → ℕ) (hf : atTop.Tendsto f atTop),\n    ∃ A, IsGood A ∧ {N : ℕ | (N : ℝ) / f N < (A ∩ Icc 1 N).ncard}.Infinite\n"
+    },
+    "erdos_67_discrepancy": {
+        "module": "FcSolvedNT.Erdos67Discrepancy",
+        "theorem": "FcSolvedNT.Erdos67Discrepancy.erdos_67",
+        "statement": "\ndef erdos_67_discrepancy : Prop :=\n  open Filter in\n  ∀ (f : ℕ → ({-1, 1} : Finset ℝ)) (C : ℝ) (hC : 0 < C),\n    ∃ᵉ (d ≥ 1) (m ≥ 1),\n      C < |∑ k ∈ Finset.Icc 1 m, (f (k * d)).1|\n"
+    },
+    "erdos_4_large_prime_gaps": {
+        "module": "FcSolvedNT.Erdos4PrimeGaps",
+        "theorem": "FcSolvedNT.Erdos4PrimeGaps.erdos_4",
+        "statement": "\ndef erdos_4_large_prime_gaps : Prop :=\n  open FcSolvedNT.Erdos4PrimeGaps in\n  open Real in\n  (∀ C > 0, Erdos4For C)\n"
+    },
+    "erdos_711_minimal_interval": {
+        "module": "FcSolvedNT.Erdos711Interval",
+        "theorem": "FcSolvedNT.Erdos711Interval.erdos_711.parts.ii",
+        "statement": "\ndef erdos_711_minimal_interval : Prop :=\n  open FcSolvedNT.Erdos711Interval in\n  open Filter Asymptotics in\n  ∀ B : ℕ, ∀ᶠ n in atTop,\n      ∃ m Lm Ln : ℕ, IsMinimalIntervalLength n m Lm ∧\n        IsMinimalIntervalLength n n Ln ∧ B ≤ Lm - Ln\n"
+    },
+    "erdos_69_omega_irrational": {
+        "module": "FcSolvedNT.Erdos69OmegaIrrational",
+        "theorem": "FcSolvedNT.Erdos69OmegaIrrational.erdos_69",
+        "statement": "\ndef erdos_69_omega_irrational : Prop :=\n  open scoped ArithmeticFunction.omega in\n  Irrational <| ∑' n, ω (n + 2) / 2 ^ (n + 2)\n"
+    },
+    "erdos_402_graham_gcd": {
+        "module": "FcSolvedNT.Erdos402GrahamGcd",
+        "theorem": "FcSolvedNT.Erdos402GrahamGcd.erdos_402",
+        "statement": "\ndef erdos_402_graham_gcd : Prop :=\n  open Filter in\n  ∀ (A : Finset ℕ) (h₁ : 0 ∉ A) (h₂ : A.Nonempty),\n    ∃ᵉ (a ∈ A) (b ∈ A),\n      a.gcd b ≤ (a / A.card : ℚ)\n"
+    },
+    "erdos_387_binomial_divisor": {
+        "module": "FcSolvedNT.Erdos387BinomDivisor",
+        "theorem": "FcSolvedNT.Erdos387BinomDivisor.erdos_387",
+        "statement": "\ndef erdos_387_binomial_divisor : Prop :=\n  open Filter in\n  ¬ ∃ c : ℝ, 0 < c ∧ ∀ n k : ℕ, 1 ≤ k → k < n →\n      ∃ d : ℕ, (d : ℝ) ∈ Set.Ioc (c * n) n ∧ d ∣ n.choose k\n"
+    },
+    "ternary_goldbach": {
+        "module": "FcSolvedNT.TernaryGoldbach",
+        "theorem": "FcSolvedNT.TernaryGoldbach.ternaryGoldbach",
+        "statement": "\ndef ternary_goldbach : Prop :=\n  ∀ (n : ℕ) (hn : 5 < n) (hn_odd : Odd n),\n    ∃ p q r, Nat.Prime p ∧ Nat.Prime q ∧ Nat.Prime r ∧ n = p + q + r\n"
+    },
+    "green_3_multiplicative_triple": {
+        "module": "FcSolvedNT.Green3MultTriple",
+        "theorem": "FcSolvedNT.Green3MultTriple.green_3",
+        "statement": "\ndef green_3_multiplicative_triple : Prop :=\n  open Set MeasureTheory in\n  ∀ A : Set ℝ,\n        IsOpen A → A ⊆ Icc 0 1 → volume A > 1/3 →\n          ∃ x y z, x ∈ A ∧ y ∈ A ∧ z ∈ A ∧ x * y = z\n"
+    },
+    "erdos_372_decreasing_max_prime_fac": {
+        "module": "FcSolvedNT.Erdos372MaxPrimeFac",
+        "theorem": "FcSolvedNT.Erdos372MaxPrimeFac.erdos_372",
+        "statement": "\ndef erdos_372_decreasing_max_prime_fac : Prop :=\n  {n : ℕ | Nat.maxPrimeFac n > Nat.maxPrimeFac (n + 1) ∧\n        Nat.maxPrimeFac (n + 1) > Nat.maxPrimeFac (n + 2)}.Infinite\n"
+    },
+    "colossally_abundant_maximizers": {
+        "module": "FcSolvedNT.ColossallyAbundant",
+        "theorem": "FcSolvedNT.ColossallyAbundant.encard_colossallyAbundant_maximizers_le_four",
+        "statement": "\ndef colossally_abundant_maximizers : Prop :=\n  open scoped ArithmeticFunction.sigma in\n  ∀ (ε : ℝ) (hε : 0 < ε),\n    Set.encard {n : ℕ | 1 < n ∧ ∀ k : ℕ, 1 < k →\n        (σ 1 k : ℝ) / (k : ℝ) ^ (1 + ε) ≤ (σ 1 n : ℝ) / (n : ℝ) ^ (1 + ε)} ≤ 4\n"
+    },
+    "oeis_a287616_polygonal_sum": {
+        "module": "FcSolvedNT.OeisA287616",
+        "theorem": "FcSolvedNT.OeisA287616.conjecture",
+        "statement": "\ndef oeis_a287616_polygonal_sum : Prop :=\n  open FcSolvedNT.OeisA287616 in\n  ∀ (n : ℕ),\n    A n\n"
+    },
+    "erdos_848_non_squarefree_products": {
+        "module": "FcSolvedNT.Erdos848NonSquarefree",
+        "theorem": "FcSolvedNT.Erdos848NonSquarefree.erdos_848",
+        "statement": "\ndef erdos_848_non_squarefree_products : Prop :=\n  open FcSolvedNT.Erdos848NonSquarefree in\n  ∀ N, Erdos848For N\n"
+    },
+    "riemann_zeta_second_moment": {
+        "module": "FcSolvedNT.ZetaSecondMoment",
+        "theorem": "FcSolvedNT.ZetaSecondMoment.moment_isEquiv₁",
+        "statement": "\ndef riemann_zeta_second_moment : Prop :=\n  open FcSolvedNT.ZetaSecondMoment in\n  open Complex Filter Real in\n  open scoped Asymptotics Nat in\n  moment 1 ~[atTop] fun T ↦ T.log\n"
+    }
+}
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>")
+    lean_verify(
+        sys.argv[1],
+        lib_root=LIB_ROOT,
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        uses_mathlib=True,
+        statement_preamble=STATEMENT_PREAMBLE,
+        timeout_sec=230,
+    )

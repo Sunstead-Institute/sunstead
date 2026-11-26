@@ -1,0 +1,38 @@
+{
+  "repo": "dronperminov/FastMatrixMultiplication",
+  "commit": "f70078cd9d1674cbc9c27e71011d4d6dff771d40",
+  "license": "MIT",
+  "specialization": "Sunstead anchors 26 open matrix multiplication tensor-rank shapes over F\u2082 (\u27e82,4,5\u27e9 through \u27e86,6,6\u27e9, disjoint from `matrix-rank444-f2` and `matrix-rank-alphatensor-f2`) to `dronperminov/FastMatrixMultiplication` (MIT), formalizing bilinear matrix-multiplication soundness and bit-packed Brent-equation kernel verification in pure Lean 4.36.0 (zero Mathlib). Each track is seeded with a verified mod-2 reduction of the corresponding pinned upstream ternary scheme.",
+  "checks": [
+    {
+      "local_file": "LICENSE",
+      "upstream_file": "LICENSE",
+      "verbatim_snippet": "MIT License\n\nCopyright (c) 2025 Andrew Perminov"
+    },
+    {
+      "local_file": "RankF2Ext/Spec.lean",
+      "upstream_file": "docs/ranks.md",
+      "verbatim_snippet": "# Rank comparison\n\nThe table below summarizes the current state of researched matrix multiplication schemes. It highlights where ternary\nschemes (`ZT`) match or approximate the known minimal ranks from other fields.\n\n|   Format   | `ZT` rank | `Z` rank | `Q` rank |        \u03c9        |\n|:----------:|:---------:|:--------:|:--------:|:---------------:|"
+    },
+    {
+      "local_file": "RankF2Ext/Spec.lean",
+      "upstream_file": "docs/ranks.md",
+      "verbatim_snippet": "|  `3x3x5`   |    36     |    36    |    36    |   2.824142367   |"
+    },
+    {
+      "local_file": "RankF2Ext/Spec.lean",
+      "upstream_file": "docs/ranks.md",
+      "verbatim_snippet": "|  `4x5x5`   |    76     |    76    |    76    |   2.821220388   |"
+    },
+    {
+      "local_file": "RankF2Ext/Spec.lean",
+      "upstream_file": "docs/ranks.md",
+      "verbatim_snippet": "|  `5x5x5`   |    93     |    93    |    93    |   2.816262409   |"
+    },
+    {
+      "local_file": "RankF2Ext/Spec.lean",
+      "upstream_file": "docs/ranks.md",
+      "verbatim_snippet": "|  `6x6x6`   |    153    |   153    |   153    |   2.807540860   |"
+    }
+  ]
+}
