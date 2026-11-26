@@ -1214,6 +1214,42 @@ test("VerifierSlotPool fans out concurrent verifications on one mission and pref
   pool.release("lean4", "img:v1", warmA);
 });
 
+test("VerifierSlotPool picks running containers before cold ones", async () => {
+  let t = 1_000_000;
+  const pool = new VerifierSlotPool({ lean4: 3, "lean4-v4.35.0": 1, "lean4-v4.31.0": 1 }, () => t, 600_000);
+  const a = await pool.acquire("lean4", "img", "mission-a");
+  const b = await pool.acquire("lean4", "img", "mission-b");
+  pool.release("lean4", "img", a);
+  t += 60_000;
+  pool.release("lean4", "img", b);
+
+  // A new mission goes to the most recently released running slot, not an unused cold one.
+  t += 60_000;
+  const c = await pool.acquire("lean4", "img", "mission-c");
+  assert.equal(c, b);
+  pool.release("lean4", "img", c);
+
+  // Same-mission affinity wins while that slot is still running.
+  t += 60_000;
+  const a2 = await pool.acquire("lean4", "img", "mission-a");
+  assert.equal(a2, a);
+  pool.release("lean4", "img", a2);
+
+  // Once mission-a's slot has slept, a running slot for another mission is preferred.
+  t += 30_000;
+  const c2 = await pool.acquire("lean4", "img", "mission-c");
+  pool.release("lean4", "img", c2);
+  t += 590_000; // mission-a's slot was released 10.5 min ago (asleep), c2's 9.8 min ago (running)
+  const a3 = await pool.acquire("lean4", "img", "mission-a");
+  assert.equal(a3, c2, "slept affinity slot loses to a running slot");
+  pool.release("lean4", "img", a3);
+
+  // Everything asleep: fall back to this mission's last slot.
+  t += 3_600_000;
+  const a4 = await pool.acquire("lean4", "img", "mission-a");
+  assert.equal(a4, a3);
+});
+
 test("shouldRunAsyncSubmit respects query flag, JSON body, and Prefer header", () => {
   const u = (s: string) => new URL(`https://sunstead.org/api/missions/m/tasks/t/submit${s}`);
   assert.equal(shouldRunAsyncSubmit(u(""), {}, new Headers()), false);
