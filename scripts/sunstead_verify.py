@@ -16,7 +16,8 @@ path. For one accepted proof it:
 3. Clones the upstream repository from GitHub at the pinned 40-character
    commit, finds the declaration whose `sorry` the task mirrors, requires its
    statement to match the one the proof was checked against, and replaces
-   that `sorry` with the Sunstead proof.
+   that `sorry` with the Sunstead proof. An explicit --upstream-commit
+   replays against a reviewed revision only if the target file is unchanged.
 4. Builds the module with the upstream project's own toolchain (`lake exe cache
    get`, `lake build`), requires the declaration to be sorry-free, and lists its
    axioms with a standalone `collectAxioms` checker that loads the compiled
@@ -350,7 +351,16 @@ def fetch_upstream(repo_url: str, commit: str, dest: str, log: list):
     run([*GIT, "-c", "advice.detachedHead=false", "checkout", "-q", "FETCH_HEAD"], dest)
     head = run([*GIT, "rev-parse", "HEAD"], dest).stdout.strip()
     if head != commit:
-        raise VerifyError(f"fetched {head}, expected pinned {commit}")
+        raise VerifyError(f"fetched {head}, expected {commit}")
+
+
+def require_unchanged_target(updir: str, pinned: str, target: str, log: list) -> None:
+    """The pinned line anchor is only valid on the same target file."""
+    run([*GIT, "fetch", "-q", "--depth", "1", "origin", pinned], updir, timeout=1800, log=log)
+    pinned_blob = run([*GIT, "rev-parse", "--verify", f"{pinned}:{target}"], updir).stdout.strip()
+    replay_blob = run([*GIT, "rev-parse", "--verify", f"HEAD:{target}"], updir).stdout.strip()
+    if pinned_blob != replay_blob:
+        raise VerifyError(f"{target} differs from the pinned commit; review the upstream diff before porting")
 
 
 # ---------------------------------------------------------------- Lean surgery
@@ -798,11 +808,15 @@ def verify(args) -> dict:
             check_no_metaprogramming(contrib)
         updir = os.path.join(scratch, "upstream")
         repo_url = args.upstream_url or f"https://github.com/{mission['upstream']['repo']}.git"
-        print(f"Fetching {mission['upstream']['repo']}@{mission['upstream']['commit'][:12]} ...", file=sys.stderr)
-        fetch_upstream(repo_url, mission["upstream"]["commit"], updir, log)
+        pinned = mission["upstream"]["commit"]
+        replay = args.upstream_commit or pinned
+        print(f"Fetching {mission['upstream']['repo']}@{replay[:12]} ...", file=sys.stderr)
+        fetch_upstream(repo_url, replay, updir, log)
         target = os.path.join(updir, mission["upstream_path"])
         if not os.path.isfile(target):
-            raise VerifyError(f"{mission['upstream_path']} not in upstream at the pinned commit")
+            raise VerifyError(f"{mission['upstream_path']} not in upstream at the replay commit")
+        if replay != pinned:
+            require_unchanged_target(updir, pinned, mission["upstream_path"], log)
         check_imports_resolve(updir, contrib)
         new_src, decl, span, ref = transplant(read(target), mission, contrib)
         checks = {}
@@ -828,7 +842,8 @@ def verify(args) -> dict:
         "mission_id": mission["id"],
         "task_id": mission["task"]["id"],
         "upstream_repo": mission["upstream"]["repo"],
-        "upstream_commit": mission["upstream"]["commit"],
+        "upstream_commit": replay,
+        "pinned_upstream_commit": pinned,
         "upstream_file": mission["upstream_path"],
         "upstream_declaration": decl.name,
         "upstream_lines": list(span),
@@ -849,12 +864,15 @@ def main(argv=None) -> int:
     src.add_argument("--proof-json", help="a saved GET /api/proofs/<id> response instead of fetching it")
     ap.add_argument("--hub", default=DEFAULT_HUB, help="where to read the proof and seed bundle (GET only)")
     ap.add_argument("--seed-bundle", help="a saved bundle.tar.gz?base=seed instead of fetching it")
-    ap.add_argument("--upstream-url", help="git URL to fetch the pinned commit from (default: GitHub)")
+    ap.add_argument("--upstream-url", help="git URL to fetch the upstream commits from (default: GitHub)")
+    ap.add_argument("--upstream-commit", metavar="SHA", help="replay at a reviewed 40-hex commit instead of the ledger pin")
     ap.add_argument("--no-build", action="store_true", help="only check the statement and splice; do not build")
     ap.add_argument("--allow-metaprogramming", action="store_true", help="build proofs that add elab/macro/#eval code")
     ap.add_argument("--keep", metavar="DIR", help="copy the patched upstream checkout to DIR (must not exist)")
     ap.add_argument("--json", action="store_true", help="print the result as JSON")
     args = ap.parse_args(argv)
+    if args.upstream_commit is not None and not COMMIT_RE.fullmatch(args.upstream_commit):
+        ap.error("--upstream-commit must be a lowercase 40-hex commit")
     if args.keep and os.path.exists(args.keep):
         print(f"verify: --keep {args.keep} already exists", file=sys.stderr)
         return 2

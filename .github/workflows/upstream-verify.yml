@@ -13,6 +13,10 @@ on:
         description: "Only this proof id (64 hex); empty = every upstream-linked proof"
         required: false
         default: ""
+      upstream_commit:
+        description: "Replay one proof at this reviewed upstream commit (40 hex); empty = ledger pin"
+        required: false
+        default: ""
   schedule:
     - cron: "17 4 * * *"
 
@@ -36,7 +40,13 @@ jobs:
       - id: ids
         env:
           ONLY: ${{ inputs.proof_id }}
-        run: python3 scripts/upstream-verify-list.py >> "$GITHUB_OUTPUT"
+          UPSTREAM_COMMIT: ${{ inputs.upstream_commit }}
+        run: |
+          if [[ -n "$UPSTREAM_COMMIT" ]] && { [[ ! "$UPSTREAM_COMMIT" =~ ^[0-9a-f]{40}$ ]] || [[ ! "$ONLY" =~ ^[0-9a-f]{64}$ ]]; }; then
+            echo "::error::An upstream commit override requires a 40-hex commit and a single 64-hex proof id"
+            exit 1
+          fi
+          python3 scripts/upstream-verify-list.py >> "$GITHUB_OUTPUT"
 
   verify:
     needs: list
@@ -63,9 +73,14 @@ jobs:
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
       - name: verify.py ${{ matrix.proof_id }}
         id: run
+        env:
+          PROOF_ID: ${{ matrix.proof_id }}
+          UPSTREAM_COMMIT: ${{ inputs.upstream_commit }}
         run: |
+          args=()
+          if [[ -n "$UPSTREAM_COMMIT" ]]; then args+=(--upstream-commit "$UPSTREAM_COMMIT"); fi
           set +e
-          python3 scripts/sunstead_verify.py "${{ matrix.proof_id }}" --json > result.json 2> stderr.txt
+          python3 scripts/sunstead_verify.py "$PROOF_ID" --json "${args[@]}" > result.json 2> stderr.txt
           code=$?
           set -e
           tail -n 60 stderr.txt

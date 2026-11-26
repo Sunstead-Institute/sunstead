@@ -274,6 +274,33 @@ class VerifyTests(unittest.TestCase):
         self.assertFalse(r["verified"], "an unbuilt check must never say verified")
         self.assertEqual(r["upstream_declaration"], "Up.isCM_liouville")
         self.assertEqual(r["upstream_commit"], self.sha)
+        self.assertEqual(r["pinned_upstream_commit"], self.sha)
+
+    def test_replays_at_new_commit_without_changing_the_ledger_pin(self):
+        write(os.path.join(self.up, "README.md"), "A newer tree")
+        git(self.up, "add", "-A")
+        git(self.up, "commit", "-q", "-m", "unrelated change")
+        head = git(self.up, "rev-parse", "HEAD").strip()
+        code, err, out = self.run_verify(extra=("--no-build", "--json", "--upstream-commit", head))
+        self.assertEqual(code, 0, err)
+        r = json.loads(out)
+        self.assertFalse(r["verified"])
+        self.assertEqual(r["upstream_commit"], head)
+        self.assertEqual(r["pinned_upstream_commit"], self.sha)
+
+    def test_replay_rejects_changed_target(self):
+        write(os.path.join(self.up, "Up", "Ch1.lean"), UPSTREAM_FILE.replace("import Mathlib", "import Init"))
+        git(self.up, "add", "-A")
+        git(self.up, "commit", "-q", "-m", "change an import")
+        head = git(self.up, "rev-parse", "HEAD").strip()
+        code, err, _ = self.run_verify(extra=("--no-build", "--upstream-commit", head))
+        self.assertEqual(code, 1)
+        self.assertIn("differs from the pinned commit", err)
+
+    def test_rejects_symbolic_commit(self):
+        with self.assertRaises(SystemExit) as caught:
+            self.run_verify(extra=("--upstream-commit", "main"))
+        self.assertEqual(caught.exception.code, 2)
 
     def test_keep_writes_patched_upstream(self):
         keep = os.path.join(self.tmp.name, "kept")
