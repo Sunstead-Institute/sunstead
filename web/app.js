@@ -744,8 +744,6 @@ function decompClusterKey(missionId, parentTaskId, decompId) {
 }
 
 function computeBlueprintLayout(tasks, activeDecomps = [], collapsedDecomps = new Set(), missionId = "") {
-  const nodeW = 262;
-  const nodeH = 92;
   const byId = new Map(tasks.map((t) => [t.def.id, t]));
   const layers = computeLayers(tasks);
 
@@ -765,18 +763,20 @@ function computeBlueprintLayout(tasks, activeDecomps = [], collapsedDecomps = ne
   const useFlatGrid = !hasDepEdges && !hasExpandedDecomp && layers.size === 1 && tasks.length > 6;
 
   if (useFlatGrid) {
-    const cols = tasks.length >= 19 ? 4 : 3;
+    const nodeW = 252;
+    const nodeH = 92;
+    const cols = 3;
     const rows = Math.ceil(tasks.length / cols);
-    const colGap = 28;
+    const colGap = 18;
     const hasCollapsedPill = (activeDecomps || []).some(
       (d) =>
         collapsedDecomps &&
         collapsedDecomps.has(decompClusterKey(missionId, d.parent_task_id, d.decomp_id)) &&
         byId.has(d.parent_task_id)
     );
-    const rowGap = hasCollapsedPill ? 28 : 20;
-    const padX = 28;
-    const padY = 28;
+    const rowGap = hasCollapsedPill ? 26 : 18;
+    const padX = 18;
+    const padY = 24;
     const width = padX * 2 + cols * nodeW + (cols - 1) * colGap;
     const height = Math.max(240, padY * 2 + rows * nodeH + (rows - 1) * rowGap);
     const pos = new Map();
@@ -790,6 +790,8 @@ function computeBlueprintLayout(tasks, activeDecomps = [], collapsedDecomps = ne
     return { mode: "grid", cols, rows, nodeW, nodeH, colGap, rowGap, width, height, pos, layers };
   }
 
+  const nodeW = 262;
+  const nodeH = 92;
   const colGap = 94;
   const rowGap = 24;
   const padX = 36;
@@ -948,16 +950,23 @@ function renderDag(detail) {
 
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
   if (layout.mode === "grid") {
-    svg.style.width = `${width}px`;
-    svg.style.height = `${height}px`;
-    svg.style.minHeight = `${Math.min(height, 680)}px`;
+    svg.style.width = "100%";
+    svg.style.maxWidth = `${width}px`;
+    svg.style.height = "auto";
+    svg.style.aspectRatio = `${width} / ${height}`;
+    svg.style.minHeight = "0";
   } else {
     svg.style.width = width > 900 ? `${width}px` : "";
+    svg.style.maxWidth = "";
     svg.style.height = height > 760 ? `${height}px` : "";
+    svg.style.aspectRatio = "";
     svg.style.minHeight = `${Math.min(height, 680)}px`;
   }
 
   let defsHtml = `<defs>
+    <clipPath id="dag-card-clip">
+      <rect x="10" y="0" width="${nodeW - 20}" height="${nodeH}" />
+    </clipPath>
     <marker id="arrow-muted" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
       <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#B5AC9A" />
     </marker>
@@ -1070,11 +1079,18 @@ function renderDag(detail) {
           !(t.def && t.def.upstream_disputed)
         ? `${c.badge} · T/¬T`
         : c.badge;
+    const innerTextW = nodeW - 28;
+    const maxTitleChars = Math.max(24, Math.floor(innerTextW / 7.6));
+    const maxIdChars = Math.max(
+      10,
+      Math.min(18, Math.floor((innerTextW - badgeLabel.length * 6.8 - 8) / 6.1))
+    );
+    const maxFooterChars = Math.max(28, Math.floor(innerTextW / 6.6));
     const shortTitle =
-      t.def.title.length > 33 ? t.def.title.slice(0, 32) + "…" : t.def.title;
+      t.def.title.length > maxTitleChars ? t.def.title.slice(0, maxTitleChars - 1) + "…" : t.def.title;
     const rawIdLabel = isSub && t.def.subgoal_id ? t.def.subgoal_id : t.def.id;
     const shortId =
-      rawIdLabel.length > 20 ? rawIdLabel.slice(0, 19) + "…" : rawIdLabel;
+      rawIdLabel.length > maxIdChars ? rawIdLabel.slice(0, maxIdChars - 1) + "…" : rawIdLabel;
     let footer = `${t.attempts} run${t.attempts === 1 ? "" : "s"}`;
     if (t.status === "refuted") {
       const refuter = t.refuted_resolution?.refuter || t.verified_by || "contributor";
@@ -1101,6 +1117,8 @@ function renderDag(detail) {
     } else if (activeChildDecomp) {
       footer = `split ${activeChildDecomp.decomp_id}: ${activeChildDecomp.verified_subgoals}/${activeChildDecomp.total_subgoals} subgoals`;
     }
+    const shortFooter =
+      footer.length > maxFooterChars ? footer.slice(0, maxFooterChars - 1) + "…" : footer;
 
     let collapsedPillHtml = "";
     if (activeChildDecomp) {
@@ -1118,14 +1136,17 @@ function renderDag(detail) {
 
     nodesHtml += `
       <g class="dag-node ${sel} ${isSub ? "dag-node-subgoal" : ""}" data-task-id="${escapeHtml(t.def.id)}" transform="translate(${p.x},${p.y})">
+        <title>${escapeHtml(`${t.def.title} (${t.def.id})`)}</title>
         <rect class="node-box" width="${nodeW}" height="${nodeH}" rx="5"
               fill="${c.fill}" stroke="${c.stroke}" stroke-width="1.5"
               ${isSub ? 'stroke-dasharray="4 2"' : ""} />
         <line x1="12" y1="29" x2="${nodeW - 12}" y2="29" stroke="${c.stroke}" stroke-opacity="0.24" stroke-width="1" />
-        <text x="12" y="20" fill="${c.badgeColor}" font-size="9.5" font-weight="700" letter-spacing="0.08em" font-family="Inter, sans-serif">${escapeHtml(badgeLabel)}</text>
-        <text x="${nodeW - 12}" y="20" text-anchor="end" fill="#6F747D" font-size="10" font-family="JetBrains Mono, monospace">${escapeHtml(shortId)}</text>
-        <text x="12" y="51" fill="${c.titleColor}" font-size="15.5" font-weight="600" font-family="Cormorant Garamond, Georgia, serif">${escapeHtml(shortTitle)}</text>
-        <text x="12" y="75" fill="#5A5E66" font-size="10.8" font-family="JetBrains Mono, monospace">${escapeHtml(footer)}</text>
+        <g clip-path="url(#dag-card-clip)">
+          <text x="12" y="20" fill="${c.badgeColor}" font-size="9.5" font-weight="700" letter-spacing="0.08em" font-family="Inter, sans-serif">${escapeHtml(badgeLabel)}</text>
+          <text x="${nodeW - 12}" y="20" text-anchor="end" fill="#6F747D" font-size="10" font-family="JetBrains Mono, monospace">${escapeHtml(shortId)}</text>
+          <text x="12" y="51" fill="${c.titleColor}" font-size="15.5" font-weight="600" font-family="Cormorant Garamond, Georgia, serif">${escapeHtml(shortTitle)}</text>
+          <text x="12" y="75" fill="#5A5E66" font-size="10.5" font-family="JetBrains Mono, monospace">${escapeHtml(shortFooter)}</text>
+        </g>
       </g>
       ${collapsedPillHtml}
     `;

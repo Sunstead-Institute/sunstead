@@ -16,6 +16,7 @@ const appJsPath = path.join(WEB_DIR, "app.js");
 const appJs = fs.readFileSync(appJsPath, "utf8");
 const indexHtml = fs.readFileSync(path.join(WEB_DIR, "index.html"), "utf8");
 const proofsHtml = fs.readFileSync(path.join(WEB_DIR, "proofs.html"), "utf8");
+const whatIsThisHtml = fs.readFileSync(path.join(WEB_DIR, "what-is-this.html"), "utf8");
 const stylesCss = fs.readFileSync(path.join(WEB_DIR, "styles.css"), "utf8");
 
 function plain(value) {
@@ -137,7 +138,12 @@ test("HTML & CSS preserve core hooks and expose filter toolbars and scrollable b
   }
 
   // Scrollable blueprint stage in styles.css
-  assert.match(stylesCss, /\.dag-stage\s*\{[^}]*max-height:\s*760px[^}]*overflow:\s*auto/s);
+  assert.match(stylesCss, /\.dag-stage\s*\{[^}]*max-height:\s*760px[^}]*overflow-y:\s*auto[^}]*overflow-x:\s*auto/s);
+
+  // Verification log wraps cleanly without horizontal scrollbar
+  assert.match(stylesCss, /\.event-feed\s*\{[^}]*overflow-x:\s*hidden/s);
+  assert.match(stylesCss, /\.event-item\s*\{[^}]*min-width:\s*0[^}]*overflow-wrap:\s*anywhere[^}]*word-break:\s*break-word/s);
+  assert.match(stylesCss, /\.event-item code\s*\{[^}]*overflow-wrap:\s*anywhere[^}]*word-break:\s*break-word[^}]*min-width:\s*0/s);
 });
 
 test("mission filter logic partitions all 47 real arenas and filters by category, search, and open work", () => {
@@ -211,13 +217,15 @@ test("computeBlueprintLayout switches wide flat packs to crisp multi-column grid
   assert.equal(lay14.mode, "grid");
   assert.equal(lay14.cols, 3);
   assert.equal(lay14.rows, 5);
-  assert.equal(lay14.nodeW, 262);
+  assert.equal(lay14.nodeW, 252);
   assert.equal(lay14.nodeH, 92);
-  assert.equal(lay14.colGap, 28);
-  assert.equal(lay14.rowGap, 20);
+  assert.equal(lay14.colGap, 18);
+  assert.equal(lay14.rowGap, 18);
+  assert.equal(lay14.width, 828);
+  assert.ok(lay14.width <= 840, `grid width (${lay14.width}px) must fit 1280x800 blueprint pane without horizontal scroll`);
   assert.equal(lay14.pos.size, 14);
 
-  // 3. Real 50-task flat mission (fate-h-fields-and-groups) -> 4-column grid, 13 rows, zero overlaps
+  // 3. Real 50-task flat mission (fate-h-fields-and-groups) -> 3-column grid, 17 rows, width <= 840, zero overlaps
   const fateManifest = JSON.parse(
     fs.readFileSync(path.join(MISSIONS_DIR, "fate-h-fields-and-groups", "sunstead.json"), "utf8")
   );
@@ -225,11 +233,13 @@ test("computeBlueprintLayout switches wide flat packs to crisp multi-column grid
   assert.equal(fateTasks.length, 50);
   const lay50 = ctx.computeBlueprintLayout(fateTasks, [], new Set(), fateManifest.id);
   assert.equal(lay50.mode, "grid");
-  assert.equal(lay50.cols, 4);
-  assert.equal(lay50.rows, 13);
-  assert.equal(lay50.width, 28 * 2 + 4 * 262 + 3 * 28);
-  assert.equal(lay50.height, 28 * 2 + 13 * 92 + 12 * 20);
-  assert.ok(lay50.height < 1600, `50-task grid height (${lay50.height}px) should stay compact`);
+  assert.equal(lay50.cols, 3);
+  assert.equal(lay50.rows, 17);
+  assert.equal(lay50.nodeW, 252);
+  assert.equal(lay50.width, 18 * 2 + 3 * 252 + 2 * 18);
+  assert.equal(lay50.width, 828);
+  assert.ok(lay50.width <= 840, `50-task grid width (${lay50.width}px) must fit cleanly at 1280x800`);
+  assert.equal(lay50.height, 24 * 2 + 17 * 92 + 16 * 18);
   const boxes = [...lay50.pos.values()];
   assert.equal(boxes.length, 50);
   for (let i = 0; i < boxes.length; i++) {
@@ -270,7 +280,7 @@ test("computeBlueprintLayout switches wide flat packs to crisp multi-column grid
   const rootOnly = decompTasks.filter((t) => !t.def.decomp_id);
   const layCollapsed = ctx.computeBlueprintLayout(rootOnly, activeDecomps, collapsed, "m1");
   assert.equal(layCollapsed.mode, "grid");
-  assert.equal(layCollapsed.rowGap, 28);
+  assert.equal(layCollapsed.rowGap, 26);
 });
 
 test("task filter logic classifies Ready, Verified, Refuted, Claimed, and searches id/title", () => {
@@ -458,16 +468,26 @@ test("renderDag sets explicit full-size SVG dimensions for flat grids and resets
 
   const flat25 = {
     mission: { manifest: { id: "fc-open-oeis-classics", mode: "dag", open_conjecture: true } },
-    tasks: Array.from({ length: 25 }, (_, i) => makeTask(`t_${i + 1}`)),
+    tasks: Array.from({ length: 25 }, (_, i) =>
+      makeTask(
+        `very_long_conjecture_identifier_number_${i + 1}`,
+        { verified_by: i === 0 ? "contributor_with_a_very_long_handle_name" : null },
+        { title: `Extremely Long Conjecture Title #${i + 1} That Must Truncate Cleanly Inside 252px` }
+      )
+    ),
     decompositions: [],
   };
   ctx.renderDag(flat25);
-  assert.equal(svgEl.style.width, "1188px");
-  assert.equal(svgEl.style.height, "820px");
-  assert.equal(svgEl.style.minHeight, "680px");
-  assert.equal(svgEl.attrs.viewBox, "0 0 1188 820");
+  assert.equal(svgEl.style.width, "100%");
+  assert.equal(svgEl.style.maxWidth, "828px");
+  assert.equal(svgEl.style.height, "auto");
+  assert.equal(svgEl.style.aspectRatio, "828 / 1020");
+  assert.equal(svgEl.style.minHeight, "0");
+  assert.equal(svgEl.attrs.viewBox, "0 0 828 1020");
+  assert.ok(svgEl.innerHTML.includes('id="dag-card-clip"'), "grid cards should render inner clipPath");
+  assert.ok(svgEl.innerHTML.includes("…"), "long title/id/footer text should truncate cleanly with ellipsis");
 
-  // Switching to a small 2-task layered DAG clears explicit flat-grid width/height.
+  // Switching to a small 2-task layered DAG clears responsive flat-grid sizing.
   const smallDag = {
     mission: { manifest: { id: "small-dag", mode: "dag" } },
     tasks: [makeTask("a"), makeTask("b", {}, { depends_on: ["a"] })],
@@ -475,11 +495,50 @@ test("renderDag sets explicit full-size SVG dimensions for flat grids and resets
   };
   ctx.renderDag(smallDag);
   assert.equal(svgEl.style.width, "");
+  assert.equal(svgEl.style.maxWidth, "");
   assert.equal(svgEl.style.height, "");
+  assert.equal(svgEl.style.aspectRatio, "");
   assert.equal(svgEl.attrs.viewBox, "0 0 780 350");
 
   ctx.syncUrlDeepLink("fc-open-oeis-classics", "t_7");
   assert.deepEqual(replaced, ["/?mission=fc-open-oeis-classics&task=t_7#blueprint"]);
+});
+
+test("web/what-is-this.html reflects current live arenas, wraps code snippets, and has no inline scripts", () => {
+  assert.ok(!whatIsThisHtml.includes("across 5 Arenas"), "what-is-this.html must not contain stale 'across 5 Arenas' text");
+  for (const required of [
+    "Refuted ¬T",
+    "best_known",
+    "Sphere Packing",
+    "Formal Conjectures",
+    "/api/frontier",
+    "get_open_frontier",
+    "47 live arenas spanning 605 tasks",
+    "10 Verbatim Arenas",
+    "Disputed ¬T",
+  ]) {
+    assert.ok(whatIsThisHtml.includes(required), `what-is-this.html missing expected text: ${required}`);
+  }
+
+  // Zero inline <script> tags (only external <script src="..."> allowed)
+  const scripts = [...whatIsThisHtml.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];
+  assert.ok(scripts.length >= 1, "expected external script tag");
+  for (const [, attrs, body] of scripts) {
+    assert.match(attrs, /\bsrc=/i, "every <script> tag in what-is-this.html must load an external src");
+    assert.equal(body.trim(), "", "inline <script> body is forbidden in what-is-this.html");
+  }
+
+  // Section 02 code snippets stay within 50 chars/line so they never clip at 1280x800
+  const snippets = [...whatIsThisHtml.matchAll(/<pre class="code-snippet"><code>([\s\S]*?)<\/code><\/pre>/g)];
+  assert.equal(snippets.length, 2, "expected BEFORE and AFTER code snippets in Section 02");
+  for (const [, code] of snippets) {
+    for (const line of code.split("\n")) {
+      assert.ok(
+        line.length <= 50,
+        `code-snippet line exceeds 50 chars (${line.length}): ${line}`
+      );
+    }
+  }
 });
 
 test("UI card and ledger row rendering escape all dynamic strings against XSS", () => {

@@ -922,8 +922,9 @@ code, pre { font-family: var(--mono); }
   background-size: 28px 28px;
   min-height: 360px;
   max-height: 760px;
-  padding: 16px;
-  overflow: auto;
+  padding: 12px 14px;
+  overflow-y: auto;
+  overflow-x: auto;
 }
 
 .dag-svg {
@@ -1012,6 +1013,7 @@ code, pre { font-family: var(--mono); }
   padding: 12px 14px;
   max-height: 390px;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 9px;
@@ -1024,6 +1026,14 @@ code, pre { font-family: var(--mono); }
   border: 1px solid var(--bone-rule);
   border-left: 3px solid #B8B0A0;
   font-size: 12.5px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.event-item code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-width: 0;
 }
 .event-item.accepted { border-left-color: var(--teal); }
 .event-item.refuted { border-left-color: var(--plum); }
@@ -1034,11 +1044,22 @@ code, pre { font-family: var(--mono); }
 .event-head {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
   gap: 8px;
+  min-width: 0;
   font-family: var(--mono);
   font-size: 10.5px;
   color: var(--ink-muted);
   margin-bottom: 3px;
+}
+.event-head > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.event-head > span:last-child {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .leaderboard {
@@ -1164,6 +1185,14 @@ code, pre { font-family: var(--mono); }
 
 .explainer-section p:last-child {
   margin-bottom: 0;
+}
+
+.explainer-section h3 code {
+  font-size: 0.78em;
+  color: var(--indigo);
+  background: rgba(13, 27, 61, 0.06);
+  padding: 1px 5px;
+  border-radius: 3px;
 }
 
 .explainer-section p code,
