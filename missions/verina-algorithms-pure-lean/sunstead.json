@@ -1,0 +1,362 @@
+{
+  "id": "verina-algorithms-pure-lean",
+  "title": "Verina (UC Berkeley): Pure Lean 4 Algorithmic Program Verification Suite",
+  "description": "33 distinct pure-Lean 4 (zero Mathlib, <1s verification) algorithmic correctness obligations copied verbatim from UC Berkeley Sunblaze Lab's Verina benchmark (sunblaze-ucb/verina@66b3ce50, Apache-2.0) and audited for non-vacuous specs, zero `Nat`-subtraction postcondition traps, zero `!` indexing, and zero `partial`/`axiom` constructs: insertion sort, merge sort, merge intervals, Kadane max subarray, LIS, Boyer–Moore majority element, top-K frequent, semi-ordered permutation, missing number, minimum right shifts, and more.",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/sunblaze-ucb/verina",
+  "upstream": {
+    "repo": "sunblaze-ucb/verina",
+    "commit": "66b3ce5014edafb20cb26b87c681e7f31847249f",
+    "license": "Apache-2.0"
+  },
+  "frozen_paths": [
+    "VerinaAlgorithms/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 120,
+    "memory_mb": 4096
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "verina_adv_1_findsinglenumber",
+      "title": "Verify `FindSingleNumber` (`verina_advanced_1`)",
+      "description": "Closes `datasets/verina/verina_advanced_1/task.lean:71-74` (`VerinaAdv1.FindSingleNumber_spec_satisfied`): This task requires writing a Lean 4 function that finds the single number in a non-empty list of integers, where every element appears… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv1.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_1/task.lean#L71-L74"
+    },
+    {
+      "id": "verina_adv_5_addtwonumbers",
+      "title": "Verify `addTwoNumbers` (`verina_advanced_5`)",
+      "description": "Closes `datasets/verina/verina_advanced_5/task.lean:67-70` (`VerinaAdv5.addTwoNumbers_spec_satisfied`): This task requires writing a Lean 4 method that adds two non-empty linked lists representing non-negative integers. The digits are stored… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv5.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_5/task.lean#L67-L70"
+    },
+    {
+      "id": "verina_adv_11_findmajorityelement",
+      "title": "Verify `findMajorityElement` (`verina_advanced_11`)",
+      "description": "Closes `datasets/verina/verina_advanced_11/task.lean:56-59` (`VerinaAdv11.findMajorityElement_spec_satisfied`): This task requires writing a Lean 4 method that finds the **majority element** in a list of integers. A majority element is defined as an… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv11.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_11/task.lean#L56-L59"
+    },
+    {
+      "id": "verina_adv_12_firstduplicate",
+      "title": "Verify `firstDuplicate` (`verina_advanced_12`)",
+      "description": "Closes `datasets/verina/verina_advanced_12/task.lean:57-60` (`VerinaAdv12.firstDuplicate_spec_satisfied`): Write a Lean 4 function that returns the first duplicate integer found in a list. The function should return the value of the first… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv12.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_12/task.lean#L57-L60"
+    },
+    {
+      "id": "verina_adv_14_ifpoweroffour",
+      "title": "Verify `ifPowerOfFour` (`verina_advanced_14`)",
+      "description": "Closes `datasets/verina/verina_advanced_14/task.lean:60-63` (`VerinaAdv14.ifPowerOfFour_spec_satisfied`): This task requires writing a Lean 4 method that determines whether a natural number is a power of four. The method should return a boolean… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv14.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_14/task.lean#L60-L63"
+    },
+    {
+      "id": "verina_adv_15_increasingtriplet",
+      "title": "Verify `increasingTriplet` (`verina_advanced_15`)",
+      "description": "Closes `datasets/verina/verina_advanced_15/task.lean:79-82` (`VerinaAdv15.increasingTriplet_spec_satisfied`): Given an integer array nums, return true if there exists a triple of indices (i, j, k) such that i < j < k and nums[i] < nums[j] < nums[k].… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv15.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_15/task.lean#L79-L82"
+    },
+    {
+      "id": "verina_adv_16_insertionsort",
+      "title": "Verify `insertionSort` (`verina_advanced_16`)",
+      "description": "Closes `datasets/verina/verina_advanced_16/task.lean:61-64` (`VerinaAdv16.insertionSort_spec_satisfied`): Implement the insertion sort algorithm in Lean 4. The function takes a single list of integers as input and returns a new list that… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv16.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_16/task.lean#L61-L64"
+    },
+    {
+      "id": "verina_adv_19_iscleanpalindrome",
+      "title": "Verify `isCleanPalindrome` (`verina_advanced_19`)",
+      "description": "Closes `datasets/verina/verina_advanced_19/task.lean:78-81` (`VerinaAdv19.isCleanPalindrome_spec_satisfied`): This task requires writing a Lean 4 method that checks whether a given string is a palindrome. A palindrome is a string that reads the same… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv19.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_19/task.lean#L78-L81"
+    },
+    {
+      "id": "verina_adv_20_isiteight",
+      "title": "Verify `isItEight` (`verina_advanced_20`)",
+      "description": "Closes `datasets/verina/verina_advanced_20/task.lean:54-57` (`VerinaAdv20.isItEight_spec_satisfied`): This task requires writing a Lean 4 method that returns true if the input n is divisible by 8 or has 8 as one of it's digits. The input… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv20.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_20/task.lean#L54-L57"
+    },
+    {
+      "id": "verina_adv_21_ispalindrome",
+      "title": "Verify `isPalindrome` (`verina_advanced_21`)",
+      "description": "Closes `datasets/verina/verina_advanced_21/task.lean:75-78` (`VerinaAdv21.isPalindrome_spec_satisfied`): Implement a Lean 4 function that checks if a given string is a palindrome. A string is considered a palindrome if it reads the same forward… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv21.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_21/task.lean#L75-L78"
+    },
+    {
+      "id": "verina_adv_23_ispoweroftwo",
+      "title": "Verify `isPowerOfTwo` (`verina_advanced_23`)",
+      "description": "Closes `datasets/verina/verina_advanced_23/task.lean:58-61` (`VerinaAdv23.isPowerOfTwo_spec_satisfied`): This task requires writing a Lean 4 method that determines whether a given integer is a power of two. An integer n is a power of two if… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv23.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_23/task.lean#L58-L61"
+    },
+    {
+      "id": "verina_adv_24_lengthoflis",
+      "title": "Verify `lengthOfLIS` (`verina_advanced_24`)",
+      "description": "Closes `datasets/verina/verina_advanced_24/task.lean:72-75` (`VerinaAdv24.lengthOfLIS_spec_satisfied`): This task requires writing a Lean 4 method that determines the length of the longest strictly increasing subsequence in a given array of… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv24.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_24/task.lean#L72-L75"
+    },
+    {
+      "id": "verina_adv_26_lettercombinations",
+      "title": "Verify `letterCombinations` (`verina_advanced_26`)",
+      "description": "Closes `datasets/verina/verina_advanced_26/task.lean:74-77` (`VerinaAdv26.letterCombinations_spec_satisfied`): This task requires writing a Lean 4 method that generates all possible letter combinations from a string of digits based on the traditional… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv26.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_26/task.lean#L74-L77"
+    },
+    {
+      "id": "verina_adv_35_majorityelement",
+      "title": "Verify `majorityElement` (`verina_advanced_35`)",
+      "description": "Closes `datasets/verina/verina_advanced_35/task.lean:57-60` (`VerinaAdv35.majorityElement_spec_satisfied`): This task requires writing a Lean 4 function that finds the majority element in a list of integers. The majority element is the element… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv35.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_35/task.lean#L57-L60"
+    },
+    {
+      "id": "verina_adv_39_maxoflist",
+      "title": "Verify `maxOfList` (`verina_advanced_39`)",
+      "description": "Closes `datasets/verina/verina_advanced_39/task.lean:55-58` (`VerinaAdv39.maxOfList_spec_satisfied`): This task requires writing a Lean 4 function that returns the maximum element from a non-empty list of natural numbers. The input consists… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv39.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_39/task.lean#L55-L58"
+    },
+    {
+      "id": "verina_adv_41_maxofthree",
+      "title": "Verify `maxOfThree` (`verina_advanced_41`)",
+      "description": "Closes `datasets/verina/verina_advanced_41/task.lean:49-52` (`VerinaAdv41.maxOfThree_spec_satisfied`): This task requires writing a Lean 4 method that finds the maximum among three given integers. The method should return the largest value,… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv41.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_41/task.lean#L49-L52"
+    },
+    {
+      "id": "verina_adv_45_maxsubarraysum",
+      "title": "Verify `maxSubarraySum` (`verina_advanced_45`)",
+      "description": "Closes `datasets/verina/verina_advanced_45/task.lean:71-74` (`VerinaAdv45.maxSubarraySum_spec_satisfied`): This task requires writing a Lean 4 function that finds the maximum subarray sum from a given list of integers. A subarray is a contiguous… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv45.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_45/task.lean#L71-L74"
+    },
+    {
+      "id": "verina_adv_47_mergeintervals",
+      "title": "Verify `mergeIntervals` (`verina_advanced_47`)",
+      "description": "Closes `datasets/verina/verina_advanced_47/task.lean:90-93` (`VerinaAdv47.mergeIntervals_spec_satisfied`): This task requires writing a Lean 4 method that merges all overlapping intervals from a given list of intervals. Each interval is… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv47.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_47/task.lean#L90-L93"
+    },
+    {
+      "id": "verina_adv_48_mergesort",
+      "title": "Verify `mergeSort` (`verina_advanced_48`)",
+      "description": "Closes `datasets/verina/verina_advanced_48/task.lean:70-73` (`VerinaAdv48.mergeSort_spec_satisfied`): This task requires implementing the merge sort algorithm in Lean 4 to sort a list of integers in ascending order. Merge sort is a… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv48.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_48/task.lean#L70-L73"
+    },
+    {
+      "id": "verina_adv_49_mergesortedlists",
+      "title": "Verify `mergeSortedLists` (`verina_advanced_49`)",
+      "description": "Closes `datasets/verina/verina_advanced_49/task.lean:57-60` (`VerinaAdv49.mergeSortedLists_spec_satisfied`): Implement a Lean 4 function that merges two ascendingly sorted lists of integers into one single sorted list (ascending). The resulting… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv49.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_49/task.lean#L57-L60"
+    },
+    {
+      "id": "verina_adv_53_minimumrightshifts",
+      "title": "Verify `minimumRightShifts` (`verina_advanced_53`)",
+      "description": "Closes `datasets/verina/verina_advanced_53/task.lean:109-112` (`VerinaAdv53.minimumRightShifts_spec_satisfied`): This task requires writing a Lean 4 function that calculates the minimum number of right shifts required to sort a given list of distinct… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv53.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_53/task.lean#L109-L112"
+    },
+    {
+      "id": "verina_adv_54_missingnumber",
+      "title": "Verify `missingNumber` (`verina_advanced_54`)",
+      "description": "Closes `datasets/verina/verina_advanced_54/task.lean:53-56` (`VerinaAdv54.missingNumber_spec_satisfied`): This task requires writing a Lean 4 function that finds the one missing number in a list of distinct natural numbers from 0 to n. The list… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv54.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_54/task.lean#L53-L56"
+    },
+    {
+      "id": "verina_adv_55_mostfrequent",
+      "title": "Verify `mostFrequent` (`verina_advanced_55`)",
+      "description": "Closes `datasets/verina/verina_advanced_55/task.lean:78-81` (`VerinaAdv55.mostFrequent_spec_satisfied`): This task requires writing a Lean 4 method that returns the integer that appears most frequently in the input list. If multiple integers… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv55.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_55/task.lean#L78-L81"
+    },
+    {
+      "id": "verina_adv_56_movezeroes",
+      "title": "Verify `moveZeroes` (`verina_advanced_56`)",
+      "description": "Closes `datasets/verina/verina_advanced_56/task.lean:71-74` (`VerinaAdv56.moveZeroes_spec_satisfied`): This task requires writing a Lean 4 method that moves all zeroes in a given integer list to the end, while preserving the relative order of… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv56.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_56/task.lean#L71-L74"
+    },
+    {
+      "id": "verina_adv_60_partitionevensodds",
+      "title": "Verify `partitionEvensOdds` (`verina_advanced_60`)",
+      "description": "Closes `datasets/verina/verina_advanced_60/task.lean:59-62` (`VerinaAdv60.partitionEvensOdds_spec_satisfied`): This task requires writing a Lean 4 method that takes a list of natural numbers and partitions it into two separate lists: one containing… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv60.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_60/task.lean#L59-L62"
+    },
+    {
+      "id": "verina_adv_64_removeelement",
+      "title": "Verify `removeElement` (`verina_advanced_64`)",
+      "description": "Closes `datasets/verina/verina_advanced_64/task.lean:61-64` (`VerinaAdv64.removeElement_spec_satisfied`): This task requires writing a Lean 4 method that removes all occurrences of a given element from a list of natural numbers. The method… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv64.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_64/task.lean#L61-L64"
+    },
+    {
+      "id": "verina_adv_65_reversestring",
+      "title": "Verify `reverseString` (`verina_advanced_65`)",
+      "description": "Closes `datasets/verina/verina_advanced_65/task.lean:51-54` (`VerinaAdv65.reverseString_spec_satisfied`): This task requires writing a Lean 4 method that reverses a given string. The method should return a new string which consists of the… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv65.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_65/task.lean#L51-L54"
+    },
+    {
+      "id": "verina_adv_66_reversewords",
+      "title": "Verify `reverseWords` (`verina_advanced_66`)",
+      "description": "Closes `datasets/verina/verina_advanced_66/task.lean:68-71` (`VerinaAdv66.reverseWords_spec_satisfied`): Given an input string \"words_str\", this task requires writing a Lean 4 function that reverses the order of its words. A word is defined as… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv66.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_66/task.lean#L68-L71"
+    },
+    {
+      "id": "verina_adv_70_semiorderedpermutation",
+      "title": "Verify `semiOrderedPermutation` (`verina_advanced_70`)",
+      "description": "Closes `datasets/verina/verina_advanced_70/task.lean:77-80` (`VerinaAdv70.semiOrderedPermutation_spec_satisfied`): This task requires writing a Lean 4 method that's goal is to determine the minimum number of adjacent swaps needed to make the array… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv70.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_70/task.lean#L77-L80"
+    },
+    {
+      "id": "verina_adv_72_singledigitprimefactor",
+      "title": "Verify `singleDigitPrimeFactor` (`verina_advanced_72`)",
+      "description": "Closes `datasets/verina/verina_advanced_72/task.lean:54-57` (`VerinaAdv72.singleDigitPrimeFactor_spec_satisfied`): This task requires writing a Lean 4 method that given an natural number n, returns the smallest prime factor that is less than 10. If none… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv72.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_72/task.lean#L54-L57"
+    },
+    {
+      "id": "verina_adv_73_smallestmissing",
+      "title": "Verify `smallestMissing` (`verina_advanced_73`)",
+      "description": "Closes `datasets/verina/verina_advanced_73/task.lean:62-65` (`VerinaAdv73.smallestMissing_spec_satisfied`): This task requires writing a Lean 4 method that finds the first missing natural number in an increasingly sorted list. The method should… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv73.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_73/task.lean#L62-L65"
+    },
+    {
+      "id": "verina_adv_76_topkfrequent",
+      "title": "Verify `topKFrequent` (`verina_advanced_76`)",
+      "description": "Closes `datasets/verina/verina_advanced_76/task.lean:87-90` (`VerinaAdv76.topKFrequent_spec_satisfied`): This task requires writing a Lean 4 method that returns the k most frequent elements from a list of integers. The method should count the… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv76.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_76/task.lean#L87-L90"
+    },
+    {
+      "id": "verina_adv_81_uniquesorted",
+      "title": "Verify `uniqueSorted` (`verina_advanced_81`)",
+      "description": "Closes `datasets/verina/verina_advanced_81/task.lean:78-81` (`VerinaAdv81.uniqueSorted_spec_satisfied`): Implement a Lean 4 function that, given a list of integers, removes all duplicates and returns the resulting list in ascending order. The… Pure Lean 4 (zero Mathlib, <1s verification) with 0 sorry and standard axioms only.",
+      "target_files": [
+        "VerinaAlgorithms/Adv81.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/sunblaze-ucb/verina/blob/66b3ce5014edafb20cb26b87c681e7f31847249f/datasets/verina/verina_advanced_81/task.lean#L78-L81"
+    }
+  ]
+}

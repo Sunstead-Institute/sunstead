@@ -1,0 +1,23 @@
+{
+  "repo": "huayaow/DPSO",
+  "commit": "e28d4f2c4e2f989e5d9ff5f78c5214a3331fe2dc",
+  "license": "MIT",
+  "specialization": "Sunstead pins `huayaow/DPSO` (MIT, Wu, Nie, Kuo, Leung & C. J. Colbourn, IEEE TEVC 2015) and formalizes strength-2/3 Covering Arrays CAN(t, k, v) with bit-sliced column-mask verification plus Optimal Golomb Rulers G(k) in pure Lean 4.36.0 across 14 minimization tracks.",
+  "checks": [
+    {
+      "local_file": "LICENSE",
+      "upstream_file": "LICENSE",
+      "verbatim_snippet": "MIT License\n\nCopyright (c) 2017 Huayao"
+    },
+    {
+      "local_file": "README.md",
+      "upstream_file": "README.md",
+      "upstream_anchor": "A covering array is a mathematical object that systematically covers the interactions"
+    },
+    {
+      "local_file": "CombDesigns/Spec.lean",
+      "upstream_file": "example.model",
+      "upstream_anchor": "3 3 3 3 3"
+    }
+  ]
+}

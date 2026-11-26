@@ -1,0 +1,58 @@
+{
+  "id": "lnsym-armv8-addloop-termination",
+  "title": "LNSym ARMv8 AddLoop: Total-Correctness Termination Proof",
+  "description": "Full-repository upstream ARMv8 verification snapshot from AWS Automated Reasoning's leanprover/LNSym (commit 49f8a1d9, Lean v4.35.0, Apache-2.0). Partial correctness (`AddLoop.partial_correctness`) is already fully proved in `Proofs/Experiments/AddLoop/AddLoop.lean`; closing the sole remaining `sorry` (`AddLoop.termination`) completes total correctness (`\u2200 s, pre s \u2192 \u2203 n, exit (run s n)`) against 86 sorry-free prebuilt upstream `.olean` dependencies (hardlink-reused from existing LNSym snapshots).",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/leanprover/LNSym",
+  "upstream": {
+    "repo": "leanprover/LNSym",
+    "commit": "49f8a1d9e46f8dcfc345f4bc15d35b0ba845ff5c",
+    "license": "Apache-2.0"
+  },
+  "snapshot": {
+    "mode": "repo-snapshot",
+    "snapshot_id": "lnsym-armv8-addloop-termination",
+    "lean_options": [
+      "linter.unusedSimpArgs=false"
+    ],
+    "allowed_import_prefixes": [
+      "Arm",
+      "Correctness",
+      "Specs",
+      "Tactics",
+      "Proofs",
+      "Tests",
+      "Std",
+      "Init"
+    ]
+  },
+  "frozen_paths": [
+    "UPSTREAM.json",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4-v4.35.0:v0.1",
+    "toolchain": "leanprover/lean4:v4.35.0",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 240,
+    "memory_mb": 4096
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "addloop_termination",
+      "title": "Prove ARMv8 AddLoop termination (`AddLoop.termination`)",
+      "description": "Closes the sole remaining `sorry` in `Proofs/Experiments/AddLoop/AddLoop.lean:615-620` (`AddLoop.termination`): prove `Termination ArmState` (`\u2200 s, pre s \u2192 \u2203 n, exit (run s n)`) for the ARMv8 `x0 := x0 + x1` loop alongside already-proved `AddLoop.partial_correctness`, with 0 sorry and standard axioms only. Accepted patches apply directly upstream to `leanprover/LNSym@49f8a1d9`.",
+      "target_files": [
+        "Proofs/Experiments/AddLoop/AddLoop.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/leanprover/LNSym/blob/49f8a1d9e46f8dcfc345f4bc15d35b0ba845ff5c/Proofs/Experiments/AddLoop/AddLoop.lean#L615-L620"
+    }
+  ]
+}

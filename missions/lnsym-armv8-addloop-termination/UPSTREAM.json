@@ -1,0 +1,19 @@
+{
+  "mode": "repo-snapshot",
+  "repo": "leanprover/LNSym",
+  "commit": "49f8a1d9e46f8dcfc345f4bc15d35b0ba845ff5c",
+  "license": "Apache-2.0",
+  "checks": [
+    {
+      "local_file": "lean-toolchain",
+      "upstream_file": "lean-toolchain",
+      "exact_sha256": "ca5f1f601d34c49079e38d7e7041eb0f2a9c227fbc1df0f404820069a052330c"
+    },
+    {
+      "local_file": "Proofs/Experiments/AddLoop/AddLoop.lean",
+      "upstream_file": "Proofs/Experiments/AddLoop/AddLoop.lean",
+      "exact_sha256": "30adb22c5de6b1de6092d45b554619af35a894b7fba804b0dd628feb76144990",
+      "upstream_anchor": "theorem termination :\n  Termination ArmState := by"
+    }
+  ]
+}

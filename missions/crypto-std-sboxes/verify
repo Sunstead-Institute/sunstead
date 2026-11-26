@@ -1,0 +1,190 @@
+#!/usr/bin/env python3
+"""Verify straight-line Boolean circuits (total gates, AND gates, AND-depth) in pure Lean 4.36.0."""
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify
+
+FROZEN_FILES = ["StdSbox/Spec.lean", "UPSTREAM.json", "lakefile.toml", "lean-toolchain"]
+
+TASKS = {
+    "whirlpool_total_gates": {
+        "module": "StdSbox.WhirlpoolTotalBound",
+        "theorem": "StdSbox.whirlpool_total_gates_bound",
+        "score_const": "StdSbox.whirlpoolTotalScore",
+        "statement": "def whirlpool_total_gates (n : Nat) : Prop := StdSbox.ValidTotalCircuit 8 StdSbox.whirlpoolSbox n",
+        "label": "{score} total gates (Whirlpool)"
+    },
+    "whirlpool_and_gates": {
+        "module": "StdSbox.WhirlpoolAndBound",
+        "theorem": "StdSbox.whirlpool_and_gates_bound",
+        "score_const": "StdSbox.whirlpoolAndScore",
+        "statement": "def whirlpool_and_gates (n : Nat) : Prop := StdSbox.ValidAndCircuit 8 StdSbox.whirlpoolSbox n",
+        "label": "{score} AND gates (Whirlpool)"
+    },
+    "whirlpool_and_depth": {
+        "module": "StdSbox.WhirlpoolDepthBound",
+        "theorem": "StdSbox.whirlpool_and_depth_bound",
+        "score_const": "StdSbox.whirlpoolDepthScore",
+        "statement": "def whirlpool_and_depth (n : Nat) : Prop := StdSbox.ValidAndDepthCircuit 8 StdSbox.whirlpoolSbox n",
+        "label": "AND-depth {score} (Whirlpool)"
+    },
+    "aria_s2_total_gates": {
+        "module": "StdSbox.AriaS2TotalBound",
+        "theorem": "StdSbox.aria_s2_total_gates_bound",
+        "score_const": "StdSbox.ariaS2TotalScore",
+        "statement": "def aria_s2_total_gates (n : Nat) : Prop := StdSbox.ValidTotalCircuit 8 StdSbox.ariaS2Sbox n",
+        "label": "{score} total gates (ARIA S2)"
+    },
+    "aria_s2_and_gates": {
+        "module": "StdSbox.AriaS2AndBound",
+        "theorem": "StdSbox.aria_s2_and_gates_bound",
+        "score_const": "StdSbox.ariaS2AndScore",
+        "statement": "def aria_s2_and_gates (n : Nat) : Prop := StdSbox.ValidAndCircuit 8 StdSbox.ariaS2Sbox n",
+        "label": "{score} AND gates (ARIA S2)"
+    },
+    "aria_s2_and_depth": {
+        "module": "StdSbox.AriaS2DepthBound",
+        "theorem": "StdSbox.aria_s2_and_depth_bound",
+        "score_const": "StdSbox.ariaS2DepthScore",
+        "statement": "def aria_s2_and_depth (n : Nat) : Prop := StdSbox.ValidAndDepthCircuit 8 StdSbox.ariaS2Sbox n",
+        "label": "AND-depth {score} (ARIA S2)"
+    },
+    "aria_invs2_total_gates": {
+        "module": "StdSbox.AriaInvS2TotalBound",
+        "theorem": "StdSbox.aria_invs2_total_gates_bound",
+        "score_const": "StdSbox.ariaInvS2TotalScore",
+        "statement": "def aria_invs2_total_gates (n : Nat) : Prop := StdSbox.ValidTotalCircuit 8 StdSbox.ariaInvS2Sbox n",
+        "label": "{score} total gates (ARIA InvS2)"
+    },
+    "aria_invs2_and_gates": {
+        "module": "StdSbox.AriaInvS2AndBound",
+        "theorem": "StdSbox.aria_invs2_and_gates_bound",
+        "score_const": "StdSbox.ariaInvS2AndScore",
+        "statement": "def aria_invs2_and_gates (n : Nat) : Prop := StdSbox.ValidAndCircuit 8 StdSbox.ariaInvS2Sbox n",
+        "label": "{score} AND gates (ARIA InvS2)"
+    },
+    "aria_invs2_and_depth": {
+        "module": "StdSbox.AriaInvS2DepthBound",
+        "theorem": "StdSbox.aria_invs2_and_depth_bound",
+        "score_const": "StdSbox.ariaInvS2DepthScore",
+        "statement": "def aria_invs2_and_depth (n : Nat) : Prop := StdSbox.ValidAndDepthCircuit 8 StdSbox.ariaInvS2Sbox n",
+        "label": "AND-depth {score} (ARIA InvS2)"
+    }
+}
+
+CIRCUIT_TARGETS = {
+    "whirlpool_total_gates": [
+        "StdSbox/WhirlpoolTotalCircuit.lean",
+        "StdSbox.whirlpoolTotalScore",
+        "StdSbox.whirlpoolTotalGates",
+        "StdSbox.whirlpoolTotalOutputs",
+        8
+    ],
+    "whirlpool_and_gates": [
+        "StdSbox/WhirlpoolAndCircuit.lean",
+        "StdSbox.whirlpoolAndScore",
+        "StdSbox.whirlpoolAndGates",
+        "StdSbox.whirlpoolAndOutputs",
+        8
+    ],
+    "whirlpool_and_depth": [
+        "StdSbox/WhirlpoolDepthCircuit.lean",
+        "StdSbox.whirlpoolDepthScore",
+        "StdSbox.whirlpoolDepthGates",
+        "StdSbox.whirlpoolDepthOutputs",
+        8
+    ],
+    "aria_s2_total_gates": [
+        "StdSbox/AriaS2TotalCircuit.lean",
+        "StdSbox.ariaS2TotalScore",
+        "StdSbox.ariaS2TotalGates",
+        "StdSbox.ariaS2TotalOutputs",
+        8
+    ],
+    "aria_s2_and_gates": [
+        "StdSbox/AriaS2AndCircuit.lean",
+        "StdSbox.ariaS2AndScore",
+        "StdSbox.ariaS2AndGates",
+        "StdSbox.ariaS2AndOutputs",
+        8
+    ],
+    "aria_s2_and_depth": [
+        "StdSbox/AriaS2DepthCircuit.lean",
+        "StdSbox.ariaS2DepthScore",
+        "StdSbox.ariaS2DepthGates",
+        "StdSbox.ariaS2DepthOutputs",
+        8
+    ],
+    "aria_invs2_total_gates": [
+        "StdSbox/AriaInvS2TotalCircuit.lean",
+        "StdSbox.ariaInvS2TotalScore",
+        "StdSbox.ariaInvS2TotalGates",
+        "StdSbox.ariaInvS2TotalOutputs",
+        8
+    ],
+    "aria_invs2_and_gates": [
+        "StdSbox/AriaInvS2AndCircuit.lean",
+        "StdSbox.ariaInvS2AndScore",
+        "StdSbox.ariaInvS2AndGates",
+        "StdSbox.ariaInvS2AndOutputs",
+        8
+    ],
+    "aria_invs2_and_depth": [
+        "StdSbox/AriaInvS2DepthCircuit.lean",
+        "StdSbox.ariaInvS2DepthScore",
+        "StdSbox.ariaInvS2DepthGates",
+        "StdSbox.ariaInvS2DepthOutputs",
+        8
+    ]
+}
+
+MAX_BYTES = 32768
+MAX_GATES = 1024
+
+
+def check_circuit(path, score_name, gates_name, outputs_name, width):
+    if not path.is_file():
+        emit(False, f"Missing circuit file: {path.name}", stage="lint")
+    raw = path.read_bytes()
+    if len(raw) > MAX_BYTES:
+        emit(False, f"Circuit file exceeds {MAX_BYTES} bytes", stage="lint")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        emit(False, "Circuit file must be valid UTF-8", stage="lint")
+    nat = r"(?:0|[1-9][0-9]{0,3})"
+    triple = rf"\(\s*{nat}\s*,\s*{nat}\s*,\s*{nat}\s*\)"
+    header_re = (
+        rf"\s*def\s+{re.escape(score_name)}\s*:\s*Nat\s*:=\s*({nat})\s*\n"
+        rf"\s*def\s+{re.escape(gates_name)}\s*:\s*List\s*\(Nat\s*×\s*Nat\s*×\s*Nat\)\s*:=\s*\[\s*(.*?)\s*\]\s*\n"
+        rf"\s*def\s+{re.escape(outputs_name)}\s*:\s*List\s+Nat\s*:=\s*\[\s*(.*?)\s*\]\s*"
+    )
+    match = re.fullmatch(header_re, text, re.DOTALL)
+    if not match:
+        emit(False, f"Expected only literal definitions for {score_name}, {gates_name}, and {outputs_name}", stage="lint")
+    gates_body = match.group(2)
+    outputs_body = match.group(3)
+    if not gates_body or not re.fullmatch(rf"{triple}(?:\s*,\s*{triple}){{0,{MAX_GATES - 1}}}", gates_body):
+        emit(False, f"Expected 1 to {MAX_GATES} literal (op, w1, w2) gate triples", stage="lint")
+    if not re.fullmatch(rf"{nat}(?:\s*,\s*{nat}){{{width - 1}}}", outputs_body):
+        emit(False, f"Expected exactly {width} literal output wire indices", stage="lint")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>", stage="lint")
+    tid = sys.argv[1]
+    if tid in CIRCUIT_TARGETS:
+        rel_path, score_name, gates_name, outputs_name, width = CIRCUIT_TARGETS[tid]
+        check_circuit(Path(__file__).resolve().parent / rel_path, score_name, gates_name, outputs_name, width)
+    lean_verify(
+        tid,
+        lib_root="StdSbox",
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        uses_mathlib=False,
+        timeout_sec=60,
+    )

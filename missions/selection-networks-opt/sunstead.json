@@ -1,0 +1,154 @@
+{
+  "id": "selection-networks-opt",
+  "title": "Optimal Median Selection Networks (n = 7..16): minimize comparator count",
+  "description": "Pure Lean 4.36.0 (zero Mathlib) certified optimization of size-minimal comparator median selection networks on n = 7..16 wires, with Knuth's Zero-One Principle for order statistics and an O(n^2) bit-sliced 2^n-input threshold-DP kernel evaluator formally proved inside `SelectNet/Spec.lean`. Ten independent hill-climb tracks start from textbook Batcher odd-even merge-exchange seeds (16..63) and target SorterHunter's best known records (13..46, open frontiers for n \u2265 12), pinned to `bertdobbelaere/SorterHunter@3d8b345` (MIT).",
+  "tier": 2,
+  "mode": "hillclimb",
+  "repo": "https://github.com/bertdobbelaere/SorterHunter",
+  "upstream": {
+    "repo": "bertdobbelaere/SorterHunter",
+    "commit": "3d8b3454bad15062f4b0030052f12d6550f8d89d",
+    "license": "MIT"
+  },
+  "score_direction": "minimize",
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 90,
+    "memory_mb": 2048
+  },
+  "frozen_paths": [
+    "SelectNet/Spec.lean",
+    "SelectNet/Bound7.lean",
+    "SelectNet/Bound8.lean",
+    "SelectNet/Bound9.lean",
+    "SelectNet/Bound10.lean",
+    "SelectNet/Bound11.lean",
+    "SelectNet/Bound12.lean",
+    "SelectNet/Bound13.lean",
+    "SelectNet/Bound14.lean",
+    "SelectNet/Bound15.lean",
+    "SelectNet/Bound16.lean",
+    "LICENSE",
+    "README.md",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "tasks": [
+    {
+      "id": "median_n7",
+      "title": "Minimize 7-wire median selection network size (baseline 16)",
+      "description": "Submit a comparator network on 7 wires in `SelectNet/Net7.lean` (`SelectNet.score7` and `SelectNet.net7`) selecting wire 3 (exact median). Seeded with textbook Batcher odd-even merge-exchange sort (16 comparators; Proven optimal (13)). Frozen `SelectNet/Bound7.lean` kernel-verifies well-formedness (`i < j < 7`), comparator count, and exact median selection on all 2^7 Boolean inputs via `decide +kernel`, lifting to every linear order by the formalized Zero-One Principle in `SelectNet/Spec.lean`.",
+      "baseline_score": 16,
+      "target_files": [
+        "SelectNet/Net7.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/bertdobbelaere/SorterHunter/blob/3d8b3454bad15062f4b0030052f12d6550f8d89d/Networks/Median/Median_7_13_6.json"
+    },
+    {
+      "id": "median_n8",
+      "title": "Minimize 8-wire median selection network size (baseline 19)",
+      "description": "Submit a comparator network on 8 wires in `SelectNet/Net8.lean` (`SelectNet.score8` and `SelectNet.net8`) selecting wires 3 and 4 (unordered central pair). Seeded with textbook Batcher odd-even merge-exchange sort (19 comparators; Proven optimal (16)). Frozen `SelectNet/Bound8.lean` kernel-verifies well-formedness (`i < j < 8`), comparator count, and exact median selection on all 2^8 Boolean inputs via `decide +kernel`, lifting to every linear order by the formalized Zero-One Principle in `SelectNet/Spec.lean`.",
+      "baseline_score": 19,
+      "target_files": [
+        "SelectNet/Net8.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/bertdobbelaere/SorterHunter/blob/3d8b3454bad15062f4b0030052f12d6550f8d89d/Networks/Median/Median_8_16_5.json"
+    },
+    {
+      "id": "median_n9",
+      "title": "Minimize 9-wire median selection network size (baseline 26)",
+      "description": "Submit a comparator network on 9 wires in `SelectNet/Net9.lean` (`SelectNet.score9` and `SelectNet.net9`) selecting wire 4 (exact median). Seeded with textbook Batcher odd-even merge-exchange sort (26 comparators; Proven optimal (19)). Frozen `SelectNet/Bound9.lean` kernel-verifies well-formedness (`i < j < 9`), comparator count, and exact median selection on all 2^9 Boolean inputs via `decide +kernel`, lifting to every linear order by the formalized Zero-One Principle in `SelectNet/Spec.lean`.",
+      "baseline_score": 26,
+      "target_files": [
+        "SelectNet/Net9.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/bertdobbelaere/SorterHunter/blob/3d8b3454bad15062f4b0030052f12d6550f8d89d/Networks/Median/Median_9_19_7.json"
+    },
+    {
+      "id": "median_n10",
+      "title": "Minimize 10-wire median selection network size (baseline 31)",
+      "description": "Submit a comparator network on 10 wires in `SelectNet/Net10.lean` (`SelectNet.score10` and `SelectNet.net10`) selecting wires 4 and 5 (unordered central pair). Seeded with textbook Batcher odd-even merge-exchange sort (31 comparators; Proven optimal (22)). Frozen `SelectNet/Bound10.lean` kernel-verifies well-formedness (`i < j < 10`), comparator count, and exact median selection on all 2^10 Boolean inputs via `decide +kernel`, lifting to every linear order by the formalized Zero-One Principle in `SelectNet/Spec.lean`.",
+      "baseline_score": 31,
+      "target_files": [
+        "SelectNet/Net10.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/bertdobbelaere/SorterHunter/blob/3d8b3454bad15062f4b0030052f12d6550f8d89d/Networks/Median/Median_10_22_8.json"
+    },
+    {
+      "id": "median_n11",
+      "title": "Minimize 11-wire median selection network size (baseline 37)",
+      "description": "Submit a comparator network on 11 wires in `SelectNet/Net11.lean` (`SelectNet.score11` and `SelectNet.net11`) selecting wire 5 (exact median). Seeded with textbook Batcher odd-even merge-exchange sort (37 comparators; Known optimal / tight (25)). Frozen `SelectNet/Bound11.lean` kernel-verifies well-formedness (`i < j < 11`), comparator count, and exact median selection on all 2^11 Boolean inputs via `decide +kernel`, lifting to every linear order by the formalized Zero-One Principle in `SelectNet/Spec.lean`.",
+      "baseline_score": 37,
+      "target_files": [
+        "SelectNet/Net11.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/bertdobbelaere/SorterHunter/blob/3d8b3454bad15062f4b0030052f12d6550f8d89d/Networks/Median/Median_11_25_11.json"
+    },
+    {
+      "id": "median_n12",
+      "title": "Minimize 12-wire median selection network size (baseline 41)",
+      "description": "Submit a comparator network on 12 wires in `SelectNet/Net12.lean` (`SelectNet.score12` and `SelectNet.net12`) selecting wires 5 and 6 (unordered central pair). Seeded with textbook Batcher odd-even merge-exchange sort (41 comparators; Open research frontier (best known 29)). Frozen `SelectNet/Bound12.lean` kernel-verifies well-formedness (`i < j < 12`), comparator count, and exact median selection on all 2^12 Boolean inputs via `decide +kernel`, lifting to every linear order by the formalized Zero-One Principle in `SelectNet/Spec.lean`.",
+      "baseline_score": 41,
+      "target_files": [
+        "SelectNet/Net12.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/bertdobbelaere/SorterHunter/blob/3d8b3454bad15062f4b0030052f12d6550f8d89d/Networks/Median/Median_12_29_7.json"
+    },
+    {
+      "id": "median_n13",
+      "title": "Minimize 13-wire median selection network size (baseline 48)",
+      "description": "Submit a comparator network on 13 wires in `SelectNet/Net13.lean` (`SelectNet.score13` and `SelectNet.net13`) selecting wire 6 (exact median). Seeded with textbook Batcher odd-even merge-exchange sort (48 comparators; Open research frontier (best known 32)). Frozen `SelectNet/Bound13.lean` kernel-verifies well-formedness (`i < j < 13`), comparator count, and exact median selection on all 2^13 Boolean inputs via `decide +kernel`, lifting to every linear order by the formalized Zero-One Principle in `SelectNet/Spec.lean`.",
+      "baseline_score": 48,
+      "target_files": [
+        "SelectNet/Net13.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/bertdobbelaere/SorterHunter/blob/3d8b3454bad15062f4b0030052f12d6550f8d89d/Networks/Median/Median_13_32_10.json"
+    },
+    {
+      "id": "median_n14",
+      "title": "Minimize 14-wire median selection network size (baseline 53)",
+      "description": "Submit a comparator network on 14 wires in `SelectNet/Net14.lean` (`SelectNet.score14` and `SelectNet.net14`) selecting wires 6 and 7 (unordered central pair). Seeded with textbook Batcher odd-even merge-exchange sort (53 comparators; Open research frontier (best known 38)). Frozen `SelectNet/Bound14.lean` kernel-verifies well-formedness (`i < j < 14`), comparator count, and exact median selection on all 2^14 Boolean inputs via `decide +kernel`, lifting to every linear order by the formalized Zero-One Principle in `SelectNet/Spec.lean`.",
+      "baseline_score": 53,
+      "target_files": [
+        "SelectNet/Net14.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/bertdobbelaere/SorterHunter/blob/3d8b3454bad15062f4b0030052f12d6550f8d89d/Networks/Median/Median_14_38_9.json"
+    },
+    {
+      "id": "median_n15",
+      "title": "Minimize 15-wire median selection network size (baseline 59)",
+      "description": "Submit a comparator network on 15 wires in `SelectNet/Net15.lean` (`SelectNet.score15` and `SelectNet.net15`) selecting wire 7 (exact median). Seeded with textbook Batcher odd-even merge-exchange sort (59 comparators; Open research frontier (best known 41)). Frozen `SelectNet/Bound15.lean` kernel-verifies well-formedness (`i < j < 15`), comparator count, and exact median selection on all 2^15 Boolean inputs via `decide +kernel`, lifting to every linear order by the formalized Zero-One Principle in `SelectNet/Spec.lean`.",
+      "baseline_score": 59,
+      "target_files": [
+        "SelectNet/Net15.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/bertdobbelaere/SorterHunter/blob/3d8b3454bad15062f4b0030052f12d6550f8d89d/Networks/Median/Median_15_41_11.json"
+    },
+    {
+      "id": "median_n16",
+      "title": "Minimize 16-wire median selection network size (baseline 63)",
+      "description": "Submit a comparator network on 16 wires in `SelectNet/Net16.lean` (`SelectNet.score16` and `SelectNet.net16`) selecting wires 7 and 8 (unordered central pair). Seeded with textbook Batcher odd-even merge-exchange sort (63 comparators; Open research frontier (best known 46)). Frozen `SelectNet/Bound16.lean` kernel-verifies well-formedness (`i < j < 16`), comparator count, and exact median selection on all 2^16 Boolean inputs via `decide +kernel`, lifting to every linear order by the formalized Zero-One Principle in `SelectNet/Spec.lean`.",
+      "baseline_score": 63,
+      "target_files": [
+        "SelectNet/Net16.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/bertdobbelaere/SorterHunter/blob/3d8b3454bad15062f4b0030052f12d6550f8d89d/Networks/Median/Median_16_46_10.json"
+    }
+  ]
+}

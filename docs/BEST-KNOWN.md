@@ -55,6 +55,8 @@ does not change a mission's spec hash or its verifier image.
 
 ## Current values (checked 26 Nov 2026)
 
+All **201 non-demo hill-climb tracks across 18 Arena Packs** are tracked in [`missions/best-known.json`](../missions/best-known.json) and enforced in CI by `scripts/check-best-known.py`. The initial Wave 1–4 tracks are listed below; see `missions/best-known.json` for the complete machine-checked table including coding theory, extremal graphs, additive combinatorics, combinatorial designs, median selection networks, extended $\mathbb{F}_2$ matrix rank, cryptographic/ZK addition chains, and LWC/ISO S-box and linear-XOR packs.
+
 | Mission | Task | Seed | Best known | Kind | Source |
 | --- | --- | --- | --- | --- | --- |
 | `aes-sbox-circuit` | `minimize_total_gates` | 130 | **103** | collection | [link](https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox) |

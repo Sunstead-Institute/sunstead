@@ -1,0 +1,247 @@
+{
+  "repo": "google-deepmind/formal-conjectures",
+  "commit": "5bd8bfb9def462c19a87d2d275af3db3341dc727",
+  "license": "Apache-2.0",
+  "checks": [
+    {
+      "local_file": "FcSolvedAlgAnal/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/114.lean",
+      "verbatim_snippet": "def lemniscate (p : ℂ[X]) : Set ℂ := {z | ‖p.eval z‖ = 1}"
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/114.lean",
+      "verbatim_snippet": "noncomputable def lemniscateLength (p : ℂ[X]) : ENNReal := μH[1] (lemniscate p)"
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Erdos114Lemniscate.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/114.lean",
+      "verbatim_snippet": "theorem erdos_114.variants.large_n : ∀ᶠ n in atTop, ∀ p : ℂ[X], p.Monic → p.natDegree = n →\n    lemniscateLength p ≤ lemniscateLength (X ^ n - 1) :="
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/GammaOneThird.lean",
+      "upstream_file": "FormalConjectures/Wikipedia/Transcendental.lean",
+      "verbatim_snippet": "theorem transcendental_gamma_one_div_three : Transcendental ℚ (1 / 3 : ℝ).Gamma :="
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Kourovka8_8a.lean",
+      "upstream_file": "FormalConjectures/Kourovka/8_8.lean",
+      "verbatim_snippet": "theorem kourovka_8_8a :\n    ∃ (G : Type) (_ : Group G), ¬ IsCyclic G ∧ Group.FG G ∧\n      ∃ a : G, ∀ g : G, ∃ n : ℤ, IsConj g (a ^ n) :="
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Spec.lean",
+      "upstream_file": "FormalConjectures/Paper/ConjugacyClassSizes.lean",
+      "verbatim_snippet": "noncomputable def conjClassCard {G : Type*} [Monoid G] (c : ConjClasses G) : ℕ :=\n  Nat.card c.carrier"
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Spec.lean",
+      "upstream_file": "FormalConjectures/Paper/ConjugacyClassSizes.lean",
+      "verbatim_snippet": "def HasDistinctConjClassSizes (G : Type*) [Group G] [Fintype G] : Prop :=\n  Function.Injective (conjClassCard (G := G))"
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/ConjClassSizesS3.lean",
+      "upstream_file": "FormalConjectures/Paper/ConjugacyClassSizes.lean",
+      "verbatim_snippet": "theorem conjClassSizes_iff_sym_three_solvable\n    (G : Type) [Group G] [Fintype G] [Group.IsSolvable G] [Nontrivial G]\n    (h : HasDistinctConjClassSizes (G := G)) :\n    Nonempty (G ≃* Equiv.Perm (Fin 3)) :="
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Spec.lean",
+      "upstream_file": "FormalConjectures/GreensOpenProblems/54.lean",
+      "verbatim_snippet": "noncomputable def gaussianMeasureInf : Measure (ℕ → ℝ) :=\n  Measure.infinitePi (fun _ : ℕ => gaussianReal 0 1)"
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Green54Gaussian.lean",
+      "upstream_file": "FormalConjectures/GreensOpenProblems/54.lean",
+      "verbatim_snippet": "theorem green_54 :\n    ∀ K : Set (ℕ → ℝ), IsCompact K → Balanced ℝ K → (0.99 : ℝ≥0∞) ≤\n    gaussianMeasureInf K → ∃ C : Set (ℕ → ℝ), IsCompact C ∧ Convex ℝ C ∧ C ⊆ (10 : ℕ) • K ∧\n    (0.01 : ℝ≥0∞) ≤ gaussianMeasureInf C :="
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Spec.lean",
+      "upstream_file": "FormalConjectures/Wikipedia/PierceBirkhoff.lean",
+      "verbatim_snippet": "def IsSemiAlgebraic {n : ℕ} (S : Set (Fin n → ℝ)) : Prop :=\n  ∃ (ι : Type) (p₀ p₁ : ι → Finset (MvPolynomial (Fin n) ℝ)), Finite ι ∧\n    S = ⋃ i, {x | (∀ p ∈ p₀ i, MvPolynomial.eval x p = 0) ∧\n      ∀ p ∈ p₁ i, MvPolynomial.eval x p > 0}"
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Spec.lean",
+      "upstream_file": "FormalConjectures/Wikipedia/PierceBirkhoff.lean",
+      "verbatim_snippet": "def IsPiecewiseMvPolynomial {n : ℕ} (f : (Fin n → ℝ) → ℝ) : Prop :=\n  ∃ (ι : Type) (P : ι → Set (Fin n → ℝ))\n    (g : ι → MvPolynomial (Fin n) ℝ),\n    Finite ι ∧\n    (∀ i, IsClosed (P i)) ∧\n    (∀ i, IsSemiAlgebraic (P i)) ∧\n    (⋃ i, P i) = Set.univ ∧\n    ∀ᵉ (i : ι) (x ∈ P i), f x = MvPolynomial.eval x (g i)"
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/PierceBirkhoffDim2.lean",
+      "upstream_file": "FormalConjectures/Wikipedia/PierceBirkhoff.lean",
+      "verbatim_snippet": "theorem pierce_birkhoff_conjecture_dim_two\n    (f : (Fin 2 → ℝ) → ℝ) (hf : IsPiecewiseMvPolynomial f) :\n    ∃ (ι κ : Type) (g : ι → κ → MvPolynomial (Fin 2) ℝ), Finite ι ∧ Finite κ ∧\n      ∀ x, f x = ⨆ i, ⨅ j, MvPolynomial.eval x (g i j) :="
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Spec.lean",
+      "upstream_file": "FormalConjectures/Paper/ShelahSpencerZeroOneLaw.lean",
+      "verbatim_snippet": "noncomputable def sparseProbability (n : ℕ) (α : ℝ) (hα : 0 < α) : unitInterval :=\n  ⟨(n : ℝ) ^ (-α), Real.rpow_nonneg (Nat.cast_nonneg n) (-α), by\n    cases n with\n    | zero => simpa using Real.zero_rpow_le_one (-α)\n    | succ n =>\n        exact Real.rpow_le_one_of_one_le_of_nonpos\n          (by exact_mod_cast Nat.succ_le_succ (Nat.zero_le n)) (by simp [hα.le])⟩"
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Spec.lean",
+      "upstream_file": "FormalConjectures/Paper/ShelahSpencerZeroOneLaw.lean",
+      "verbatim_snippet": "noncomputable def sparseRandomGraph (n : ℕ) (α : ℝ) (hα : 0 < α) :\n    Measure (SimpleGraph (Fin n)) :=\n  SimpleGraph.binomialRandom (Fin n) (sparseProbability n α hα)"
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/ShelahSpencer01.lean",
+      "upstream_file": "FormalConjectures/Paper/ShelahSpencerZeroOneLaw.lean",
+      "verbatim_snippet": "theorem zeroOne_irrational\n   (α : ℝ) (hα : 0 < α ∧ α < 1) (hirr : Irrational α) (φ : Language.graph.Sentence) :\n   Tendsto (fun n =>\n     sparseRandomGraph n α hα.1\n       {G | @Language.Sentence.Realize Language.graph (Fin n) G.structure φ}) atTop (𝓝 0) ∨\n   Tendsto (fun n =>\n     sparseRandomGraph n α hα.1\n       {G | @Language.Sentence.Realize Language.graph (Fin n) G.structure φ}) atTop (𝓝 1) :="
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Erdos1038Measure.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/1038.lean",
+      "verbatim_snippet": "theorem erdos_1038.parts.ii : 2 * 2 ^ (1 / 2 : ℝ) =\n    ⨆ f : {f : Polynomial ℝ // f.Monic ∧\n    (f.roots.filter fun x => x ∈ Set.Icc (-1 : ℝ) 1).card = f.natDegree},\n    volume {x | |f.1.eval x| < 1} :="
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/120.lean",
+      "verbatim_snippet": "def Erdos120For (A : Set ℝ) : Prop := ∃ E : Set ℝ,\n  MeasurableSet E ∧ 0 < volume E ∧ ∀ a b : ℝ, a ≠ 0 → ¬ .image (fun x => a * x + b) A ⊆ E"
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Erdos120Finite.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/120.lean",
+      "verbatim_snippet": "theorem erdos_120.variants.finite_set {A : Set ℝ} (h : A.Finite) : ¬ Erdos120For A :="
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/TensorRankThreeSlices.lean",
+      "upstream_file": "FormalConjectures/Arxiv/0805.3777/TensorRank.lean",
+      "verbatim_snippet": "theorem cprank_le_of_three_slices {n : ℕ} (hn : 1 ≤ n) (T : Holor ℂ [n, n, 3]) :\n    T.cprank ≤ 2 * n - 1 :="
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Erdos1119Entire.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/1119.lean",
+      "verbatim_snippet": "theorem erdos_1119 :\n    ∀ (m : Cardinal.{0}), ℵ₀ < m → m < 𝔠 →\n    ∀ F : Set (ℂ → ℂ), (∀ f ∈ F, Differentiable ℂ f) →\n      (∀ z₀ : ℂ, #{y : ℂ | ∃ f ∈ F, f z₀ = y} ≤ m) →\n      #F ≤ m :="
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/SemiringMaxIdeals.lean",
+      "upstream_file": "FormalConjectures/Mathoverflow/486451.lean",
+      "verbatim_snippet": "theorem exists_semiring_unique_left_maximal_not_unique_right_maximal :\n    ∃ (R : Type) (_ : Semiring R), (∃! I : Ideal R, I.IsMaximal) ∧\n      ∃ I J : Ideal Rᵐᵒᵖ, I.IsMaximal ∧ J.IsMaximal ∧ I ≠ J :="
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Kourovka19_25.lean",
+      "upstream_file": "FormalConjectures/Kourovka/19_25.lean",
+      "verbatim_snippet": "theorem kourovka_19_25 :\n    ¬ ∀ (G H : Type) [Group G] [Group H] [Fintype G] [Fintype H],\n       Fintype.card G = Fintype.card H →\n       ∑ g : G, φ (orderOf g) = ∑ h : H, φ (orderOf h) →\n       IsSimpleGroup G → IsSimpleGroup H :="
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Kourovka20_76.lean",
+      "upstream_file": "FormalConjectures/Kourovka/20_76.lean",
+      "verbatim_snippet": "theorem kourovka_20_76 :\n    ¬ (∀ᵉ (p : ℕ) (hp : p.Prime) (G : Type) (_ : Group G) (hg : IsPGroup p G) (_ : Finite G) (k : ℕ)\n    (h : ∀ H: Subgroup G, H.Normal ∧ IsMulCommutative H → Nat.card H ≤ p ^ k),\n    (∀ H : Subgroup G, IsMulCommutative H → Nat.card H ≤ p ^ (2 * k))) :="
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Green85Loose.lean",
+      "upstream_file": "FormalConjectures/GreensOpenProblems/85.lean",
+      "verbatim_snippet": "theorem green_85_loose :\n    ∃ c > 0, ∀ᶠ α in 𝓝[>] 0,\n    ∀ A : Set (ℝ × ℝ),\n    IsOpen A →\n    A ⊆ Icc 0 1 ×ˢ Icc 0 1 →\n    A.Nonempty →\n    α = (volume A).toReal →\n    ∃ x₁ x₂ y₁ y₂,\n      {(x₁, y₁), (x₂, y₁), (x₂, y₂), (x₁, y₂)} ⊆ A ∧\n      c * α ^ 2 * (Real.log (1/α))⁻¹ ≤ |x₁ - x₂| * |y₁ - y₂| :="
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Erdos1133Interp.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/1133.lean",
+      "verbatim_snippet": "theorem erdos_1133 :\n    ∀ C > (0 : ℝ), ∃ ε > (0 : ℝ), ∀ᶠ n : ℕ in atTop,\n      ∀ x : Fin n → Icc (-1 : ℝ) 1,\n        ∃ y : Fin n → Icc (-1 : ℝ) 1,\n          ∀ P : Polynomial ℝ,\n            (P.natDegree : ℝ) < (1 + ε) * (n : ℝ) →\n            ((Finset.univ.filter (fun i ↦ P.eval (x i : ℝ) = (y i : ℝ))).card : ℝ) ≥\n              (1 - ε) * (n : ℝ) →\n            ∃ z ∈ Icc (-1 : ℝ) 1, |P.eval z| > C :="
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Spec.lean",
+      "upstream_file": "FormalConjectures/HilbertProblems/17.lean",
+      "verbatim_snippet": "noncomputable def f : MvPolynomial (Fin 2) ℝ :=\n  X 0 ^ 4 * X 1 ^ 2 + X 0 ^ 2 * X 1 ^ 4 - 3 * X 0 ^ 2 * X 1 ^ 2 + 1"
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Hilbert17Motzkin.lean",
+      "upstream_file": "FormalConjectures/HilbertProblems/17.lean",
+      "verbatim_snippet": "theorem f_not_sum_of_squares :\n    ¬∃ (n : ℕ) (hn : 0 < n) (S : Fin n → MvPolynomial (Fin 2) ℝ), f = ∑ i, S i ^ 2 :="
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Spec.lean",
+      "upstream_file": "FormalConjectures/Paper/VoronovskajaTypeFormula.lean",
+      "verbatim_snippet": "noncomputable def bernsteinTail (n k : ℕ) : Polynomial ℝ :=\n  ∑ j ∈ Finset.Icc k n, bernsteinPolynomial ℝ n j"
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Spec.lean",
+      "upstream_file": "FormalConjectures/Paper/VoronovskajaTypeFormula.lean",
+      "verbatim_snippet": "noncomputable def bezierBernstein (n : ℕ) (α : ℝ) (f : ℝ → ℝ) (x : ℝ) : ℝ :=\n  ∑ k ∈ Finset.range (n + 1),\n    f (k / n) * ((bernsteinTail n k).eval x ^ α - (bernsteinTail n (k + 1)).eval x ^ α)"
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/VoronovskajaBernstein.lean",
+      "upstream_file": "FormalConjectures/Paper/VoronovskajaTypeFormula.lean",
+      "verbatim_snippet": "theorem voronovskaja_theorem.bernstein_operators\n    (f : ℝ → ℝ) (x : ℝ) (hx : x ∈ I)\n    (hf : ContDiffOn ℝ 2 f I) :\n    let f'' : ℝ := iteratedDerivWithin 2 f I x\n    Tendsto (fun (n : ℕ) => (n : ℝ) * (bezierBernstein n 1 f x - f x))\n    atTop\n    (𝓝 ((1 / 2) * x * (1 - x) * f'')) :="
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Erdos1154Subgroup.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/1154.lean",
+      "verbatim_snippet": "theorem erdos_1154.variants.group {a : ℝ≥0∞} (ha : a ∈ Icc 0 1) :\n    ∃ R : AddSubgroup ℝ, dimH (R : Set ℝ) = a :="
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Erdos477Squares.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/477.lean",
+      "verbatim_snippet": "theorem erdos_477.variants.S_sq :\n    letI f := X ^ 2\n    ∀ A : Set ℤ, ∃ z, ¬ ∃! a ∈ A ×ˢ (Set.range f.eval), z = a.1 + a.2 :="
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Spec.lean",
+      "upstream_file": "FormalConjectures/Wikipedia/ErdosUlamProblem.lean",
+      "verbatim_snippet": "def PairwiseRationalDistances (S : Set (EuclideanSpace ℝ (Fin 2))) : Prop :=\n  ∀ p ∈ S, ∀ q ∈ S, ∃ r : ℚ, dist p q = (r : ℝ)"
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/ErdosUlamSolymosi.lean",
+      "upstream_file": "FormalConjectures/Wikipedia/ErdosUlamProblem.lean",
+      "verbatim_snippet": "theorem erdos_ulam_problem.variants.solymosi_de_zeeuw\n    (S : Set (EuclideanSpace ℝ (Fin 2))) (hd : PairwiseRationalDistances S)\n    (hstructure :\n      (∃ a b : EuclideanSpace ℝ (Fin 2), a ≠ b ∧\n        {x ∈ S | ∃ t : ℝ, x = a + t • (b - a)}.Infinite) ∨\n      (∃ (c : EuclideanSpace ℝ (Fin 2)) (ρ : ℝ), 0 < ρ ∧\n        {x ∈ S | dist x c = ρ}.Infinite)) :\n    (∃ a b : EuclideanSpace ℝ (Fin 2), a ≠ b ∧\n        {x ∈ S | ¬ ∃ t : ℝ, x = a + t • (b - a)}.Finite) ∨\n    (∃ (c : EuclideanSpace ℝ (Fin 2)) (ρ : ℝ), 0 < ρ ∧\n        {x ∈ S | dist x c ≠ ρ}.Finite) :="
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Spec.lean",
+      "upstream_file": "FormalConjectures/GreensOpenProblems/87.lean",
+      "verbatim_snippet": "def FixesSet {n : ℕ} (σ : Equiv.Perm (Fin n)) (k : ℕ) : Prop :=\n  ∃ s : Finset (Fin n), s.card = k ∧ s.image σ = s"
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Spec.lean",
+      "upstream_file": "FormalConjectures/GreensOpenProblems/87.lean",
+      "verbatim_snippet": "noncomputable def i (n k : ℕ) : ℝ :=\n  (Nat.card {σ : Equiv.Perm (Fin n) // FixesSet σ k} : ℝ) / (Nat.card (Equiv.Perm (Fin n)) : ℝ)"
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Spec.lean",
+      "upstream_file": "FormalConjectures/GreensOpenProblems/87.lean",
+      "verbatim_snippet": "noncomputable def δ : ℝ := 1 - (1 + Real.log (Real.log 2)) / Real.log 2"
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Green87PermLimit.lean",
+      "upstream_file": "FormalConjectures/GreensOpenProblems/87.lean",
+      "verbatim_snippet": "theorem green_87.variants.exists_tendsto (k : ℕ) :\n    ∃ L : ℝ, Tendsto (fun n ↦ i n k) atTop (𝓝 L) :="
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Spec.lean",
+      "upstream_file": "FormalConjectures/Arxiv/2605.12342/Conjecture1.lean",
+      "verbatim_snippet": "noncomputable def signDiffHom (m n : ℕ) : Equiv.Perm (Fin m) × Equiv.Perm (Fin n) →* ℤˣ :=\n  (sign.comp (MonoidHom.fst _ _)) * (sign.comp (MonoidHom.snd _ _))⁻¹"
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Spec.lean",
+      "upstream_file": "FormalConjectures/Arxiv/2605.12342/Conjecture1.lean",
+      "verbatim_snippet": "noncomputable def gammaSubgroup (m n : ℕ) : Subgroup (Equiv.Perm (Fin m) × Equiv.Perm (Fin n)) :=\n  (signDiffHom m n).ker"
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/GammaSubgroup33.lean",
+      "upstream_file": "FormalConjectures/Arxiv/2605.12342/Conjecture1.lean",
+      "verbatim_snippet": "theorem conjecture_1.variants.rank_3_3 :\n    ∀ h₁ h₂ : gammaSubgroup 3 3, Subgroup.closure {h₁, h₂} ≠ ⊤ :="
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/1046.lean",
+      "verbatim_snippet": "def lemniscate (f : ℂ[X]) : Set ℂ := {z | ‖f.eval z‖ < 1}"
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/1046.lean",
+      "verbatim_snippet": "def closedLemniscate (f : ℂ[X]) : Set ℂ := {z | ‖f.eval z‖ ≤ 1}"
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Erdos1046Diameter.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/1046.lean",
+      "verbatim_snippet": "theorem erdos_1046.variants.diameter : ∀ f : ℂ[X], f.Monic →\n    IsConnected (closedLemniscate f) → 2 ≤ Metric.ediam (closedLemniscate f) :="
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/1132.lean",
+      "verbatim_snippet": "noncomputable def lagrangeBasis (n : ℕ) (x : ℕ → ℝ) (k : ℕ) (t : ℝ) : ℝ :=\n  (∏ i ∈ (Finset.range n).erase k, (t - x i)) / ∏ i ∈ (Finset.range n).erase k, (x k - x i)"
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/1132.lean",
+      "verbatim_snippet": "noncomputable def lebesgueFunction (n : ℕ) (x : ℕ → ℝ) (t : ℝ) : ℝ :=\n  ∑ k ∈ Finset.range n, |lagrangeBasis n x k t|"
+    },
+    {
+      "local_file": "FcSolvedAlgAnal/Erdos1132Lebesgue.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/1132.lean",
+      "verbatim_snippet": "theorem erdos_1132.variants.erdos_max :\n    ∃ C : ℝ, ∀ n : ℕ, 1 ≤ n → ∀ x : ℕ → ℝ, (∀ k < n, x k ∈ Set.Icc (-1 : ℝ) 1) →\n      Set.InjOn x (Set.Iio n) →\n        ∃ t ∈ Set.Icc (-1 : ℝ) 1, 2 / Real.pi * Real.log n - C < lebesgueFunction n x t :="
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "repo": "chrispbsmolen/ramsey-witnesses",
+  "commit": "d21fda594c86657be87e425f19f5fc02a27986e6",
+  "license": "MIT",
+  "specialization": "Sunstead pins Christopher Smolen's `ramsey-witnesses` (MIT, verifying Radziszowski's Small Ramsey Numbers survey rev. 18) and formalizes SimpleGraph semantics, an active-filtered Tomita greedy-coloring Ramsey clique-freeness verifier, and a bitwise C4-free extremal graph verifier in pure Lean 4.36.0 across 16 witness frontier tracks.",
+  "checks": [
+    {
+      "local_file": "LICENSE",
+      "upstream_file": "LICENSE",
+      "verbatim_snippet": "MIT License\n\nCopyright (c) 2026 Christopher Smolen"
+    },
+    {
+      "local_file": "README.md",
+      "upstream_file": "README.md",
+      "upstream_anchor": "An exact checker for lower-bound witnesses of small Ramsey numbers"
+    },
+    {
+      "local_file": "ExtremalGraphs/Spec.lean",
+      "upstream_file": "table/register.csv",
+      "upstream_anchor": "p1:exoo_site/r3.10.39,\"3,10\",2,39,,40"
+    },
+    {
+      "local_file": "ExtremalGraphs/Spec.lean",
+      "upstream_file": "table/register.csv",
+      "upstream_anchor": "p1:exoo_site/r4.6.35,\"4,6\",2,35,,36"
+    },
+    {
+      "local_file": "ExtremalGraphs/Spec.lean",
+      "upstream_file": "table/register.csv",
+      "upstream_anchor": "p1:exoo_site/g55.42,\"5,5\",2,42,,43"
+    }
+  ]
+}

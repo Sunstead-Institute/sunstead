@@ -1,0 +1,226 @@
+{
+  "id": "coding-theory-bounds",
+  "title": "Binary Error-Correcting & Constant-Weight Codes: maximize code size A(n, d) and A(n, d, w)",
+  "description": "Pure Lean 4.36.0 (zero Mathlib) certified optimization of binary block codes A(n, d) and constant-weight codes A(n, d, w) across 16 classical open Brouwer/Rosin frontier parameters. `CodingBounds/Spec.lean` formally defines semantic `Fin n \u2192 Bool` Hamming weight and distance and proves end-to-end soundness of a carry-free 32-bit SWAR popcount evaluator (`popcount32`) verified inside the Lean 4 kernel (`decide +kernel`). Pinned to `williamechols/cwc-seeded-tabu-search@4f0bf18` (MIT).",
+  "tier": 2,
+  "mode": "hillclimb",
+  "repo": "https://github.com/williamechols/cwc-seeded-tabu-search",
+  "upstream": {
+    "repo": "williamechols/cwc-seeded-tabu-search",
+    "commit": "4f0bf18b094fb15c3634001ea8aed847e8353d1c",
+    "license": "MIT"
+  },
+  "score_direction": "maximize",
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 90,
+    "memory_mb": 2048
+  },
+  "frozen_paths": [
+    "CodingBounds/Spec.lean",
+    "CodingBounds/BoundCode17_8.lean",
+    "CodingBounds/BoundCode18_8.lean",
+    "CodingBounds/BoundCode19_8.lean",
+    "CodingBounds/BoundCode21_10.lean",
+    "CodingBounds/BoundCode22_10.lean",
+    "CodingBounds/BoundCode23_10.lean",
+    "CodingBounds/BoundCode24_10.lean",
+    "CodingBounds/BoundCode26_12.lean",
+    "CodingBounds/BoundCwc17_6_6.lean",
+    "CodingBounds/BoundCwc18_6_7.lean",
+    "CodingBounds/BoundCwc20_8_7.lean",
+    "CodingBounds/BoundCwc21_6_5.lean",
+    "CodingBounds/BoundCwc24_10_8.lean",
+    "CodingBounds/BoundCwc26_10_8.lean",
+    "CodingBounds/BoundCwc27_10_8.lean",
+    "CodingBounds/BoundCwc29_12_10.lean",
+    "LICENSE",
+    "README.md",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "tasks": [
+    {
+      "id": "code_17_8",
+      "title": "Maximize binary code size A(17, 8) (baseline 28)",
+      "description": "Submit a binary error-correcting code of length 17 and minimum Hamming distance 8 in `CodingBounds/Code17_8.lean` (`CodingBounds.score_code_17_8` and `CodingBounds.words_code_17_8`), seeded with a constructive greedy code of size 28 (open Brouwer frontier: 36\u201337). Frozen `CodingBounds/BoundCode17_8.lean` kernel-verifies codeword bounds (`< 2^17`), pairwise distinctness, and minimum Hamming distance `\u2265 8` via SWAR `popcount32` and `decide +kernel`, certifying `ValidBinaryCode 17 8 score_code_17_8`.",
+      "baseline_score": 28,
+      "target_files": [
+        "CodingBounds/Code17_8.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/williamechols/cwc-seeded-tabu-search/blob/4f0bf18b094fb15c3634001ea8aed847e8353d1c/README.md"
+    },
+    {
+      "id": "code_18_8",
+      "title": "Maximize binary code size A(18, 8) (baseline 48)",
+      "description": "Submit a binary error-correcting code of length 18 and minimum Hamming distance 8 in `CodingBounds/Code18_8.lean` (`CodingBounds.score_code_18_8` and `CodingBounds.words_code_18_8`), seeded with a constructive greedy code of size 48 (open Brouwer frontier: 64\u201372). Frozen `CodingBounds/BoundCode18_8.lean` kernel-verifies codeword bounds (`< 2^18`), pairwise distinctness, and minimum Hamming distance `\u2265 8` via SWAR `popcount32` and `decide +kernel`, certifying `ValidBinaryCode 18 8 score_code_18_8`.",
+      "baseline_score": 48,
+      "target_files": [
+        "CodingBounds/Code18_8.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/williamechols/cwc-seeded-tabu-search/blob/4f0bf18b094fb15c3634001ea8aed847e8353d1c/README.md"
+    },
+    {
+      "id": "code_19_8",
+      "title": "Maximize binary code size A(19, 8) (baseline 80)",
+      "description": "Submit a binary error-correcting code of length 19 and minimum Hamming distance 8 in `CodingBounds/Code19_8.lean` (`CodingBounds.score_code_19_8` and `CodingBounds.words_code_19_8`), seeded with a constructive greedy code of size 80 (open Brouwer frontier: 128\u2013142). Frozen `CodingBounds/BoundCode19_8.lean` kernel-verifies codeword bounds (`< 2^19`), pairwise distinctness, and minimum Hamming distance `\u2265 8` via SWAR `popcount32` and `decide +kernel`, certifying `ValidBinaryCode 19 8 score_code_19_8`.",
+      "baseline_score": 80,
+      "target_files": [
+        "CodingBounds/Code19_8.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/williamechols/cwc-seeded-tabu-search/blob/4f0bf18b094fb15c3634001ea8aed847e8353d1c/README.md"
+    },
+    {
+      "id": "code_21_10",
+      "title": "Maximize binary code size A(21, 10) (baseline 17)",
+      "description": "Submit a binary error-correcting code of length 21 and minimum Hamming distance 10 in `CodingBounds/Code21_10.lean` (`CodingBounds.score_code_21_10` and `CodingBounds.words_code_21_10`), seeded with a constructive greedy code of size 17 (open Brouwer frontier: 42\u201347). Frozen `CodingBounds/BoundCode21_10.lean` kernel-verifies codeword bounds (`< 2^21`), pairwise distinctness, and minimum Hamming distance `\u2265 10` via SWAR `popcount32` and `decide +kernel`, certifying `ValidBinaryCode 21 10 score_code_21_10`.",
+      "baseline_score": 17,
+      "target_files": [
+        "CodingBounds/Code21_10.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/williamechols/cwc-seeded-tabu-search/blob/4f0bf18b094fb15c3634001ea8aed847e8353d1c/README.md"
+    },
+    {
+      "id": "code_22_10",
+      "title": "Maximize binary code size A(22, 10) (baseline 23)",
+      "description": "Submit a binary error-correcting code of length 22 and minimum Hamming distance 10 in `CodingBounds/Code22_10.lean` (`CodingBounds.score_code_22_10` and `CodingBounds.words_code_22_10`), seeded with a constructive greedy code of size 23 (open Brouwer frontier: 64\u201384). Frozen `CodingBounds/BoundCode22_10.lean` kernel-verifies codeword bounds (`< 2^22`), pairwise distinctness, and minimum Hamming distance `\u2265 10` via SWAR `popcount32` and `decide +kernel`, certifying `ValidBinaryCode 22 10 score_code_22_10`.",
+      "baseline_score": 23,
+      "target_files": [
+        "CodingBounds/Code22_10.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/williamechols/cwc-seeded-tabu-search/blob/4f0bf18b094fb15c3634001ea8aed847e8353d1c/README.md"
+    },
+    {
+      "id": "code_23_10",
+      "title": "Maximize binary code size A(23, 10) (baseline 33)",
+      "description": "Submit a binary error-correcting code of length 23 and minimum Hamming distance 10 in `CodingBounds/Code23_10.lean` (`CodingBounds.score_code_23_10` and `CodingBounds.words_code_23_10`), seeded with a constructive greedy code of size 33 (open Brouwer frontier: 80\u2013151). Frozen `CodingBounds/BoundCode23_10.lean` kernel-verifies codeword bounds (`< 2^23`), pairwise distinctness, and minimum Hamming distance `\u2265 10` via SWAR `popcount32` and `decide +kernel`, certifying `ValidBinaryCode 23 10 score_code_23_10`.",
+      "baseline_score": 33,
+      "target_files": [
+        "CodingBounds/Code23_10.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/williamechols/cwc-seeded-tabu-search/blob/4f0bf18b094fb15c3634001ea8aed847e8353d1c/README.md"
+    },
+    {
+      "id": "code_24_10",
+      "title": "Maximize binary code size A(24, 10) (baseline 40)",
+      "description": "Submit a binary error-correcting code of length 24 and minimum Hamming distance 10 in `CodingBounds/Code24_10.lean` (`CodingBounds.score_code_24_10` and `CodingBounds.words_code_24_10`), seeded with a constructive greedy code of size 40 (open Brouwer frontier: 136\u2013268). Frozen `CodingBounds/BoundCode24_10.lean` kernel-verifies codeword bounds (`< 2^24`), pairwise distinctness, and minimum Hamming distance `\u2265 10` via SWAR `popcount32` and `decide +kernel`, certifying `ValidBinaryCode 24 10 score_code_24_10`.",
+      "baseline_score": 40,
+      "target_files": [
+        "CodingBounds/Code24_10.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/williamechols/cwc-seeded-tabu-search/blob/4f0bf18b094fb15c3634001ea8aed847e8353d1c/README.md"
+    },
+    {
+      "id": "code_26_12",
+      "title": "Maximize binary code size A(26, 12) (baseline 24)",
+      "description": "Submit a binary error-correcting code of length 26 and minimum Hamming distance 12 in `CodingBounds/Code26_12.lean` (`CodingBounds.score_code_26_12` and `CodingBounds.words_code_26_12`), seeded with a constructive greedy code of size 24 (open Brouwer frontier: 44\u201362). Frozen `CodingBounds/BoundCode26_12.lean` kernel-verifies codeword bounds (`< 2^26`), pairwise distinctness, and minimum Hamming distance `\u2265 12` via SWAR `popcount32` and `decide +kernel`, certifying `ValidBinaryCode 26 12 score_code_26_12`.",
+      "baseline_score": 24,
+      "target_files": [
+        "CodingBounds/Code26_12.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/williamechols/cwc-seeded-tabu-search/blob/4f0bf18b094fb15c3634001ea8aed847e8353d1c/README.md"
+    },
+    {
+      "id": "cwc_17_6_6",
+      "title": "Maximize constant-weight code size A(17, 6, 6) (baseline 32)",
+      "description": "Submit a binary constant-weight code of length 17, minimum Hamming distance 6, and constant weight 6 in `CodingBounds/Cwc17_6_6.lean` (`CodingBounds.score_cwc_17_6_6` and `CodingBounds.words_cwc_17_6_6`), seeded with a constructive greedy code of size 32 (open frontier: 44\u201361). Frozen `CodingBounds/BoundCwc17_6_6.lean` kernel-verifies codeword bounds (`< 2^17`), exact Hamming weight `6`, pairwise distinctness, and minimum Hamming distance `\u2265 6` via SWAR `popcount32` and `decide +kernel`, certifying `ValidConstantWeightCode 17 6 6 score_cwc_17_6_6`.",
+      "baseline_score": 32,
+      "target_files": [
+        "CodingBounds/Cwc17_6_6.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/williamechols/cwc-seeded-tabu-search/blob/4f0bf18b094fb15c3634001ea8aed847e8353d1c/README.md"
+    },
+    {
+      "id": "cwc_18_6_7",
+      "title": "Maximize constant-weight code size A(18, 6, 7) (baseline 56)",
+      "description": "Submit a binary constant-weight code of length 18, minimum Hamming distance 6, and constant weight 7 in `CodingBounds/Cwc18_6_7.lean` (`CodingBounds.score_cwc_18_6_7` and `CodingBounds.words_cwc_18_6_7`), seeded with a constructive greedy code of size 56 (open frontier: 97\u2013137). Frozen `CodingBounds/BoundCwc18_6_7.lean` kernel-verifies codeword bounds (`< 2^18`), exact Hamming weight `7`, pairwise distinctness, and minimum Hamming distance `\u2265 6` via SWAR `popcount32` and `decide +kernel`, certifying `ValidConstantWeightCode 18 6 7 score_cwc_18_6_7`.",
+      "baseline_score": 56,
+      "target_files": [
+        "CodingBounds/Cwc18_6_7.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/williamechols/cwc-seeded-tabu-search/blob/4f0bf18b094fb15c3634001ea8aed847e8353d1c/README.md"
+    },
+    {
+      "id": "cwc_20_8_7",
+      "title": "Maximize constant-weight code size A(20, 8, 7) (baseline 24)",
+      "description": "Submit a binary constant-weight code of length 20, minimum Hamming distance 8, and constant weight 7 in `CodingBounds/Cwc20_8_7.lean` (`CodingBounds.score_cwc_20_8_7` and `CodingBounds.words_cwc_20_8_7`), seeded with a constructive greedy code of size 24 (open frontier: 34\u201341). Frozen `CodingBounds/BoundCwc20_8_7.lean` kernel-verifies codeword bounds (`< 2^20`), exact Hamming weight `7`, pairwise distinctness, and minimum Hamming distance `\u2265 8` via SWAR `popcount32` and `decide +kernel`, certifying `ValidConstantWeightCode 20 8 7 score_cwc_20_8_7`.",
+      "baseline_score": 24,
+      "target_files": [
+        "CodingBounds/Cwc20_8_7.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/williamechols/cwc-seeded-tabu-search/blob/4f0bf18b094fb15c3634001ea8aed847e8353d1c/README.md"
+    },
+    {
+      "id": "cwc_21_6_5",
+      "title": "Maximize constant-weight code size A(21, 6, 5) (baseline 68)",
+      "description": "Submit a binary constant-weight code of length 21, minimum Hamming distance 6, and constant weight 5 in `CodingBounds/Cwc21_6_5.lean` (`CodingBounds.score_cwc_21_6_5` and `CodingBounds.words_cwc_21_6_5`), seeded with a constructive greedy code of size 68 (open frontier: 109\u2013113). Frozen `CodingBounds/BoundCwc21_6_5.lean` kernel-verifies codeword bounds (`< 2^21`), exact Hamming weight `5`, pairwise distinctness, and minimum Hamming distance `\u2265 6` via SWAR `popcount32` and `decide +kernel`, certifying `ValidConstantWeightCode 21 6 5 score_cwc_21_6_5`.",
+      "baseline_score": 68,
+      "target_files": [
+        "CodingBounds/Cwc21_6_5.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/williamechols/cwc-seeded-tabu-search/blob/4f0bf18b094fb15c3634001ea8aed847e8353d1c/codes/21_6_5_109.txt"
+    },
+    {
+      "id": "cwc_24_10_8",
+      "title": "Maximize constant-weight code size A(24, 10, 8) (baseline 24)",
+      "description": "Submit a binary constant-weight code of length 24, minimum Hamming distance 10, and constant weight 8 in `CodingBounds/Cwc24_10_8.lean` (`CodingBounds.score_cwc_24_10_8` and `CodingBounds.words_cwc_24_10_8`), seeded with a constructive greedy code of size 24 (open frontier: 39\u201348). Frozen `CodingBounds/BoundCwc24_10_8.lean` kernel-verifies codeword bounds (`< 2^24`), exact Hamming weight `8`, pairwise distinctness, and minimum Hamming distance `\u2265 10` via SWAR `popcount32` and `decide +kernel`, certifying `ValidConstantWeightCode 24 10 8 score_cwc_24_10_8`.",
+      "baseline_score": 24,
+      "target_files": [
+        "CodingBounds/Cwc24_10_8.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/williamechols/cwc-seeded-tabu-search/blob/4f0bf18b094fb15c3634001ea8aed847e8353d1c/codes/24_10_8_39.txt"
+    },
+    {
+      "id": "cwc_26_10_8",
+      "title": "Maximize constant-weight code size A(26, 10, 8) (baseline 32)",
+      "description": "Submit a binary constant-weight code of length 26, minimum Hamming distance 10, and constant weight 8 in `CodingBounds/Cwc26_10_8.lean` (`CodingBounds.score_cwc_26_10_8` and `CodingBounds.words_cwc_26_10_8`), seeded with a constructive greedy code of size 32 (open frontier: 68\u201395). Frozen `CodingBounds/BoundCwc26_10_8.lean` kernel-verifies codeword bounds (`< 2^26`), exact Hamming weight `8`, pairwise distinctness, and minimum Hamming distance `\u2265 10` via SWAR `popcount32` and `decide +kernel`, certifying `ValidConstantWeightCode 26 10 8 score_cwc_26_10_8`.",
+      "baseline_score": 32,
+      "target_files": [
+        "CodingBounds/Cwc26_10_8.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/williamechols/cwc-seeded-tabu-search/blob/4f0bf18b094fb15c3634001ea8aed847e8353d1c/codes/26_10_8_68.txt"
+    },
+    {
+      "id": "cwc_27_10_8",
+      "title": "Maximize constant-weight code size A(27, 10, 8) (baseline 37)",
+      "description": "Submit a binary constant-weight code of length 27, minimum Hamming distance 10, and constant weight 8 in `CodingBounds/Cwc27_10_8.lean` (`CodingBounds.score_cwc_27_10_8` and `CodingBounds.words_cwc_27_10_8`), seeded with a constructive greedy code of size 37 (open frontier: 76\u2013115). Frozen `CodingBounds/BoundCwc27_10_8.lean` kernel-verifies codeword bounds (`< 2^27`), exact Hamming weight `8`, pairwise distinctness, and minimum Hamming distance `\u2265 10` via SWAR `popcount32` and `decide +kernel`, certifying `ValidConstantWeightCode 27 10 8 score_cwc_27_10_8`.",
+      "baseline_score": 37,
+      "target_files": [
+        "CodingBounds/Cwc27_10_8.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/williamechols/cwc-seeded-tabu-search/blob/4f0bf18b094fb15c3634001ea8aed847e8353d1c/codes/27_10_8_76.txt"
+    },
+    {
+      "id": "cwc_29_12_10",
+      "title": "Maximize constant-weight code size A(29, 12, 10) (baseline 28)",
+      "description": "Submit a binary constant-weight code of length 29, minimum Hamming distance 12, and constant weight 10 in `CodingBounds/Cwc29_12_10.lean` (`CodingBounds.score_cwc_29_12_10` and `CodingBounds.words_cwc_29_12_10`), seeded with a constructive greedy code of size 28 (open frontier: 70\u2013131). Frozen `CodingBounds/BoundCwc29_12_10.lean` kernel-verifies codeword bounds (`< 2^29`), exact Hamming weight `10`, pairwise distinctness, and minimum Hamming distance `\u2265 12` via SWAR `popcount32` and `decide +kernel`, certifying `ValidConstantWeightCode 29 12 10 score_cwc_29_12_10`.",
+      "baseline_score": 28,
+      "target_files": [
+        "CodingBounds/Cwc29_12_10.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/williamechols/cwc-seeded-tabu-search/blob/4f0bf18b094fb15c3634001ea8aed847e8353d1c/codes/29_12_10_70.txt"
+    }
+  ]
+}

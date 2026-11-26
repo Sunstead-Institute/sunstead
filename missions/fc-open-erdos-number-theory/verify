@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+"""Frozen verifier for `fc-open-erdos-number-theory`.
+
+Uses the shared trusted harness baked into `/opt/sunstead/sunstead_sandbox.py`
+with Lean 4.36.0 + read-only Mathlib v4.36.0.
+"""
+import sys
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify  # noqa: E402
+
+LIB_ROOT = 'FcOpenErdosNT'
+FROZEN_FILES = [
+    "FcOpenErdosNT/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain"
+]
+STATEMENT_PREAMBLE = "open scoped Nat"
+TASKS = {
+    "erdos_52_sum_product": {
+        "module": "FcOpenErdosNT.Erdos52SumProduct",
+        "theorem": "FcOpenErdosNT.Erdos52SumProduct.erdos_52",
+        "statement": "\ndef erdos_52_sum_product : Prop :=\n  open scoped Pointwise in\n  ∀ (ε : ℝ), 0 < ε → ε < 1 → ∃ (C : ℝ), 0 < C ∧ ∀ (A : Finset ℤ),\n      (max (A + A).card (A * A).card : ℝ) ≥ C * (A.card : ℝ) ^ (2 - ε)\n"
+    },
+    "erdos_324_polynomial_sum_inj": {
+        "module": "FcOpenErdosNT.Erdos324PolySum",
+        "theorem": "FcOpenErdosNT.Erdos324PolySum.erdos_324",
+        "statement": "\ndef erdos_324_polynomial_sum_inj : Prop :=\n  open scoped Polynomial in\n  ∃ f : ℤ[X], {(a, b) : ℕ × ℕ | a < b}.InjOn fun (a, b) => f.eval (a : ℤ) + f.eval (b : ℤ)\n"
+    },
+    "erdos_695_prime_chain_growth": {
+        "module": "FcOpenErdosNT.Erdos695PrimeChain",
+        "theorem": "FcOpenErdosNT.Erdos695PrimeChain.erdos_695",
+        "statement": "\ndef erdos_695_prime_chain_growth : Prop :=\n  open Filter Finset Real in\n  ∀ {q : ℕ → ℕ},\n        StrictMono q →\n        (∀ i, (q i).Prime) →\n        (∀ i, q (i + 1) % q i = 1) →\n        Tendsto (fun k => (q k : ℝ) ^ (1 / k : ℝ)) atTop atTop\n"
+    },
+    "erdos_1002_diophantine_dist": {
+        "module": "FcOpenErdosNT.Erdos1002FractDist",
+        "theorem": "FcOpenErdosNT.Erdos1002FractDist.erdos_1002",
+        "statement": "\ndef erdos_1002_diophantine_dist : Prop :=\n  open Real Set Filter Finset MeasureTheory Topology in\n  ∃ g : ℝ → ℝ, Monotone g ∧\n      Tendsto g atBot (𝓝 0) ∧\n      Tendsto g atTop (𝓝 1) ∧\n      letI f :=  fun (α : ℝ) (n : ℕ) ↦\n        (1 / log n) * ∑ k ∈ Icc (1 : ℕ) n, (1 / 2 - Int.fract (α * k));\n  ∀ c : ℝ, Tendsto (fun (n : ℕ) ↦ (volume { α | α ∈ Ioo (0 : ℝ) 1 ∧ f α n ≤ c }).toReal)\n        atTop (𝓝 (g c))\n"
+    },
+    "erdos_288_unit_fraction_intervals": {
+        "module": "FcOpenErdosNT.Erdos288Harmonic",
+        "theorem": "FcOpenErdosNT.Erdos288Harmonic.erdos_288.variants.exists_k_gt_2",
+        "statement": "\ndef erdos_288_unit_fraction_intervals : Prop :=\n  ∃ k > 2, Set.Finite { I : Fin k → ℕ+ × ℕ+ |\n        ∀ j, (I j).1 ≤ (I j).2 ∧\n          ∃ n : ℕ+, (∑ j : Fin k, ∑ nⱼ ∈ Set.Icc (I j).1 (I j).2, (nⱼ⁻¹ : ℚ)) = n }\n"
+    },
+    "erdos_931_consecutive_prime_factors": {
+        "module": "FcOpenErdosNT.Erdos931PrimeFac",
+        "theorem": "FcOpenErdosNT.Erdos931PrimeFac.erdos_931.variants.exists_prime",
+        "statement": "\ndef erdos_931_consecutive_prime_factors : Prop :=\n  ∀ (k₁ k₂ n₁ n₂ : ℕ) (h₁ : k₂ ≤ k₁) (h₂ : 3 ≤ k₂)\n      (h₃ : n₁ + k₁ ≤ n₂) (h₄ : (∏ i ∈ Finset.Icc 1 k₁, (n₁ + i)).primeFactors =\n        (∏ j ∈ Finset.Icc 1 k₂, (n₂ + j)).primeFactors),\n    ∃ (p : ℕ), p.Prime ∧ n₁ ≤ p ∧ p ≤ n₂\n"
+    },
+    "erdos_470_odd_weird_exists": {
+        "module": "FcOpenErdosNT.Erdos470OddWeird",
+        "theorem": "FcOpenErdosNT.Erdos470OddWeird.erdos_470.parts.i",
+        "statement": "\ndef erdos_470_odd_weird_exists : Prop :=\n  ∃ n : ℕ, n.Weird ∧ Odd n\n"
+    },
+    "erdos_1003_consecutive_totient": {
+        "module": "FcOpenErdosNT.Erdos1003Totient",
+        "theorem": "FcOpenErdosNT.Erdos1003Totient.erdos_1003",
+        "statement": "\ndef erdos_1003_consecutive_totient : Prop :=\n  open scoped Nat in\n  open Filter in\n  Set.Infinite {n | φ n = φ (n + 1)}\n"
+    },
+    "erdos_828_totient_divides_shift": {
+        "module": "FcOpenErdosNT.Erdos828TotientDiv",
+        "theorem": "FcOpenErdosNT.Erdos828TotientDiv.erdos_828",
+        "statement": "\ndef erdos_828_totient_divides_shift : Prop :=\n  open scoped Nat in\n  ∀ a : ℤ, Set.Infinite {n : ℕ | ↑(φ n) ∣ n + a}\n"
+    },
+    "erdos_376_central_binom_coprime_105": {
+        "module": "FcOpenErdosNT.Erdos376CentralBinom",
+        "theorem": "FcOpenErdosNT.Erdos376CentralBinom.erdos_376",
+        "statement": "\ndef erdos_376_central_binom_coprime_105 : Prop :=\n  { (n : ℕ) | n.centralBinom.Coprime 105 }.Infinite\n"
+    },
+    "erdos_412_iterated_sigma_merge": {
+        "module": "FcOpenErdosNT.Erdos412SigmaOrbit",
+        "theorem": "FcOpenErdosNT.Erdos412SigmaOrbit.erdos_412",
+        "statement": "\ndef erdos_412_iterated_sigma_merge : Prop :=\n  open ArithmeticFunction.sigma in\n  ∀ᵉ (m ≥ 2) (n ≥ 2), ∃ i j, (σ 1)^[i] m = (σ 1)^[j] n\n"
+    },
+    "erdos_251_prime_series_irrational": {
+        "module": "FcOpenErdosNT.Erdos251PrimeSeries",
+        "theorem": "FcOpenErdosNT.Erdos251PrimeSeries.erdos_251",
+        "statement": "\ndef erdos_251_prime_series_irrational : Prop :=\n  Irrational (∑' n : ℕ, (Nat.nth Nat.Prime n) / (2 ^ n))\n"
+    },
+    "erdos_406_pow2_base3_digits": {
+        "module": "FcOpenErdosNT.Erdos406Base3",
+        "theorem": "FcOpenErdosNT.Erdos406Base3.erdos_406",
+        "statement": "\ndef erdos_406_pow2_base3_digits : Prop :=\n  { n | n.isPowerOfTwo ∧ Nat.digits 3 n ⊆ [0, 1] }.Finite\n"
+    },
+    "erdos_396_desc_factorial_divides_binom": {
+        "module": "FcOpenErdosNT.Erdos396DescFac",
+        "theorem": "FcOpenErdosNT.Erdos396DescFac.erdos_396",
+        "statement": "\ndef erdos_396_desc_factorial_divides_binom : Prop :=\n  open Nat in\n  ∀ k : ℕ, ∃ n : ℕ, descFactorial n (k + 1) ∣ centralBinom n\n"
+    },
+    "erdos_826_divisor_bound_shift": {
+        "module": "FcOpenErdosNT.Erdos826Divisors",
+        "theorem": "FcOpenErdosNT.Erdos826Divisors.erdos_826",
+        "statement": "\ndef erdos_826_divisor_bound_shift : Prop :=\n  open scoped ArithmeticFunction.sigma in\n  ∃ C > (0 : ℝ), { n | ∀ k ≥ 1, σ 0 (n + k) ≤ C * k }.Infinite\n"
+    },
+    "erdos_11_squarefree_plus_pow2": {
+        "module": "FcOpenErdosNT.Erdos11SquarefreePow2",
+        "theorem": "FcOpenErdosNT.Erdos11SquarefreePow2.erdos_11",
+        "statement": "\ndef erdos_11_squarefree_plus_pow2 : Prop :=\n  open Filter in\n  ∀ᶠ n : ℕ in atTop, Odd n → ∃ k l : ℕ, Squarefree k ∧ n = k + 2 ^ l\n"
+    },
+    "erdos_676_square_prime_rep": {
+        "module": "FcOpenErdosNT.Erdos676PrimeSquare",
+        "theorem": "FcOpenErdosNT.Erdos676PrimeSquare.erdos_676",
+        "statement": "\ndef erdos_676_square_prime_rep : Prop :=\n  open Filter in\n  ∀ᶠ n in atTop,\n      ∃ a p b : ℕ, p.Prime ∧ 1 ≤ a ∧ b < p ∧ n = a * p ^ 2 + b\n"
+    },
+    "erdos_849_pascal_multiplicity": {
+        "module": "FcOpenErdosNT.Erdos849PascalMult",
+        "theorem": "FcOpenErdosNT.Erdos849PascalMult.erdos_849",
+        "statement": "\ndef erdos_849_pascal_multiplicity : Prop :=\n  open Nat in\n  ∀ t ≥ 1, ∃ a : ℕ,\n        {n : ℕ | ∃ k ≥ 1, 2 * k ≤ n ∧ choose n k = a}.ncard = t\n"
+    },
+    "erdos_410_iterated_sigma_growth": {
+        "module": "FcOpenErdosNT.Erdos410SigmaGrowth",
+        "theorem": "FcOpenErdosNT.Erdos410SigmaGrowth.erdos_410",
+        "statement": "\ndef erdos_410_iterated_sigma_growth : Prop :=\n  open ArithmeticFunction Filter in\n  ∀ n > 1,\n      Tendsto (fun k : ℕ ↦ ((sigma 1)^[k] n : ℝ) ^ (1 / (k : ℝ))) atTop atTop\n"
+    },
+    "erdos_913_distinct_prime_exponents": {
+        "module": "FcOpenErdosNT.Erdos913Exponents",
+        "theorem": "FcOpenErdosNT.Erdos913Exponents.erdos_913",
+        "statement": "\ndef erdos_913_distinct_prime_exponents : Prop :=\n  { n | Set.InjOn (n * (n + 1)).factorization (n * (n + 1)).primeFactors }.Infinite\n"
+    },
+    "erdos_1094_binom_min_prime_fac": {
+        "module": "FcOpenErdosNT.Erdos1094MinFac",
+        "theorem": "FcOpenErdosNT.Erdos1094MinFac.erdos_1094",
+        "statement": "\ndef erdos_1094_binom_min_prime_fac : Prop :=\n  open scoped Nat in\n  {(n, k) : ℕ × ℕ | 0 < k ∧ 2 * k ≤ n ∧ (n.choose k).minFac > max (n / k) k}.Finite\n"
+    },
+    "erdos_389_consecutive_product_div": {
+        "module": "FcOpenErdosNT.Erdos389ConsecProd",
+        "theorem": "FcOpenErdosNT.Erdos389ConsecProd.erdos_389",
+        "statement": "\ndef erdos_389_consecutive_product_div : Prop :=\n  ∀ n ≥ 1, ∃ k ≥ 1, ∏ i ∈ Finset.range k, (n + i) ∣ ∏ i ∈ Finset.range k, (n + k + i)\n"
+    },
+    "erdos_727_shifted_factorial_square": {
+        "module": "FcOpenErdosNT.Erdos727Factorial",
+        "theorem": "FcOpenErdosNT.Erdos727Factorial.erdos_727",
+        "statement": "\ndef erdos_727_shifted_factorial_square : Prop :=\n  open scoped Nat in\n  ∀ k ≥ 2,\n      Set.Infinite {n : ℕ | (Nat.factorial (n + k)) ^ 2 ∣ Nat.factorial (2 * n)}\n"
+    },
+    "erdos_891_primorial_interval_omega": {
+        "module": "FcOpenErdosNT.Erdos891Primorial",
+        "theorem": "FcOpenErdosNT.Erdos891Primorial.erdos_891",
+        "statement": "\ndef erdos_891_primorial_interval_omega : Prop :=\n  open Nat Filter Finset in\n  open scoped ArithmeticFunction.omega in\n  ∀ k ≥ 2, ∀ᶠ n in atTop,\n      ∃ m ∈ Ico n (n + ∏ i ∈ range k, i.nth Nat.Prime), k < ω m\n"
+    },
+    "erdos_386_binom_consecutive_primes": {
+        "module": "FcOpenErdosNT.Erdos386ConsecPrimes",
+        "theorem": "FcOpenErdosNT.Erdos386ConsecPrimes.erdos_386",
+        "statement": "\ndef erdos_386_binom_consecutive_primes : Prop :=\n  open Nat in\n  ∃ᶠ n in .atTop, ∃ k ≥ 2,\n        k ≤ n - 2 ∧ ∃ p q : ℕ, n.choose k = ∏ i ∈ .Ico p q, nth Nat.Prime i\n"
+    }
+}
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>")
+    lean_verify(
+        sys.argv[1],
+        lib_root=LIB_ROOT,
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        uses_mathlib=True,
+        statement_preamble=STATEMENT_PREAMBLE,
+        timeout_sec=230,
+    )

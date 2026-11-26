@@ -597,7 +597,7 @@ test("every non-demo hill-climb seed mission carries a sourced best_known at or 
       checked++;
     }
   }
-  assert.equal(checked, 37);
+  assert.equal(checked, 201);
 });
 
 test("demo missions award 0 points in both hillclimb and dag modes", () => {

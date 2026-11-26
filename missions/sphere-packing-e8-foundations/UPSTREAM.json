@@ -1,0 +1,25 @@
+{
+  "mode": "repo-snapshot",
+  "repo": "thefundamentaltheor3m/Sphere-Packing-Lean",
+  "commit": "072d555d14b4265f3c996ad195925dc00f47f563",
+  "license": "Apache-2.0",
+  "checks": [
+    {
+      "local_file": "lean-toolchain",
+      "upstream_file": "lean-toolchain",
+      "exact_sha256": "9387b82b68652509fde6b2b4c61210a71fcc4b68b65d02f025414e000d47b567"
+    },
+    {
+      "local_file": "SpherePacking/Basic/PeriodicPacking.lean",
+      "upstream_file": "SpherePacking/Basic/PeriodicPacking.lean",
+      "exact_sha256": "5471470811cb9b64333c76ac6e952173565f4f01bfa925d643765d5427d6f96d",
+      "upstream_anchor": "theorem periodic_constant_eq_constant (hd : 0 < d) :"
+    },
+    {
+      "local_file": "SpherePacking/MainTheorem.lean",
+      "upstream_file": "SpherePacking/MainTheorem.lean",
+      "exact_sha256": "29bd6863578e9046fe3b67198cb933b6d10be71bef7ca845c491b3d48d5e65c0",
+      "upstream_anchor": "theorem SpherePacking.MainTheorem : SpherePackingConstant 8 = E8Packing.density :="
+    }
+  ]
+}

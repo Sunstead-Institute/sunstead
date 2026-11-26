@@ -63,8 +63,33 @@ COPY crypto-sbox-circuits /tmp/prebuild-missions/crypto-sbox-circuits
 COPY crypto-linear-xor-opt /tmp/prebuild-missions/crypto-linear-xor-opt
 COPY sorting-networks-opt /tmp/prebuild-missions/sorting-networks-opt
 COPY sorting-networks-depth-opt /tmp/prebuild-missions/sorting-networks-depth-opt
+COPY flt-standalone-foundations /tmp/prebuild-missions/flt-standalone-foundations
+COPY fate-x-ideal-theory /tmp/prebuild-missions/fate-x-ideal-theory
+COPY fate-x-dimension-and-geometry /tmp/prebuild-missions/fate-x-dimension-and-geometry
+COPY fate-x-fields-rings-groups /tmp/prebuild-missions/fate-x-fields-rings-groups
+COPY fate-h-fields-and-groups /tmp/prebuild-missions/fate-h-fields-and-groups
+COPY verina-algorithms-pure-lean /tmp/prebuild-missions/verina-algorithms-pure-lean
+COPY fc-solved-number-theory /tmp/prebuild-missions/fc-solved-number-theory
+COPY fc-solved-combinatorics /tmp/prebuild-missions/fc-solved-combinatorics
+COPY fc-solved-algebra-analysis /tmp/prebuild-missions/fc-solved-algebra-analysis
+COPY fc-open-erdos-number-theory /tmp/prebuild-missions/fc-open-erdos-number-theory
+COPY fc-open-erdos-combinatorics /tmp/prebuild-missions/fc-open-erdos-combinatorics
+COPY fc-open-oeis-classics /tmp/prebuild-missions/fc-open-oeis-classics
+COPY coding-theory-bounds /tmp/prebuild-missions/coding-theory-bounds
+COPY extremal-graph-bounds /tmp/prebuild-missions/extremal-graph-bounds
+COPY combinatorial-additive-opt /tmp/prebuild-missions/combinatorial-additive-opt
+COPY combinatorial-designs-opt /tmp/prebuild-missions/combinatorial-designs-opt
+COPY selection-networks-opt /tmp/prebuild-missions/selection-networks-opt
+COPY matrix-rank-f2-extended /tmp/prebuild-missions/matrix-rank-f2-extended
+COPY crypto-addition-chains /tmp/prebuild-missions/crypto-addition-chains
+COPY crypto-zk-addition-chains /tmp/prebuild-missions/crypto-zk-addition-chains
+COPY crypto-lwc-sboxes /tmp/prebuild-missions/crypto-lwc-sboxes
+COPY crypto-std-sboxes /tmp/prebuild-missions/crypto-std-sboxes
+COPY crypto-lwc-linear-xor /tmp/prebuild-missions/crypto-lwc-linear-xor
+COPY sphere-packing-e8-foundations /tmp/prebuild-snapshots/sphere-packing-e8-foundations
 RUN python3 /opt/sunstead/prebuild_cache.py /tmp/prebuild-missions/* \
-    && rm -rf /tmp/prebuild-missions \
+    && python3 /opt/sunstead/prebuild_snapshot.py /tmp/prebuild-snapshots/* \
+    && rm -rf /tmp/prebuild-missions /tmp/prebuild-snapshots \
     && chmod -R a-w,a+rX /opt/sunstead
 
 WORKDIR /work

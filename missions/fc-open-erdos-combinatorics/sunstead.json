@@ -1,0 +1,289 @@
+{
+  "id": "fc-open-erdos-combinatorics",
+  "title": "Formal Conjectures (Open Research): Erdős, Green & Combinatorial Conjectures",
+  "description": "Twenty-five genuinely open conjectures in combinatorics, graph theory, additive combinatorics, and discrete geometry (two-sided prove-or-refute targets via POST .../submit or POST .../refute) extracted verbatim from google-deepmind/formal-conjectures@5bd8bfb9 (Apache-2.0), including 7 FC100OpenSet2 benchmarks (Erdős–Ulam #212, Zarankiewicz K_{r,r} #714, even-cycle Turán #572, Reed's ω-Δ-χ conjecture, Beck–Fiala, 1/3–2/3 poset conjecture, Babai–Seress Cayley diameter) plus Ringel, Kotzig, Gyárfás–Sumner, Barker sequences, Weighing Matrices, Manickam–Miklós–Singhi, Hindman's sumset question (#1199), and 8 Ben Green open problems.",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/google-deepmind/formal-conjectures",
+  "upstream": {
+    "repo": "google-deepmind/formal-conjectures",
+    "commit": "5bd8bfb9def462c19a87d2d275af3db3341dc727",
+    "license": "Apache-2.0"
+  },
+  "frozen_paths": [
+    "FcOpenErdosComb/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 240,
+    "memory_mb": 6144
+  },
+  "decomposition": {
+    "enabled": true,
+    "require_allowlist": true,
+    "allow_direct_bypass": true,
+    "max_depth": 2
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "erdos_212_dense_rational_dist",
+      "title": "Erdős #212 (Erdős–Ulam): does a dense planar set with all rational distances exist?",
+      "description": "Verbatim statement `erdos_212` from `FormalConjectures/ErdosProblems/212.lean#L35-L36` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosComb/Erdos212Ulam.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/212.lean#L35-L36"
+    },
+    {
+      "id": "erdos_714_krr_extremal_lb",
+      "title": "Erdős #714: Zarankiewicz lower bound ex(n, K_{r,r}) ≫ n^{2 - 1/r}",
+      "description": "Verbatim statement `erdos_714` from `FormalConjectures/ErdosProblems/714.lean#L43-L47` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosComb/Erdos714Krr.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/714.lean#L43-L47"
+    },
+    {
+      "id": "erdos_572_even_cycle_extremal",
+      "title": "Erdős #572: even-cycle extremal lower bound ex(n, C_{2k}) ≫ n^{1 + 1/k}",
+      "description": "Verbatim statement `erdos_572` from `FormalConjectures/ErdosProblems/572.lean#L46-L50` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosComb/Erdos572EvenCycle.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/572.lean#L46-L50"
+    },
+    {
+      "id": "reed_omega_delta_chi",
+      "title": "Reed's ω–Δ–χ conjecture: 2χ(G) ≤ ω(G) + Δ(G) + 2 for finite simple graphs",
+      "description": "Verbatim statement `reed_omega_delta_chi_conjecture_for_finite_graphs` from `FormalConjectures/Paper/ReedOmegaDeltaChi.lean#L55-L61` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosComb/ReedOmegaDeltaChi.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Paper/ReedOmegaDeltaChi.lean#L55-L61"
+    },
+    {
+      "id": "beck_fiala_conjecture",
+      "title": "Beck–Fiala conjecture: discrepancy O(√t) for degree-t set systems",
+      "description": "Verbatim statement `beck_fiala_conjecture` from `FormalConjectures/Wikipedia/BeckFialaConjecture.lean#L88-L93` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosComb/BeckFiala.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/BeckFialaConjecture.lean#L88-L93"
+    },
+    {
+      "id": "conjecture_1_3_to_2_3",
+      "title": "1/3–2/3 Conjecture: every non-total finite poset has a balanced comparison pair",
+      "description": "Verbatim statement `conjecture_1_3_to_2_3` from `FormalConjectures/Wikipedia/conjecture_1_3_to_2_3.lean#L39-L44` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosComb/ConjectureOneThirdTwoThirds.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/conjecture_1_3_to_2_3.lean#L39-L44"
+    },
+    {
+      "id": "babai_seress_diameter",
+      "title": "Babai–Seress conjecture: polylogarithmic Cayley diameter of finite simple groups",
+      "description": "Verbatim statement `babai_seress_conjecture` from `FormalConjectures/Wikipedia/DiameterSimpleFiniteGroups.lean#L168-L173` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosComb/BabaiSeress.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/DiameterSimpleFiniteGroups.lean#L168-L173"
+    },
+    {
+      "id": "green_61_squares_sumset_cover",
+      "title": "Ben Green #61: additive basis A + A covering {1², …, n²} has size ≥ n^{1 - o(1)}",
+      "description": "Verbatim statement `green_61` from `FormalConjectures/GreensOpenProblems/61.lean#L42-L47` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosComb/Green61SquaresBasis.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/GreensOpenProblems/61.lean#L42-L47"
+    },
+    {
+      "id": "erdos_203_covering_primes",
+      "title": "Erdős #203: does there exist m coprime to 6 with 2^k·3^l·m + 1 never prime?",
+      "description": "Verbatim statement `erdos_203` from `FormalConjectures/ErdosProblems/203.lean#L35-L36` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosComb/Erdos203Covering.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/203.lean#L35-L36"
+    },
+    {
+      "id": "erdos_949_sumfree_complement",
+      "title": "Erdős #949: continuum-sized sum-free subset in the complement of any sum-free S ⊆ ℝ",
+      "description": "Verbatim statement `erdos_949` from `FormalConjectures/ErdosProblems/949.lean#L40-L42` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosComb/Erdos949SumFree.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/949.lean#L40-L42"
+    },
+    {
+      "id": "erdos_1199_hindman_sumset",
+      "title": "Erdős #1199 (Hindman): every 2-colouring of ℕ has an infinite A with monochromatic A + A",
+      "description": "Verbatim statement `erdos_1199` from `FormalConjectures/ErdosProblems/1199.lean#L43-L46` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosComb/Erdos1199Hindman.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/1199.lean#L43-L46"
+    },
+    {
+      "id": "green_45_prime_congruences",
+      "title": "Ben Green #45: prime residue assignment covering [1, N] at least 10 times",
+      "description": "Verbatim statement `green_45` from `FormalConjectures/GreensOpenProblems/45.lean#L47-L50` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosComb/Green45Congruences.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/GreensOpenProblems/45.lean#L47-L50"
+    },
+    {
+      "id": "green_60_squares_sumset_growth",
+      "title": "Ben Green #60: power growth |A + A| ≥ |A|^{1 + c} for finite sets of squares",
+      "description": "Verbatim statement `green_60` from `FormalConjectures/GreensOpenProblems/60.lean#L36-L42` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosComb/Green60SquaresSumset.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/GreensOpenProblems/60.lean#L36-L42"
+    },
+    {
+      "id": "green_33_zmod_basis_density",
+      "title": "Ben Green #33: additive bases of ZMod q of size ~ √(2q)",
+      "description": "Verbatim statement `green_33` from `FormalConjectures/GreensOpenProblems/33.lean#L43-L49` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosComb/Green33ZModBasis.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/GreensOpenProblems/33.lean#L43-L49"
+    },
+    {
+      "id": "green_62_primes_product_mod_p",
+      "title": "Ben Green #62: every nonzero residue mod p is a product of two primes < p (large p)",
+      "description": "Verbatim statement `green_62` from `FormalConjectures/GreensOpenProblems/62.lean#L41-L46` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosComb/Green62PrimeProd.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/GreensOpenProblems/62.lean#L41-L46"
+    },
+    {
+      "id": "erdos_1159_projective_plane_blocking",
+      "title": "Erdős #1159: uniform bounded-intersection blocking sets in all finite projective planes",
+      "description": "Verbatim statement `erdos_1159` from `FormalConjectures/ErdosProblems/1159.lean#L43-L48` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosComb/Erdos1159Blocking.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/1159.lean#L43-L48"
+    },
+    {
+      "id": "green_85_axis_aligned_rectangle",
+      "title": "Ben Green #85: axis-aligned rectangle of area ≥ c·α² inside open A ⊆ [0,1]²",
+      "description": "Verbatim statement `green_85` from `FormalConjectures/GreensOpenProblems/85.lean#L45-L54` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosComb/Green85Rectangle.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/GreensOpenProblems/85.lean#L45-L54"
+    },
+    {
+      "id": "ringel_tree_decomposition",
+      "title": "Ringel's conjecture: every n-edge tree decomposes K_{2n+1}",
+      "description": "Verbatim statement `ringel_conjecture` from `FormalConjectures/Paper/RingelConjecture.lean#L45-L51` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosComb/RingelConjecture.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Paper/RingelConjecture.lean#L45-L51"
+    },
+    {
+      "id": "kotzig_cyclic_tree_decomposition",
+      "title": "Kotzig's conjecture: every n-edge tree cyclically decomposes K_{2n+1}",
+      "description": "Verbatim statement `kotzig_conjecture` from `FormalConjectures/Paper/KotzigConjecture.lean#L46-L53` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosComb/KotzigConjecture.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Paper/KotzigConjecture.lean#L46-L53"
+    },
+    {
+      "id": "barker_sequence_length",
+      "title": "Barker sequence conjecture: every Barker ±1 sequence has length ≤ 13",
+      "description": "Verbatim statement `barker_conjecture` from `FormalConjectures/Arxiv/2104.00502/BarkerSequence.lean#L50-L51` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosComb/BarkerSequence.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Arxiv/2104.00502/BarkerSequence.lean#L50-L51"
+    },
+    {
+      "id": "green_76_rectangle_hitting_set",
+      "title": "Ben Green #76: halving hitting set for 1000-rich axis-aligned rectangles",
+      "description": "Verbatim statement `green_76` from `FormalConjectures/GreensOpenProblems/76.lean#L64-L66` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosComb/Green76HittingSet.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/GreensOpenProblems/76.lean#L64-L66"
+    },
+    {
+      "id": "weighing_matrix_conjecture",
+      "title": "Weighing matrix conjecture: W(4m, w) exists for every m ≥ 1 and w ≤ 4m",
+      "description": "Verbatim statement `weighing_matrix_conjecture` from `FormalConjectures/Wikipedia/WeighingMatrix.lean#L97-L99` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosComb/WeighingMatrix.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/WeighingMatrix.lean#L97-L99"
+    },
+    {
+      "id": "manickam_miklos_singhi",
+      "title": "Manickam–Miklós–Singhi conjecture: ≥ C(n-1, k-1) non-negative k-subsets for n ≥ 4k",
+      "description": "Verbatim statement `manickam_miklos_singhi_conjecture` from `FormalConjectures/Paper/ManickamMiklosSinghiConjecture.lean#L56-L59` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosComb/ManickamMiklosSinghi.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Paper/ManickamMiklosSinghiConjecture.lean#L56-L59"
+    },
+    {
+      "id": "gyarfas_sumner_conjecture",
+      "title": "Gyárfás–Sumner conjecture: T-free graphs are χ-bounded for every finite tree T",
+      "description": "Verbatim statement `gyarfas_sumner_conjecture` from `FormalConjectures/Wikipedia/GyarfasSumnerConjecture.lean#L58-L61` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosComb/GyarfasSumner.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/GyarfasSumnerConjecture.lean#L58-L61"
+    },
+    {
+      "id": "green_59_smooth_goldbach",
+      "title": "Ben Green #59: every n ∈ [2, N] is a sum of two N^ε-smooth positive integers",
+      "description": "Verbatim statement `green_59` from `FormalConjectures/GreensOpenProblems/59.lean#L69-L72` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosComb/Green59SmoothSum.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/GreensOpenProblems/59.lean#L69-L72"
+    }
+  ],
+  "open_conjecture": true
+}

@@ -1,0 +1,17 @@
+{
+  "repo": "ImperialCollegeLondon/FLT",
+  "commit": "019805815d7da565ed1e9f427b6fbd0cbc9d00d3",
+  "license": "Apache-2.0",
+  "checks": [
+    {
+      "local_file": "FltFoundations/EllipticTorsion.lean",
+      "upstream_file": "FLT/KnownIn1980s/EllipticCurves/Torsion.lean",
+      "verbatim_snippet": "theorem WeierstrassCurve.torsion_rank_two :\n    Nonempty (AddSubgroup.torsionBy (E\u2044k).Point (n : \u2124) \u2243+ (ZMod n) \u00d7 (ZMod n)) :="
+    },
+    {
+      "local_file": "FltFoundations/CompactHausdorff.lean",
+      "upstream_file": "FLT/Patching/Utils/CompactHausdorffRings.lean",
+      "verbatim_snippet": "theorem Group.subsingleton_of_pow_prime_eq_one\n    (A : Type*) [CommGroup A] [TopologicalSpace A] [IsTopologicalGroup A]\n    [ConnectedSpace A] [CompactSpace A] [T2Space A]\n    (p : \u2115) (hp : p.Prime) (hAp : \u2200 a : A, a ^ p = 1) :\n    Subsingleton A := by"
+    }
+  ]
+}

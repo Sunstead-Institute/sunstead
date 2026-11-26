@@ -1,0 +1,162 @@
+{
+  "repo": "frenzymath/FATE-X",
+  "commit": "a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d",
+  "license": "MIT",
+  "checks": [
+    {
+      "local_file": "FateXFieldsRingsGroups/P1.lean",
+      "upstream_file": "FATEX/1.lean",
+      "verbatim_snippet": "theorem isPrincipalIdealRing_of_associated_or_associated {R : Type} [CommRing R] [IsDomain R]\n    [UniqueFactorizationMonoid R] {p q : R} (hp : Prime p) (hq : Prime q) (hpq : ¬ Associated p q)\n    (h : ∀ {x : R}, Prime x → Associated x p ∨ Associated x q) :\n    IsPrincipalIdealRing R :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/P2.lean",
+      "upstream_file": "FATEX/2.lean",
+      "verbatim_snippet": "theorem card_minimal_normal_subgroup_le_2 (G : Type) [Group G] [Finite G]\n    (L : Subgroup G) (h_ne_top : L ≠ ⊤) (h_maximal : IsMax (⟨L, h_ne_top⟩ : {H : Subgroup G // H ≠ ⊤}))\n    (h_simple : IsSimpleGroup L) (h_non_comm : ∃ (x y : L), x * y ≠ y * x) :\n    {H : {H : Subgroup G // H.Normal} | IsMin H}.ncard ≤ 2 :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/P3.lean",
+      "upstream_file": "FATEX/3.lean",
+      "verbatim_snippet": "theorem exists_leftCoset_rightCoset_representative\n    (G : Type) [Group G] (H : Subgroup G) [H.FiniteIndex] :\n    ∃ S : Set G, Subgroup.IsComplement S H ∧ Subgroup.IsComplement H S :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/P4.lean",
+      "upstream_file": "FATEX/4.lean",
+      "verbatim_snippet": "theorem add_one_eq_two_pow_of_sylow_subgroup_not_normal (p : ℕ) (h_odd : Odd p) (G : Type)\n    (hp : p.Prime) [Finite G] [Group G] (h_card : Nat.card G = p * (p + 1))\n    (h_sylow : ∀ (H : Sylow p G), ¬ H.Normal) : ∃ (n : ℕ), p + 1 = 2 ^ n :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/P5.lean",
+      "upstream_file": "FATEX/5.lean",
+      "verbatim_snippet": "theorem maximal_abelian_normal_subgroup_of_p_group_is_maximal_abelian_subgroup\n    (p : ℕ) (hp : p.Prime) (G : Type) [Group G] [Finite G] (h_pgroup : IsPGroup p G)\n    (H : Subgroup G) (h_normal : H.Normal) (h_comm : IsMulCommutative H)\n    (h_maximal_normal_abelian : ∀ (K : Subgroup G), K.Normal → IsMulCommutative K → H ≤ K → H = K) :\n    ∀ (K : Subgroup G), IsMulCommutative K → H ≤ K → H = K :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/P6.lean",
+      "upstream_file": "FATEX/6.lean",
+      "verbatim_snippet": "theorem not_isSimpleGroup_of_card_eq_396 (G : Type) [Group G]\n    [Finite G] (h_card : Nat.card G = 396) : ¬ IsSimpleGroup G :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/P7.lean",
+      "upstream_file": "FATEX/7.lean",
+      "verbatim_snippet": "theorem not_isSimpleGroup_of_card_eq_1785 (G : Type) [Group G]\n    [Finite G] (h_card : Nat.card G = 1785) : ¬ IsSimpleGroup G :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/P8.lean",
+      "upstream_file": "FATEX/8.lean",
+      "verbatim_snippet": "theorem quaternionAlgebra_isomorphic_to_matrix_ring_or_quaternion_ring\n    (A B : ℚ) (ha : A ≠ 0) (hb : B ≠ 0) :\n    ((Nonempty (ℍ[ℝ, A, B] ≃ₐ[ℝ] ℍ[ℝ, -1, -1])) ∨ (Nonempty (ℍ[ℝ, A, B] ≃ₐ[ℝ] Matrix (Fin 2) (Fin 2) ℝ)))\n    ∧ IsEmpty (Matrix (Fin 2) (Fin 2) ℝ ≃ₐ[ℝ] ℍ[ℝ, -1, -1]) :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/Spec.lean",
+      "upstream_file": "FATEX/11.lean",
+      "verbatim_snippet": "class EuclideanNormNat (R : Type) [CommRing R] extends Nontrivial R where"
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/P11.lean",
+      "upstream_file": "FATEX/11.lean",
+      "verbatim_snippet": "theorem not_isomorphic_euclideanDomain : IsEmpty <| EuclideanNormNat (((MvPolynomial (Fin 2) ℝ) ⧸\n    Ideal.span {(.X 0 ^ 2 + .X 1 ^ 2 + .C 1: MvPolynomial (Fin 2) ℝ)})) :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/P13.lean",
+      "upstream_file": "FATEX/13.lean",
+      "verbatim_snippet": "theorem sq_eq_self_of_not_unit {R : Type} [Ring R] (h : ¬ IsField R)\n    (h2 : ∀ x : R, ¬ IsUnit x → x^2 = x) (x : R) : x^2 = x :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/P14.lean",
+      "upstream_file": "FATEX/14.lean",
+      "verbatim_snippet": "theorem isomorphic_real_of_fractionRing_isomorphic_real_of_UFD (R : Type) [CommRing R] [IsDomain R]\n    [UniqueFactorizationMonoid R] (h : Nonempty ((FractionRing R) ≃+* ℝ)) :\n    Nonempty (R ≃+* ℝ) :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/Spec.lean",
+      "upstream_file": "FATEX/16.lean",
+      "verbatim_snippet": "class IsPExtension (F E : Type) [Field F] [Field E] [Algebra F E]"
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/P16.lean",
+      "upstream_file": "FATEX/16.lean",
+      "verbatim_snippet": "theorem normalClosure_isPExtension_of_isPExtension (F E : Type) [Field F] [Field E]\n    [Algebra F E] (L : IntermediateField F E) (K : IntermediateField F L) (p : ℕ) (hp : p.Prime)\n    [IsPExtension F K p] [IsGalois K L] [IsPExtension K L p]\n    (h_normalClosure : IsNormalClosure F L E) : IsPExtension F E p :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/P17.lean",
+      "upstream_file": "FATEX/17.lean",
+      "verbatim_snippet": "theorem countable_index_of_maximal_subfield_sqrt_2_nmem\n    (K : Subfield ℂ) (h_nmem : (Real.sqrt 2 : ℂ) ∉ K)\n    (h : ∀ (L : Subfield ℂ), K ≤ L → (Real.sqrt 2 : ℂ) ∉ L → K = L) :\n    Module.rank K ℂ = Cardinal.aleph0 :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/Spec.lean",
+      "upstream_file": "FATEX/18.lean",
+      "verbatim_snippet": "def IsRadicalExtension (E F : Type) [CommRing E] [CommRing F] [Algebra E F] : Prop :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/P18.lean",
+      "upstream_file": "FATEX/18.lean",
+      "verbatim_snippet": "theorem isEmpty_embedding_intermediateField_of_odd_degree_galois (E : Subfield ℝ) (K : Type)\n    [Field K] [Algebra E K] [IsGalois E K] (n : ℕ) (h_odd : Odd n) (hn : n > 1) (h_deg_eq : Module.rank E K = n)\n    (K' : IntermediateField E ℝ) (h_radical : IsRadicalTower E K') :\n    IsEmpty (K →ₐ[E] K') :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/P20.lean",
+      "upstream_file": "FATEX/20.lean",
+      "verbatim_snippet": "theorem generated_single_elem_of_degree_le_p (p : ℕ) [Fact (Nat.Prime p)]\n    (K L : Type) [Field K] [Field L] [CharP L p] [Algebra K L] [FiniteDimensional K L]\n    (h : Module.rank (IntermediateField.adjoin K ((frobenius L p).range : Set L)) L ≤ p) :\n    ∃ (x : L), IntermediateField.adjoin K {x} = ⊤ :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/P21.lean",
+      "upstream_file": "FATEX/21.lean",
+      "verbatim_snippet": "theorem intermediateField_rank_eq_ringChar (F : Type) [Field F] (f : Polynomial F) (hf : Irreducible f)\n    (K : Type) [Field K] [Algebra F K] (hK : f.IsSplittingField F K) (α : K)\n    (hα : f.aeval α = 0) (hα1 : f.aeval (α + 1) = 0) :\n    ∃ (E : IntermediateField F K), Module.rank E K = ringChar F :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/P22.lean",
+      "upstream_file": "FATEX/22.lean",
+      "verbatim_snippet": "theorem finite_algebraic_integers_of_finite_module\n    (F : IntermediateField ℚ ℂ) (h_fin : Module.Finite ℚ F) [IsGalois ℚ F]\n    (h : IsMulCommutative (F ≃ₐ[ℚ] F)) : {x : F | IsIntegral ℤ x ∧ ‖(x : ℂ)‖ = 1}.Finite ∧\n    (∀ x : F, IsIntegral ℤ x → ‖(x : ℂ)‖ = 1 → ∃ n,  x ^ n = 1) :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/P23.lean",
+      "upstream_file": "FATEX/23.lean",
+      "verbatim_snippet": "theorem ratio_tendsto_one_of_irreducible (f : Polynomial ℤ) (h_irr : Irreducible f) :\n    Function.rightLim\n    (fun (s : ℝ) ↦\n    (tsum (fun p : Nat.Primes ↦ (f.rootSet (ZMod p)).ncard * ((p : ℝ) ^ (-s)))) /\n    (tsum (fun p : Nat.Primes ↦ (p : ℝ) ^ (-s)))) 1 = 1 :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/Spec.lean",
+      "upstream_file": "FATEX/24.lean",
+      "verbatim_snippet": "abbrev RatAdjoinSqrt {I : Type} (p : I → ℕ) : Type :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/P24.lean",
+      "upstream_file": "FATEX/24.lean",
+      "verbatim_snippet": "theorem galoisGroup_iso_of_distinct_primes {I : Type} [Finite I] (p : I → ℕ)\n    (hp : ∀ (i : I), (p i).Prime) (h_inj : p.Injective) :\n    Nonempty ((RatAdjoinSqrt p ≃ₐ[ℚ] RatAdjoinSqrt p) ≃* (Multiplicative (I → (ZMod 2)))) :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/P33.lean",
+      "upstream_file": "FATEX/33.lean",
+      "verbatim_snippet": "theorem isNoetherianRing_of_fg_of_isNoetherianRing (B : Type) [CommRing B] [IsNoetherianRing B]\n    (A : Subring B) (h : Module.Finite A B) : IsNoetherianRing A :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/P51.lean",
+      "upstream_file": "FATEX/51.lean",
+      "verbatim_snippet": "theorem adicCompletion_faithfullyFlat_iff (A : Type) [CommRing A] [IsNoetherianRing A]\n    (I : Ideal A) : Module.FaithfullyFlat A (AdicCompletion I A) ↔ I ≤ Ring.jacobson A :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/P54.lean",
+      "upstream_file": "FATEX/54.lean",
+      "verbatim_snippet": "theorem not_zero_divisor_of_hausdorff_of_der_eq_one (A : Type) [CommRing A] [Algebra ℚ A]\n    (x : A) (D : Derivation ℤ A A) (h_dx : D x = 1) (h_hausdorff : IsHausdorff (Ideal.span {x}) A) :\n    x ∈ nonZeroDivisors A :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/P59.lean",
+      "upstream_file": "FATEX/59.lean",
+      "verbatim_snippet": "theorem exists_unique_valuation_eq (α : ℝ) (h_pos : α > 0) (h_irr : Irrational α)\n    (k : Type) [Field k] : ∃! (v : AddValuation (FractionRing (MvPolynomial (Fin 2) k)) (WithTop ℝ)),\n    ∀ (f : MvPolynomial (Fin 2) k), v (algebraMap _ _ f) = Finset.inf (Finset.image (fun s ↦ ((s 0 + α * s 1) : WithTop ℝ)) f.support) id :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/Spec.lean",
+      "upstream_file": "FATEX/79.lean",
+      "verbatim_snippet": "class IsRegularLocalRing (R : Type) [CommRing R] : Prop extends"
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/P79.lean",
+      "upstream_file": "FATEX/79.lean",
+      "verbatim_snippet": "theorem IsLocalRing.not_isCompleteIntersection.height_not_zero_and_not_one (B : Type) [CommRing B]\n    [IsRegularLocalRing B] (I : Ideal B) [IsGorensteinRing (B ⧸ I)]\n    (hc : ¬ IsLocalCompleteIntersectionRing (B ⧸ I)) : I.height ≠ 0 ∧ I.height ≠ 1 :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/Spec.lean",
+      "upstream_file": "FATEX/80.lean",
+      "verbatim_snippet": "noncomputable def moduleDepth (N M : ModuleCat.{0} R) : ℕ∞ :="
+    },
+    {
+      "local_file": "FateXFieldsRingsGroups/P80.lean",
+      "upstream_file": "FATEX/80.lean",
+      "verbatim_snippet": "theorem isCohenMacaulayRing_of_dimension_three (k : Type) [Field k] :\n    IsCohenMacaulayRing (target_ring_aux k) ∧ (ringKrullDim (target_ring_aux k) = 3) :="
+    }
+  ]
+}

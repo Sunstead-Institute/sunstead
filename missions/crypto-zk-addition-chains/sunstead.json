@@ -1,0 +1,154 @@
+{
+  "id": "crypto-zk-addition-chains",
+  "title": "ZK STARK/SNARK Prime Field Addition Chains (Plonky3: Goldilocks, BabyBear, KoalaBear, Mersenne31, BN254)",
+  "description": "Ten pure Lean 4.36.0 (zero Mathlib) kernel-verified shortest addition-chain hill-climb tracks for Plonky3's five production ZK prime fields \u2014 Goldilocks (2^64-2^32+1), BabyBear (2^31-2^27+1), KoalaBear (2^31-2^24+1), Mersenne31 (2^31-1), and BN254 \u2014 covering both Fermat field inversions (`p-2`) and Rescue/Poseidon inverse S-box roots (`1/7`, `1/3`, `1/5` mod `p-1`) where Plonky3's own `exponentiation.rs` invites shorter chains. Pinned verbatim to `Plonky3/Plonky3@0d803737b6` (Apache-2.0).",
+  "tier": 2,
+  "mode": "hillclimb",
+  "repo": "https://github.com/Plonky3/Plonky3",
+  "upstream": {
+    "repo": "Plonky3/Plonky3",
+    "commit": "0d803737b681774186cd283b1fd2d8e493655c82",
+    "license": "Apache-2.0"
+  },
+  "score_direction": "minimize",
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 60,
+    "memory_mb": 2048
+  },
+  "frozen_paths": [
+    "ZkAddChain/Spec.lean",
+    "ZkAddChain/BoundGoldilocksInv.lean",
+    "ZkAddChain/BoundGoldilocksInvD7.lean",
+    "ZkAddChain/BoundBabyBearInv.lean",
+    "ZkAddChain/BoundBabyBearInvD7.lean",
+    "ZkAddChain/BoundKoalaBearInv.lean",
+    "ZkAddChain/BoundKoalaBearInvD3.lean",
+    "ZkAddChain/BoundMersenne31Inv.lean",
+    "ZkAddChain/BoundMersenne31InvD5.lean",
+    "ZkAddChain/BoundBn254Inv.lean",
+    "ZkAddChain/BoundBn254InvD5.lean",
+    "LICENSE",
+    "README.md",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "tasks": [
+    {
+      "id": "goldilocks_inv",
+      "title": "Goldilocks p-2: minimize addition-chain length (baseline 125)",
+      "description": "Minimize addition-chain length for Plonky3 Goldilocks p-2 (seeded at 125 steps; Plonky3/known frontier: ~72). Edit `ZkAddChain/ChainGoldilocksInv.lean` (`ZkAddChain.score_goldilocks_inv` and `ZkAddChain.steps_goldilocks_inv`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 125,
+      "target_files": [
+        "ZkAddChain/ChainGoldilocksInv.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/Plonky3/Plonky3/blob/0d803737b681774186cd283b1fd2d8e493655c82/goldilocks/src/goldilocks.rs"
+    },
+    {
+      "id": "goldilocks_inv_d7",
+      "title": "Goldilocks 1/7 (x^10540996611094048183): minimize addition-chain length (baseline 89)",
+      "description": "Minimize addition-chain length for Plonky3 Goldilocks 1/7 (x^10540996611094048183) (seeded at 89 steps; Plonky3/known frontier: ~71). Edit `ZkAddChain/ChainGoldilocksInvD7.lean` (`ZkAddChain.score_goldilocks_inv_d7` and `ZkAddChain.steps_goldilocks_inv_d7`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 89,
+      "target_files": [
+        "ZkAddChain/ChainGoldilocksInvD7.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/Plonky3/Plonky3/blob/0d803737b681774186cd283b1fd2d8e493655c82/field/src/exponentiation.rs"
+    },
+    {
+      "id": "babybear_inv",
+      "title": "BabyBear p-2: minimize addition-chain length (baseline 59)",
+      "description": "Minimize addition-chain length for Plonky3 BabyBear p-2 (seeded at 59 steps; Plonky3/known frontier: ~38). Edit `ZkAddChain/ChainBabyBearInv.lean` (`ZkAddChain.score_babybear_inv` and `ZkAddChain.steps_babybear_inv`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 59,
+      "target_files": [
+        "ZkAddChain/ChainBabyBearInv.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/Plonky3/Plonky3/blob/0d803737b681774186cd283b1fd2d8e493655c82/baby-bear/src/baby_bear.rs"
+    },
+    {
+      "id": "babybear_inv_d7",
+      "title": "BabyBear 1/7 (x^1725656503): minimize addition-chain length (baseline 50)",
+      "description": "Minimize addition-chain length for Plonky3 BabyBear 1/7 (x^1725656503) (seeded at 50 steps; Plonky3/known frontier: ~37). Edit `ZkAddChain/ChainBabyBearInvD7.lean` (`ZkAddChain.score_babybear_inv_d7` and `ZkAddChain.steps_babybear_inv_d7`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 50,
+      "target_files": [
+        "ZkAddChain/ChainBabyBearInvD7.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/Plonky3/Plonky3/blob/0d803737b681774186cd283b1fd2d8e493655c82/field/src/exponentiation.rs"
+    },
+    {
+      "id": "koalabear_inv",
+      "title": "KoalaBear p-2: minimize addition-chain length (baseline 59)",
+      "description": "Minimize addition-chain length for Plonky3 KoalaBear p-2 (seeded at 59 steps; Plonky3/known frontier: ~38). Edit `ZkAddChain/ChainKoalaBearInv.lean` (`ZkAddChain.score_koalabear_inv` and `ZkAddChain.steps_koalabear_inv`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 59,
+      "target_files": [
+        "ZkAddChain/ChainKoalaBearInv.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/Plonky3/Plonky3/blob/0d803737b681774186cd283b1fd2d8e493655c82/koala-bear/src/koala_bear.rs"
+    },
+    {
+      "id": "koalabear_inv_d3",
+      "title": "KoalaBear 1/3 (x^1420470955): minimize addition-chain length (baseline 45)",
+      "description": "Minimize addition-chain length for Plonky3 KoalaBear 1/3 (x^1420470955) (seeded at 45 steps; Plonky3/known frontier: ~36). Edit `ZkAddChain/ChainKoalaBearInvD3.lean` (`ZkAddChain.score_koalabear_inv_d3` and `ZkAddChain.steps_koalabear_inv_d3`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 45,
+      "target_files": [
+        "ZkAddChain/ChainKoalaBearInvD3.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/Plonky3/Plonky3/blob/0d803737b681774186cd283b1fd2d8e493655c82/field/src/exponentiation.rs"
+    },
+    {
+      "id": "mersenne31_inv",
+      "title": "Mersenne31 p-2: minimize addition-chain length (baseline 59)",
+      "description": "Minimize addition-chain length for Plonky3 Mersenne31 p-2 (seeded at 59 steps; Plonky3/known frontier: ~37). Edit `ZkAddChain/ChainMersenne31Inv.lean` (`ZkAddChain.score_mersenne31_inv` and `ZkAddChain.steps_mersenne31_inv`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 59,
+      "target_files": [
+        "ZkAddChain/ChainMersenne31Inv.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/Plonky3/Plonky3/blob/0d803737b681774186cd283b1fd2d8e493655c82/mersenne-31/src/mersenne_31.rs"
+    },
+    {
+      "id": "mersenne31_inv_d5",
+      "title": "Mersenne31 1/5 (x^1717986917): minimize addition-chain length (baseline 45)",
+      "description": "Minimize addition-chain length for Plonky3 Mersenne31 1/5 (x^1717986917) (seeded at 45 steps; Plonky3/known frontier: ~37). Edit `ZkAddChain/ChainMersenne31InvD5.lean` (`ZkAddChain.score_mersenne31_inv_d5` and `ZkAddChain.steps_mersenne31_inv_d5`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 45,
+      "target_files": [
+        "ZkAddChain/ChainMersenne31InvD5.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/Plonky3/Plonky3/blob/0d803737b681774186cd283b1fd2d8e493655c82/field/src/exponentiation.rs"
+    },
+    {
+      "id": "bn254_inv",
+      "title": "BN254 Field p-2: minimize addition-chain length (baseline 325)",
+      "description": "Minimize addition-chain length for Plonky3 BN254 Field p-2 (seeded at 325 steps; Plonky3/known frontier: ~295). Edit `ZkAddChain/ChainBn254Inv.lean` (`ZkAddChain.score_bn254_inv` and `ZkAddChain.steps_bn254_inv`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 325,
+      "target_files": [
+        "ZkAddChain/ChainBn254Inv.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/Plonky3/Plonky3/blob/0d803737b681774186cd283b1fd2d8e493655c82/bn254/src/bn254.rs"
+    },
+    {
+      "id": "bn254_inv_d5",
+      "title": "BN254 Rescue/Poseidon 1/5: minimize addition-chain length (baseline 328)",
+      "description": "Minimize addition-chain length for Plonky3 BN254 Rescue/Poseidon 1/5 (seeded at 328 steps; Plonky3/known frontier: ~295). Edit `ZkAddChain/ChainBn254InvD5.lean` (`ZkAddChain.score_bn254_inv_d5` and `ZkAddChain.steps_bn254_inv_d5`). Frozen Lean 4.36.0 kernel proofs verify well-formedness, step count, exact target value, and algebraic exponentiation soundness.",
+      "baseline_score": 328,
+      "target_files": [
+        "ZkAddChain/ChainBn254InvD5.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/Plonky3/Plonky3/blob/0d803737b681774186cd283b1fd2d8e493655c82/bn254/src/bn254.rs"
+    }
+  ]
+}

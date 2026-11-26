@@ -1,0 +1,182 @@
+#!/usr/bin/env python3
+"""Verify an explicit comparator median selection network on n = 7..16 wires."""
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify
+
+LIB_ROOT = "SelectNet"
+FROZEN_FILES = ["SelectNet/Spec.lean", "UPSTREAM.json", "lakefile.toml", "lean-toolchain"]
+
+TASKS = {
+    "median_n7": {
+        "module": "SelectNet.Bound7",
+        "theorem": "SelectNet.bound_7",
+        "score_const": "SelectNet.score7",
+        "statement": "def median_n7 (k : Nat) : Prop := SelectNet.ValidMedianNetwork 7 k",
+        "label": "{score} comparators (median n=7)"
+    },
+    "median_n8": {
+        "module": "SelectNet.Bound8",
+        "theorem": "SelectNet.bound_8",
+        "score_const": "SelectNet.score8",
+        "statement": "def median_n8 (k : Nat) : Prop := SelectNet.ValidMedianNetwork 8 k",
+        "label": "{score} comparators (median n=8)"
+    },
+    "median_n9": {
+        "module": "SelectNet.Bound9",
+        "theorem": "SelectNet.bound_9",
+        "score_const": "SelectNet.score9",
+        "statement": "def median_n9 (k : Nat) : Prop := SelectNet.ValidMedianNetwork 9 k",
+        "label": "{score} comparators (median n=9)"
+    },
+    "median_n10": {
+        "module": "SelectNet.Bound10",
+        "theorem": "SelectNet.bound_10",
+        "score_const": "SelectNet.score10",
+        "statement": "def median_n10 (k : Nat) : Prop := SelectNet.ValidMedianNetwork 10 k",
+        "label": "{score} comparators (median n=10)"
+    },
+    "median_n11": {
+        "module": "SelectNet.Bound11",
+        "theorem": "SelectNet.bound_11",
+        "score_const": "SelectNet.score11",
+        "statement": "def median_n11 (k : Nat) : Prop := SelectNet.ValidMedianNetwork 11 k",
+        "label": "{score} comparators (median n=11)"
+    },
+    "median_n12": {
+        "module": "SelectNet.Bound12",
+        "theorem": "SelectNet.bound_12",
+        "score_const": "SelectNet.score12",
+        "statement": "def median_n12 (k : Nat) : Prop := SelectNet.ValidMedianNetwork 12 k",
+        "label": "{score} comparators (median n=12)"
+    },
+    "median_n13": {
+        "module": "SelectNet.Bound13",
+        "theorem": "SelectNet.bound_13",
+        "score_const": "SelectNet.score13",
+        "statement": "def median_n13 (k : Nat) : Prop := SelectNet.ValidMedianNetwork 13 k",
+        "label": "{score} comparators (median n=13)"
+    },
+    "median_n14": {
+        "module": "SelectNet.Bound14",
+        "theorem": "SelectNet.bound_14",
+        "score_const": "SelectNet.score14",
+        "statement": "def median_n14 (k : Nat) : Prop := SelectNet.ValidMedianNetwork 14 k",
+        "label": "{score} comparators (median n=14)"
+    },
+    "median_n15": {
+        "module": "SelectNet.Bound15",
+        "theorem": "SelectNet.bound_15",
+        "score_const": "SelectNet.score15",
+        "statement": "def median_n15 (k : Nat) : Prop := SelectNet.ValidMedianNetwork 15 k",
+        "label": "{score} comparators (median n=15)"
+    },
+    "median_n16": {
+        "module": "SelectNet.Bound16",
+        "theorem": "SelectNet.bound_16",
+        "score_const": "SelectNet.score16",
+        "statement": "def median_n16 (k : Nat) : Prop := SelectNet.ValidMedianNetwork 16 k",
+        "label": "{score} comparators (median n=16)"
+    }
+}
+
+NET_TARGETS = {
+    "median_n7": [
+        "SelectNet/Net7.lean",
+        "SelectNet.score7",
+        "SelectNet.net7"
+    ],
+    "median_n8": [
+        "SelectNet/Net8.lean",
+        "SelectNet.score8",
+        "SelectNet.net8"
+    ],
+    "median_n9": [
+        "SelectNet/Net9.lean",
+        "SelectNet.score9",
+        "SelectNet.net9"
+    ],
+    "median_n10": [
+        "SelectNet/Net10.lean",
+        "SelectNet.score10",
+        "SelectNet.net10"
+    ],
+    "median_n11": [
+        "SelectNet/Net11.lean",
+        "SelectNet.score11",
+        "SelectNet.net11"
+    ],
+    "median_n12": [
+        "SelectNet/Net12.lean",
+        "SelectNet.score12",
+        "SelectNet.net12"
+    ],
+    "median_n13": [
+        "SelectNet/Net13.lean",
+        "SelectNet.score13",
+        "SelectNet.net13"
+    ],
+    "median_n14": [
+        "SelectNet/Net14.lean",
+        "SelectNet.score14",
+        "SelectNet.net14"
+    ],
+    "median_n15": [
+        "SelectNet/Net15.lean",
+        "SelectNet.score15",
+        "SelectNet.net15"
+    ],
+    "median_n16": [
+        "SelectNet/Net16.lean",
+        "SelectNet.score16",
+        "SelectNet.net16"
+    ]
+}
+
+MAX_BYTES = 16384
+MAX_COMPARATORS = 256
+
+
+def check_network(path: Path, score_name: str, net_name: str) -> None:
+    if not path.is_file():
+        emit(False, f"Missing network file: {path.name}", stage="lint")
+    raw = path.read_bytes()
+    if len(raw) > MAX_BYTES:
+        emit(False, f"Network file exceeds {MAX_BYTES} bytes", stage="lint")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        emit(False, "Network file must be valid UTF-8", stage="lint")
+
+    nat = r"(?:0|[1-9][0-9]{0,2})"
+    pair = rf"\(\s*{nat}\s*,\s*{nat}\s*\)"
+    header_re = (
+        rf"\s*def\s+{re.escape(score_name)}\s*:\s*Nat\s*:=\s*({nat})\s*\n"
+        rf"\s*def\s+{re.escape(net_name)}\s*:\s*List\s*\(Nat\s*×\s*Nat\)\s*:=\s*\[\s*(.*?)\s*\]\s*"
+    )
+    match = re.fullmatch(header_re, text, re.DOTALL)
+    if not match:
+        emit(False, f"Expected only literal definitions for {score_name} and {net_name}", stage="lint")
+    net_body = match.group(2)
+    if not net_body or not re.fullmatch(rf"{pair}(?:\s*,\s*{pair}){{0,{MAX_COMPARATORS - 1}}}", net_body):
+        emit(False, f"Expected 1 to {MAX_COMPARATORS} literal (i, j) comparator pairs", stage="lint")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>", stage="lint")
+    task_id = sys.argv[1]
+    if task_id in NET_TARGETS:
+        rel_path, score_name, net_name = NET_TARGETS[task_id]
+        check_network(Path(__file__).resolve().parent / rel_path, score_name, net_name)
+    lean_verify(
+        task_id,
+        lib_root=LIB_ROOT,
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        uses_mathlib=False,
+        timeout_sec=90,
+    )

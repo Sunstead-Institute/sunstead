@@ -1,0 +1,237 @@
+{
+  "repo": "frenzymath/FATE-X",
+  "commit": "a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d",
+  "license": "MIT",
+  "checks": [
+    {
+      "local_file": "FateXDimGeom/P10.lean",
+      "upstream_file": "FATEX/10.lean",
+      "verbatim_snippet": "theorem isPrincipalIdealRing_quot_X_pow_two_plus_Y_pow_two_plus_one :\n    IsPrincipalIdealRing ((MvPolynomial (Fin 2) ℝ) ⧸\n    Ideal.span {(.X 0 ^ 2 + .X 1 ^ 2 + .C 1 : (MvPolynomial (Fin 2) ℝ))}) :="
+    },
+    {
+      "local_file": "FateXDimGeom/Spec.lean",
+      "upstream_file": "FATEX/19.lean",
+      "verbatim_snippet": "abbrev E : Type := (Algebra.adjoin ℚ {Real.sqrt ((2 + Real.sqrt 2) * (3 + Real.sqrt 3))})"
+    },
+    {
+      "local_file": "FateXDimGeom/P19.lean",
+      "upstream_file": "FATEX/19.lean",
+      "verbatim_snippet": "theorem galoisGroup_iso_quaternion_group : Nonempty ((E ≃ₐ[ℚ] E) ≃* (QuaternionGroup 2)) :="
+    },
+    {
+      "local_file": "FateXDimGeom/P39.lean",
+      "upstream_file": "FATEX/39.lean",
+      "verbatim_snippet": "theorem finite_primes_lies_over_of_finite_extension (R : Type) [CommRing R] [IsDomain R]\n    [IsNoetherianRing R] [IsIntegrallyClosed R] (L : Type) [Field L] [Algebra R L]\n    [Algebra (FractionRing R) L] [IsScalarTower R (FractionRing R) L]\n    [FiniteDimensional (FractionRing R) L] (p : Ideal R) [p.IsPrime] :\n    (p.primesOver (integralClosure R L)).Finite :="
+    },
+    {
+      "local_file": "FateXDimGeom/P40.lean",
+      "upstream_file": "FATEX/40.lean",
+      "verbatim_snippet": "theorem free_of_rank_iff (R : Type) [CommRing R] [IsLocalRing R] [IsReduced R]\n    (h : (minimalPrimes R).Finite) (r : ℕ) (M : Type) [AddCommGroup M] [Module R M] [Module.Finite R M] :\n    Module.Free R M ∧ Module.rank R M = r ↔\n    (Module.rank (IsLocalRing.ResidueField R) ((IsLocalRing.ResidueField R) ⊗[R] M) = r ∧\n    ∀ p ∈ minimalPrimes R,\n    Module.rank (FractionRing (R ⧸ p)) ((FractionRing (R ⧸ p)) ⊗[R] M) = r) :="
+    },
+    {
+      "local_file": "FateXDimGeom/Spec.lean",
+      "upstream_file": "FATEX/44.lean",
+      "verbatim_snippet": "class IsGlobalCompleteIntersection (k : Type) [Field k] (S : Type) [CommRing S] [Algebra k S] :"
+    },
+    {
+      "local_file": "FateXDimGeom/P44.lean",
+      "upstream_file": "FATEX/44.lean",
+      "verbatim_snippet": "theorem quot_x2_sub_y2_y2_sub_z2_xy_yz_zx_not_global_complete_intersection (k : Type) [Field k] :\n    ¬ IsGlobalCompleteIntersection k (MvPolynomial (Fin 3) k ⧸ Ideal.span\n    ({(X 0)^ 2 - (X 1)^2, (X 1)^2 - (X 2)^2, (X 0) * (X 1), (X 1) * (X 2), (X 2) * (X 0)} :\n    Set (MvPolynomial (Fin 3) k))) :="
+    },
+    {
+      "local_file": "FateXDimGeom/Spec.lean",
+      "upstream_file": "FATEX/45.lean",
+      "verbatim_snippet": "def IsGradedHom {R M N ι : Type} [CommRing R] [AddCommGroup M] [AddCommGroup N]"
+    },
+    {
+      "local_file": "FateXDimGeom/P45.lean",
+      "upstream_file": "FATEX/45.lean",
+      "verbatim_snippet": "theorem free_of_free_resolution {k : Type} [Field k] {r : ℕ}\n    (C : ChainComplex (ModuleCat.{0} (MvPolynomial (Fin r) k)) ℕ)\n    (hC : ∀ (n : ℕ), n > (r + 1) → CategoryTheory.Limits.IsZero (C.X n))\n    (𝓜 : ∀ (n : ℕ), (ℕ → Submodule (MvPolynomial (Fin r) k) (C.X n)))\n    [hM : ∀ (n : ℕ), DirectSum.Decomposition (𝓜 n)]\n    [hM' : ∀ (n : ℕ), SetLike.GradedSMul (MvPolynomial.homogeneousSubmodule (Fin r) k) (𝓜 n)]\n    (h_exact : C.Acyclic)\n    (h_gr : ∀ (i j : ℕ), IsGradedHom (𝓜 i) (𝓜 j) (C.d i j).hom)\n    (h_free : ∀ (n : ℕ), 1 ≤ n ∧ n ≤ r → Module.Free (MvPolynomial (Fin r) k) (C.X n)) :\n    Module.Free (MvPolynomial (Fin r) k) (C.X (r + 1)) :="
+    },
+    {
+      "local_file": "FateXDimGeom/Spec.lean",
+      "upstream_file": "FATEX/47.lean",
+      "verbatim_snippet": "abbrev A {k : Type} [Field k] {n : ℕ} (t : (Fin n) → k) : Type := (MvPolynomial (Fin 2) k) ⧸ Ideal.span {(.X 1 ^ 2) - ∏ (m : Fin n), (.X 0 - .C (t m) : (MvPolynomial (Fin 2) k))}"
+    },
+    {
+      "local_file": "FateXDimGeom/P47.lean",
+      "upstream_file": "FATEX/47.lean",
+      "verbatim_snippet": "theorem isEmpty_isomorphism_UFD_of_quotient (k : Type) [Field k] (h_char : ¬ CharP k 2)\n    (n : ℕ) (h_ge : n ≥ 3) (h_odd : Odd n) (t : (Fin n) → k) (h_inj : Function.Injective t) :\n    ∃ _ : IsDedekindDomain (A t), Nontrivial (ClassGroup (A t)) :="
+    },
+    {
+      "local_file": "FateXDimGeom/Spec.lean",
+      "upstream_file": "FATEX/48.lean",
+      "verbatim_snippet": "class IsAbsolutelyFlat (R : Type) [CommRing R] : Prop where"
+    },
+    {
+      "local_file": "FateXDimGeom/P48.lean",
+      "upstream_file": "FATEX/48.lean",
+      "verbatim_snippet": "theorem isAbsolutelyFlat_iff_principal_ideal_idempotent (R : Type) [CommRing R] :\n    IsAbsolutelyFlat R ↔ (∀ I : Ideal R, I.IsPrincipal → I ^ 2 = I) :="
+    },
+    {
+      "local_file": "FateXDimGeom/P52.lean",
+      "upstream_file": "FATEX/52.lean",
+      "verbatim_snippet": "theorem generate_unit_ideal_of_quotient (R : Type) [CommRing R] (m : Ideal R)\n    (h_le_jac : m ≤ Ring.jacobson R) (G₁ G₂ : Polynomial R) (h_monic : G₁.Monic)\n    (h_gen : Ideal.span {G₁.map (Ideal.Quotient.mk m), G₂.map (Ideal.Quotient.mk m)} = ⊤) :\n    Ideal.span {G₁, G₂} = ⊤ :="
+    },
+    {
+      "local_file": "FateXDimGeom/P56.lean",
+      "upstream_file": "FATEX/56.lean",
+      "verbatim_snippet": "theorem projective_of_faithfullyFlat_base_change (R S M : Type) [CommRing R] [CommRing S]\n    [Algebra R S] [Module.FaithfullyFlat R S] [AddCommGroup M] [Module R M]\n    [Module.Projective S (TensorProduct R S M)] : Module.Projective R M :="
+    },
+    {
+      "local_file": "FateXDimGeom/P58.lean",
+      "upstream_file": "FATEX/58.lean",
+      "verbatim_snippet": "theorem flat_of_flat_over_quotient (R S : Type) [CommRing R] [CommRing S]\n    [IsLocalRing R] [IsLocalRing S] [IsNoetherianRing R] [IsNoetherianRing S] [Algebra R S]\n    (h_map : Ideal.map (algebraMap R S) (IsLocalRing.maximalIdeal R) ≤ IsLocalRing.maximalIdeal S)\n    (M : Type) [AddCommGroup M] [Module S M] [Module R M] [IsScalarTower R S M] [Module.Finite S M]\n    (h_flat_quotient : ∀ (n : ℕ), Module.Flat (R ⧸ (IsLocalRing.maximalIdeal R) ^ n) ((R ⧸ (IsLocalRing.maximalIdeal R) ^ n) ⊗[R] M)) :\n    Module.Flat R M :="
+    },
+    {
+      "local_file": "FateXDimGeom/Spec.lean",
+      "upstream_file": "FATEX/60.lean",
+      "verbatim_snippet": "def Ideal.Invertible {R : Type} [CommRing R] [IsDomain R] (I : Ideal R) : Prop :="
+    },
+    {
+      "local_file": "FateXDimGeom/P60.lean",
+      "upstream_file": "FATEX/60.lean",
+      "verbatim_snippet": "theorem invertible_iff_codimension_one (R : Type) [CommRing R] [IsDomain R] [IsNoetherianRing R]\n    (h_ufd : ∀ (p : Ideal R), (h : p.IsMaximal) → UniqueFactorizationMonoid (Localization.AtPrime p))\n    (I : Ideal R) : I.Invertible ↔ ∀ (p : associatedPrimes R I), ringKrullDim (R ⧸ p.1) = 1 :="
+    },
+    {
+      "local_file": "FateXDimGeom/P61.lean",
+      "upstream_file": "FATEX/61.lean",
+      "verbatim_snippet": "theorem formallySmooth_of_formallySmooth_quotient (R S : Type) [CommRing R] [CommRing S]\n    [Algebra R S] [Module.Flat R S] (I : Ideal R) (h : I ^ 2 = 0)\n    [Algebra.FormallySmooth (R ⧸ I) (S ⧸ (I.map (algebraMap R S)))] :\n    Algebra.FormallySmooth R S :="
+    },
+    {
+      "local_file": "FateXDimGeom/Spec.lean",
+      "upstream_file": "FATEX/64.lean",
+      "verbatim_snippet": "noncomputable def moduleDepth (N M : ModuleCat.{0} R) : ℕ∞ :="
+    },
+    {
+      "local_file": "FateXDimGeom/P64.lean",
+      "upstream_file": "FATEX/64.lean",
+      "verbatim_snippet": "theorem homogeneous_coordinate_ring_not_isCohenMacaulayRing (k : Type) [Field k] :\n    ¬ IsCohenMacaulayRing (Algebra.adjoin k ({(X 0) ^ 4, (X 0) ^ 3 * X 1,\n      X 0 * (X 1) ^ 3, (X 1) ^ 4} : Set (MvPolynomial (Fin 2) k))) :="
+    },
+    {
+      "local_file": "FateXDimGeom/Spec.lean",
+      "upstream_file": "FATEX/65.lean",
+      "verbatim_snippet": "class IsGorensteinLocalRing (R : Type) [CommRing R] : Prop extends"
+    },
+    {
+      "local_file": "FateXDimGeom/P65.lean",
+      "upstream_file": "FATEX/65.lean",
+      "verbatim_snippet": "theorem Polynomial.isGorensteinRing {R : Type} [CommRing R] [IsGorensteinRing R] :\n    IsGorensteinRing R[X] :="
+    },
+    {
+      "local_file": "FateXDimGeom/P66.lean",
+      "upstream_file": "FATEX/66.lean",
+      "verbatim_snippet": "theorem exists_eq_ofList_and_isRegular_of_perm {R : Type} [CommRing R] [IsNoetherianRing R] (I : Ideal R) (rs : List R)\n    (gen : I = Ideal.ofList rs) (h₂ : Sequence.IsRegular R rs) : ∃ rs' : List R,\n    I = Ideal.ofList rs' ∧ (∀ l : List R, (l.Perm rs') → Sequence.IsRegular R l) :="
+    },
+    {
+      "local_file": "FateXDimGeom/P67.lean",
+      "upstream_file": "FATEX/67.lean",
+      "verbatim_snippet": "theorem isEmpty_mvPowerSeries_tensor_mvPowerSeries_algEquiv\n    {k : Type} [Field k] (n : ℕ) (hn : n ≠ 0) :\n    IsEmpty ((MvPowerSeries (Fin n) k) ⊗[k] (MvPowerSeries (Fin n) k) ≃ₐ[k]\n    (MvPowerSeries (Fin (n + n)) k)) :="
+    },
+    {
+      "local_file": "FateXDimGeom/P68.lean",
+      "upstream_file": "FATEX/68.lean",
+      "verbatim_snippet": "theorem localization_jacobson_of_one_lt_ringKrullDim (R : Type) [CommRing R] [IsLocalRing R]\n    [IsNoetherianRing R] (f : R) (hf : f ∈ IsLocalRing.maximalIdeal R) (ne0 : ¬ IsNilpotent f) :\n    IsJacobsonRing (Localization.Away f) :="
+    },
+    {
+      "local_file": "FateXDimGeom/Spec.lean",
+      "upstream_file": "FATEX/69.lean",
+      "verbatim_snippet": "class IsRegularLocalRing (R : Type) [CommRing R] : Prop extends"
+    },
+    {
+      "local_file": "FateXDimGeom/P69.lean",
+      "upstream_file": "FATEX/69.lean",
+      "verbatim_snippet": "theorem IsRegularLocalRing.regularAtPrime {R : Type} [CommRing R] [IsRegularLocalRing R]\n    (P : Ideal R[X]) [P.IsPrime] [P.LiesOver (maximalIdeal R)] :\n    IsRegularLocalRing (Localization.AtPrime P) :="
+    },
+    {
+      "local_file": "FateXDimGeom/P70.lean",
+      "upstream_file": "FATEX/70.lean",
+      "verbatim_snippet": "theorem exists_minimalPrime_map_zero (R S : Type) [CommRing R] [IsDomain R] [IsNoetherianRing R]\n    [CommRing S] [IsNoetherianRing S] [IsLocalRing S] [Algebra R S] [NoZeroSMulDivisors R S] :\n    ∃ (p : minimalPrimes S), Ideal.comap (algebraMap R S) p.1 = ⊥ :="
+    },
+    {
+      "local_file": "FateXDimGeom/Spec.lean",
+      "upstream_file": "FATEX/71.lean",
+      "verbatim_snippet": "def FixedPoints.subring : Subring B where"
+    },
+    {
+      "local_file": "FateXDimGeom/P71.lean",
+      "upstream_file": "FATEX/71.lean",
+      "verbatim_snippet": "theorem fixedPoints_isCohenMacaulayRing {R : Type} [CommRing R] (k : Type) [Field k]\n    [CharZero k] [Algebra k R] [IsNoetherianRing R] [IsCohenMacaulayRing R]\n    (G : Subgroup (R ≃ₐ[k] R)) [Finite G] :\n    IsCohenMacaulayRing (FixedPoints.subalgebra k R G) :="
+    },
+    {
+      "local_file": "FateXDimGeom/Spec.lean",
+      "upstream_file": "FATEX/72.lean",
+      "verbatim_snippet": "noncomputable def Module.supportDim (R : Type) [CommRing R] (M : Type) [AddCommGroup M]"
+    },
+    {
+      "local_file": "FateXDimGeom/P72.lean",
+      "upstream_file": "FATEX/72.lean",
+      "verbatim_snippet": "theorem isCohenMacaulay_extendScalars_over_mvPolynomial_of_isCohenMacaulay\n    (R : Type) [CommRing R] (M : Type) [AddCommGroup M] [Module R M]\n    [IsNoetherianRing R] [Module.IsCohenMacaulay R M] (n : ℕ) :\n    Module.IsCohenMacaulay (MvPolynomial (Fin n) R) ((MvPolynomial (Fin n) R) ⊗[R] M) :="
+    },
+    {
+      "local_file": "FateXDimGeom/Spec.lean",
+      "upstream_file": "FATEX/74.lean",
+      "verbatim_snippet": "class IsRegularLocalRing (R : Type) [CommRing R] : Prop extends"
+    },
+    {
+      "local_file": "FateXDimGeom/P74.lean",
+      "upstream_file": "FATEX/74.lean",
+      "verbatim_snippet": "theorem IsRegularLocalRing.gorensteinAtRegularSequence {R : Type} [CommRing R]\n    [IsRegularLocalRing R] {rs : List R} (reg : RingTheory.Sequence.IsRegular R rs) (y : R)\n    (h : y ∉ Ideal.ofList rs) : IsGorensteinRing (R ⧸ (Ideal.ofList rs / Ideal.span {y})) :="
+    },
+    {
+      "local_file": "FateXDimGeom/Spec.lean",
+      "upstream_file": "FATEX/76.lean",
+      "verbatim_snippet": "def IsCatenary (R : Type) [CommRing R] : Prop :="
+    },
+    {
+      "local_file": "FateXDimGeom/P76.lean",
+      "upstream_file": "FATEX/76.lean",
+      "verbatim_snippet": "theorem IsCatenary.of_noetherian_ufd_of_dim_le_three {A : Type} [CommRing A] [IsNoetherianRing A]\n    [IsDomain A] [UniqueFactorizationMonoid A] (h : ringKrullDim A ≤ 3) : IsCatenary A :="
+    },
+    {
+      "local_file": "FateXDimGeom/P81.lean",
+      "upstream_file": "FATEX/81.lean",
+      "verbatim_snippet": "theorem generated_by_regular_sequence_iff (R : Type) [CommRing R] [IsLocalRing R]\n    [IsNoetherianRing R] (I : Ideal R) (netop : I ≠ ⊤) :\n    ∃ (rs : List R), (RingTheory.Sequence.IsRegular R rs) ∧ Ideal.ofList rs = I ↔\n    Module.Free (R ⧸ I) I.Cotangent ∧\n    (∃ n, CategoryTheory.HasProjectiveDimensionLE (ModuleCat.of R I) n) :="
+    },
+    {
+      "local_file": "FateXDimGeom/P82.lean",
+      "upstream_file": "FATEX/82.lean",
+      "verbatim_snippet": "theorem subring_iso_mvPowerSeries_over_DVR (d : ℕ) (A : Type) [CommRing A] [IsLocalRing A]\n    [IsNoetherianRing A] [IsAdicComplete (maximalIdeal A) A] (dim : ringKrullDim A = d)\n    {p : ℕ} (hp : p.Prime) [CharZero A] [CharP (ResidueField A) p]\n    (ht : (Ideal.span {(p : A)}).height = 1) :\n    ∃ B : Subring A, Module.Finite B A ∧\n    ∃ (C : Type) (_ : CommRing C) (_ : IsDomain C), IsDiscreteValuationRing C ∧\n    Nonempty (B ≃+* MvPowerSeries (Fin (d - 1)) C) :="
+    },
+    {
+      "local_file": "FateXDimGeom/Spec.lean",
+      "upstream_file": "FATEX/83.lean",
+      "verbatim_snippet": "class IsRegularLocalRing (R : Type) [CommRing R] : Prop extends"
+    },
+    {
+      "local_file": "FateXDimGeom/P83.lean",
+      "upstream_file": "FATEX/83.lean",
+      "verbatim_snippet": "theorem IsRegularLocalRing.flat_local_of_regular {A B : Type} [CommRing A] [CommRing B]\n    [IsRegularLocalRing A] [IsNoetherianRing B] [IsLocalRing B] {f : A →+* B} (hfl : IsLocalHom f)\n    (hff : f.Flat) [IsRegularLocalRing (B ⧸ (maximalIdeal A).map f)] : IsRegularLocalRing B :="
+    },
+    {
+      "local_file": "FateXDimGeom/P84.lean",
+      "upstream_file": "FATEX/84.lean",
+      "verbatim_snippet": "theorem exists_directSum_free_free_of_projective (R M : Type) [CommRing R] [AddCommGroup M]\n    [Module R M] [Module.Projective R M] : ∃ (N : Type) (_ : AddCommGroup N) (_ : Module R N),\n    Module.Free R N ∧ Module.Free R (N × M) :="
+    },
+    {
+      "local_file": "FateXDimGeom/Spec.lean",
+      "upstream_file": "FATEX/85.lean",
+      "verbatim_snippet": "class EuclideanNormNat (R : Type) [CommRing R] extends Nontrivial R where"
+    },
+    {
+      "local_file": "FateXDimGeom/P85.lean",
+      "upstream_file": "FATEX/85.lean",
+      "verbatim_snippet": "theorem exist_euclideanDomain_not_norm_nat :\n    ∃ (R : Type) (_ : EuclideanDomain R), IsEmpty (EuclideanNormNat R) :="
+    },
+    {
+      "local_file": "FateXDimGeom/P86.lean",
+      "upstream_file": "FATEX/86.lean",
+      "verbatim_snippet": "theorem dimension_convex (A : Type) [CommRing A] :\n    ringKrullDim (MvPolynomial (Fin 2) A) + ringKrullDim A ≤ 2 * ringKrullDim (Polynomial A) :="
+    },
+    {
+      "local_file": "FateXDimGeom/P87.lean",
+      "upstream_file": "FATEX/87.lean",
+      "verbatim_snippet": "theorem exists_polynomial_ringEquiv_isEmpty_ringEquiv :\n    ∃ (R S : Type) (_ : CommRing R) (_ : CommRing S),\n    Nonempty ((Polynomial R) ≃+* (Polynomial S)) ∧ IsEmpty (R ≃+* S) :="
+    }
+  ]
+}

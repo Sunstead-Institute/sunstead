@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+"""Frozen verifier for `fc-solved-combinatorics`.
+
+Uses the shared trusted harness baked into `/opt/sunstead/sunstead_sandbox.py`
+with Lean 4.36.0 + read-only Mathlib v4.36.0.
+"""
+import sys
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify  # noqa: E402
+
+LIB_ROOT = 'FcSolvedComb'
+FROZEN_FILES = [
+    "FcSolvedComb/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain"
+]
+STATEMENT_PREAMBLE = ""
+TASKS = {
+    "six_standard_deviations": {
+        "module": "FcSolvedComb.SixStdDev",
+        "theorem": "FcSolvedComb.SixStdDev.six_standard_deviations",
+        "statement": "\ndef six_standard_deviations : Prop :=\n  ∀ (n : ℕ) (S : Fin n → Finset (Fin n)),\n        ∃ χ : Fin n → ℝ, (∀ j, χ j = 1 ∨ χ j = -1) ∧\n          ∀ i, |∑ j ∈ S i, χ j| ≤ 6 * Real.sqrt n\n"
+    },
+    "kotzig_ringel_large": {
+        "module": "FcSolvedComb.KotzigLarge",
+        "theorem": "FcSolvedComb.KotzigLarge.kotzig_conjecture_large",
+        "statement": "\ndef kotzig_ringel_large : Prop :=\n  open SimpleGraph in\n  ∀ᶠ (n : ℕ) in Filter.atTop, ∀ {V : Type} [Finite V] (T : SimpleGraph V),\n        T.IsTree → T.edgeSet.ncard = n →\n        ∃ f : Fin (2 * n + 1) → (V ↪ Fin (2 * n + 1)),\n          (∀ i v, f i v = f 0 v + i) ∧\n          Pairwise (fun i j => Disjoint (T.map (f i)).edgeSet (T.map (f j)).edgeSet) ∧\n          ⨆ i, T.map (f i) = (⊤ : SimpleGraph (Fin (2 * n + 1)))\n"
+    },
+    "erdos_723_projective_planes_le_11": {
+        "module": "FcSolvedComb.Erdos723ProjPlane",
+        "theorem": "FcSolvedComb.Erdos723ProjPlane.erdos_723.variants.leq_11",
+        "statement": "\ndef erdos_723_projective_planes_le_11 : Prop :=\n  open Configuration in\n  ∀ {P L : Type} [Membership P L] [Fintype P] [Fintype L],\n    ∀ pp : ProjectivePlane P L, pp.order ≤ 11 → IsPrimePow pp.order\n"
+    },
+    "erdos_813_bucic_sudakov": {
+        "module": "FcSolvedComb.Erdos813BucicSudakov",
+        "theorem": "FcSolvedComb.Erdos813BucicSudakov.erdos_813.variants.bucic_sudakov",
+        "statement": "\ndef erdos_813_bucic_sudakov : Prop :=\n  open FcSolvedComb.Erdos813BucicSudakov in\n  open Filter Asymptotics in\n  ∀ ε > (0 : ℝ), ∀ᶠ n : ℕ in atTop, (n : ℝ) ^ (5 / 12 - ε : ℝ) ≤ (h n : ℝ)\n"
+    },
+    "erdos_920_triangle_free_chromatic": {
+        "module": "FcSolvedComb.Erdos920TriangleFree",
+        "theorem": "FcSolvedComb.Erdos920TriangleFree.erdos_920.variants.k_eq_3",
+        "statement": "\ndef erdos_920_triangle_free_chromatic : Prop :=\n  open FcSolvedComb.Erdos920TriangleFree in\n  open Real Filter in\n  (fun n ↦ (f 3 n : ℝ)) =Θ[atTop] (fun n ↦ ((n : ℝ) / log n) ^ (1 / 2 : ℝ))\n"
+    },
+    "erdos_295_egyptian_fractions": {
+        "module": "FcSolvedComb.Erdos295Straus",
+        "theorem": "FcSolvedComb.Erdos295Straus.erdos_295.variants.erdos_straus",
+        "statement": "\ndef erdos_295_egyptian_fractions : Prop :=\n  open FcSolvedComb.Erdos295Straus in\n  open scoped Real in\n  ∃ᵉ (C > 0) (O > 0), ∀ᶠ (N : ℕ) in Filter.atTop,\n        (k N - (rexp 1 - 1)*N) ∈ Set.Ioc (-C) (O * N / (N : ℝ).log)\n"
+    },
+    "erdos_494_product_multiset": {
+        "module": "FcSolvedComb.Erdos494ProdMultiset",
+        "theorem": "FcSolvedComb.Erdos494ProdMultiset.erdos_494.variants.product",
+        "statement": "\ndef erdos_494_product_multiset : Prop :=\n  open FcSolvedComb.Erdos494ProdMultiset in\n  open Filter in\n  ∃ (A B : Finset ℂ), 3 < A.card ∧ A.card = B.card ∧ (0 : ℂ) ∉ A ∧ (0 : ℂ) ∉ B ∧\n        prodMultiset A 3 = prodMultiset B 3 ∧ A ≠ B\n"
+    },
+    "erdos_88_erdos_mckay": {
+        "module": "FcSolvedComb.Erdos88McKay",
+        "theorem": "FcSolvedComb.Erdos88McKay.erdos_88.variants.erdos_mckay",
+        "statement": "\ndef erdos_88_erdos_mckay : Prop :=\n  open Filter in\n  ∀ ε > (0 : ℝ), ∃ δ > (0 : ℝ), ∀ n : ℕ, ∀ G : SimpleGraph (Fin n),\n        (G.cliqueNum : ℝ) < ε * Real.log n → (G.indepNum : ℝ) < ε * Real.log n →\n          ∀ m : ℕ, (m : ℝ) ≤ δ * Real.log n ^ 2 →\n            ∃ S : Finset (Fin n), (G.induce (S : Set (Fin n))).edgeSet.ncard = m\n"
+    },
+    "erdos_245_sumset_limsup": {
+        "module": "FcSolvedComb.Erdos245Sumset",
+        "theorem": "FcSolvedComb.Erdos245Sumset.erdos_245",
+        "statement": "\ndef erdos_245_sumset_limsup : Prop :=\n  open Filter Set in\n  open scoped Pointwise Topology in\n  ∀ (A : Set ℕ), A.Infinite →\n        atTop.Tendsto (fun N ↦ (A ∩ Icc 1 ⌊N⌋₊ |>.ncard : ℝ) / N) (𝓝 0) →\n        3 ≤ atTop.limsup\n          fun N : ℝ ↦ ((A + A) ∩ Icc 1 ⌊N⌋₊ |>.ncard : EReal)\n            / (A ∩ Icc 1 ⌊N⌋₊).ncard\n"
+    },
+    "green_23_pythagorean_colouring": {
+        "module": "FcSolvedComb.Green23Pythagorean",
+        "theorem": "FcSolvedComb.Green23Pythagorean.green_23",
+        "statement": "\ndef green_23_pythagorean_colouring : Prop :=\n  -- For every finite colouring of the natural numbers\n      ∀ (k : ℕ) (c : ℕ → Fin k),\n      -- there exist two numbers of the same colour whose squares sum to a square\n      ∃ x y : ℕ,\n        0 < x ∧ 0 < y ∧  -- Exclude trivial x^2 + 0^2 = x^2 solution\n        c x = c y ∧      -- Same colour\n        IsSquare (x^2 + y^2)\n"
+    },
+    "erdos_599_infinite_menger": {
+        "module": "FcSolvedComb.Erdos599Menger",
+        "theorem": "FcSolvedComb.Erdos599Menger.erdos_599",
+        "statement": "\ndef erdos_599_infinite_menger : Prop :=\n  open SimpleGraph in\n  ∀ (V : Type) (G : SimpleGraph V) (A B : Set V),\n        Disjoint A B → G.IsIndepSet A → G.IsIndepSet B →\n        ∃ (ι : Type) (a b : ι → V) (p : ∀ i, G.Walk (a i) (b i)) (S : Set V),\n          (∀ i, a i ∈ A) ∧ (∀ i, b i ∈ B) ∧ (∀ i, (p i).IsPath) ∧\n          (Pairwise fun i j => Disjoint {v | v ∈ (p i).support} {v | v ∈ (p j).support}) ∧\n          S ⊆ {v | ∃ i, v ∈ (p i).support} ∧\n          (∀ i, ∃! v, v ∈ S ∧ v ∈ (p i).support) ∧\n          (∀ a' ∈ A, ∀ b' ∈ B, ∀ q : G.Walk a' b', q.IsPath → ∃ v ∈ q.support, v ∈ S)\n"
+    },
+    "erdos_882_subset_sum_antichain": {
+        "module": "FcSolvedComb.Erdos882Antichain",
+        "theorem": "FcSolvedComb.Erdos882Antichain.erdos_882",
+        "statement": "\ndef erdos_882_subset_sum_antichain : Prop :=\n  open FcSolvedComb.Erdos882Antichain in\n  open Finset in\n  Filter.Tendsto (fun n : ℕ => (maxAntichainCard n : ℝ) / Real.logb 2 n)\n        Filter.atTop (nhds 1)\n"
+    },
+    "tu_deng_conjecture": {
+        "module": "FcSolvedComb.TuDeng",
+        "theorem": "FcSolvedComb.TuDeng.tu_deng_conjecture",
+        "statement": "\ndef tu_deng_conjecture : Prop :=\n  open FcSolvedComb.TuDeng in\n  ∀ (k : ℕ) (hk : 2 ≤ k) (t : ZMod (2 ^ k - 1)) (ht : t ≠ 0),\n    {p : ZMod (2 ^ k - 1) × ZMod (2 ^ k - 1) |\n          p.1 + p.2 = t ∧ binaryWeight p.1.val + binaryWeight p.2.val ≤ k - 1}.ncard\n        ≤ 2 ^ (k - 1)\n"
+    },
+    "tx_graffiti_conjecture_2": {
+        "module": "FcSolvedComb.TxGraffiti2",
+        "theorem": "FcSolvedComb.TxGraffiti2.tx_graffiti_conjecture_2",
+        "statement": "\ndef tx_graffiti_conjecture_2 : Prop :=\n  open FcSolvedComb.TxGraffiti2 in\n  open SimpleGraph in\n  ¬ ∀ (V : Type) [Fintype V] [DecidableEq V] (G : SimpleGraph V)\n        [DecidableRel G.Adj] (_hConn : G.Connected)\n        (_hDeg : G.maxDegree ≤ 3)\n        (_hNotK4 : G = ⊤ → Fintype.card V ≠ 4),\n        zeroForcingNumber G ≤ G.indepNum + 1\n"
+    },
+    "erdos_1033_fan_triangle_degree": {
+        "module": "FcSolvedComb.Erdos1033Fan",
+        "theorem": "FcSolvedComb.Erdos1033Fan.erdos_1033.variants.fan",
+        "statement": "\ndef erdos_1033_fan_triangle_degree : Prop :=\n  open Filter Finset in\n  ∀ (n : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]\n      (hG : n ^ 2 < 4 * #G.edgeFinset),\n    ∃ t, G.IsNClique 3 t ∧ 21 * n ≤ 16 * ∑ v ∈ t, G.degree v\n"
+    },
+    "erdos_627_triangle_free_chromatic_lb": {
+        "module": "FcSolvedComb.Erdos627Chromatic",
+        "theorem": "FcSolvedComb.Erdos627Chromatic.erdos_627.variants.erdos_1961",
+        "statement": "\ndef erdos_627_triangle_free_chromatic_lb : Prop :=\n  open Filter SimpleGraph in\n  open scoped Topology Asymptotics in\n  ∃ c > (0 : ℝ), ∀ᶠ n : ℕ in atTop, ∃ G : SimpleGraph (Fin n),\n        G.cliqueNum = 2 ∧\n          c * Real.sqrt (n : ℝ) / Real.log (n : ℝ) ≤ (G.chromaticNumber.toNat : ℝ)\n"
+    },
+    "erdos_780_kneser_sharp": {
+        "module": "FcSolvedComb.Erdos780Sharp",
+        "theorem": "FcSolvedComb.Erdos780Sharp.erdos_780.variants.sharp",
+        "statement": "\ndef erdos_780_kneser_sharp : Prop :=\n  ∀ (k r t : ℕ) (hk : 1 ≤ k) (hr : 1 ≤ r) (ht : 1 ≤ t),\n    ∃ c : {e : Finset (Fin (k * r - 1 + (t - 1) * (k - 1))) // e.card = r} → Fin t,\n        ¬ ∃ (i : Fin t) (e : Fin k → {e : Finset (Fin (k * r - 1 + (t - 1) * (k - 1))) //\n            e.card = r}), (∀ j, c (e j) = i) ∧ Pairwise fun a b ↦ Disjoint (e a).1 (e b).1\n"
+    },
+    "erdos_1009_sauer_triangles": {
+        "module": "FcSolvedComb.Erdos1009Sauer",
+        "theorem": "FcSolvedComb.Erdos1009Sauer.erdos_1009.variants.sauer",
+        "statement": "\ndef erdos_1009_sauer_triangles : Prop :=\n  ∀ r : ℕ, 1 ≤ r → ∃ G : SimpleGraph (Fin (2 * r + 4)),\n      G.edgeSet.ncard = (2 * r + 4) ^ 2 / 4 + 2 * (2 * r + 4) - 6 ∧\n        ∀ T : Finset (Finset (Fin (2 * r + 4))), (∀ t ∈ T, G.IsNClique 3 t) →\n          (T : Set (Finset (Fin (2 * r + 4)))).Pairwise (fun s t => (s ∩ t).card ≤ 1) →\n            T.card ≤ 2 * (2 * r + 4) - 7\n"
+    },
+    "erdos_915_edge_disjoint_paths": {
+        "module": "FcSolvedComb.Erdos915Paths",
+        "theorem": "FcSolvedComb.Erdos915Paths.erdos_915.variants.edge_disjoint",
+        "statement": "\ndef erdos_915_edge_disjoint_paths : Prop :=\n  open SimpleGraph in\n  ∀ m n : ℕ, 2 ≤ m → 1 ≤ n → ∀ (V : Type) [Fintype V] (G : SimpleGraph V),\n        Fintype.card V = 1 + n * (m - 1) → G.edgeSet.ncard = 1 + n * m.choose 2 →\n          ∃ u v : V, u ≠ v ∧ ∃ P : Finset (G.Walk u v), P.card = m ∧ (∀ p ∈ P, p.IsPath) ∧\n            (P : Set (G.Walk u v)).Pairwise fun p q => List.Disjoint p.edges q.edges\n"
+    },
+    "gyarfas_sumner_path": {
+        "module": "FcSolvedComb.GyarfasSumnerPath",
+        "theorem": "FcSolvedComb.GyarfasSumnerPath.gyarfas_sumner_conjecture.variants.path",
+        "statement": "\ndef gyarfas_sumner_path : Prop :=\n  open FcSolvedComb.GyarfasSumnerPath in\n  open SimpleGraph in\n  ∀ (n : ℕ),\n    ∃ f : ℕ → ℕ, IsChiBoundedBy (pathGraph n) f\n"
+    },
+    "erdos_61_erdos_hajnal_p5": {
+        "module": "FcSolvedComb.Erdos61P5",
+        "theorem": "FcSolvedComb.Erdos61P5.erdos_61.variants.p5",
+        "statement": "\ndef erdos_61_erdos_hajnal_p5 : Prop :=\n  open FcSolvedComb.Erdos61P5 in\n  open Filter in\n  open SimpleGraph in\n  open Real in\n  ∃ c > (0 : ℝ), IsErdosHajnalLowerBound (pathGraph 5) (fun n : ℕ => (n : ℝ) ^ c)\n"
+    },
+    "green_76_rich_rectangles": {
+        "module": "FcSolvedComb.Green76Rectangles",
+        "theorem": "FcSolvedComb.Green76Rectangles.green_76.variants.subset",
+        "statement": "\ndef green_76_rich_rectangles : Prop :=\n  open FcSolvedComb.Green76Rectangles in\n  open scoped Finset in\n  ¬ ∃ k : ℕ, ∀ A : Finset (ℝ × ℝ), ∃ A' ⊆ A, #A' ≤ #A / 2 ∧ HitsRichRectangles k A A'\n"
+    },
+    "erdos_926_aks_extremal": {
+        "module": "FcSolvedComb.Erdos926AKS",
+        "theorem": "FcSolvedComb.Erdos926AKS.erdos_926.variants.aks",
+        "statement": "\ndef erdos_926_aks_extremal : Prop :=\n  open FcSolvedComb.Erdos926AKS in\n  open Filter Asymptotics SimpleGraph in\n  ∃ C : ℝ, ∀ k : ℕ, 4 ≤ k → ∀ n : ℕ,\n      (extremalNumber n (H k) : ℝ) ≤ C * k * (n : ℝ) ^ (3 / 2 : ℝ)\n"
+    },
+    "erdos_781_descending_wave": {
+        "module": "FcSolvedComb.Erdos781Wave",
+        "theorem": "FcSolvedComb.Erdos781Wave.erdos_781.variants.brown_erdos_freedman",
+        "statement": "\ndef erdos_781_descending_wave : Prop :=\n  open FcSolvedComb.Erdos781Wave in\n  open Filter Asymptotics in\n  ∀ (k : ℕ) (hk : 1 ≤ k),\n    k ^ 2 - k + 1 ≤ f k ∧ (f k : ℚ) ≤ (k ^ 3 - 4 * k + 9) / 3\n"
+    },
+    "manickam_miklos_singhi_pokrovskiy": {
+        "module": "FcSolvedComb.MmsPokrovskiy",
+        "theorem": "FcSolvedComb.MmsPokrovskiy.manickam_miklos_singhi_conjecture.variants.pokrovskiy",
+        "statement": "\ndef manickam_miklos_singhi_pokrovskiy : Prop :=\n  open FcSolvedComb.MmsPokrovskiy in\n  open Finset in\n  ∃ C : ℕ, ∀ (n k : ℕ), 1 ≤ k → C * k ≤ n → ∀ x : Fin n → ℝ, ∑ i, x i = 0 →\n        (n - 1).choose (k - 1) ≤ nonnegSubsetCount n k x\n"
+    }
+}
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>")
+    lean_verify(
+        sys.argv[1],
+        lib_root=LIB_ROOT,
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        uses_mathlib=True,
+        statement_preamble=STATEMENT_PREAMBLE,
+        timeout_sec=230,
+    )

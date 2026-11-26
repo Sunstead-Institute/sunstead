@@ -1,0 +1,432 @@
+{
+  "id": "fate-x-ideal-theory",
+  "title": "FATE-X Research Algebra: Ideal Theory, Krull Dimension & Commutative Rings",
+  "description": "40 research-level commutative algebra & ideal theory `sorry` theorems copied verbatim from frenzymath/FATE-X (a6fb49ee, MIT) and kernel-verified on Lean v4.36.0 + Mathlib v4.36.0: prime/maximal/primary ideals, Noetherian & Artinian rings, Dedekind domains, integral extensions, valuations, and Bass's theorem on countably generated projective modules.",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/frenzymath/FATE-X",
+  "upstream": {
+    "repo": "frenzymath/FATE-X",
+    "commit": "a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d",
+    "license": "MIT"
+  },
+  "frozen_paths": [
+    "FateXIdealTheory/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 240,
+    "memory_mb": 6144
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "fatex_12_isPrincipalIdealRing_of_quadratic_integer_19",
+      "title": "FATEX #12 (Ideal Theory / Integral Dependence and the Nullstellensatz): `isPrincipalIdealRing_of_quadratic_integer_19`",
+      "description": "Closes `FATEX/12.lean:8-10` (`Problem12.isPrincipalIdealRing_of_quadratic_integer_19`): Prove that the ring $\\mathbb{Z}[\\frac{1+\\sqrt{-19}}{2}]$ is a principal ideal domain. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P12.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/12.lean#L8-L10"
+    },
+    {
+      "id": "fatex_25_fixedField_eq_algebra_adjoin",
+      "title": "FATEX #25 (Ideal Theory / Integral Dependence and the Nullstellensatz): `fixedField_eq_algebra_adjoin`",
+      "description": "Closes `FATEX/25.lean:9-13` (`Problem25.fixedField_eq_algebra_adjoin`): Prove that the automorphism group of $\\mathbb{F}_2(t)$ is isomorphic to $S_3$, and its fixed field is $\\mathbb{F}_2(u)$ with $$u… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P25.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/25.lean#L9-L13"
+    },
+    {
+      "id": "fatex_26_card_one_or_two_of_finite_closed_subgroup_of_abso",
+      "title": "FATEX #26 (Ideal Theory / Integral Dependence and the Nullstellensatz): `card_one_or_two_of_finite_closed_subgroup_of_absoluteGaloisGroup`",
+      "description": "Closes `FATEX/26.lean:10-15` (`Problem26.card_one_or_two_of_finite_closed_subgroup_of_absoluteGaloisGroup`): Let $K/\\mathbb{Q}$ be a finite extension. Let $H$ be a closed subgroup of the absolute Galois group $G(K)$ of $K$. If $H$ is… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P26.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/26.lean#L10-L15"
+    },
+    {
+      "id": "fatex_27_isGalois_and_rank_eq_of_isPrimitiveRoot_sq",
+      "title": "FATEX #27 (Ideal Theory / Integral Dependence and the Nullstellensatz): `isGalois_and_rank_eq_of_isPrimitiveRoot_sq`",
+      "description": "Closes `FATEX/27.lean:10-17` (`Problem27.isGalois_and_rank_eq_of_isPrimitiveRoot_sq`): Let $p$ be a prime number. Let $K/\\mathbb{Q}$ be a finite extension, such that the $p^{2}$th root of unity is contained in $K$.… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P27.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/27.lean#L10-L17"
+    },
+    {
+      "id": "fatex_28_infinite_conj_of_ne_1_absoluteGaloisGroup",
+      "title": "FATEX #28 (Ideal Theory / Localization and Decomposition of Ideals): `infinite_conj_of_ne_1_absoluteGaloisGroup`",
+      "description": "Closes `FATEX/28.lean:10-13` (`Problem28.infinite_conj_of_ne_1_absoluteGaloisGroup`): Let $K/\\mathbb{Q}$ be a finite extension. Let $g$ be a nontrivial element of the absolute Galois group $G(K)$ of $K$. Show that… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P28.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/28.lean#L10-L13"
+    },
+    {
+      "id": "fatex_29_isClosed_zpowers_iff_isOfFinOrder",
+      "title": "FATEX #29 (Ideal Theory / Localization and Decomposition of Ideals): `isClosed_zpowers_iff_isOfFinOrder`",
+      "description": "Closes `FATEX/29.lean:10-13` (`Problem29.isClosed_zpowers_iff_isOfFinOrder`): Let $K/\\mathbb{Q}$ be a finite extension. Let $g$ be an element of the absolute Galois group $G(K)$ of $K$. Show that the… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P29.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/29.lean#L10-L13"
+    },
+    {
+      "id": "fatex_30_integrallyClosedIn_of_complement_multiplicatively",
+      "title": "FATEX #30 (Ideal Theory / Integral Dependence and the Nullstellensatz): `integrallyClosedIn_of_complement_multiplicatively_closed`",
+      "description": "Closes `FATEX/30.lean:9-11` (`Problem30.integrallyClosedIn_of_complement_multiplicatively_closed`): Let \\( A \\) be a subring of a ring \\( B \\), such that the set \\( B \\setminus A \\) is closed under multiplication. Show that \\( A… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P30.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/30.lean#L9-L11"
+    },
+    {
+      "id": "fatex_31_UFD_of_ge_5",
+      "title": "FATEX #31 (Ideal Theory / Localization and Decomposition of Ideals): `UFD_of_ge_5`",
+      "description": "Closes `FATEX/31.lean:17-19` (`Problem31.UFD_of_ge_5`): Let \\( R = \\mathbb{C}[x_1, \\dots, x_n]/(x_1^2 + x_2^2 + \\dots + x_n^2) \\). Then \\( R \\) is a unique factorization domain for \\(n… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P31.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/31.lean#L17-L19"
+    },
+    {
+      "id": "fatex_32_UFD_of_adicCompletion_UFD",
+      "title": "FATEX #32 (Ideal Theory / Localization and Decomposition of Ideals): `UFD_of_adicCompletion_UFD`",
+      "description": "Closes `FATEX/32.lean:11-15` (`Problem32.UFD_of_adicCompletion_UFD`): Let \\( A \\) be a Noetherian local ring such that its completion \\( \\widehat{A} \\) is a unique factorization domain. Then \\( A \\)… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P32.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/32.lean#L11-L15"
+    },
+    {
+      "id": "fatex_34_powerSeries_not_integrallyClosed_of_two_lt_ringKr",
+      "title": "FATEX #34 (Ideal Theory / Tensor Product and Flatness): `powerSeries_not_integrallyClosed_of_two_lt_ringKrullDim`",
+      "description": "Closes `FATEX/34.lean:11-14` (`Problem34.powerSeries_not_integrallyClosed_of_two_lt_ringKrullDim`): If \\( R \\) is a valuation ring of Krull dimension \\( \\geq 2 \\), then the formal power series ring \\( R[[X]] \\) is not integrally… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P34.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/34.lean#L11-L14"
+    },
+    {
+      "id": "fatex_35_noetherian_of_prime_ideals_fg",
+      "title": "FATEX #35 (Ideal Theory / Ideals and Modules): `noetherian_of_prime_ideals_fg`",
+      "description": "Closes `FATEX/35.lean:8-10` (`Problem35.noetherian_of_prime_ideals_fg`): A commutative ring whose prime ideals are finitely generated is Noetherian. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P35.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/35.lean#L8-L10"
+    },
+    {
+      "id": "fatex_36_associatedPrimes_hom_eq_support_inter_associatedP",
+      "title": "FATEX #36 (Ideal Theory / Integral Dependence and the Nullstellensatz): `associatedPrimes_hom_eq_support_inter_associatedPrimes`",
+      "description": "Closes `FATEX/36.lean:12-16` (`Problem36.associatedPrimes_hom_eq_support_inter_associatedPrimes`): If \\( R \\) is Noetherian and \\( M \\) and \\( N \\) are finitely generated \\( R \\)-modules, show that \\[ \\operatorname{Ass}… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P36.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/36.lean#L12-L16"
+    },
+    {
+      "id": "fatex_37_ufd_quotDetSubOne",
+      "title": "FATEX #37 (Ideal Theory / Integral Dependence and the Nullstellensatz): `ufd_quotDetSubOne`",
+      "description": "Closes `FATEX/37.lean:17-19` (`Problem37.ufd_quotDetSubOne`): Let $R=\\mathbb{C}[x_{11},x_{12},\\dots,x_{1n},x_{21},x_{22},\\dots,x_{2n},\\dots,x_{n1},x_{n2},\\dots,x_{nn}]/(\\det(x_{ij})-1)$, show… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P37.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/37.lean#L17-L19"
+    },
+    {
+      "id": "fatex_42_nonEmpty_ringEquiv_of_sub_in_cube",
+      "title": "FATEX #42 (Ideal Theory / Tensor Product and Flatness): `nonEmpty_ringEquiv_of_sub_in_cube`",
+      "description": "Closes `FATEX/42.lean:10-14` (`Problem42.nonEmpty_ringEquiv_of_sub_in_cube`): Let \\(k\\) be any field. Suppose that \\(A = k[[x,y]]/(f)\\) and \\(B = k[[u,v]]/(g)\\), where \\(f = xy\\) and \\(g = uv + \\delta\\) with… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P42.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/42.lean#L10-L14"
+    },
+    {
+      "id": "fatex_43_IsRegularLocalRing_frobenius_flat",
+      "title": "FATEX #43 (Ideal Theory / Ideals and Modules): `IsRegularLocalRing.frobenius_flat`",
+      "description": "Closes `FATEX/43.lean:19-22` (`Problem43.IsRegularLocalRing.frobenius_flat`): Let $A$ be a reduced Noetherian local ring, $\\mathrm{Char}\\ A = p$. Show that the absolute Frobenius $F_A\\colon A\\to A, a\\mapsto… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P43.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/43.lean#L19-L22"
+    },
+    {
+      "id": "fatex_46_module_flat_iff",
+      "title": "FATEX #46 (Ideal Theory / Ideals and Modules): `module_flat_iff`",
+      "description": "Closes `FATEX/46.lean:11-16` (`Problem46.module_flat_iff`): Let \\(M\\) be an \\(R\\)-module. Then \\(M\\) is flat if and only if the following condition holds: if \\(P\\) is a finitely presented… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P46.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/46.lean#L11-L16"
+    },
+    {
+      "id": "fatex_49_principal_ideal_idempotent_iff_fg_ideal_is_direct",
+      "title": "FATEX #49 (Ideal Theory / Ideals and Modules): `principal_ideal_idempotent_iff_fg_ideal_is_direct_summand`",
+      "description": "Closes `FATEX/49.lean:9-12` (`Problem49.principal_ideal_idempotent_iff_fg_ideal_is_direct_summand`): Let \\( A \\) be a commutative ring. Prove that every principal ideal of \\( A \\) is idempotent if and only if every finitely… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P49.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/49.lean#L9-L12"
+    },
+    {
+      "id": "fatex_50_isNoetherianRing_of_isLocalRing_of_field_inj_of_a",
+      "title": "FATEX #50 (Ideal Theory / Tensor Product and Flatness): `isNoetherianRing_of_isLocalRing_of_field_inj_of_adicComplete_of_maximalIdeal_finite`",
+      "description": "Closes `FATEX/50.lean:9-13` (`Problem50.isNoetherianRing_of_isLocalRing_of_field_inj_of_adicComplete_of_maximalIdeal_finite`): Let \\((A, \\mathfrak{m}, K)\\) be a complete local ring containing a field, and suppose that \\(\\mathfrak{m}\\) is finitely generated… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P50.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/50.lean#L9-L13"
+    },
+    {
+      "id": "fatex_53_isGorensteinRing_quot_x2_sub_y2_y2_sub_z2_xy_yz_z",
+      "title": "FATEX #53 (Ideal Theory / Tensor Product and Flatness): `isGorensteinRing_quot_x2_sub_y2_y2_sub_z2_xy_yz_zx`",
+      "description": "Closes `FATEX/53.lean:31-34` (`Problem53.isGorensteinRing_quot_x2_sub_y2_y2_sub_z2_xy_yz_zx`): Let \\( k \\) be a field, and set \\( A = k[X, Y, Z]/(X^2 - Y^2, Y^2 - Z^2, XY, YZ, ZX) \\). Show that \\( A \\) is Gorenstein. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P53.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/53.lean#L31-L34"
+    },
+    {
+      "id": "fatex_55_stablyFree_iff_free_of_not_fg",
+      "title": "FATEX #55 (Ideal Theory / Ideals and Modules): `stablyFree_iff_free_of_not_fg`",
+      "description": "Closes `FATEX/55.lean:20-22` (`Problem55.stablyFree_iff_free_of_not_fg`): A module \\( M \\) over a ring \\( R \\) is \\textit{stably free} if there exists a free finitely generated module \\( F \\) over \\( R… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P55.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/55.lean#L20-L22"
+    },
+    {
+      "id": "fatex_57_completely_integrally_closed_polynomial_ring",
+      "title": "FATEX #57 (Ideal Theory / Dedekind Domains and DVRs): `completely_integrally_closed_polynomial_ring`",
+      "description": "Closes `FATEX/57.lean:23-25` (`Problem57.completely_integrally_closed_polynomial_ring`): Let \\( A \\) be a domain and \\( K \\) its field of fractions. \\( x \\in K \\) is called almost integral if there exists an element \\(… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P57.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/57.lean#L23-L25"
+    },
+    {
+      "id": "fatex_62_adicCompletion_equiv_of_smooth",
+      "title": "FATEX #62 (Ideal Theory / Tensor Product and Flatness): `adicCompletion_equiv_of_smooth`",
+      "description": "Closes `FATEX/62.lean:11-15` (`Problem62.adicCompletion_equiv_of_smooth`): Let \\( \\varphi: R \\to S \\) be a smooth ring map. Let \\( \\sigma: S \\to R \\) be a left inverse to \\( \\varphi \\). Set \\( I =… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P62.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/62.lean#L11-L15"
+    },
+    {
+      "id": "fatex_63_surjection_of_formally_unramified",
+      "title": "FATEX #63 (Ideal Theory / Ideals and Modules): `surjection_of_formally_unramified`",
+      "description": "Closes `FATEX/63.lean:37-40` (`Problem63.surjection_of_formally_unramified`): Let \\( R \\to S \\) be a formally unramified ring map. Show there exists a surjection of \\( R \\)-algebras \\( S' \\to S \\) whose… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P63.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/63.lean#L37-L40"
+    },
+    {
+      "id": "fatex_73_mvPolynomial_quotient_isCohenMacaulayRing_iff",
+      "title": "FATEX #73 (Ideal Theory / Tensor Product and Flatness): `mvPolynomial_quotient_isCohenMacaulayRing_iff`",
+      "description": "Closes `FATEX/73.lean:40-47` (`Problem73.mvPolynomial_quotient_isCohenMacaulayRing_iff`): If $I$ is an homogeneous ideal of $k[x_0, \\dots, x_n]$, \\( R = k[x_0, \\dots, x_n]/I \\), then \\( R \\) is Cohen-Macaulay if and… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P73.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/73.lean#L40-L47"
+    },
+    {
+      "id": "fatex_75_gradedAlgebra_isCohenMacaulay_iff_homogeneously_l",
+      "title": "FATEX #75 (Ideal Theory / Ideals and Modules): `gradedAlgebra_isCohenMacaulay_iff_homogeneously_localize`",
+      "description": "Closes `FATEX/75.lean:38-42` (`Problem75.gradedAlgebra_isCohenMacaulay_iff_homogeneously_localize`): Let $A$ be a graded Noetherian ring, with $A_0$ a field and $A$ generated by $A_1$. Show that $A$ is Cohen-Macaulay if and only… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P75.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/75.lean#L38-L42"
+    },
+    {
+      "id": "fatex_77_infinite_intermediate_primes",
+      "title": "FATEX #77 (Ideal Theory / Ideals and Modules): `infinite_intermediate_primes`",
+      "description": "Closes `FATEX/77.lean:11-16` (`Problem77.infinite_intermediate_primes`): Let $A$ be a Noetherian ring, $P \\subset Q$ prime ideals such that $\\operatorname{ht} P = h$, $\\operatorname{ht} Q/P = d$, where… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P77.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/77.lean#L11-L16"
+    },
+    {
+      "id": "fatex_78_IsCohenMacaulayLocalRing_isGorensteinRing_of_ufd",
+      "title": "FATEX #78 (Ideal Theory / Localization and Decomposition of Ideals): `IsCohenMacaulayLocalRing.isGorensteinRing_of_ufd`",
+      "description": "Closes `FATEX/78.lean:61-65` (`Problem78.IsCohenMacaulayLocalRing.isGorensteinRing_of_ufd`): Let $A$ be a local Cohen–Macaulay (CM) ring that is a quotient of a regular local ring. If $A$ is a UFD, then $A$ is Gorenstein. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P78.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/78.lean#L61-L65"
+    },
+    {
+      "id": "fatex_88_quotient_not_UFD",
+      "title": "FATEX #88 (Ideal Theory / Localization and Decomposition of Ideals): `quotient_not_UFD`",
+      "description": "Closes `FATEX/88.lean:13-16` (`Problem88.quotient_not_UFD`): $\\mathbb{C}[x, y, z] / (x^2 + y^3 + z^7)$ is a UFD. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P88.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/88.lean#L13-L16"
+    },
+    {
+      "id": "fatex_89_not_isSimpleGroup_of_card_eq_336",
+      "title": "FATEX #89 (Ideal Theory / Localization and Decomposition of Ideals): `not_isSimpleGroup_of_card_eq_336`",
+      "description": "Closes `FATEX/89.lean:8-10` (`Problem89.not_isSimpleGroup_of_card_eq_336`): Prove that if $\\#G = 336$ then $G$ is not simple. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P89.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/89.lean#L8-L10"
+    },
+    {
+      "id": "fatex_90_not_finiteType_inf_algebraMap_range",
+      "title": "FATEX #90 (Ideal Theory / Localization and Decomposition of Ideals): `not_finiteType_inf_algebraMap_range`",
+      "description": "Closes `FATEX/90.lean:10-15` (`Problem90.not_finiteType_inf_algebraMap_range`): Given a field $k$, there exists some $n > 0$, there exists some subfield $K \\subseteq k(x_1, \\cdots ,x_n) $, such that $K \\cap k… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P90.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/90.lean#L10-L15"
+    },
+    {
+      "id": "fatex_91_pic_three_lines",
+      "title": "FATEX #91 (Ideal Theory / Localization and Decomposition of Ideals): `pic_three_lines`",
+      "description": "Closes `FATEX/91.lean:16-19` (`Problem91.pic_three_lines`): Let $ k $ be a field, $ A := k[x, y]/(xy(x + y - 1)) $, then $ \\mathrm{Pic}\\ A \\cong k^{\\times} $. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P91.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/91.lean#L16-L19"
+    },
+    {
+      "id": "fatex_92_dimension_sequences_of_one_dimensional_rings",
+      "title": "FATEX #92 (Ideal Theory / Localization and Decomposition of Ideals): `dimension_sequences_of_one_dimensional_rings`",
+      "description": "Closes `FATEX/92.lean:18-23` (`Problem92.dimension_sequences_of_one_dimensional_rings`): Let $A$ be a commutative ring with identity, $\\dim A = 1$. Then all possible sequences for \\(a_n = dim A[x_1, \\ldots, x_n] ( n… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P92.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/92.lean#L18-L23"
+    },
+    {
+      "id": "fatex_93_exists_integral_finiteType_not_finiteDimensional",
+      "title": "FATEX #93 (Ideal Theory / Localization and Decomposition of Ideals): `exists_integral_finiteType_not_finiteDimensional`",
+      "description": "Closes `FATEX/93.lean:9-12` (`Problem93.exists_integral_finiteType_not_finiteDimensional`): There exists a field $k$ and a (not necessarily commutative) ring $A$ such that $A$ is integral and finitely generated over $k$… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P93.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/93.lean#L9-L12"
+    },
+    {
+      "id": "fatex_94_zeroSet_finite_or_contain_arithmetic_progression",
+      "title": "FATEX #94 (Ideal Theory / Localization and Decomposition of Ideals): `zeroSet_finite_or_contain_arithmetic_progression`",
+      "description": "Closes `FATEX/94.lean:19-21` (`Problem94.zeroSet_finite_or_contain_arithmetic_progression`): Let $k$ be field, $\\mathrm{char}\\ k=0$, $ A $ be a finite-type $k$-algebra, $f: A \\to A$ be an \\'etale endomorphsim, $\\varphi: A… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P94.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/94.lean#L19-L21"
+    },
+    {
+      "id": "fatex_95_p_map_ne_p",
+      "title": "FATEX #95 (Ideal Theory / Localization and Decomposition of Ideals): `p_map_ne_p`",
+      "description": "Closes `FATEX/95.lean:21-24` (`Problem95.p_map_ne_p`): Let $f : \\mathbb{C}[x, y] \\to \\mathbb{C}[x, y]$, $x \\mapsto p(x) + ay, y \\mapsto x$, where $a \\in \\mathbb{C}$, $a \\ne 0$, $p(x)… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P95.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/95.lean#L21-L24"
+    },
+    {
+      "id": "fatex_96_ratFunc_square_is_poly_of_orbit_contain_infinite",
+      "title": "FATEX #96 (Ideal Theory / Localization and Decomposition of Ideals): `ratFunc_square_is_poly_of_orbit_contain_infinite_integer`",
+      "description": "Closes `FATEX/96.lean:12-17` (`Problem96.ratFunc_square_is_poly_of_orbit_contain_infinite_integer`): Let $f(x) \\in \\mathbb{Q}(x)$ be a rational function of degree at least 2, $\\alpha \\in \\mathbb{Q}$. If the orbit… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P96.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/96.lean#L12-L17"
+    },
+    {
+      "id": "fatex_97_exists_point_not_in_zero_set",
+      "title": "FATEX #97 (Ideal Theory / Localization and Decomposition of Ideals): `exists_point_not_in_zero_set`",
+      "description": "Closes `FATEX/97.lean:14-18` (`Problem97.exists_point_not_in_zero_set`): If $k$ is a field of characteristic zero, $n \\in \\mathbb{N}$, $n \\ne 0$, and $\\phi \\colon k[x_1, \\dots, x_n] \\to k[x_1, \\dots,… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P97.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/97.lean#L14-L18"
+    },
+    {
+      "id": "fatex_98_exists_maximal_ideal_not_in_finite_order",
+      "title": "FATEX #98 (Ideal Theory / Localization and Decomposition of Ideals): `exists_maximal_ideal_not_in_finite_order`",
+      "description": "Closes `FATEX/98.lean:10-13` (`Problem98.exists_maximal_ideal_not_in_finite_order`): If $K$ be a number field, $A$ be a finite-type $K$-algebra, $f : A \\to A$ be an endomorphism. If $A$ is a domain and $f$ is not… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P98.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/98.lean#L10-L13"
+    },
+    {
+      "id": "fatex_99_equiv_of_aut_equiv",
+      "title": "FATEX #99 (Ideal Theory / Localization and Decomposition of Ideals): `equiv_of_aut_equiv`",
+      "description": "Closes `FATEX/99.lean:11-15` (`Problem99.equiv_of_aut_equiv`): Let $A$ be a finite-type $\\mathbb{C}$-algebra, $n \\in \\mathbb{N}$, $n \\ge 1$. If $A$ is a domain, and $\\mathrm{Aut}_\\mathbb{C}\\… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P99.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/99.lean#L11-L15"
+    },
+    {
+      "id": "fatex_100_free_of_countably_generated_projective_of_local",
+      "title": "FATEX #100 (Ideal Theory / Localization and Decomposition of Ideals): `free_of_countably_generated_projective_of_local_infinite_rank`",
+      "description": "Closes `FATEX/100.lean:12-17` (`Problem100.free_of_countably_generated_projective_of_local_infinite_rank`): Let $R$ be a Noetherian ring, $P$ be a countably generated projective $R$-module such that $P_{\\mathfrak{m}}$ has infinite rank… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXIdealTheory/P100.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/100.lean#L12-L17"
+    }
+  ]
+}

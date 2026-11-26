@@ -19,6 +19,487 @@
         "note": "Re-checked on all 256 inputs by Sunstead on 2026-11-26."
       }
     },
+    "coding-theory-bounds": {
+      "code_17_8": {
+        "value": 36,
+        "kind": "collection",
+        "source": "A. E. Brouwer, 'Table of general binary codes' (binary-1.html): exact value A(17, 8) = 36.",
+        "url": "https://www.win.tue.nl/~aeb/codes/binary-1.html",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "code_18_8": {
+        "value": 64,
+        "kind": "collection",
+        "source": "A. E. Brouwer, 'Table of general binary codes' (binary-1.html): exact value A(18, 8) = 64.",
+        "url": "https://www.win.tue.nl/~aeb/codes/binary-1.html",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "code_19_8": {
+        "value": 128,
+        "kind": "collection",
+        "source": "A. E. Brouwer, 'Table of general binary codes' (binary-1.html): exact value A(19, 8) = 128.",
+        "url": "https://www.win.tue.nl/~aeb/codes/binary-1.html",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "code_21_10": {
+        "value": 42,
+        "kind": "collection",
+        "source": "A. E. Brouwer, 'Table of general binary codes' (binary-1.html): A(21, 10) in 42-47 (open frontier).",
+        "url": "https://www.win.tue.nl/~aeb/codes/binary-1.html",
+        "checked": "2026-11-26"
+      },
+      "code_22_10": {
+        "value": 64,
+        "kind": "collection",
+        "source": "A. E. Brouwer, 'Table of general binary codes' (binary-1.html): A(22, 10) in 64-84 (open frontier).",
+        "url": "https://www.win.tue.nl/~aeb/codes/binary-1.html",
+        "checked": "2026-11-26"
+      },
+      "code_23_10": {
+        "value": 84,
+        "kind": "collection",
+        "source": "A. E. Brouwer, 'Table of general binary codes' (binary-1.html): A(23, 10) in 84-150 (open frontier).",
+        "url": "https://www.win.tue.nl/~aeb/codes/binary-1.html",
+        "checked": "2026-11-26"
+      },
+      "code_24_10": {
+        "value": 136,
+        "kind": "collection",
+        "source": "A. E. Brouwer, 'Table of general binary codes' (binary-1.html): A(24, 10) in 136-268 (open frontier).",
+        "url": "https://www.win.tue.nl/~aeb/codes/binary-1.html",
+        "checked": "2026-11-26"
+      },
+      "code_26_12": {
+        "value": 65,
+        "kind": "collection",
+        "source": "A. E. Brouwer, 'Table of general binary codes' (binary-1.html): A(26, 12) in 65-96 (open frontier).",
+        "url": "https://www.win.tue.nl/~aeb/codes/binary-1.html",
+        "checked": "2026-11-26"
+      },
+      "cwc_17_6_6": {
+        "value": 113,
+        "kind": "collection",
+        "source": "A. E. Brouwer, 'Bounds for binary constant weight codes' (Andw.html): A(17, 6, 6) in 113-124 (113Ch-124Ö).",
+        "url": "https://aeb.win.tue.nl/codes/Andw.html",
+        "checked": "2026-11-26"
+      },
+      "cwc_18_6_7": {
+        "value": 243,
+        "kind": "collection",
+        "source": "A. E. Brouwer, 'Bounds for binary constant weight codes' (Andw.html): A(18, 6, 7) in 243-309 (243G-309Cha).",
+        "url": "https://aeb.win.tue.nl/codes/Andw.html",
+        "checked": "2026-11-26"
+      },
+      "cwc_20_8_7": {
+        "value": 80,
+        "kind": "collection",
+        "source": "A. E. Brouwer, 'Bounds for binary constant weight codes' (Andw.html): exact value A(20, 8, 7) = 80 (80s, Steiner system).",
+        "url": "https://aeb.win.tue.nl/codes/Andw.html",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "cwc_21_6_5": {
+        "value": 110,
+        "kind": "collection",
+        "source": "A. E. Brouwer, 'Bounds for binary constant weight codes' (Andw.html): A(21, 6, 5) in 110-126 (110Bo-126); williamechols/cwc-seeded-tabu-search also publishes a 109-word certificate.",
+        "url": "https://aeb.win.tue.nl/codes/Andw.html",
+        "checked": "2026-11-26"
+      },
+      "cwc_24_10_8": {
+        "value": 39,
+        "kind": "collection",
+        "source": "A. E. Brouwer (Andw.html, 39E-60) and williamechols/cwc-seeded-tabu-search certificate codes/24_10_8_39.txt: A(24, 10, 8) >= 39 (upper bound 60).",
+        "url": "https://github.com/williamechols/cwc-seeded-tabu-search/tree/4f0bf18b094fb15c3634001ea8aed847e8353d1c/codes",
+        "checked": "2026-11-26"
+      },
+      "cwc_26_10_8": {
+        "value": 68,
+        "kind": "collection",
+        "source": "A. E. Brouwer (Andw.html, 68E-104) and williamechols/cwc-seeded-tabu-search certificate codes/26_10_8_68.txt: A(26, 10, 8) >= 68 (upper bound 104).",
+        "url": "https://github.com/williamechols/cwc-seeded-tabu-search/tree/4f0bf18b094fb15c3634001ea8aed847e8353d1c/codes",
+        "checked": "2026-11-26"
+      },
+      "cwc_27_10_8": {
+        "value": 76,
+        "kind": "collection",
+        "source": "A. E. Brouwer (Andw.html, 76E-121) and williamechols/cwc-seeded-tabu-search certificate codes/27_10_8_76.txt: A(27, 10, 8) >= 76 (upper bound 121).",
+        "url": "https://github.com/williamechols/cwc-seeded-tabu-search/tree/4f0bf18b094fb15c3634001ea8aed847e8353d1c/codes",
+        "checked": "2026-11-26"
+      },
+      "cwc_29_12_10": {
+        "value": 70,
+        "kind": "collection",
+        "source": "A. E. Brouwer (Andw.html, 70E-126Po) and williamechols/cwc-seeded-tabu-search certificate codes/29_12_10_70.txt: A(29, 12, 10) >= 70 (upper bound 126).",
+        "url": "https://github.com/williamechols/cwc-seeded-tabu-search/tree/4f0bf18b094fb15c3634001ea8aed847e8353d1c/codes",
+        "checked": "2026-11-26"
+      }
+    },
+    "combinatorial-additive-opt": {
+      "capset_f3_4": {
+        "value": 20,
+        "kind": "literature",
+        "source": "G. Pellegrino (1970): maximum cap set size in AG(4, 3) = F_3^4 is exactly 20 (OEIS A090245).",
+        "url": "https://oeis.org/A090245",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "capset_f3_5": {
+        "value": 45,
+        "kind": "literature",
+        "source": "Y. Edel, S. Ferret, I. Landjev, L. Storme, 'The classification of the largest caps in AG(5, 3)', J. Combin. Theory Ser. A 99 (2002): maximum cap set in F_3^5 is exactly 45 (OEIS A090245).",
+        "url": "https://oeis.org/A090245",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "capset_f3_6": {
+        "value": 112,
+        "kind": "literature",
+        "source": "A. Potechin, 'Maximal caps in AG(6, 3)', Des. Codes Cryptogr. 46 (2008), arXiv:0802.0789: maximum cap set in F_3^6 is exactly 112 (OEIS A090245).",
+        "url": "https://arxiv.org/abs/0802.0789",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "capset_f3_7": {
+        "value": 236,
+        "kind": "literature",
+        "source": "Y. Edel, 'Extensions of generalized product caps', Des. Codes Cryptogr. 31 (2004): largest known cap set in F_3^7 has size 236 (open frontier; upper bound 276; OEIS A090245).",
+        "url": "https://oeis.org/A090245",
+        "checked": "2026-11-26"
+      },
+      "ap3_n64": {
+        "value": 20,
+        "kind": "collection",
+        "source": "OEIS A003002 (b003002.txt) / J. Dybizbanski, Electron. J. Combin. 19(2) (2012): exact value r_3(64) = 20.",
+        "url": "https://oeis.org/A003002",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "ap3_n100": {
+        "value": 27,
+        "kind": "collection",
+        "source": "OEIS A003002 (b003002.txt) / J. Dybizbanski, Electron. J. Combin. 19(2) (2012): exact value r_3(100) = 27.",
+        "url": "https://oeis.org/A003002",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "ap3_n150": {
+        "value": 35,
+        "kind": "collection",
+        "source": "OEIS A003002 (b003002.txt) / J. Dybizbanski, Electron. J. Combin. 19(2) (2012): exact value r_3(150) = 35.",
+        "url": "https://oeis.org/A003002",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "ap3_n200": {
+        "value": 41,
+        "kind": "collection",
+        "source": "OEIS A003002 (b003002.txt): exact value r_3(200) = 41 (verified through n = 211).",
+        "url": "https://oeis.org/A003002",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "ap3_n300": {
+        "value": 54,
+        "kind": "derived",
+        "source": "Derived from OEIS A003002 exact r_3(100) = 27: for any 27-element 3-AP-free set A in {0..99}, A union (A + 200) in {0..299} has size 54 and is 3-AP-free because any cross-interval midpoint lies in [100, 199].",
+        "url": "https://oeis.org/A003002",
+        "checked": "2026-11-26",
+        "note": "Exact r_3(300) is open; replace with a stronger literature lower bound if published."
+      },
+      "sidon_n100": {
+        "value": 12,
+        "kind": "derived",
+        "source": "Exact equivalence to Optimal Golomb Rulers (OEIS A003022): G(12) = 85 <= 99 < 106 = G(13), so the largest Sidon set in {0..99} has exactly 12 elements.",
+        "url": "https://oeis.org/A003022",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "sidon_n150": {
+        "value": 14,
+        "kind": "derived",
+        "source": "Exact equivalence to Optimal Golomb Rulers (OEIS A003022): G(14) = 127 <= 149 < 151 = G(15), so the largest Sidon set in {0..149} has exactly 14 elements.",
+        "url": "https://oeis.org/A003022",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "sidon_n200": {
+        "value": 17,
+        "kind": "derived",
+        "source": "Exact equivalence to Optimal Golomb Rulers (OEIS A003022): G(17) = 199 <= 199 < 216 = G(18), so the largest Sidon set in {0..199} has exactly 17 elements.",
+        "url": "https://oeis.org/A003022",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "sidon_n300": {
+        "value": 20,
+        "kind": "derived",
+        "source": "Exact equivalence to Optimal Golomb Rulers (OEIS A003022): G(20) = 283 <= 299 < 333 = G(21), so the largest Sidon set in {0..299} has exactly 20 elements.",
+        "url": "https://oeis.org/A003022",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "sidon_n500": {
+        "value": 26,
+        "kind": "derived",
+        "source": "Exact equivalence to Optimal Golomb Rulers (OEIS A003022): G(26) = 492 <= 499 < 553 = G(27), so the largest Sidon set in {0..499} has exactly 26 elements.",
+        "url": "https://oeis.org/A003022",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      }
+    },
+    "combinatorial-designs-opt": {
+      "ca_2_15_3": {
+        "value": 15,
+        "kind": "collection",
+        "source": "C. J. Colbourn, Covering Array Tables (CAN(2, 15, 3) <= 15); also benchmarked in Wu, Nie, Kuo, Leung, Colbourn, IEEE TEVC 19(4) (2015).",
+        "url": "https://www.public.asu.edu/~ccolbou/src/tabby/catable.html",
+        "checked": "2026-11-26"
+      },
+      "ca_2_20_3": {
+        "value": 15,
+        "kind": "collection",
+        "source": "C. J. Colbourn, Covering Array Tables (CAN(2, 20, 3) <= 15); also benchmarked in Wu, Nie, Kuo, Leung, Colbourn, IEEE TEVC 19(4) (2015).",
+        "url": "https://www.public.asu.edu/~ccolbou/src/tabby/catable.html",
+        "checked": "2026-11-26"
+      },
+      "ca_2_15_4": {
+        "value": 24,
+        "kind": "collection",
+        "source": "C. J. Colbourn, Covering Array Tables (CAN(2, 15, 4) <= 24); also benchmarked in Wu, Nie, Kuo, Leung, Colbourn, IEEE TEVC 19(4) (2015).",
+        "url": "https://www.public.asu.edu/~ccolbou/src/tabby/catable.html",
+        "checked": "2026-11-26"
+      },
+      "ca_2_20_4": {
+        "value": 28,
+        "kind": "collection",
+        "source": "C. J. Colbourn, Covering Array Tables (CAN(2, 20, 4) <= 28); also benchmarked in Wu, Nie, Kuo, Leung, Colbourn, IEEE TEVC 19(4) (2015).",
+        "url": "https://www.public.asu.edu/~ccolbou/src/tabby/catable.html",
+        "checked": "2026-11-26"
+      },
+      "ca_3_12_2": {
+        "value": 15,
+        "kind": "literature",
+        "source": "Exact value CAN(3, 12, 2) = 15 (Nurmela / Colbourn Covering Array Tables; proven no 14-row strength-3 binary CA on 12 columns exists).",
+        "url": "https://www.public.asu.edu/~ccolbou/src/tabby/catable.html",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "ca_3_16_2": {
+        "value": 17,
+        "kind": "literature",
+        "source": "Exact value CAN(3, 16, 2) = 17 (Colbourn Covering Array Tables; proven optimal by exact classification of strength-3 binary covering arrays).",
+        "url": "https://www.public.asu.edu/~ccolbou/src/tabby/catable.html",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "ca_3_20_2": {
+        "value": 18,
+        "kind": "literature",
+        "source": "Exact value CAN(3, 20, 2) = 18 (Sloane / Roux / Colbourn Covering Array Tables; proven optimal for 17 <= k <= 20).",
+        "url": "https://www.public.asu.edu/~ccolbou/src/tabby/catable.html",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "ca_3_10_3": {
+        "value": 45,
+        "kind": "collection",
+        "source": "C. J. Colbourn, Covering Array Tables (CAN(3, 10, 3) <= 45); also benchmarked in Wu, Nie, Kuo, Leung, Colbourn, IEEE TEVC 19(4) (2015).",
+        "url": "https://www.public.asu.edu/~ccolbou/src/tabby/catable.html",
+        "checked": "2026-11-26"
+      },
+      "golomb_k12": {
+        "value": 85,
+        "kind": "literature",
+        "source": "OEIS A003022 (b003022.txt) / distributed.net Project OGR: proven optimal 12-mark Golomb ruler length G(12) = 85.",
+        "url": "https://oeis.org/A003022",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "golomb_k14": {
+        "value": 127,
+        "kind": "literature",
+        "source": "OEIS A003022 (b003022.txt) / distributed.net Project OGR: proven optimal 14-mark Golomb ruler length G(14) = 127.",
+        "url": "https://oeis.org/A003022",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "golomb_k16": {
+        "value": 177,
+        "kind": "literature",
+        "source": "OEIS A003022 (b003022.txt) / distributed.net Project OGR: proven optimal 16-mark Golomb ruler length G(16) = 177.",
+        "url": "https://oeis.org/A003022",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "golomb_k20": {
+        "value": 283,
+        "kind": "literature",
+        "source": "OEIS A003022 (b003022.txt) / distributed.net Project OGR: proven optimal 20-mark Golomb ruler length G(20) = 283.",
+        "url": "https://oeis.org/A003022",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "golomb_k25": {
+        "value": 480,
+        "kind": "literature",
+        "source": "OEIS A003022 (b003022.txt) / distributed.net Project OGR-25 (2008): proven optimal 25-mark Golomb ruler length G(25) = 480.",
+        "url": "https://oeis.org/A003022",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "golomb_k29": {
+        "value": 623,
+        "kind": "literature",
+        "source": "M. D. Atkinson and A. Hassenklover (1984) / J. B. Shearer Golomb ruler tables: shortest known 29-mark Golomb ruler has length 623 (OGR-29 open frontier; exhaustive optimality proved only through OGR-28 = 585).",
+        "url": "https://oeis.org/A003022",
+        "checked": "2026-11-26"
+      }
+    },
+    "crypto-addition-chains": {
+      "curve25519_field_inv": {
+        "value": 265,
+        "kind": "literature",
+        "source": "D. J. Bernstein / Brian Smith (ecc-inversion-addition-chains-01) and mmcloughlin/addchain BestKnown: 265 steps (254 doubles + 11 adds) for Curve25519 p-2.",
+        "url": "https://briansmith.org/ecc-inversion-addition-chains-01",
+        "checked": "2026-11-26"
+      },
+      "curve25519_scalar_inv": {
+        "value": 283,
+        "kind": "collection",
+        "source": "mmcloughlin/addchain internal/results/results.go (curve25519_scalar, D=2): 283 steps (beats Brian Smith's 284).",
+        "url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/results/results.go",
+        "checked": "2026-11-26"
+      },
+      "p256_field_inv": {
+        "value": 267,
+        "kind": "derived",
+        "source": "Derived from Brian Smith's 266-step chain for NIST P-256 p-3 (ecc-inversion-addition-chains-01, addchain BestKnown=266 for D=3): adding +1 yields p-2 in 267 steps.",
+        "url": "https://briansmith.org/ecc-inversion-addition-chains-01",
+        "checked": "2026-11-26"
+      },
+      "p256_scalar_inv": {
+        "value": 292,
+        "kind": "literature",
+        "source": "Brian Smith (ecc-inversion-addition-chains-01) and mmcloughlin/addchain BestKnown: 292 steps for NIST P-256 scalar n-2.",
+        "url": "https://briansmith.org/ecc-inversion-addition-chains-01",
+        "checked": "2026-11-26"
+      },
+      "p384_field_inv": {
+        "value": 397,
+        "kind": "derived",
+        "source": "Derived from Brian Smith's 396-step chain for NIST P-384 p-3 (ecc-inversion-addition-chains-01, addchain BestKnown=396 for D=3): adding +1 yields p-2 in 397 steps.",
+        "url": "https://briansmith.org/ecc-inversion-addition-chains-01",
+        "checked": "2026-11-26"
+      },
+      "p384_scalar_inv": {
+        "value": 433,
+        "kind": "literature",
+        "source": "Brian Smith (ecc-inversion-addition-chains-01) and mmcloughlin/addchain BestKnown: 433 steps for NIST P-384 scalar n-2.",
+        "url": "https://briansmith.org/ecc-inversion-addition-chains-01",
+        "checked": "2026-11-26"
+      },
+      "secp256k1_field_inv": {
+        "value": 270,
+        "kind": "derived",
+        "source": "Derived from Brian Smith's 269-step chain for secp256k1 p-3 (ecc-inversion-addition-chains-01, addchain BestKnown=269 for D=3): adding +1 yields p-2 in 270 steps.",
+        "url": "https://briansmith.org/ecc-inversion-addition-chains-01",
+        "checked": "2026-11-26"
+      },
+      "secp256k1_scalar_inv": {
+        "value": 290,
+        "kind": "literature",
+        "source": "Peter Dettman / Brian Smith (ecc-inversion-addition-chains-01) and mmcloughlin/addchain BestKnown: 290 steps for secp256k1 scalar n-2.",
+        "url": "https://briansmith.org/ecc-inversion-addition-chains-01",
+        "checked": "2026-11-26"
+      },
+      "goldilocks_ed448_inv": {
+        "value": 460,
+        "kind": "collection",
+        "source": "mmcloughlin/addchain internal/results/results.go (goldilocks_field, D=2): 460 steps for Ed448-Goldilocks p-2.",
+        "url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/results/results.go",
+        "checked": "2026-11-26"
+      },
+      "p224_field_inv": {
+        "value": 234,
+        "kind": "collection",
+        "source": "mmcloughlin/addchain internal/results/results.go (p224_field, D=2): 234 steps for NIST P-224 p-2.",
+        "url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/results/results.go",
+        "checked": "2026-11-26"
+      },
+      "p192_field_inv": {
+        "value": 203,
+        "kind": "collection",
+        "source": "mmcloughlin/addchain internal/results/results.go (p192_field, D=2): 203 steps for NIST P-192 p-2.",
+        "url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/results/results.go",
+        "checked": "2026-11-26"
+      },
+      "secp192k1_field_inv": {
+        "value": 205,
+        "kind": "collection",
+        "source": "mmcloughlin/addchain internal/results/results.go (secp192k1_field, D=2): 205 steps for secp192k1 p-2.",
+        "url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/results/results.go",
+        "checked": "2026-11-26"
+      },
+      "secp224k1_field_inv": {
+        "value": 238,
+        "kind": "collection",
+        "source": "mmcloughlin/addchain internal/results/results.go (secp224k1_field, D=2): 238 steps for secp224k1 p-2.",
+        "url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/results/results.go",
+        "checked": "2026-11-26"
+      },
+      "p2213_field_inv": {
+        "value": 231,
+        "kind": "collection",
+        "source": "mmcloughlin/addchain internal/results/results.go (p2213_field, D=2): 231 steps for M-221 (2^221-3) p-2.",
+        "url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/results/results.go",
+        "checked": "2026-11-26"
+      },
+      "p222117_field_inv": {
+        "value": 233,
+        "kind": "collection",
+        "source": "mmcloughlin/addchain internal/results/results.go (p222117_field, D=2): 233 steps for E-222 (2^222-117) p-2.",
+        "url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/results/results.go",
+        "checked": "2026-11-26"
+      },
+      "p2519_field_inv": {
+        "value": 263,
+        "kind": "collection",
+        "source": "mmcloughlin/addchain internal/results/results.go (p2519_field, D=2): 263 steps for Curve1174 (2^251-9) p-2.",
+        "url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/results/results.go",
+        "checked": "2026-11-26"
+      },
+      "p382105_field_inv": {
+        "value": 395,
+        "kind": "collection",
+        "source": "mmcloughlin/addchain internal/results/results.go (p382105_field, D=2): 395 steps for E-382 (2^382-105) p-2.",
+        "url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/results/results.go",
+        "checked": "2026-11-26"
+      },
+      "p383187_field_inv": {
+        "value": 396,
+        "kind": "collection",
+        "source": "mmcloughlin/addchain internal/results/results.go (p383187_field, D=2): 396 steps for M-383 (2^383-187) p-2.",
+        "url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/results/results.go",
+        "checked": "2026-11-26"
+      },
+      "p41417_field_inv": {
+        "value": 426,
+        "kind": "collection",
+        "source": "mmcloughlin/addchain internal/results/results.go (p41417_field, D=2): 426 steps for Curve41417 (2^414-17) p-2.",
+        "url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/results/results.go",
+        "checked": "2026-11-26"
+      },
+      "p511187_field_inv": {
+        "value": 525,
+        "kind": "collection",
+        "source": "mmcloughlin/addchain internal/results/results.go (p511187_field, D=2): 525 steps for M-511 (2^511-187) p-2.",
+        "url": "https://github.com/mmcloughlin/addchain/blob/6c4dbba3acc1bf0269d4a90bb9cdfdf865017601/internal/results/results.go",
+        "checked": "2026-11-26"
+      }
+    },
     "crypto-linear-xor-opt": {
       "aes_mixcolumns_xor": {
         "value": 88,
@@ -69,6 +550,227 @@
         "note": "The designers' figure has not been confirmed from the paper text yet."
       }
     },
+    "crypto-lwc-linear-xor": {
+      "pyjamask_m0_xor": {
+        "value": 176,
+        "kind": "heuristic",
+        "source": "No published straight-line 2-input XOR count for Pyjamask-128 M0 (32x32 circulant) was confirmed on 2026-11-26. Floor from stock randomized Paar heuristic (scripts/best_known/linear_floor.py, 40 runs, seed 1).",
+        "url": "https://github.com/Sunstead-Institute/sunstead/blob/main/scripts/best_known/linear_floor.py",
+        "checked": "2026-11-26",
+        "note": "Replace with a lower literature XOR count (e.g., RNBP/Xiang et al.) when confirmed."
+      },
+      "pyjamask_m1_xor": {
+        "value": 144,
+        "kind": "heuristic",
+        "source": "No published straight-line 2-input XOR count for Pyjamask-128 M1 (32x32 circulant) was confirmed on 2026-11-26. Floor from stock randomized Paar heuristic (scripts/best_known/linear_floor.py, 40 runs, seed 1).",
+        "url": "https://github.com/Sunstead-Institute/sunstead/blob/main/scripts/best_known/linear_floor.py",
+        "checked": "2026-11-26",
+        "note": "Replace with a lower literature XOR count (e.g., RNBP/Xiang et al.) when confirmed."
+      },
+      "pyjamask_m2_xor": {
+        "value": 199,
+        "kind": "heuristic",
+        "source": "No published straight-line 2-input XOR count for Pyjamask-128 M2 (32x32 circulant) was confirmed on 2026-11-26. Floor from stock randomized Paar heuristic (scripts/best_known/linear_floor.py, 40 runs, seed 1).",
+        "url": "https://github.com/Sunstead-Institute/sunstead/blob/main/scripts/best_known/linear_floor.py",
+        "checked": "2026-11-26",
+        "note": "Replace with a lower literature XOR count (e.g., RNBP/Xiang et al.) when confirmed."
+      },
+      "pyjamask_m3_xor": {
+        "value": 144,
+        "kind": "heuristic",
+        "source": "No published straight-line 2-input XOR count for Pyjamask-128 M3 (32x32 circulant) was confirmed on 2026-11-26. Floor from stock randomized Paar heuristic (scripts/best_known/linear_floor.py, 40 runs, seed 1).",
+        "url": "https://github.com/Sunstead-Institute/sunstead/blob/main/scripts/best_known/linear_floor.py",
+        "checked": "2026-11-26",
+        "note": "Replace with a lower literature XOR count (e.g., RNBP/Xiang et al.) when confirmed."
+      },
+      "pyjamask_mk_xor": {
+        "value": 200,
+        "kind": "heuristic",
+        "source": "No published straight-line 2-input XOR count for Pyjamask-128 Key M_K (32x32 circulant) was confirmed on 2026-11-26. Floor from stock randomized Paar heuristic (scripts/best_known/linear_floor.py, 40 runs, seed 1).",
+        "url": "https://github.com/Sunstead-Institute/sunstead/blob/main/scripts/best_known/linear_floor.py",
+        "checked": "2026-11-26",
+        "note": "Replace with a lower literature XOR count (e.g., RNBP/Xiang et al.) when confirmed."
+      },
+      "pyjamask_inv_m0_xor": {
+        "value": 169,
+        "kind": "heuristic",
+        "source": "No published straight-line 2-input XOR count for Pyjamask-128 InvM0 (32x32 circulant) was confirmed on 2026-11-26. Floor from stock randomized Paar heuristic (scripts/best_known/linear_floor.py, 40 runs, seed 1).",
+        "url": "https://github.com/Sunstead-Institute/sunstead/blob/main/scripts/best_known/linear_floor.py",
+        "checked": "2026-11-26",
+        "note": "Replace with a lower literature XOR count (e.g., RNBP/Xiang et al.) when confirmed."
+      },
+      "pyjamask_inv_m1_xor": {
+        "value": 199,
+        "kind": "heuristic",
+        "source": "No published straight-line 2-input XOR count for Pyjamask-128 InvM1 (32x32 circulant) was confirmed on 2026-11-26. Floor from stock randomized Paar heuristic (scripts/best_known/linear_floor.py, 40 runs, seed 1).",
+        "url": "https://github.com/Sunstead-Institute/sunstead/blob/main/scripts/best_known/linear_floor.py",
+        "checked": "2026-11-26",
+        "note": "Replace with a lower literature XOR count (e.g., RNBP/Xiang et al.) when confirmed."
+      },
+      "pyjamask_inv_m2_xor": {
+        "value": 144,
+        "kind": "heuristic",
+        "source": "No published straight-line 2-input XOR count for Pyjamask-128 InvM2 (32x32 circulant) was confirmed on 2026-11-26. Floor from stock randomized Paar heuristic (scripts/best_known/linear_floor.py, 40 runs, seed 1).",
+        "url": "https://github.com/Sunstead-Institute/sunstead/blob/main/scripts/best_known/linear_floor.py",
+        "checked": "2026-11-26",
+        "note": "Replace with a lower literature XOR count (e.g., RNBP/Xiang et al.) when confirmed."
+      },
+      "pyjamask_inv_m3_xor": {
+        "value": 198,
+        "kind": "heuristic",
+        "source": "No published straight-line 2-input XOR count for Pyjamask-128 InvM3 (32x32 circulant) was confirmed on 2026-11-26. Floor from stock randomized Paar heuristic (scripts/best_known/linear_floor.py, 40 runs, seed 1).",
+        "url": "https://github.com/Sunstead-Institute/sunstead/blob/main/scripts/best_known/linear_floor.py",
+        "checked": "2026-11-26",
+        "note": "Replace with a lower literature XOR count (e.g., RNBP/Xiang et al.) when confirmed."
+      },
+      "photon256_mds_xor": {
+        "value": 217,
+        "kind": "heuristic",
+        "source": "No published straight-line 2-input XOR count for PHOTON-256 8x8 GF(2^4) MDS (32x32) was confirmed on 2026-11-26. Floor from stock randomized Paar heuristic (scripts/best_known/linear_floor.py, 40 runs, seed 1).",
+        "url": "https://github.com/Sunstead-Institute/sunstead/blob/main/scripts/best_known/linear_floor.py",
+        "checked": "2026-11-26",
+        "note": "Replace with a lower literature XOR count (e.g., RNBP/Xiang et al.) when confirmed."
+      },
+      "clyde128_lbox_xor": {
+        "value": 384,
+        "kind": "collection",
+        "source": "D. Bellizia et al. (Spook/Clyde-128, ToSC 2020) / rweather/lightweight-crypto internal-spook.c: 12 32-bit word XORs = 384 bit-XORs (stock randomized Paar on the expanded 64x64 matrix reaches 580).",
+        "url": "https://github.com/rweather/lightweight-crypto/tree/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined",
+        "checked": "2026-11-26"
+      },
+      "ascon_sigma0_xor": {
+        "value": 128,
+        "kind": "heuristic",
+        "source": "NIST SP 800-232 / rweather/lightweight-crypto internal-ascon.c: two 64-bit word XORs = 128 bit-XORs; stock randomized Paar (scripts/best_known/linear_floor.py, 15 runs, seed 1) finds no reduction below 128.",
+        "url": "https://github.com/Sunstead-Institute/sunstead/blob/main/scripts/best_known/linear_floor.py",
+        "checked": "2026-11-26"
+      },
+      "ascon_sigma2_xor": {
+        "value": 128,
+        "kind": "heuristic",
+        "source": "NIST SP 800-232 / rweather/lightweight-crypto internal-ascon.c: two 64-bit word XORs = 128 bit-XORs; stock randomized Paar (scripts/best_known/linear_floor.py, 15 runs, seed 1) finds no reduction below 128.",
+        "url": "https://github.com/Sunstead-Institute/sunstead/blob/main/scripts/best_known/linear_floor.py",
+        "checked": "2026-11-26"
+      }
+    },
+    "crypto-lwc-sboxes": {
+      "skinny8_total_gates": {
+        "value": 24,
+        "kind": "literature",
+        "source": "C. Beierle et al., 'The SKINNY Family of Block Ciphers and Its Low-Latency Variant MANTIS', CRYPTO 2016 / rweather/lightweight-crypto internal-skinnyutil.h: 8 NOR + 8 XOR maps to 8 NOT + 8 AND + 8 XNOR = 24 gates in {xor, xnor, and, not}.",
+        "url": "https://github.com/rweather/lightweight-crypto/tree/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined",
+        "checked": "2026-11-26"
+      },
+      "skinny8_and_gates": {
+        "value": 8,
+        "kind": "literature",
+        "source": "C. Beierle et al., CRYPTO 2016 / rweather/lightweight-crypto internal-skinnyutil.h: defining 4-round SKINNY-128 S-box uses exactly 8 NOR/AND gates.",
+        "url": "https://github.com/rweather/lightweight-crypto/tree/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined",
+        "checked": "2026-11-26"
+      },
+      "skinny8_and_depth": {
+        "value": 4,
+        "kind": "literature",
+        "source": "C. Beierle et al., CRYPTO 2016 / rweather/lightweight-crypto internal-skinnyutil.h: defining 4-round iterated NOR-XOR SKINNY-128 S-box has AND-depth 4 (algebraic degree 6 gives theoretical lower bound 3).",
+        "url": "https://github.com/rweather/lightweight-crypto/tree/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined",
+        "checked": "2026-11-26"
+      },
+      "ascon_total_gates": {
+        "value": 21,
+        "kind": "collection",
+        "source": "NIST SP 800-232 / rweather/lightweight-crypto internal-ascon.c bitsliced 5-bit Ascon S-box: 5 AND + 5 NOT + 10 XOR + 1 XNOR = 21 gates in {xor, xnor, and, not}.",
+        "url": "https://github.com/rweather/lightweight-crypto/tree/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined",
+        "checked": "2026-11-26"
+      },
+      "ascon_and_gates": {
+        "value": 5,
+        "kind": "literature",
+        "source": "C. Dobraunig, M. Eichlseder, F. Mendel, M. Schlaffer (Ascon / NIST SP 800-232) and K. Stoffelen (ePrint 2016/198): 5-bit quadratic Ascon S-box has optimal multiplicative complexity 5.",
+        "url": "https://eprint.iacr.org/2016/198",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "keccak_chi_total_gates": {
+        "value": 15,
+        "kind": "literature",
+        "source": "G. Bertoni, J. Daemen, M. Peeters, G. Van Assche (NIST FIPS 202) / rweather/lightweight-crypto internal-keccak.c: 5-bit Keccak chi uses 5 NOT + 5 AND + 5 XOR = 15 gates.",
+        "url": "https://github.com/rweather/lightweight-crypto/tree/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined",
+        "checked": "2026-11-26"
+      },
+      "present_total_gates": {
+        "value": 14,
+        "kind": "literature",
+        "source": "N. Courtois, D. Hulme, T. Mourouzis (2011) and K. Stoffelen, 'Optimizing S-box Implementations for Several Criteria using SAT Solvers', FSE 2016 (ePrint 2016/198): 14 gates for PRESENT S-box in {xor, xnor, and, not}.",
+        "url": "https://eprint.iacr.org/2016/198",
+        "checked": "2026-11-26"
+      },
+      "present_and_gates": {
+        "value": 4,
+        "kind": "literature",
+        "source": "K. Stoffelen, FSE 2016 (ePrint 2016/198): PRESENT 4-bit S-box has optimal multiplicative complexity 4.",
+        "url": "https://eprint.iacr.org/2016/198",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "gift_total_gates": {
+        "value": 12,
+        "kind": "collection",
+        "source": "S. Banik et al., 'GIFT: A Small Present', CHES 2017 / rweather/lightweight-crypto internal-gift128.c: 4 AND + 4 XOR + 2 XNOR + 2 NOT = 12 gates in {xor, xnor, and, not}.",
+        "url": "https://github.com/rweather/lightweight-crypto/tree/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined",
+        "checked": "2026-11-26"
+      },
+      "gift_and_gates": {
+        "value": 4,
+        "kind": "literature",
+        "source": "S. Banik et al., CHES 2017 / rweather/lightweight-crypto internal-gift128.c: GIFT 4-bit S-box has optimal multiplicative complexity 4.",
+        "url": "https://github.com/rweather/lightweight-crypto/tree/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "spongent_total_gates": {
+        "value": 14,
+        "kind": "literature",
+        "source": "K. Stoffelen, FSE 2016 (ePrint 2016/198): SAT-optimized 4-bit SPONGENT S-box implementation achieves 14 gates in {xor, xnor, and, not} (rweather/lightweight-crypto internal-spongent.c uses 18 gates).",
+        "url": "https://eprint.iacr.org/2016/198",
+        "checked": "2026-11-26"
+      },
+      "spongent_and_gates": {
+        "value": 4,
+        "kind": "literature",
+        "source": "A. Bogdanov et al. (SPONGENT, CHES 2011) / K. Stoffelen (ePrint 2016/198): SPONGENT 4-bit S-box has optimal multiplicative complexity 4.",
+        "url": "https://eprint.iacr.org/2016/198",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "saturnin_total_gates": {
+        "value": 16,
+        "kind": "literature",
+        "source": "A. Canteaut et al., 'Saturnin: a suite of lightweight symmetric algorithms for post-quantum security', ToSC 2020 / rweather/lightweight-crypto internal-saturnin.c: 6-stage bitsliced 4-bit S-box circuit.",
+        "url": "https://github.com/rweather/lightweight-crypto/tree/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined",
+        "checked": "2026-11-26"
+      },
+      "knot_total_gates": {
+        "value": 14,
+        "kind": "collection",
+        "source": "W. Zhang et al. (KNOT NIST LWC submission) / rweather/lightweight-crypto internal-knot.c: 4 nonlinear + 6 XOR + NOT gates = 14 gates in {xor, xnor, and, not}.",
+        "url": "https://github.com/rweather/lightweight-crypto/tree/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined",
+        "checked": "2026-11-26"
+      },
+      "clyde_total_gates": {
+        "value": 8,
+        "kind": "collection",
+        "source": "D. Bellizia et al., 'Spook: Sponge-Based Leakage-Resistant Authenticated Encryption with a Masked Tweakable Block Cipher', ToSC 2020 / rweather/lightweight-crypto internal-spook.c: 4 AND + 4 XOR = 8 gates.",
+        "url": "https://github.com/rweather/lightweight-crypto/tree/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined",
+        "checked": "2026-11-26"
+      },
+      "pyjamask_total_gates": {
+        "value": 12,
+        "kind": "collection",
+        "source": "D. Goudarzi et al. (Pyjamask NIST LWC submission) / rweather/lightweight-crypto internal-pyjamask.c: 4 AND + 7 XOR + 1 NOT = 12 gates in {xor, xnor, and, not} (final 3-XOR swap is wire relabeling).",
+        "url": "https://github.com/rweather/lightweight-crypto/tree/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined",
+        "checked": "2026-11-26"
+      }
+    },
     "crypto-sbox-circuits": {
       "sm4_total_gates": {
         "value": 103,
@@ -117,6 +819,274 @@
         "checked": "2026-11-26"
       }
     },
+    "crypto-std-sboxes": {
+      "whirlpool_total_gates": {
+        "value": 103,
+        "kind": "proxy",
+        "source": "No published {xor, xnor, and, not} total gate count for Whirlpool's 8-bit mini-box S-box was confirmed on 2026-11-26; NIST usnistgov/Circuits aes-sbox-a32-ad7-g103 (103 gates) is used as a conservative 8-bit degree-7 S-box proxy.",
+        "url": "https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox",
+        "checked": "2026-11-26",
+        "note": "Replace with a sourced Whirlpool S-box circuit count when confirmed (mini-box decompositions may go lower)."
+      },
+      "whirlpool_and_gates": {
+        "value": 28,
+        "kind": "proxy",
+        "source": "No published multiplicative complexity for Whirlpool's 8-bit S-box was confirmed on 2026-11-26; NIST usnistgov/Circuits 28-AND AES S-box is used as a conservative proxy (Whirlpool's five 4-bit mini-boxes may reach ~20-24 AND gates).",
+        "url": "https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox",
+        "checked": "2026-11-26",
+        "note": "Replace with a sourced Whirlpool multiplicative complexity bound when confirmed."
+      },
+      "whirlpool_and_depth": {
+        "value": 4,
+        "kind": "proxy",
+        "source": "No published minimum AND-depth for Whirlpool's 8-bit degree-7 S-box was confirmed on 2026-11-26; depth 4 (NIST usnistgov/Circuits AES depth-4 family) is used as a conservative proxy (algebraic degree 7 gives lower bound 3; seed mini-box layering has depth 6).",
+        "url": "https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox",
+        "checked": "2026-11-26"
+      },
+      "aria_s2_total_gates": {
+        "value": 103,
+        "kind": "proxy",
+        "source": "ARIA S2 (RFC 5794) is affine-equivalent to x -> x^247 = (x^-1)^8 over GF(2^8), which is affine-equivalent to GF(2^8) inversion because x -> x^8 is F2-linear; NIST usnistgov/Circuits aes-sbox-a32-ad7-g103 (103 gates) is used as a conservative proxy.",
+        "url": "https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox",
+        "checked": "2026-11-26"
+      },
+      "aria_s2_and_gates": {
+        "value": 28,
+        "kind": "derived",
+        "source": "ARIA S2 is affine-equivalent to GF(2^8) inversion (x^247 = (x^-1)^8 and x^8 is F2-linear). Composing NIST usnistgov/Circuits 28-AND AES S-box circuits with linear pre/post-maps costs 0 AND gates, giving 28.",
+        "url": "https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox",
+        "checked": "2026-11-26"
+      },
+      "aria_s2_and_depth": {
+        "value": 3,
+        "kind": "derived",
+        "source": "ARIA S2 is affine-equivalent to GF(2^8) inversion (algebraic degree 7 => lower bound ceil(log2 7) = 3). Composing NIST usnistgov/Circuits aes-sbox-a35-ad3-g139 (AND-depth 3) with linear maps achieves optimal AND-depth 3.",
+        "url": "https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "aria_invs2_total_gates": {
+        "value": 103,
+        "kind": "proxy",
+        "source": "ARIA InvS2 (RFC 5794) is the inverse of ARIA S2 and hence affine-equivalent to GF(2^8) inversion; NIST usnistgov/Circuits aes-sbox-a32-ad7-g103 (103 gates) is used as a conservative proxy.",
+        "url": "https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox",
+        "checked": "2026-11-26"
+      },
+      "aria_invs2_and_gates": {
+        "value": 28,
+        "kind": "derived",
+        "source": "ARIA InvS2 is affine-equivalent to GF(2^8) inversion. Composing NIST usnistgov/Circuits 28-AND AES S-box circuits with linear pre/post-maps costs 0 AND gates, giving 28.",
+        "url": "https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox",
+        "checked": "2026-11-26"
+      },
+      "aria_invs2_and_depth": {
+        "value": 3,
+        "kind": "derived",
+        "source": "ARIA InvS2 is affine-equivalent to GF(2^8) inversion (algebraic degree 7 => lower bound 3). Composing NIST usnistgov/Circuits aes-sbox-a35-ad3-g139 (AND-depth 3) with linear maps achieves optimal AND-depth 3.",
+        "url": "https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      }
+    },
+    "crypto-zk-addition-chains": {
+      "goldilocks_inv": {
+        "value": 72,
+        "kind": "heuristic",
+        "source": "Verified constructive runs addition chain for Goldilocks p-2 = 2^64 - 2^32 - 1 = (2^32 - 2)*2^32 + (2^32 - 1) using the 37-step chain for 2^31 - 1 (l(31)=7), taking 72 operations total.",
+        "url": "https://github.com/Plonky3/Plonky3/tree/0d803737b681774186cd283b1fd2d8e493655c82",
+        "checked": "2026-11-26"
+      },
+      "goldilocks_inv_d7": {
+        "value": 71,
+        "kind": "collection",
+        "source": "Plonky3/Plonky3@0d803737b6 field/src/exponentiation.rs (exp_10540996611094048183): 63 squares + 8 multiplications = 71 operations total.",
+        "url": "https://github.com/Plonky3/Plonky3/blob/0d803737b681774186cd283b1fd2d8e493655c82/field/src/exponentiation.rs",
+        "checked": "2026-11-26"
+      },
+      "babybear_inv": {
+        "value": 38,
+        "kind": "heuristic",
+        "source": "Verified constructive factored addition chain for BabyBear p-2 = 0x77ffffff = 17 * 0x070f0f0f (33 steps for 0x070f0f0f + 5 steps to multiply by 17 = 2^4 + 1), taking 38 operations total.",
+        "url": "https://github.com/Plonky3/Plonky3/tree/0d803737b681774186cd283b1fd2d8e493655c82",
+        "checked": "2026-11-26"
+      },
+      "babybear_inv_d7": {
+        "value": 37,
+        "kind": "collection",
+        "source": "Plonky3/Plonky3@0d803737b6 field/src/exponentiation.rs (exp_1725656503): 29 squares + 8 multiplications = 37 operations total.",
+        "url": "https://github.com/Plonky3/Plonky3/blob/0d803737b681774186cd283b1fd2d8e493655c82/field/src/exponentiation.rs",
+        "checked": "2026-11-26"
+      },
+      "koalabear_inv": {
+        "value": 37,
+        "kind": "heuristic",
+        "source": "Verified constructive runs addition chain for KoalaBear p-2 = 0x7effffff (6 ones, 0, four 6-bit blocks of ones using 2^6 - 1 in 8 steps), taking 37 operations total.",
+        "url": "https://github.com/Plonky3/Plonky3/tree/0d803737b681774186cd283b1fd2d8e493655c82",
+        "checked": "2026-11-26"
+      },
+      "koalabear_inv_d3": {
+        "value": 36,
+        "kind": "collection",
+        "source": "Plonky3/Plonky3@0d803737b6 field/src/exponentiation.rs (exp_1420470955): 29 squares + 7 multiplications = 36 operations total.",
+        "url": "https://github.com/Plonky3/Plonky3/blob/0d803737b681774186cd283b1fd2d8e493655c82/field/src/exponentiation.rs",
+        "checked": "2026-11-26"
+      },
+      "mersenne31_inv": {
+        "value": 38,
+        "kind": "heuristic",
+        "source": "Verified constructive runs addition chain for Mersenne31 p-2 = 2^31 - 3 = ((2^29 - 1) << 2) + 1 using l(29)=7 (35 steps for 2^29 - 1 + 2 doubles + 1 add), taking 38 operations total.",
+        "url": "https://github.com/Plonky3/Plonky3/tree/0d803737b681774186cd283b1fd2d8e493655c82",
+        "checked": "2026-11-26"
+      },
+      "mersenne31_inv_d5": {
+        "value": 37,
+        "kind": "collection",
+        "source": "Plonky3/Plonky3@0d803737b6 field/src/exponentiation.rs (exp_1717986917): 30 squares + 7 multiplications = 37 operations total.",
+        "url": "https://github.com/Plonky3/Plonky3/blob/0d803737b681774186cd283b1fd2d8e493655c82/field/src/exponentiation.rs",
+        "checked": "2026-11-26"
+      },
+      "bn254_inv": {
+        "value": 309,
+        "kind": "heuristic",
+        "source": "Stock 5-bit sliding-window addition chain for BN254 p-2 (254-bit prime), verified at 309 operations total (Plonky3 uses gcd inversion for BN254).",
+        "url": "https://github.com/Plonky3/Plonky3/tree/0d803737b681774186cd283b1fd2d8e493655c82",
+        "checked": "2026-11-26",
+        "note": "Replace with an addchain/continued-fraction optimal bound (~295) when verified."
+      },
+      "bn254_inv_d5": {
+        "value": 309,
+        "kind": "heuristic",
+        "source": "Stock 5-bit sliding-window addition chain for BN254 1/5 mod (p-1), verified at 309 operations total.",
+        "url": "https://github.com/Plonky3/Plonky3/tree/0d803737b681774186cd283b1fd2d8e493655c82",
+        "checked": "2026-11-26",
+        "note": "Replace with an addchain/continued-fraction optimal bound (~295) when verified."
+      }
+    },
+    "extremal-graph-bounds": {
+      "ramsey_3_8": {
+        "value": 27,
+        "kind": "literature",
+        "source": "B. D. McKay and Zhang Ke Min, 'The value of the Ramsey number R(3,8)', J. Graph Theory 16 (1992): R(3,8) = 28 exact, so max (3,8)-Ramsey witness graph order is 27. Listed in Radziszowski Dynamic Survey DS1.",
+        "url": "https://www.combinatorics.org/ojs/index.php/eljc/article/view/DS1",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "ramsey_3_9": {
+        "value": 35,
+        "kind": "literature",
+        "source": "C. M. Grinstead and S. M. Roberts, 'On the Ramsey numbers R(3,8) and R(3,9)', J. Combin. Theory Ser. B 33 (1982): R(3,9) = 36 exact, so max (3,9)-Ramsey witness graph order is 35. Listed in Radziszowski DS1.",
+        "url": "https://www.combinatorics.org/ojs/index.php/eljc/article/view/DS1",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "ramsey_3_10": {
+        "value": 39,
+        "kind": "collection",
+        "source": "G. Exoo (1989) 39-vertex witness establishing R(3,10) >= 40 (verified in chrispbsmolen/ramsey-witnesses register p1:exoo_site/r3.10.39; open frontier R(3,10) in [40, 41]).",
+        "url": "https://github.com/chrispbsmolen/ramsey-witnesses/tree/d21fda594c86657be87e425f19f5fc02a27986e6/table",
+        "checked": "2026-11-26"
+      },
+      "ramsey_3_11": {
+        "value": 46,
+        "kind": "collection",
+        "source": "G. Exoo 46-vertex witness establishing R(3,11) >= 47 (verified in chrispbsmolen/ramsey-witnesses register p1:exoo_site/r3.11.46; open frontier R(3,11) in [47, 50]).",
+        "url": "https://github.com/chrispbsmolen/ramsey-witnesses/tree/d21fda594c86657be87e425f19f5fc02a27986e6/table",
+        "checked": "2026-11-26"
+      },
+      "ramsey_4_5": {
+        "value": 24,
+        "kind": "literature",
+        "source": "B. D. McKay and S. P. Radziszowski, 'R(4,5) = 25', J. Graph Theory 19 (1995): R(4,5) = 25 exact, so max (4,5)-Ramsey witness graph order is 24. Listed in Radziszowski DS1.",
+        "url": "https://www.combinatorics.org/ojs/index.php/eljc/article/view/DS1",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "ramsey_4_6": {
+        "value": 35,
+        "kind": "collection",
+        "source": "G. Exoo 35-vertex witness establishing R(4,6) >= 36 (verified in chrispbsmolen/ramsey-witnesses register p1:exoo_site/r4.6.35; open frontier R(4,6) in [36, 40]).",
+        "url": "https://github.com/chrispbsmolen/ramsey-witnesses/tree/d21fda594c86657be87e425f19f5fc02a27986e6/table",
+        "checked": "2026-11-26"
+      },
+      "ramsey_4_7": {
+        "value": 48,
+        "kind": "collection",
+        "source": "G. Exoo 48-vertex witness establishing R(4,7) >= 49 (verified in chrispbsmolen/ramsey-witnesses register p1:exoo_site/r4.7.48; open frontier R(4,7) in [49, 58]).",
+        "url": "https://github.com/chrispbsmolen/ramsey-witnesses/tree/d21fda594c86657be87e425f19f5fc02a27986e6/table",
+        "checked": "2026-11-26"
+      },
+      "ramsey_5_5": {
+        "value": 42,
+        "kind": "collection",
+        "source": "G. Exoo (1989) 42-vertex witness establishing R(5,5) >= 43 (verified in chrispbsmolen/ramsey-witnesses register p1:exoo_site/g55.42; open frontier R(5,5) in [43, 46]).",
+        "url": "https://github.com/chrispbsmolen/ramsey-witnesses/tree/d21fda594c86657be87e425f19f5fc02a27986e6/table",
+        "checked": "2026-11-26"
+      },
+      "c4free_n25": {
+        "value": 63,
+        "kind": "collection",
+        "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(25, C_4) = 63 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
+        "url": "https://oeis.org/A006855",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "c4free_n27": {
+        "value": 71,
+        "kind": "collection",
+        "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(27, C_4) = 71 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
+        "url": "https://oeis.org/A006855",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "c4free_n29": {
+        "value": 80,
+        "kind": "collection",
+        "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(29, C_4) = 80 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
+        "url": "https://oeis.org/A006855",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "c4free_n32": {
+        "value": 92,
+        "kind": "collection",
+        "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(32, C_4) = 92 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
+        "url": "https://oeis.org/A006855",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "c4free_n34": {
+        "value": 102,
+        "kind": "collection",
+        "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(34, C_4) = 102 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
+        "url": "https://oeis.org/A006855",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "c4free_n36": {
+        "value": 110,
+        "kind": "collection",
+        "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(36, C_4) = 110 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
+        "url": "https://oeis.org/A006855",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "c4free_n38": {
+        "value": 117,
+        "kind": "collection",
+        "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(38, C_4) = 117 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
+        "url": "https://oeis.org/A006855",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "c4free_n40": {
+        "value": 127,
+        "kind": "collection",
+        "source": "OEIS A006855 (b006855.txt): exact extremal C4-free edge count ex(40, C_4) = 127 (Garnick-Kwong-Lazebnik 1993; Abajo-Dianez; Codish-Miller-Prosser-Stuckey 2016).",
+        "url": "https://oeis.org/A006855",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      }
+    },
     "matrix-rank-alphatensor-f2": {
       "rank_333": {
         "value": 23,
@@ -162,6 +1132,197 @@
         "note": "The seed (63) is AlphaTensor's 2022 value; 60 has been public since Dec 2022."
       }
     },
+    "matrix-rank-f2-extended": {
+      "rank_2_4_5": {
+        "value": 33,
+        "kind": "collection",
+        "source": "dronperminov/FastMatrixMultiplication@f70078cd (docs/ranks.md, cross-checked against A. Sedoglavic fmm.univ-lille.fr): best known ternary/F2 rank for <2x4x5> is 33. Novikov et al. (AlphaEvolve 2025) reaches 32 over Q; dronperminov/FastMatrixMultiplication ZT scheme gives 33 over ZT/F2.",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/docs/ranks.md",
+        "checked": "2026-11-26",
+        "note": "Known Q rank is 32, which uses non-binary rational denominators; 33 is the best verified ZT/F2 rank."
+      },
+      "rank_2_5_5": {
+        "value": 40,
+        "kind": "collection",
+        "source": "dronperminov/FastMatrixMultiplication@f70078cd (docs/ranks.md, cross-checked against A. Sedoglavic fmm.univ-lille.fr): best known ternary/F2 rank for <2x5x5> is 40. Hopcroft and Kerr (1971); matches dronperminov/FastMatrixMultiplication ZT/F2 and Sedoglavic fmm.univ-lille.fr.",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/docs/ranks.md",
+        "checked": "2026-11-26"
+      },
+      "rank_2_5_6": {
+        "value": 47,
+        "kind": "collection",
+        "source": "dronperminov/FastMatrixMultiplication@f70078cd (docs/ranks.md, cross-checked against A. Sedoglavic fmm.univ-lille.fr): best known ternary/F2 rank for <2x5x6> is 47. Novikov et al. (AlphaEvolve 2025) / dronperminov/FastMatrixMultiplication ZT/F2.",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/docs/ranks.md",
+        "checked": "2026-11-26"
+      },
+      "rank_3_3_5": {
+        "value": 36,
+        "kind": "collection",
+        "source": "dronperminov/FastMatrixMultiplication@f70078cd (docs/ranks.md, cross-checked against A. Sedoglavic fmm.univ-lille.fr): best known ternary/F2 rank for <3x3x5> is 36. A. V. Smirnov (2013); matches dronperminov/FastMatrixMultiplication ZT/F2 and Sedoglavic fmm.univ-lille.fr.",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/docs/ranks.md",
+        "checked": "2026-11-26"
+      },
+      "rank_3_3_6": {
+        "value": 42,
+        "kind": "collection",
+        "source": "dronperminov/FastMatrixMultiplication@f70078cd (docs/ranks.md, cross-checked against A. Sedoglavic fmm.univ-lille.fr): best known ternary/F2 rank for <3x3x6> is 42. dronperminov/FastMatrixMultiplication ZT/F2 best known is 42 (Smirnov 2013 reaches 40 over Q with non-binary denominators).",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/docs/ranks.md",
+        "checked": "2026-11-26",
+        "note": "Known Q rank is 40, which uses non-binary rational denominators; 42 is the best verified ZT/F2 rank."
+      },
+      "rank_3_3_7": {
+        "value": 49,
+        "kind": "collection",
+        "source": "dronperminov/FastMatrixMultiplication@f70078cd (docs/ranks.md, cross-checked against A. Sedoglavic fmm.univ-lille.fr): best known ternary/F2 rank for <3x3x7> is 49. dronperminov/FastMatrixMultiplication ZT/F2 and Sedoglavic fmm.univ-lille.fr (<3,3,1:9> + <3,3,6:40>).",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/docs/ranks.md",
+        "checked": "2026-11-26"
+      },
+      "rank_3_3_8": {
+        "value": 56,
+        "kind": "collection",
+        "source": "dronperminov/FastMatrixMultiplication@f70078cd (docs/ranks.md, cross-checked against A. Sedoglavic fmm.univ-lille.fr): best known ternary/F2 rank for <3x3x8> is 56. dronperminov/FastMatrixMultiplication ZT/F2 best known is 56 (Sedoglavic table lists 55 over Q).",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/docs/ranks.md",
+        "checked": "2026-11-26",
+        "note": "Known Q rank is 55, which uses non-binary rational denominators; 56 is the best verified ZT/F2 rank."
+      },
+      "rank_3_4_6": {
+        "value": 54,
+        "kind": "collection",
+        "source": "dronperminov/FastMatrixMultiplication@f70078cd (docs/ranks.md, cross-checked against A. Sedoglavic fmm.univ-lille.fr): best known ternary/F2 rank for <3x4x6> is 54. Novikov et al. (AlphaEvolve 2025) / dronperminov/FastMatrixMultiplication ZT/F2.",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/docs/ranks.md",
+        "checked": "2026-11-26"
+      },
+      "rank_3_4_7": {
+        "value": 64,
+        "kind": "collection",
+        "source": "dronperminov/FastMatrixMultiplication@f70078cd (docs/ranks.md, cross-checked against A. Sedoglavic fmm.univ-lille.fr): best known ternary/F2 rank for <3x4x7> is 64. dronperminov/FastMatrixMultiplication ZT/F2 best known is 64 (AlphaEvolve 2025 reaches 63 over Q).",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/docs/ranks.md",
+        "checked": "2026-11-26",
+        "note": "Known Q rank is 63, which uses non-binary rational denominators; 64 is the best verified ZT/F2 rank."
+      },
+      "rank_3_4_8": {
+        "value": 73,
+        "kind": "collection",
+        "source": "dronperminov/FastMatrixMultiplication@f70078cd (docs/ranks.md, cross-checked against A. Sedoglavic fmm.univ-lille.fr): best known ternary/F2 rank for <3x4x8> is 73. Kauers and Wood (2025) / dronperminov/FastMatrixMultiplication ZT/F2.",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/docs/ranks.md",
+        "checked": "2026-11-26"
+      },
+      "rank_3_5_6": {
+        "value": 68,
+        "kind": "collection",
+        "source": "dronperminov/FastMatrixMultiplication@f70078cd (docs/ranks.md, cross-checked against A. Sedoglavic fmm.univ-lille.fr): best known ternary/F2 rank for <3x5x6> is 68. Novikov et al. (AlphaEvolve 2025) / dronperminov/FastMatrixMultiplication ZT/F2.",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/docs/ranks.md",
+        "checked": "2026-11-26"
+      },
+      "rank_3_5_7": {
+        "value": 79,
+        "kind": "collection",
+        "source": "dronperminov/FastMatrixMultiplication@f70078cd (docs/ranks.md, cross-checked against A. Sedoglavic fmm.univ-lille.fr): best known ternary/F2 rank for <3x5x7> is 79. Kauers and Wood (2025) / dronperminov/FastMatrixMultiplication ZT/F2.",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/docs/ranks.md",
+        "checked": "2026-11-26"
+      },
+      "rank_3_5_8": {
+        "value": 90,
+        "kind": "collection",
+        "source": "dronperminov/FastMatrixMultiplication@f70078cd (docs/ranks.md, cross-checked against A. Sedoglavic fmm.univ-lille.fr): best known ternary/F2 rank for <3x5x8> is 90. Kauers and Wood (2025) / dronperminov/FastMatrixMultiplication ZT/F2.",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/docs/ranks.md",
+        "checked": "2026-11-26"
+      },
+      "rank_3_6_6": {
+        "value": 82,
+        "kind": "collection",
+        "source": "dronperminov/FastMatrixMultiplication@f70078cd (docs/ranks.md, cross-checked against A. Sedoglavic fmm.univ-lille.fr): best known ternary/F2 rank for <3x6x6> is 82. dronperminov/FastMatrixMultiplication ZT/F2 best known is 82 (Sedoglavic table lists 80 over Q).",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/docs/ranks.md",
+        "checked": "2026-11-26",
+        "note": "Known Q rank is 80, which uses non-binary rational denominators; 82 is the best verified ZT/F2 rank."
+      },
+      "rank_3_6_7": {
+        "value": 96,
+        "kind": "collection",
+        "source": "dronperminov/FastMatrixMultiplication@f70078cd (docs/ranks.md, cross-checked against A. Sedoglavic fmm.univ-lille.fr): best known ternary/F2 rank for <3x6x7> is 96. dronperminov/FastMatrixMultiplication ZT/F2 best known is 96 (Sedoglavic table lists 94 over Q).",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/docs/ranks.md",
+        "checked": "2026-11-26",
+        "note": "Known Q rank is 94, which uses non-binary rational denominators; 96 is the best verified ZT/F2 rank."
+      },
+      "rank_4_4_6": {
+        "value": 73,
+        "kind": "collection",
+        "source": "dronperminov/FastMatrixMultiplication@f70078cd (docs/ranks.md, cross-checked against A. Sedoglavic fmm.univ-lille.fr): best known ternary/F2 rank for <4x4x6> is 73. A. V. Smirnov (2023) / dronperminov/FastMatrixMultiplication ZT/F2.",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/docs/ranks.md",
+        "checked": "2026-11-26"
+      },
+      "rank_4_4_7": {
+        "value": 85,
+        "kind": "collection",
+        "source": "dronperminov/FastMatrixMultiplication@f70078cd (docs/ranks.md, cross-checked against A. Sedoglavic fmm.univ-lille.fr): best known ternary/F2 rank for <4x4x7> is 85. Novikov et al. (AlphaEvolve 2025) / dronperminov/FastMatrixMultiplication ZT/F2.",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/docs/ranks.md",
+        "checked": "2026-11-26"
+      },
+      "rank_4_4_8": {
+        "value": 96,
+        "kind": "collection",
+        "source": "dronperminov/FastMatrixMultiplication@f70078cd (docs/ranks.md, cross-checked against A. Sedoglavic fmm.univ-lille.fr): best known ternary/F2 rank for <4x4x8> is 96. dronperminov/FastMatrixMultiplication ZT/F2 best known is 96 (Perminov 2026 reaches 95 over Q).",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/docs/ranks.md",
+        "checked": "2026-11-26",
+        "note": "Known Q rank is 95, which uses non-binary rational denominators; 96 is the best verified ZT/F2 rank."
+      },
+      "rank_4_5_5": {
+        "value": 76,
+        "kind": "collection",
+        "source": "dronperminov/FastMatrixMultiplication@f70078cd (docs/ranks.md, cross-checked against A. Sedoglavic fmm.univ-lille.fr): best known ternary/F2 rank for <4x5x5> is 76. Fawzi et al. (AlphaTensor, Nature 2022) / dronperminov/FastMatrixMultiplication ZT/F2.",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/docs/ranks.md",
+        "checked": "2026-11-26"
+      },
+      "rank_4_5_6": {
+        "value": 90,
+        "kind": "collection",
+        "source": "dronperminov/FastMatrixMultiplication@f70078cd (docs/ranks.md, cross-checked against A. Sedoglavic fmm.univ-lille.fr): best known ternary/F2 rank for <4x5x6> is 90. Kauers and Wood (2025) / dronperminov/FastMatrixMultiplication ZT/F2.",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/docs/ranks.md",
+        "checked": "2026-11-26"
+      },
+      "rank_4_5_7": {
+        "value": 104,
+        "kind": "collection",
+        "source": "dronperminov/FastMatrixMultiplication@f70078cd (docs/ranks.md, cross-checked against A. Sedoglavic fmm.univ-lille.fr): best known ternary/F2 rank for <4x5x7> is 104. Kauers and Wood (2025) / dronperminov/FastMatrixMultiplication ZT/F2.",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/docs/ranks.md",
+        "checked": "2026-11-26"
+      },
+      "rank_4_6_6": {
+        "value": 105,
+        "kind": "collection",
+        "source": "dronperminov/FastMatrixMultiplication@f70078cd (docs/ranks.md, cross-checked against A. Sedoglavic fmm.univ-lille.fr): best known ternary/F2 rank for <4x6x6> is 105. Kronecker product <2,2,2:7> x <2,3,3:15> / dronperminov/FastMatrixMultiplication ZT/F2.",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/docs/ranks.md",
+        "checked": "2026-11-26"
+      },
+      "rank_5_5_5": {
+        "value": 93,
+        "kind": "collection",
+        "source": "dronperminov/FastMatrixMultiplication@f70078cd (docs/ranks.md, cross-checked against A. Sedoglavic fmm.univ-lille.fr): best known ternary/F2 rank for <5x5x5> is 93. Moosbauer and Poole (2025) / dronperminov/FastMatrixMultiplication ZT/F2.",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/docs/ranks.md",
+        "checked": "2026-11-26"
+      },
+      "rank_5_5_6": {
+        "value": 110,
+        "kind": "collection",
+        "source": "dronperminov/FastMatrixMultiplication@f70078cd (docs/ranks.md, cross-checked against A. Sedoglavic fmm.univ-lille.fr): best known ternary/F2 rank for <5x5x6> is 110. Kauers and Wood (2025) / dronperminov/FastMatrixMultiplication ZT/F2.",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/docs/ranks.md",
+        "checked": "2026-11-26"
+      },
+      "rank_5_6_6": {
+        "value": 130,
+        "kind": "collection",
+        "source": "dronperminov/FastMatrixMultiplication@f70078cd (docs/ranks.md, cross-checked against A. Sedoglavic fmm.univ-lille.fr): best known ternary/F2 rank for <5x6x6> is 130. Kauers and Wood (2025) / dronperminov/FastMatrixMultiplication ZT/F2.",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/docs/ranks.md",
+        "checked": "2026-11-26"
+      },
+      "rank_6_6_6": {
+        "value": 153,
+        "kind": "collection",
+        "source": "dronperminov/FastMatrixMultiplication@f70078cd (docs/ranks.md, cross-checked against A. Sedoglavic fmm.univ-lille.fr): best known ternary/F2 rank for <6x6x6> is 153. Moosbauer and Poole (2025) / dronperminov/FastMatrixMultiplication ZT/F2.",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication/blob/f70078cd9d1674cbc9c27e71011d4d6dff771d40/docs/ranks.md",
+        "checked": "2026-11-26"
+      }
+    },
     "matrix-rank444-f2": {
       "reduce_rank": {
         "value": 47,
@@ -171,65 +1332,80 @@
         "checked": "2026-11-26"
       }
     },
-    "sorting-networks-opt": {
-      "sort_n9": {
+    "selection-networks-opt": {
+      "median_n7": {
+        "value": 13,
+        "kind": "collection",
+        "source": "B. Dobbelaere, SorterHunter median selection networks table (median_networks.html, bertdobbelaere/SorterHunter@3d8b345): best known 7-input median network uses 13 compare-exchange elements (proven optimal).",
+        "url": "https://bertdobbelaere.github.io/median_networks.html",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "median_n8": {
+        "value": 16,
+        "kind": "collection",
+        "source": "B. Dobbelaere, SorterHunter median selection networks table (median_networks.html, bertdobbelaere/SorterHunter@3d8b345): best known 8-input median network uses 16 compare-exchange elements (proven optimal).",
+        "url": "https://bertdobbelaere.github.io/median_networks.html",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "median_n9": {
+        "value": 19,
+        "kind": "collection",
+        "source": "B. Dobbelaere, SorterHunter median selection networks table (median_networks.html, bertdobbelaere/SorterHunter@3d8b345): best known 9-input median network uses 19 compare-exchange elements (proven optimal).",
+        "url": "https://bertdobbelaere.github.io/median_networks.html",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "median_n10": {
+        "value": 22,
+        "kind": "collection",
+        "source": "B. Dobbelaere, SorterHunter median selection networks table (median_networks.html, bertdobbelaere/SorterHunter@3d8b345): best known 10-input median network uses 22 compare-exchange elements (proven optimal).",
+        "url": "https://bertdobbelaere.github.io/median_networks.html",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "median_n11": {
         "value": 25,
         "kind": "collection",
-        "source": "Best known 25 comparators (Floyd/Knuth); optimality proven by Codish, Cruz-Filipe, Frank, Schneider-Kamp, 'Twenty-Five Comparators is Optimal when Sorting Nine Inputs (and Twenty-Nine for Ten)', ICTAI 2014. Listed in B. Dobbelaere's SorterHunter table.",
-        "url": "https://bertdobbelaere.github.io/sorting_networks.html",
+        "source": "B. Dobbelaere, SorterHunter median selection networks table (median_networks.html, bertdobbelaere/SorterHunter@3d8b345): best known 11-input median network uses 25 compare-exchange elements (proven optimal).",
+        "url": "https://bertdobbelaere.github.io/median_networks.html",
         "checked": "2026-11-26",
         "proven_optimal": true
       },
-      "sort_n10": {
+      "median_n12": {
         "value": 29,
         "kind": "collection",
-        "source": "Best known 29 comparators (Floyd/Knuth); optimality proven by Codish, Cruz-Filipe, Frank, Schneider-Kamp, 'Twenty-Five Comparators is Optimal when Sorting Nine Inputs (and Twenty-Nine for Ten)', ICTAI 2014. Listed in B. Dobbelaere's SorterHunter table.",
-        "url": "https://bertdobbelaere.github.io/sorting_networks.html",
-        "checked": "2026-11-26",
-        "proven_optimal": true
-      },
-      "sort_n11": {
-        "value": 35,
-        "kind": "collection",
-        "source": "Best known 35 comparators; optimality proven by J. Harder, 'An Answer to the Bose-Nelson Sorting Problem for 11 and 12 Channels', arXiv:2012.04400 (2020). Listed in B. Dobbelaere's SorterHunter table.",
-        "url": "https://arxiv.org/abs/2012.04400",
-        "checked": "2026-11-26",
-        "proven_optimal": true
-      },
-      "sort_n12": {
-        "value": 39,
-        "kind": "collection",
-        "source": "Best known 39 comparators; optimality proven by J. Harder, 'An Answer to the Bose-Nelson Sorting Problem for 11 and 12 Channels', arXiv:2012.04400 (2020). Listed in B. Dobbelaere's SorterHunter table.",
-        "url": "https://arxiv.org/abs/2012.04400",
-        "checked": "2026-11-26",
-        "proven_optimal": true
-      },
-      "sort_n13": {
-        "value": 45,
-        "kind": "collection",
-        "source": "Best known upper bound 45 comparators, B. Dobbelaere's list of smallest and fastest sorting networks (SorterHunter, pinned upstream bertdobbelaere/SorterHunter@3d8b345). Not known to be optimal.",
-        "url": "https://bertdobbelaere.github.io/sorting_networks.html",
+        "source": "B. Dobbelaere, SorterHunter median selection networks table (median_networks.html, bertdobbelaere/SorterHunter@3d8b345): best known 12-input median network uses 29 compare-exchange elements (open research frontier).",
+        "url": "https://bertdobbelaere.github.io/median_networks.html",
         "checked": "2026-11-26"
       },
-      "sort_n14": {
-        "value": 51,
+      "median_n13": {
+        "value": 32,
         "kind": "collection",
-        "source": "Best known upper bound 51 comparators, B. Dobbelaere's list of smallest and fastest sorting networks (SorterHunter, pinned upstream bertdobbelaere/SorterHunter@3d8b345). Not known to be optimal.",
-        "url": "https://bertdobbelaere.github.io/sorting_networks.html",
+        "source": "B. Dobbelaere, SorterHunter median selection networks table (median_networks.html, bertdobbelaere/SorterHunter@3d8b345): best known 13-input median network uses 32 compare-exchange elements (open research frontier).",
+        "url": "https://bertdobbelaere.github.io/median_networks.html",
         "checked": "2026-11-26"
       },
-      "sort_n15": {
-        "value": 56,
+      "median_n14": {
+        "value": 38,
         "kind": "collection",
-        "source": "Best known upper bound 56 comparators, B. Dobbelaere's list of smallest and fastest sorting networks (SorterHunter, pinned upstream bertdobbelaere/SorterHunter@3d8b345). Not known to be optimal.",
-        "url": "https://bertdobbelaere.github.io/sorting_networks.html",
+        "source": "B. Dobbelaere, SorterHunter median selection networks table (median_networks.html, bertdobbelaere/SorterHunter@3d8b345): best known 14-input median network uses 38 compare-exchange elements (open research frontier).",
+        "url": "https://bertdobbelaere.github.io/median_networks.html",
         "checked": "2026-11-26"
       },
-      "sort_n16": {
-        "value": 60,
+      "median_n15": {
+        "value": 41,
         "kind": "collection",
-        "source": "Best known upper bound 60 comparators, B. Dobbelaere's list of smallest and fastest sorting networks (SorterHunter, pinned upstream bertdobbelaere/SorterHunter@3d8b345). Not known to be optimal.",
-        "url": "https://bertdobbelaere.github.io/sorting_networks.html",
+        "source": "B. Dobbelaere, SorterHunter median selection networks table (median_networks.html, bertdobbelaere/SorterHunter@3d8b345): best known 15-input median network uses 41 compare-exchange elements (open research frontier).",
+        "url": "https://bertdobbelaere.github.io/median_networks.html",
+        "checked": "2026-11-26"
+      },
+      "median_n16": {
+        "value": 46,
+        "kind": "collection",
+        "source": "B. Dobbelaere, SorterHunter median selection networks table (median_networks.html, bertdobbelaere/SorterHunter@3d8b345): best known 16-input median network uses 46 compare-exchange elements (open research frontier).",
+        "url": "https://bertdobbelaere.github.io/median_networks.html",
         "checked": "2026-11-26"
       }
     },
@@ -297,6 +1473,68 @@
         "url": "https://arxiv.org/abs/1310.6271",
         "checked": "2026-11-26",
         "proven_optimal": true
+      }
+    },
+    "sorting-networks-opt": {
+      "sort_n9": {
+        "value": 25,
+        "kind": "collection",
+        "source": "Best known 25 comparators (Floyd/Knuth); optimality proven by Codish, Cruz-Filipe, Frank, Schneider-Kamp, 'Twenty-Five Comparators is Optimal when Sorting Nine Inputs (and Twenty-Nine for Ten)', ICTAI 2014. Listed in B. Dobbelaere's SorterHunter table.",
+        "url": "https://bertdobbelaere.github.io/sorting_networks.html",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "sort_n10": {
+        "value": 29,
+        "kind": "collection",
+        "source": "Best known 29 comparators (Floyd/Knuth); optimality proven by Codish, Cruz-Filipe, Frank, Schneider-Kamp, 'Twenty-Five Comparators is Optimal when Sorting Nine Inputs (and Twenty-Nine for Ten)', ICTAI 2014. Listed in B. Dobbelaere's SorterHunter table.",
+        "url": "https://bertdobbelaere.github.io/sorting_networks.html",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "sort_n11": {
+        "value": 35,
+        "kind": "collection",
+        "source": "Best known 35 comparators; optimality proven by J. Harder, 'An Answer to the Bose-Nelson Sorting Problem for 11 and 12 Channels', arXiv:2012.04400 (2020). Listed in B. Dobbelaere's SorterHunter table.",
+        "url": "https://arxiv.org/abs/2012.04400",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "sort_n12": {
+        "value": 39,
+        "kind": "collection",
+        "source": "Best known 39 comparators; optimality proven by J. Harder, 'An Answer to the Bose-Nelson Sorting Problem for 11 and 12 Channels', arXiv:2012.04400 (2020). Listed in B. Dobbelaere's SorterHunter table.",
+        "url": "https://arxiv.org/abs/2012.04400",
+        "checked": "2026-11-26",
+        "proven_optimal": true
+      },
+      "sort_n13": {
+        "value": 45,
+        "kind": "collection",
+        "source": "Best known upper bound 45 comparators, B. Dobbelaere's list of smallest and fastest sorting networks (SorterHunter, pinned upstream bertdobbelaere/SorterHunter@3d8b345). Not known to be optimal.",
+        "url": "https://bertdobbelaere.github.io/sorting_networks.html",
+        "checked": "2026-11-26"
+      },
+      "sort_n14": {
+        "value": 51,
+        "kind": "collection",
+        "source": "Best known upper bound 51 comparators, B. Dobbelaere's list of smallest and fastest sorting networks (SorterHunter, pinned upstream bertdobbelaere/SorterHunter@3d8b345). Not known to be optimal.",
+        "url": "https://bertdobbelaere.github.io/sorting_networks.html",
+        "checked": "2026-11-26"
+      },
+      "sort_n15": {
+        "value": 56,
+        "kind": "collection",
+        "source": "Best known upper bound 56 comparators, B. Dobbelaere's list of smallest and fastest sorting networks (SorterHunter, pinned upstream bertdobbelaere/SorterHunter@3d8b345). Not known to be optimal.",
+        "url": "https://bertdobbelaere.github.io/sorting_networks.html",
+        "checked": "2026-11-26"
+      },
+      "sort_n16": {
+        "value": 60,
+        "kind": "collection",
+        "source": "Best known upper bound 60 comparators, B. Dobbelaere's list of smallest and fastest sorting networks (SorterHunter, pinned upstream bertdobbelaere/SorterHunter@3d8b345). Not known to be optimal.",
+        "url": "https://bertdobbelaere.github.io/sorting_networks.html",
+        "checked": "2026-11-26"
       }
     }
   }

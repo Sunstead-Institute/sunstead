@@ -1,0 +1,33 @@
+{
+  "repo": "bertdobbelaere/SorterHunter",
+  "commit": "3d8b3454bad15062f4b0030052f12d6550f8d89d",
+  "license": "MIT",
+  "specialization": "Sunstead pins Bert Dobbelaere's SorterHunter optimal median-selection network benchmarks for n = 7..16 (including Median_9_19_7.json, Median_12_29_7.json, Median_16_46_10.json, and median_networks.html) and formalizes order-statistic semantics, Knuth's Zero-One Principle for median networks, and an O(n^2) bit-sliced threshold-DP kernel evaluator in pure Lean 4.36.0.",
+  "checks": [
+    {
+      "local_file": "LICENSE",
+      "upstream_file": "LICENSE",
+      "verbatim_snippet": "MIT License\n\nCopyright (c) 2017 bertdobbelaere"
+    },
+    {
+      "local_file": "README.md",
+      "upstream_file": "median_networks.html",
+      "upstream_anchor": "Median selection networks for a given number of inputs"
+    },
+    {
+      "local_file": "SelectNet/Spec.lean",
+      "upstream_file": "Networks/Median/Median_9_19_7.json",
+      "upstream_anchor": "\"N\": 9,\n  \"L\": 19,\n  \"D\": 7,"
+    },
+    {
+      "local_file": "SelectNet/Spec.lean",
+      "upstream_file": "Networks/Median/Median_12_29_7.json",
+      "upstream_anchor": "\"N\": 12,\n  \"L\": 29,\n  \"D\": 7,"
+    },
+    {
+      "local_file": "SelectNet/Spec.lean",
+      "upstream_file": "Networks/Median/Median_16_46_10.json",
+      "upstream_anchor": "\"N\": 16,\n  \"L\": 46,\n  \"D\": 10,"
+    }
+  ]
+}

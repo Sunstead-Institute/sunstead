@@ -1,0 +1,337 @@
+{
+  "repo": "sunblaze-ucb/verina",
+  "commit": "66b3ce5014edafb20cb26b87c681e7f31847249f",
+  "license": "Apache-2.0",
+  "checks": [
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_1/task.lean",
+      "verbatim_snippet": "def FindSingleNumber_postcond (nums : List Int) (result: Int) (h_precond : FindSingleNumber_precond (nums)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv1.lean",
+      "upstream_file": "datasets/verina/verina_advanced_1/task.lean",
+      "verbatim_snippet": "theorem FindSingleNumber_spec_satisfied (nums: List Int) (h_precond : FindSingleNumber_precond (nums)) :\n    FindSingleNumber_postcond (nums) (FindSingleNumber (nums) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_5/task.lean",
+      "verbatim_snippet": "def addTwoNumbers_postcond (l1 : List Nat) (l2 : List Nat) (result: List Nat) (h_precond : addTwoNumbers_precond (l1) (l2)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv5.lean",
+      "upstream_file": "datasets/verina/verina_advanced_5/task.lean",
+      "verbatim_snippet": "theorem addTwoNumbers_spec_satisfied (l1: List Nat) (l2: List Nat) (h_precond : addTwoNumbers_precond (l1) (l2)) :\n    addTwoNumbers_postcond (l1) (l2) (addTwoNumbers (l1) (l2) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_11/task.lean",
+      "verbatim_snippet": "def findMajorityElement_postcond (lst : List Int) (result: Int) (h_precond : findMajorityElement_precond (lst)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv11.lean",
+      "upstream_file": "datasets/verina/verina_advanced_11/task.lean",
+      "verbatim_snippet": "theorem findMajorityElement_spec_satisfied (lst: List Int) (h_precond : findMajorityElement_precond (lst)) :\n    findMajorityElement_postcond (lst) (findMajorityElement (lst) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_12/task.lean",
+      "verbatim_snippet": "def firstDuplicate_postcond (lst : List Int) (result: Option Int) (h_precond : firstDuplicate_precond (lst)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv12.lean",
+      "upstream_file": "datasets/verina/verina_advanced_12/task.lean",
+      "verbatim_snippet": "theorem firstDuplicate_spec_satisfied (lst: List Int) (h_precond : firstDuplicate_precond (lst)) :\n    firstDuplicate_postcond (lst) (firstDuplicate (lst) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_14/task.lean",
+      "verbatim_snippet": "def ifPowerOfFour_postcond (n : Nat) (result: Bool) (h_precond : ifPowerOfFour_precond (n)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv14.lean",
+      "upstream_file": "datasets/verina/verina_advanced_14/task.lean",
+      "verbatim_snippet": "theorem ifPowerOfFour_spec_satisfied (n: Nat) (h_precond : ifPowerOfFour_precond (n)) :\n    ifPowerOfFour_postcond (n) (ifPowerOfFour (n) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_15/task.lean",
+      "verbatim_snippet": "def increasingTriplet_postcond (nums : List Int) (result: Bool) (h_precond : increasingTriplet_precond (nums)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv15.lean",
+      "upstream_file": "datasets/verina/verina_advanced_15/task.lean",
+      "verbatim_snippet": "theorem increasingTriplet_spec_satisfied (nums: List Int) (h_precond : increasingTriplet_precond (nums)) :\n    increasingTriplet_postcond (nums) (increasingTriplet (nums) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_16/task.lean",
+      "verbatim_snippet": "def insertionSort_postcond (xs : List Int) (result: List Int) (h_precond : insertionSort_precond (xs)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv16.lean",
+      "upstream_file": "datasets/verina/verina_advanced_16/task.lean",
+      "verbatim_snippet": "theorem insertionSort_spec_satisfied (xs: List Int) (h_precond : insertionSort_precond (xs)) :\n    insertionSort_postcond (xs) (insertionSort (xs) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_19/task.lean",
+      "verbatim_snippet": "def isCleanPalindrome_postcond (s : String) (result: Bool) (h_precond : isCleanPalindrome_precond (s)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv19.lean",
+      "upstream_file": "datasets/verina/verina_advanced_19/task.lean",
+      "verbatim_snippet": "theorem isCleanPalindrome_spec_satisfied (s: String) (h_precond : isCleanPalindrome_precond (s)) :\n    isCleanPalindrome_postcond (s) (isCleanPalindrome (s) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_20/task.lean",
+      "verbatim_snippet": "def isItEight_postcond (n : Int) (result: Bool) (h_precond : isItEight_precond (n)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv20.lean",
+      "upstream_file": "datasets/verina/verina_advanced_20/task.lean",
+      "verbatim_snippet": "theorem isItEight_spec_satisfied (n: Int) (h_precond : isItEight_precond (n)) :\n    isItEight_postcond (n) (isItEight (n) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_21/task.lean",
+      "verbatim_snippet": "def isPalindrome_postcond (s : String) (result: Bool) (h_precond : isPalindrome_precond (s)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv21.lean",
+      "upstream_file": "datasets/verina/verina_advanced_21/task.lean",
+      "verbatim_snippet": "theorem isPalindrome_spec_satisfied (s: String) (h_precond : isPalindrome_precond (s)) :\n    isPalindrome_postcond (s) (isPalindrome (s) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_23/task.lean",
+      "verbatim_snippet": "def isPowerOfTwo_postcond (n : Int) (result: Bool) (h_precond : isPowerOfTwo_precond (n)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv23.lean",
+      "upstream_file": "datasets/verina/verina_advanced_23/task.lean",
+      "verbatim_snippet": "theorem isPowerOfTwo_spec_satisfied (n: Int) (h_precond : isPowerOfTwo_precond (n)) :\n    isPowerOfTwo_postcond (n) (isPowerOfTwo (n) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_24/task.lean",
+      "verbatim_snippet": "def lengthOfLIS_postcond (nums : List Int) (result: Int) (h_precond : lengthOfLIS_precond (nums)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv24.lean",
+      "upstream_file": "datasets/verina/verina_advanced_24/task.lean",
+      "verbatim_snippet": "theorem lengthOfLIS_spec_satisfied (nums: List Int) (h_precond : lengthOfLIS_precond (nums)) :\n    lengthOfLIS_postcond (nums) (lengthOfLIS (nums) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_26/task.lean",
+      "verbatim_snippet": "def letterCombinations_postcond (digits : String) (result: List String) (h_precond : letterCombinations_precond (digits)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv26.lean",
+      "upstream_file": "datasets/verina/verina_advanced_26/task.lean",
+      "verbatim_snippet": "theorem letterCombinations_spec_satisfied (digits: String) (h_precond : letterCombinations_precond (digits)) :\n    letterCombinations_postcond (digits) (letterCombinations (digits) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_35/task.lean",
+      "verbatim_snippet": "def majorityElement_postcond (nums : List Int) (result: Int) (h_precond : majorityElement_precond (nums)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv35.lean",
+      "upstream_file": "datasets/verina/verina_advanced_35/task.lean",
+      "verbatim_snippet": "theorem majorityElement_spec_satisfied (nums: List Int) (h_precond : majorityElement_precond (nums)) :\n    majorityElement_postcond (nums) (majorityElement (nums) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_39/task.lean",
+      "verbatim_snippet": "def maxOfList_postcond (lst : List Nat) (result: Nat) (h_precond : maxOfList_precond (lst)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv39.lean",
+      "upstream_file": "datasets/verina/verina_advanced_39/task.lean",
+      "verbatim_snippet": "theorem maxOfList_spec_satisfied (lst: List Nat) (h_precond : maxOfList_precond (lst)) :\n    maxOfList_postcond (lst) (maxOfList (lst) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_41/task.lean",
+      "verbatim_snippet": "def maxOfThree_postcond (a : Int) (b : Int) (c : Int) (result: Int) (h_precond : maxOfThree_precond (a) (b) (c)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv41.lean",
+      "upstream_file": "datasets/verina/verina_advanced_41/task.lean",
+      "verbatim_snippet": "theorem maxOfThree_spec_satisfied (a: Int) (b: Int) (c: Int) (h_precond : maxOfThree_precond (a) (b) (c)) :\n    maxOfThree_postcond (a) (b) (c) (maxOfThree (a) (b) (c) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_45/task.lean",
+      "verbatim_snippet": "def maxSubarraySum_postcond (xs : List Int) (result: Int) (h_precond : maxSubarraySum_precond (xs)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv45.lean",
+      "upstream_file": "datasets/verina/verina_advanced_45/task.lean",
+      "verbatim_snippet": "theorem maxSubarraySum_spec_satisfied (xs: List Int) (h_precond : maxSubarraySum_precond (xs)) :\n    maxSubarraySum_postcond (xs) (maxSubarraySum (xs) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_47/task.lean",
+      "verbatim_snippet": "def mergeIntervals_postcond (intervals : List (Prod Int Int)) (result: List (Prod Int Int)) (h_precond : mergeIntervals_precond (intervals)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv47.lean",
+      "upstream_file": "datasets/verina/verina_advanced_47/task.lean",
+      "verbatim_snippet": "theorem mergeIntervals_spec_satisfied (intervals: List (Prod Int Int)) (h_precond : mergeIntervals_precond (intervals)) :\n    mergeIntervals_postcond (intervals) (mergeIntervals (intervals) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_48/task.lean",
+      "verbatim_snippet": "def mergeSort_postcond (list : List Int) (result: List Int) (h_precond : mergeSort_precond (list)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv48.lean",
+      "upstream_file": "datasets/verina/verina_advanced_48/task.lean",
+      "verbatim_snippet": "theorem mergeSort_spec_satisfied (list: List Int) (h_precond : mergeSort_precond (list)) :\n    mergeSort_postcond (list) (mergeSort (list) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_49/task.lean",
+      "verbatim_snippet": "def mergeSortedLists_postcond (arr1 : List Int) (arr2 : List Int) (result: List Int) (h_precond : mergeSortedLists_precond (arr1) (arr2)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv49.lean",
+      "upstream_file": "datasets/verina/verina_advanced_49/task.lean",
+      "verbatim_snippet": "theorem mergeSortedLists_spec_satisfied (arr1: List Int) (arr2: List Int) (h_precond : mergeSortedLists_precond (arr1) (arr2)) :\n    mergeSortedLists_postcond (arr1) (arr2) (mergeSortedLists (arr1) (arr2) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_53/task.lean",
+      "verbatim_snippet": "def minimumRightShifts_postcond (nums : List Int) (result: Int) (h_precond : minimumRightShifts_precond (nums)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv53.lean",
+      "upstream_file": "datasets/verina/verina_advanced_53/task.lean",
+      "verbatim_snippet": "theorem minimumRightShifts_spec_satisfied (nums: List Int) (h_precond : minimumRightShifts_precond (nums)) :\n    minimumRightShifts_postcond (nums) (minimumRightShifts (nums) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_54/task.lean",
+      "verbatim_snippet": "def missingNumber_postcond (nums : List Nat) (result: Nat) (h_precond : missingNumber_precond (nums)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv54.lean",
+      "upstream_file": "datasets/verina/verina_advanced_54/task.lean",
+      "verbatim_snippet": "theorem missingNumber_spec_satisfied (nums: List Nat) (h_precond : missingNumber_precond (nums)) :\n    missingNumber_postcond (nums) (missingNumber (nums) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_55/task.lean",
+      "verbatim_snippet": "def mostFrequent_postcond (xs : List Int) (result: Int) (h_precond : mostFrequent_precond (xs)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv55.lean",
+      "upstream_file": "datasets/verina/verina_advanced_55/task.lean",
+      "verbatim_snippet": "theorem mostFrequent_spec_satisfied (xs: List Int) (h_precond : mostFrequent_precond (xs)) :\n    mostFrequent_postcond (xs) (mostFrequent (xs) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_56/task.lean",
+      "verbatim_snippet": "def moveZeroes_postcond (xs : List Int) (result: List Int) (h_precond : moveZeroes_precond (xs)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv56.lean",
+      "upstream_file": "datasets/verina/verina_advanced_56/task.lean",
+      "verbatim_snippet": "theorem moveZeroes_spec_satisfied (xs: List Int) (h_precond : moveZeroes_precond (xs)) :\n    moveZeroes_postcond (xs) (moveZeroes (xs) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_60/task.lean",
+      "verbatim_snippet": "def partitionEvensOdds_postcond (nums : List Nat) (result: (List Nat × List Nat)) (h_precond : partitionEvensOdds_precond (nums)): Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv60.lean",
+      "upstream_file": "datasets/verina/verina_advanced_60/task.lean",
+      "verbatim_snippet": "theorem partitionEvensOdds_spec_satisfied (nums: List Nat) (h_precond : partitionEvensOdds_precond (nums)) :\n    partitionEvensOdds_postcond (nums) (partitionEvensOdds (nums) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_64/task.lean",
+      "verbatim_snippet": "def removeElement_postcond (lst : List Nat) (target : Nat) (result: List Nat) (h_precond : removeElement_precond (lst) (target)): Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv64.lean",
+      "upstream_file": "datasets/verina/verina_advanced_64/task.lean",
+      "verbatim_snippet": "theorem removeElement_spec_satisfied (lst: List Nat) (target: Nat) (h_precond : removeElement_precond (lst) (target)):\n    removeElement_postcond (lst) (target) (removeElement (lst) (target) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_65/task.lean",
+      "verbatim_snippet": "def reverseString_postcond (s : String) (result: String) (h_precond : reverseString_precond (s)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv65.lean",
+      "upstream_file": "datasets/verina/verina_advanced_65/task.lean",
+      "verbatim_snippet": "theorem reverseString_spec_satisfied (s: String) (h_precond : reverseString_precond (s)) :\n    reverseString_postcond (s) (reverseString (s) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_66/task.lean",
+      "verbatim_snippet": "def reverseWords_postcond (words_str : String) (result: String) (h_precond : reverseWords_precond (words_str)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv66.lean",
+      "upstream_file": "datasets/verina/verina_advanced_66/task.lean",
+      "verbatim_snippet": "theorem reverseWords_spec_satisfied (words_str: String) (h_precond : reverseWords_precond (words_str)) :\n    reverseWords_postcond (words_str) (reverseWords (words_str) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_70/task.lean",
+      "verbatim_snippet": "def semiOrderedPermutation_postcond (nums : List Int) (result: Int) (h_precond : semiOrderedPermutation_precond (nums)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv70.lean",
+      "upstream_file": "datasets/verina/verina_advanced_70/task.lean",
+      "verbatim_snippet": "theorem semiOrderedPermutation_spec_satisfied (nums: List Int) (h_precond : semiOrderedPermutation_precond (nums)) :\n    semiOrderedPermutation_postcond (nums) (semiOrderedPermutation (nums) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_72/task.lean",
+      "verbatim_snippet": "def singleDigitPrimeFactor_postcond (n : Nat) (result: Nat) (h_precond : singleDigitPrimeFactor_precond (n)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv72.lean",
+      "upstream_file": "datasets/verina/verina_advanced_72/task.lean",
+      "verbatim_snippet": "theorem singleDigitPrimeFactor_spec_satisfied (n: Nat) (h_precond : singleDigitPrimeFactor_precond (n)) :\n    singleDigitPrimeFactor_postcond (n) (singleDigitPrimeFactor (n) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_73/task.lean",
+      "verbatim_snippet": "def smallestMissing_postcond (l : List Nat) (result: Nat) (h_precond : smallestMissing_precond (l)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv73.lean",
+      "upstream_file": "datasets/verina/verina_advanced_73/task.lean",
+      "verbatim_snippet": "theorem smallestMissing_spec_satisfied (l: List Nat) (h_precond : smallestMissing_precond (l)) :\n    smallestMissing_postcond (l) (smallestMissing (l) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_76/task.lean",
+      "verbatim_snippet": "def topKFrequent_postcond (nums : List Int) (k : Nat) (result: List Int) (h_precond : topKFrequent_precond (nums) (k)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv76.lean",
+      "upstream_file": "datasets/verina/verina_advanced_76/task.lean",
+      "verbatim_snippet": "theorem topKFrequent_spec_satisfied (nums: List Int) (k: Nat) (h_precond : topKFrequent_precond (nums) (k)) :\n    topKFrequent_postcond (nums) (k) (topKFrequent (nums) (k) h_precond) h_precond :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Spec.lean",
+      "upstream_file": "datasets/verina/verina_advanced_81/task.lean",
+      "verbatim_snippet": "def uniqueSorted_postcond (arr : List Int) (result: List Int) (h_precond : uniqueSorted_precond (arr)) : Prop :="
+    },
+    {
+      "local_file": "VerinaAlgorithms/Adv81.lean",
+      "upstream_file": "datasets/verina/verina_advanced_81/task.lean",
+      "verbatim_snippet": "theorem uniqueSorted_spec_satisfied (arr: List Int) (h_precond : uniqueSorted_precond (arr)) :\n    uniqueSorted_postcond (arr) (uniqueSorted (arr) h_precond) h_precond :="
+    }
+  ]
+}

@@ -1,0 +1,288 @@
+#!/usr/bin/env python3
+"""Verify straight-line Boolean circuits (total gates, AND gates, AND-depth) in pure Lean 4.36.0."""
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify
+
+FROZEN_FILES = ["LwcSbox/Spec.lean", "UPSTREAM.json", "lakefile.toml", "lean-toolchain"]
+
+TASKS = {
+    "skinny8_total_gates": {
+        "module": "LwcSbox.Skinny8TotalBound",
+        "theorem": "LwcSbox.skinny8_total_gates_bound",
+        "score_const": "LwcSbox.skinny8TotalScore",
+        "statement": "def skinny8_total_gates (n : Nat) : Prop := LwcSbox.ValidTotalCircuit 8 LwcSbox.skinny8Sbox n",
+        "label": "{score} total gates (SKINNY-128)"
+    },
+    "skinny8_and_gates": {
+        "module": "LwcSbox.Skinny8AndBound",
+        "theorem": "LwcSbox.skinny8_and_gates_bound",
+        "score_const": "LwcSbox.skinny8AndScore",
+        "statement": "def skinny8_and_gates (n : Nat) : Prop := LwcSbox.ValidAndCircuit 8 LwcSbox.skinny8Sbox n",
+        "label": "{score} AND gates (SKINNY-128)"
+    },
+    "skinny8_and_depth": {
+        "module": "LwcSbox.Skinny8DepthBound",
+        "theorem": "LwcSbox.skinny8_and_depth_bound",
+        "score_const": "LwcSbox.skinny8DepthScore",
+        "statement": "def skinny8_and_depth (n : Nat) : Prop := LwcSbox.ValidAndDepthCircuit 8 LwcSbox.skinny8Sbox n",
+        "label": "AND-depth {score} (SKINNY-128)"
+    },
+    "ascon_total_gates": {
+        "module": "LwcSbox.AsconTotalBound",
+        "theorem": "LwcSbox.ascon_total_gates_bound",
+        "score_const": "LwcSbox.asconTotalScore",
+        "statement": "def ascon_total_gates (n : Nat) : Prop := LwcSbox.ValidTotalCircuit 5 LwcSbox.asconSbox n",
+        "label": "{score} total gates (Ascon 5-bit)"
+    },
+    "ascon_and_gates": {
+        "module": "LwcSbox.AsconAndBound",
+        "theorem": "LwcSbox.ascon_and_gates_bound",
+        "score_const": "LwcSbox.asconAndScore",
+        "statement": "def ascon_and_gates (n : Nat) : Prop := LwcSbox.ValidAndCircuit 5 LwcSbox.asconSbox n",
+        "label": "{score} AND gates (Ascon 5-bit)"
+    },
+    "keccak_chi_total_gates": {
+        "module": "LwcSbox.KeccakChiTotalBound",
+        "theorem": "LwcSbox.keccak_chi_total_gates_bound",
+        "score_const": "LwcSbox.keccakChiTotalScore",
+        "statement": "def keccak_chi_total_gates (n : Nat) : Prop := LwcSbox.ValidTotalCircuit 5 LwcSbox.keccakChiSbox n",
+        "label": "{score} total gates (Keccak-\u03c7 5-bit)"
+    },
+    "present_total_gates": {
+        "module": "LwcSbox.PresentTotalBound",
+        "theorem": "LwcSbox.present_total_gates_bound",
+        "score_const": "LwcSbox.presentTotalScore",
+        "statement": "def present_total_gates (n : Nat) : Prop := LwcSbox.ValidTotalCircuit 4 LwcSbox.presentSbox n",
+        "label": "{score} total gates (PRESENT/PHOTON)"
+    },
+    "present_and_gates": {
+        "module": "LwcSbox.PresentAndBound",
+        "theorem": "LwcSbox.present_and_gates_bound",
+        "score_const": "LwcSbox.presentAndScore",
+        "statement": "def present_and_gates (n : Nat) : Prop := LwcSbox.ValidAndCircuit 4 LwcSbox.presentSbox n",
+        "label": "{score} AND gates (PRESENT/PHOTON)"
+    },
+    "gift_total_gates": {
+        "module": "LwcSbox.GiftTotalBound",
+        "theorem": "LwcSbox.gift_total_gates_bound",
+        "score_const": "LwcSbox.giftTotalScore",
+        "statement": "def gift_total_gates (n : Nat) : Prop := LwcSbox.ValidTotalCircuit 4 LwcSbox.giftSbox n",
+        "label": "{score} total gates (GIFT-128)"
+    },
+    "gift_and_gates": {
+        "module": "LwcSbox.GiftAndBound",
+        "theorem": "LwcSbox.gift_and_gates_bound",
+        "score_const": "LwcSbox.giftAndScore",
+        "statement": "def gift_and_gates (n : Nat) : Prop := LwcSbox.ValidAndCircuit 4 LwcSbox.giftSbox n",
+        "label": "{score} AND gates (GIFT-128)"
+    },
+    "spongent_total_gates": {
+        "module": "LwcSbox.SpongentTotalBound",
+        "theorem": "LwcSbox.spongent_total_gates_bound",
+        "score_const": "LwcSbox.spongentTotalScore",
+        "statement": "def spongent_total_gates (n : Nat) : Prop := LwcSbox.ValidTotalCircuit 4 LwcSbox.spongentSbox n",
+        "label": "{score} total gates (Spongent/Elephant)"
+    },
+    "spongent_and_gates": {
+        "module": "LwcSbox.SpongentAndBound",
+        "theorem": "LwcSbox.spongent_and_gates_bound",
+        "score_const": "LwcSbox.spongentAndScore",
+        "statement": "def spongent_and_gates (n : Nat) : Prop := LwcSbox.ValidAndCircuit 4 LwcSbox.spongentSbox n",
+        "label": "{score} AND gates (Spongent/Elephant)"
+    },
+    "saturnin_total_gates": {
+        "module": "LwcSbox.SaturninTotalBound",
+        "theorem": "LwcSbox.saturnin_total_gates_bound",
+        "score_const": "LwcSbox.saturninTotalScore",
+        "statement": "def saturnin_total_gates (n : Nat) : Prop := LwcSbox.ValidTotalCircuit 4 LwcSbox.saturninSbox n",
+        "label": "{score} total gates (Saturnin)"
+    },
+    "knot_total_gates": {
+        "module": "LwcSbox.KnotTotalBound",
+        "theorem": "LwcSbox.knot_total_gates_bound",
+        "score_const": "LwcSbox.knotTotalScore",
+        "statement": "def knot_total_gates (n : Nat) : Prop := LwcSbox.ValidTotalCircuit 4 LwcSbox.knotSbox n",
+        "label": "{score} total gates (KNOT)"
+    },
+    "clyde_total_gates": {
+        "module": "LwcSbox.ClydeTotalBound",
+        "theorem": "LwcSbox.clyde_total_gates_bound",
+        "score_const": "LwcSbox.clydeTotalScore",
+        "statement": "def clyde_total_gates (n : Nat) : Prop := LwcSbox.ValidTotalCircuit 4 LwcSbox.clydeSbox n",
+        "label": "{score} total gates (Clyde-128/Spook)"
+    },
+    "pyjamask_total_gates": {
+        "module": "LwcSbox.PyjamaskTotalBound",
+        "theorem": "LwcSbox.pyjamask_total_gates_bound",
+        "score_const": "LwcSbox.pyjamaskTotalScore",
+        "statement": "def pyjamask_total_gates (n : Nat) : Prop := LwcSbox.ValidTotalCircuit 4 LwcSbox.pyjamaskSbox n",
+        "label": "{score} total gates (Pyjamask-128)"
+    }
+}
+
+CIRCUIT_TARGETS = {
+    "skinny8_total_gates": [
+        "LwcSbox/Skinny8TotalCircuit.lean",
+        "LwcSbox.skinny8TotalScore",
+        "LwcSbox.skinny8TotalGates",
+        "LwcSbox.skinny8TotalOutputs",
+        8
+    ],
+    "skinny8_and_gates": [
+        "LwcSbox/Skinny8AndCircuit.lean",
+        "LwcSbox.skinny8AndScore",
+        "LwcSbox.skinny8AndGates",
+        "LwcSbox.skinny8AndOutputs",
+        8
+    ],
+    "skinny8_and_depth": [
+        "LwcSbox/Skinny8DepthCircuit.lean",
+        "LwcSbox.skinny8DepthScore",
+        "LwcSbox.skinny8DepthGates",
+        "LwcSbox.skinny8DepthOutputs",
+        8
+    ],
+    "ascon_total_gates": [
+        "LwcSbox/AsconTotalCircuit.lean",
+        "LwcSbox.asconTotalScore",
+        "LwcSbox.asconTotalGates",
+        "LwcSbox.asconTotalOutputs",
+        5
+    ],
+    "ascon_and_gates": [
+        "LwcSbox/AsconAndCircuit.lean",
+        "LwcSbox.asconAndScore",
+        "LwcSbox.asconAndGates",
+        "LwcSbox.asconAndOutputs",
+        5
+    ],
+    "keccak_chi_total_gates": [
+        "LwcSbox/KeccakChiTotalCircuit.lean",
+        "LwcSbox.keccakChiTotalScore",
+        "LwcSbox.keccakChiTotalGates",
+        "LwcSbox.keccakChiTotalOutputs",
+        5
+    ],
+    "present_total_gates": [
+        "LwcSbox/PresentTotalCircuit.lean",
+        "LwcSbox.presentTotalScore",
+        "LwcSbox.presentTotalGates",
+        "LwcSbox.presentTotalOutputs",
+        4
+    ],
+    "present_and_gates": [
+        "LwcSbox/PresentAndCircuit.lean",
+        "LwcSbox.presentAndScore",
+        "LwcSbox.presentAndGates",
+        "LwcSbox.presentAndOutputs",
+        4
+    ],
+    "gift_total_gates": [
+        "LwcSbox/GiftTotalCircuit.lean",
+        "LwcSbox.giftTotalScore",
+        "LwcSbox.giftTotalGates",
+        "LwcSbox.giftTotalOutputs",
+        4
+    ],
+    "gift_and_gates": [
+        "LwcSbox/GiftAndCircuit.lean",
+        "LwcSbox.giftAndScore",
+        "LwcSbox.giftAndGates",
+        "LwcSbox.giftAndOutputs",
+        4
+    ],
+    "spongent_total_gates": [
+        "LwcSbox/SpongentTotalCircuit.lean",
+        "LwcSbox.spongentTotalScore",
+        "LwcSbox.spongentTotalGates",
+        "LwcSbox.spongentTotalOutputs",
+        4
+    ],
+    "spongent_and_gates": [
+        "LwcSbox/SpongentAndCircuit.lean",
+        "LwcSbox.spongentAndScore",
+        "LwcSbox.spongentAndGates",
+        "LwcSbox.spongentAndOutputs",
+        4
+    ],
+    "saturnin_total_gates": [
+        "LwcSbox/SaturninTotalCircuit.lean",
+        "LwcSbox.saturninTotalScore",
+        "LwcSbox.saturninTotalGates",
+        "LwcSbox.saturninTotalOutputs",
+        4
+    ],
+    "knot_total_gates": [
+        "LwcSbox/KnotTotalCircuit.lean",
+        "LwcSbox.knotTotalScore",
+        "LwcSbox.knotTotalGates",
+        "LwcSbox.knotTotalOutputs",
+        4
+    ],
+    "clyde_total_gates": [
+        "LwcSbox/ClydeTotalCircuit.lean",
+        "LwcSbox.clydeTotalScore",
+        "LwcSbox.clydeTotalGates",
+        "LwcSbox.clydeTotalOutputs",
+        4
+    ],
+    "pyjamask_total_gates": [
+        "LwcSbox/PyjamaskTotalCircuit.lean",
+        "LwcSbox.pyjamaskTotalScore",
+        "LwcSbox.pyjamaskTotalGates",
+        "LwcSbox.pyjamaskTotalOutputs",
+        4
+    ]
+}
+
+MAX_BYTES = 32768
+MAX_GATES = 1024
+
+
+def check_circuit(path, score_name, gates_name, outputs_name, width):
+    if not path.is_file():
+        emit(False, f"Missing circuit file: {path.name}", stage="lint")
+    raw = path.read_bytes()
+    if len(raw) > MAX_BYTES:
+        emit(False, f"Circuit file exceeds {MAX_BYTES} bytes", stage="lint")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        emit(False, "Circuit file must be valid UTF-8", stage="lint")
+    nat = r"(?:0|[1-9][0-9]{0,3})"
+    triple = rf"\(\s*{nat}\s*,\s*{nat}\s*,\s*{nat}\s*\)"
+    header_re = (
+        rf"\s*def\s+{re.escape(score_name)}\s*:\s*Nat\s*:=\s*({nat})\s*\n"
+        rf"\s*def\s+{re.escape(gates_name)}\s*:\s*List\s*\(Nat\s*×\s*Nat\s*×\s*Nat\)\s*:=\s*\[\s*(.*?)\s*\]\s*\n"
+        rf"\s*def\s+{re.escape(outputs_name)}\s*:\s*List\s+Nat\s*:=\s*\[\s*(.*?)\s*\]\s*"
+    )
+    match = re.fullmatch(header_re, text, re.DOTALL)
+    if not match:
+        emit(False, f"Expected only literal definitions for {score_name}, {gates_name}, and {outputs_name}", stage="lint")
+    gates_body = match.group(2)
+    outputs_body = match.group(3)
+    if not gates_body or not re.fullmatch(rf"{triple}(?:\s*,\s*{triple}){{0,{MAX_GATES - 1}}}", gates_body):
+        emit(False, f"Expected 1 to {MAX_GATES} literal (op, w1, w2) gate triples", stage="lint")
+    if not re.fullmatch(rf"{nat}(?:\s*,\s*{nat}){{{width - 1}}}", outputs_body):
+        emit(False, f"Expected exactly {width} literal output wire indices", stage="lint")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>", stage="lint")
+    tid = sys.argv[1]
+    if tid in CIRCUIT_TARGETS:
+        rel_path, score_name, gates_name, outputs_name, width = CIRCUIT_TARGETS[tid]
+        check_circuit(Path(__file__).resolve().parent / rel_path, score_name, gates_name, outputs_name, width)
+    lean_verify(
+        tid,
+        lib_root="LwcSbox",
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        uses_mathlib=False,
+        timeout_sec=60,
+    )

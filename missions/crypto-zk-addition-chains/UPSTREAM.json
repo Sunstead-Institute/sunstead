@@ -1,0 +1,53 @@
+{
+  "repo": "Plonky3/Plonky3",
+  "commit": "0d803737b681774186cd283b1fd2d8e493655c82",
+  "license": "Apache-2.0",
+  "specialization": "Sunstead pins the verbatim prime field moduli and inverse-root exponentiation comments from `Plonky3/Plonky3` (`goldilocks`, `baby-bear`, `koala-bear`, `mersenne-31`, `bn254`, and `field/src/exponentiation.rs`), kernel-proves the modular root identities `\u03b1 * d \u2261 1 (mod p - 1)` and polymorphic associative power soundness in pure Lean 4.36.0 (zero Mathlib), and seeds all 10 tracks strictly above Plonky3's custom chains.",
+  "checks": [
+    {
+      "local_file": "ZkAddChain/Spec.lean",
+      "upstream_file": "goldilocks/src/goldilocks.rs",
+      "verbatim_snippet": "pub(crate) const P: u64 = 0xFFFF_FFFF_0000_0001;"
+    },
+    {
+      "local_file": "ZkAddChain/Spec.lean",
+      "upstream_file": "baby-bear/src/baby_bear.rs",
+      "verbatim_snippet": "    const PRIME: u32 = 0x78000001;"
+    },
+    {
+      "local_file": "ZkAddChain/Spec.lean",
+      "upstream_file": "koala-bear/src/koala_bear.rs",
+      "verbatim_snippet": "    const PRIME: u32 = 0x7f000001;"
+    },
+    {
+      "local_file": "ZkAddChain/Spec.lean",
+      "upstream_file": "mersenne-31/src/mersenne_31.rs",
+      "verbatim_snippet": "const P: u32 = (1 << 31) - 1;"
+    },
+    {
+      "local_file": "ZkAddChain/Spec.lean",
+      "upstream_file": "bn254/src/bn254.rs",
+      "verbatim_snippet": "pub(crate) const BN254_PRIME: [u64; 4] = [\n    0x43e1f593f0000001,\n    0x2833e84879b97091,\n    0xb85045b68181585d,\n    0x30644e72e131a029,\n];"
+    },
+    {
+      "local_file": "ZkAddChain/Spec.lean",
+      "upstream_file": "field/src/exponentiation.rs",
+      "verbatim_snippet": "/// Compute the exponential `x -> x^1717986917` using a custom addition chain."
+    },
+    {
+      "local_file": "ZkAddChain/Spec.lean",
+      "upstream_file": "field/src/exponentiation.rs",
+      "verbatim_snippet": "/// Compute the exponential `x -> x^1420470955` using a custom addition chain."
+    },
+    {
+      "local_file": "ZkAddChain/Spec.lean",
+      "upstream_file": "field/src/exponentiation.rs",
+      "verbatim_snippet": "/// Compute the exponential `x -> x^1725656503` using a custom addition chain."
+    },
+    {
+      "local_file": "ZkAddChain/Spec.lean",
+      "upstream_file": "field/src/exponentiation.rs",
+      "verbatim_snippet": "/// Compute the exponential `x -> x^10540996611094048183` using a custom addition chain."
+    }
+  ]
+}

@@ -1,0 +1,285 @@
+#!/usr/bin/env python3
+"""Verify explicit binary error-correcting and constant-weight codes in Lean 4."""
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify
+
+LIB_ROOT = "CodingBounds"
+FROZEN_FILES = ["CodingBounds/Spec.lean", "UPSTREAM.json", "lakefile.toml", "lean-toolchain"]
+
+TASKS = {
+    "code_17_8": {
+        "module": "CodingBounds.BoundCode17_8",
+        "theorem": "CodingBounds.bound_code_17_8",
+        "score_const": "CodingBounds.score_code_17_8",
+        "statement": "def code_17_8 (M : Nat) : Prop := CodingBounds.ValidBinaryCode 17 8 M",
+        "label": "{score} codewords (A(17,8))"
+    },
+    "code_18_8": {
+        "module": "CodingBounds.BoundCode18_8",
+        "theorem": "CodingBounds.bound_code_18_8",
+        "score_const": "CodingBounds.score_code_18_8",
+        "statement": "def code_18_8 (M : Nat) : Prop := CodingBounds.ValidBinaryCode 18 8 M",
+        "label": "{score} codewords (A(18,8))"
+    },
+    "code_19_8": {
+        "module": "CodingBounds.BoundCode19_8",
+        "theorem": "CodingBounds.bound_code_19_8",
+        "score_const": "CodingBounds.score_code_19_8",
+        "statement": "def code_19_8 (M : Nat) : Prop := CodingBounds.ValidBinaryCode 19 8 M",
+        "label": "{score} codewords (A(19,8))"
+    },
+    "code_21_10": {
+        "module": "CodingBounds.BoundCode21_10",
+        "theorem": "CodingBounds.bound_code_21_10",
+        "score_const": "CodingBounds.score_code_21_10",
+        "statement": "def code_21_10 (M : Nat) : Prop := CodingBounds.ValidBinaryCode 21 10 M",
+        "label": "{score} codewords (A(21,10))"
+    },
+    "code_22_10": {
+        "module": "CodingBounds.BoundCode22_10",
+        "theorem": "CodingBounds.bound_code_22_10",
+        "score_const": "CodingBounds.score_code_22_10",
+        "statement": "def code_22_10 (M : Nat) : Prop := CodingBounds.ValidBinaryCode 22 10 M",
+        "label": "{score} codewords (A(22,10))"
+    },
+    "code_23_10": {
+        "module": "CodingBounds.BoundCode23_10",
+        "theorem": "CodingBounds.bound_code_23_10",
+        "score_const": "CodingBounds.score_code_23_10",
+        "statement": "def code_23_10 (M : Nat) : Prop := CodingBounds.ValidBinaryCode 23 10 M",
+        "label": "{score} codewords (A(23,10))"
+    },
+    "code_24_10": {
+        "module": "CodingBounds.BoundCode24_10",
+        "theorem": "CodingBounds.bound_code_24_10",
+        "score_const": "CodingBounds.score_code_24_10",
+        "statement": "def code_24_10 (M : Nat) : Prop := CodingBounds.ValidBinaryCode 24 10 M",
+        "label": "{score} codewords (A(24,10))"
+    },
+    "code_26_12": {
+        "module": "CodingBounds.BoundCode26_12",
+        "theorem": "CodingBounds.bound_code_26_12",
+        "score_const": "CodingBounds.score_code_26_12",
+        "statement": "def code_26_12 (M : Nat) : Prop := CodingBounds.ValidBinaryCode 26 12 M",
+        "label": "{score} codewords (A(26,12))"
+    },
+    "cwc_17_6_6": {
+        "module": "CodingBounds.BoundCwc17_6_6",
+        "theorem": "CodingBounds.bound_cwc_17_6_6",
+        "score_const": "CodingBounds.score_cwc_17_6_6",
+        "statement": "def cwc_17_6_6 (M : Nat) : Prop := CodingBounds.ValidConstantWeightCode 17 6 6 M",
+        "label": "{score} codewords (A(17,6,6))"
+    },
+    "cwc_18_6_7": {
+        "module": "CodingBounds.BoundCwc18_6_7",
+        "theorem": "CodingBounds.bound_cwc_18_6_7",
+        "score_const": "CodingBounds.score_cwc_18_6_7",
+        "statement": "def cwc_18_6_7 (M : Nat) : Prop := CodingBounds.ValidConstantWeightCode 18 6 7 M",
+        "label": "{score} codewords (A(18,6,7))"
+    },
+    "cwc_20_8_7": {
+        "module": "CodingBounds.BoundCwc20_8_7",
+        "theorem": "CodingBounds.bound_cwc_20_8_7",
+        "score_const": "CodingBounds.score_cwc_20_8_7",
+        "statement": "def cwc_20_8_7 (M : Nat) : Prop := CodingBounds.ValidConstantWeightCode 20 8 7 M",
+        "label": "{score} codewords (A(20,8,7))"
+    },
+    "cwc_21_6_5": {
+        "module": "CodingBounds.BoundCwc21_6_5",
+        "theorem": "CodingBounds.bound_cwc_21_6_5",
+        "score_const": "CodingBounds.score_cwc_21_6_5",
+        "statement": "def cwc_21_6_5 (M : Nat) : Prop := CodingBounds.ValidConstantWeightCode 21 6 5 M",
+        "label": "{score} codewords (A(21,6,5))"
+    },
+    "cwc_24_10_8": {
+        "module": "CodingBounds.BoundCwc24_10_8",
+        "theorem": "CodingBounds.bound_cwc_24_10_8",
+        "score_const": "CodingBounds.score_cwc_24_10_8",
+        "statement": "def cwc_24_10_8 (M : Nat) : Prop := CodingBounds.ValidConstantWeightCode 24 10 8 M",
+        "label": "{score} codewords (A(24,10,8))"
+    },
+    "cwc_26_10_8": {
+        "module": "CodingBounds.BoundCwc26_10_8",
+        "theorem": "CodingBounds.bound_cwc_26_10_8",
+        "score_const": "CodingBounds.score_cwc_26_10_8",
+        "statement": "def cwc_26_10_8 (M : Nat) : Prop := CodingBounds.ValidConstantWeightCode 26 10 8 M",
+        "label": "{score} codewords (A(26,10,8))"
+    },
+    "cwc_27_10_8": {
+        "module": "CodingBounds.BoundCwc27_10_8",
+        "theorem": "CodingBounds.bound_cwc_27_10_8",
+        "score_const": "CodingBounds.score_cwc_27_10_8",
+        "statement": "def cwc_27_10_8 (M : Nat) : Prop := CodingBounds.ValidConstantWeightCode 27 10 8 M",
+        "label": "{score} codewords (A(27,10,8))"
+    },
+    "cwc_29_12_10": {
+        "module": "CodingBounds.BoundCwc29_12_10",
+        "theorem": "CodingBounds.bound_cwc_29_12_10",
+        "score_const": "CodingBounds.score_cwc_29_12_10",
+        "statement": "def cwc_29_12_10 (M : Nat) : Prop := CodingBounds.ValidConstantWeightCode 29 12 10 M",
+        "label": "{score} codewords (A(29,12,10))"
+    }
+}
+
+CODE_TARGETS = {
+    "code_17_8": [
+        "CodingBounds/Code17_8.lean",
+        "CodingBounds.score_code_17_8",
+        "CodingBounds.words_code_17_8",
+        17
+    ],
+    "code_18_8": [
+        "CodingBounds/Code18_8.lean",
+        "CodingBounds.score_code_18_8",
+        "CodingBounds.words_code_18_8",
+        18
+    ],
+    "code_19_8": [
+        "CodingBounds/Code19_8.lean",
+        "CodingBounds.score_code_19_8",
+        "CodingBounds.words_code_19_8",
+        19
+    ],
+    "code_21_10": [
+        "CodingBounds/Code21_10.lean",
+        "CodingBounds.score_code_21_10",
+        "CodingBounds.words_code_21_10",
+        21
+    ],
+    "code_22_10": [
+        "CodingBounds/Code22_10.lean",
+        "CodingBounds.score_code_22_10",
+        "CodingBounds.words_code_22_10",
+        22
+    ],
+    "code_23_10": [
+        "CodingBounds/Code23_10.lean",
+        "CodingBounds.score_code_23_10",
+        "CodingBounds.words_code_23_10",
+        23
+    ],
+    "code_24_10": [
+        "CodingBounds/Code24_10.lean",
+        "CodingBounds.score_code_24_10",
+        "CodingBounds.words_code_24_10",
+        24
+    ],
+    "code_26_12": [
+        "CodingBounds/Code26_12.lean",
+        "CodingBounds.score_code_26_12",
+        "CodingBounds.words_code_26_12",
+        26
+    ],
+    "cwc_17_6_6": [
+        "CodingBounds/Cwc17_6_6.lean",
+        "CodingBounds.score_cwc_17_6_6",
+        "CodingBounds.words_cwc_17_6_6",
+        17
+    ],
+    "cwc_18_6_7": [
+        "CodingBounds/Cwc18_6_7.lean",
+        "CodingBounds.score_cwc_18_6_7",
+        "CodingBounds.words_cwc_18_6_7",
+        18
+    ],
+    "cwc_20_8_7": [
+        "CodingBounds/Cwc20_8_7.lean",
+        "CodingBounds.score_cwc_20_8_7",
+        "CodingBounds.words_cwc_20_8_7",
+        20
+    ],
+    "cwc_21_6_5": [
+        "CodingBounds/Cwc21_6_5.lean",
+        "CodingBounds.score_cwc_21_6_5",
+        "CodingBounds.words_cwc_21_6_5",
+        21
+    ],
+    "cwc_24_10_8": [
+        "CodingBounds/Cwc24_10_8.lean",
+        "CodingBounds.score_cwc_24_10_8",
+        "CodingBounds.words_cwc_24_10_8",
+        24
+    ],
+    "cwc_26_10_8": [
+        "CodingBounds/Cwc26_10_8.lean",
+        "CodingBounds.score_cwc_26_10_8",
+        "CodingBounds.words_cwc_26_10_8",
+        26
+    ],
+    "cwc_27_10_8": [
+        "CodingBounds/Cwc27_10_8.lean",
+        "CodingBounds.score_cwc_27_10_8",
+        "CodingBounds.words_cwc_27_10_8",
+        27
+    ],
+    "cwc_29_12_10": [
+        "CodingBounds/Cwc29_12_10.lean",
+        "CodingBounds.score_cwc_29_12_10",
+        "CodingBounds.words_cwc_29_12_10",
+        29
+    ]
+}
+
+MAX_BYTES = 65536
+MAX_CODEWORDS = 1024
+
+
+def check_code_file(path: Path, score_name: str, words_name: str, n: int) -> None:
+    if not path.is_file():
+        emit(False, f"Missing code file: {path.name}", stage="lint")
+    raw = path.read_bytes()
+    if len(raw) > MAX_BYTES:
+        emit(False, f"Code file exceeds {MAX_BYTES} bytes", stage="lint")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        emit(False, "Code file must be valid UTF-8", stage="lint")
+
+    nat = r"(?:0|[1-9][0-9]{0,9}|0x[0-9a-fA-F]{1,8})"
+    header_re = (
+        rf"\s*def\s+{re.escape(score_name)}\s*:\s*Nat\s*:=\s*({nat})\s*\n"
+        rf"\s*def\s+{re.escape(words_name)}\s*:\s*List\s+Nat\s*:=\s*\[\s*(.*?)\s*\]\s*"
+    )
+    match = re.fullmatch(header_re, text, re.DOTALL)
+    if not match:
+        emit(
+            False,
+            f"Expected only literal definitions for {score_name} and {words_name}",
+            stage="lint",
+        )
+    score_val = int(match.group(1), 0)
+    body = match.group(2)
+    if not body or not re.fullmatch(rf"{nat}(?:\s*,\s*{nat}){{0,{MAX_CODEWORDS - 1}}}", body):
+        emit(
+            False,
+            f"Expected 1 to {MAX_CODEWORDS} literal codeword naturals",
+            stage="lint",
+        )
+    vals = [int(tok, 0) for tok in re.findall(nat, body)]
+    if len(vals) != score_val:
+        emit(False, f"Score {score_val} does not match codeword count {len(vals)}", stage="lint")
+    limit = 1 << n
+    for v in vals:
+        if v >= limit:
+            emit(False, f"Codeword {v} exceeds n={n} bit width (< {limit})", stage="lint")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>", stage="lint")
+    task_id = sys.argv[1]
+    if task_id in CODE_TARGETS:
+        rel_path, score_name, words_name, n = CODE_TARGETS[task_id]
+        check_code_file(Path(__file__).resolve().parent / rel_path, score_name, words_name, n)
+    lean_verify(
+        task_id,
+        lib_root=LIB_ROOT,
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        uses_mathlib=False,
+        timeout_sec=90,
+    )

@@ -1,0 +1,282 @@
+{
+  "repo": "frenzymath/FATE-X",
+  "commit": "a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d",
+  "license": "MIT",
+  "checks": [
+    {
+      "local_file": "FateXIdealTheory/P12.lean",
+      "upstream_file": "FATEX/12.lean",
+      "verbatim_snippet": "theorem isPrincipalIdealRing_of_quadratic_integer_19 :\n    IsPrincipalIdealRing (Algebra.adjoin ℤ {(1 + (Real.sqrt 19) * Complex.I) / 2}) ∧ IsDomain (Algebra.adjoin ℤ {(1 + (Real.sqrt 19) * Complex.I) / 2}) :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P25.lean",
+      "upstream_file": "FATEX/25.lean",
+      "verbatim_snippet": "theorem fixedField_eq_algebra_adjoin :\n    Nonempty ((RatFunc (ZMod 2) ≃+* RatFunc (ZMod 2)) ≃* (Equiv.Perm (Fin 3))) ∧\n    IntermediateField.fixedField (F := ZMod 2) (E := RatFunc (ZMod 2)) ⊤ =\n    IntermediateField.adjoin (ZMod 2) {((.X ^ 4 - .X) ^ 3 / (.X ^ 2 - .X) ^ 5 : (RatFunc (ZMod 2)))} :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P26.lean",
+      "upstream_file": "FATEX/26.lean",
+      "verbatim_snippet": "theorem card_one_or_two_of_finite_closed_subgroup_of_absoluteGaloisGroup\n    (K : Type) [Field K] [Algebra ℚ K] [Module.Finite ℚ K]\n    (H : Subgroup (Field.absoluteGaloisGroup K))\n    (h_closed : IsClosed (H : Set (Field.absoluteGaloisGroup K)))\n    (h_fin : Finite H) : Nat.card H = 1 ∨ Nat.card H = 2 :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P27.lean",
+      "upstream_file": "FATEX/27.lean",
+      "verbatim_snippet": "theorem isGalois_and_rank_eq_of_isPrimitiveRoot_sq (p : ℕ) (hp : p.Prime) {K : Type} [Field K]\n    [NumberField K] {ζ : K} (h : IsPrimitiveRoot ζ (p^2))\n    {L : IntermediateField K (AlgebraicClosure K)} [IsGalois K L]\n    (hdeg : Module.rank K L = p) :\n    ∃ (L' : Type) (_ : Field L') (_ : Algebra K L')\n    (_ : Algebra L L') (_ : IsScalarTower K L L'),\n    IsGalois K L' ∧ IsGalois L L' ∧ Module.rank L L' = p :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P28.lean",
+      "upstream_file": "FATEX/28.lean",
+      "verbatim_snippet": "theorem infinite_conj_of_ne_1_absoluteGaloisGroup (K : Type)\n    [Field K] [Algebra ℚ K] [Module.Finite ℚ K] (g : Field.absoluteGaloisGroup K) (h : g ≠ 1) :\n    {g' : Field.absoluteGaloisGroup K | IsConj g g'}.Infinite :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P29.lean",
+      "upstream_file": "FATEX/29.lean",
+      "verbatim_snippet": "theorem isClosed_zpowers_iff_isOfFinOrder (K : Type)\n    [Field K] [Algebra ℚ K] [Module.Finite ℚ K] (g : Field.absoluteGaloisGroup K) :\n    IsClosed ((Subgroup.zpowers g) : Set (Field.absoluteGaloisGroup K)) ↔ IsOfFinOrder g :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P30.lean",
+      "upstream_file": "FATEX/30.lean",
+      "verbatim_snippet": "theorem integrallyClosedIn_of_complement_multiplicatively_closed (B : Type) [CommRing B] (A : Subring B)\n    (h : ∀ (x y : B), x ∉ A → y ∉ A → x * y ∉ A) : IsIntegrallyClosedIn A B :="
+    },
+    {
+      "local_file": "FateXIdealTheory/Spec.lean",
+      "upstream_file": "FATEX/31.lean",
+      "verbatim_snippet": "abbrev R (n : ℕ) : Type :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P31.lean",
+      "upstream_file": "FATEX/31.lean",
+      "verbatim_snippet": "theorem UFD_of_ge_5 (n : ℕ) (h : n ≥ 5) :\n    ∃ (h : IsDomain (R n)), UniqueFactorizationMonoid (R n) :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P32.lean",
+      "upstream_file": "FATEX/32.lean",
+      "verbatim_snippet": "theorem UFD_of_adicCompletion_UFD (R : Type) [CommRing R] [IsLocalRing R] [IsNoetherianRing R]\n    [IsDomain (AdicCompletion (maximalIdeal R) R)]\n    [UniqueFactorizationMonoid (AdicCompletion (maximalIdeal R) R)] :\n    ∃ (h : IsDomain R), UniqueFactorizationMonoid R :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P34.lean",
+      "upstream_file": "FATEX/34.lean",
+      "verbatim_snippet": "theorem powerSeries_not_integrallyClosed_of_two_lt_ringKrullDim (R : Type) [CommRing R]\n    [IsDomain R] [ValuationRing R] (two_lt : 2 ≤ ringKrullDim R) :\n    ¬ (IsIntegrallyClosed R⟦X⟧) :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P35.lean",
+      "upstream_file": "FATEX/35.lean",
+      "verbatim_snippet": "theorem noetherian_of_prime_ideals_fg (R : Type) [CommRing R]\n    (h_fg : ∀ (p : Ideal R), p.IsPrime → p.FG) : IsNoetherianRing R :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P36.lean",
+      "upstream_file": "FATEX/36.lean",
+      "verbatim_snippet": "theorem associatedPrimes_hom_eq_support_inter_associatedPrimes (R : Type) [CommRing R]\n    [IsNoetherianRing R] (M N : Type) [AddCommGroup M] [AddCommGroup N] [Module R M] [Module R N]\n    [Module.Finite R M] [Module.Finite R N] : associatedPrimes R (M →ₗ[R] N) =\n    {p | p ∈ associatedPrimes R N ∧ Module.annihilator R M ≤ p} :="
+    },
+    {
+      "local_file": "FateXIdealTheory/Spec.lean",
+      "upstream_file": "FATEX/37.lean",
+      "verbatim_snippet": "abbrev QuotDetSubOne (n : ℕ) : Type := MvPolynomial ((Fin n) × (Fin n)) ℂ ⧸ Ideal.span {"
+    },
+    {
+      "local_file": "FateXIdealTheory/P37.lean",
+      "upstream_file": "FATEX/37.lean",
+      "verbatim_snippet": "theorem ufd_quotDetSubOne (n : ℕ) (h : n ≥ 1) : ∃ (h : IsDomain (QuotDetSubOne n)),\n    UniqueFactorizationMonoid (QuotDetSubOne n) :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P42.lean",
+      "upstream_file": "FATEX/42.lean",
+      "verbatim_snippet": "theorem nonEmpty_ringEquiv_of_sub_in_cube (k : Type) [Field k]\n    (g : MvPowerSeries (Fin 2) k) (hg : g - .X 0 * .X 1 ∈ (Ideal.span {MvPowerSeries.X 0, .X 1}) ^ 3) :\n    Nonempty (((MvPowerSeries (Fin 2) k) ⧸ Ideal.span {(.X 0 * .X 1 : (MvPowerSeries (Fin 2) k))}) ≃+*\n    ((MvPowerSeries (Fin 2) k) ⧸ Ideal.span {g})) :="
+    },
+    {
+      "local_file": "FateXIdealTheory/Spec.lean",
+      "upstream_file": "FATEX/43.lean",
+      "verbatim_snippet": "class IsRegularLocalRing (R : Type) [CommRing R] : Prop extends"
+    },
+    {
+      "local_file": "FateXIdealTheory/P43.lean",
+      "upstream_file": "FATEX/43.lean",
+      "verbatim_snippet": "theorem IsRegularLocalRing.frobenius_flat {A : Type} [CommRing A] [IsNoetherianRing A]\n    [IsLocalRing A] [IsReduced A] (p : ℕ) [Fact p.Prime] [CharP A p] :\n    (frobenius A p).Flat ↔ IsRegularLocalRing A :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P46.lean",
+      "upstream_file": "FATEX/46.lean",
+      "verbatim_snippet": "theorem module_flat_iff (R : Type) [CommRing R] (M : Type) [AddCommGroup M] [Module R M] :\n    Module.Flat R M ↔\n    ∀ P : Type, ∀ (_ : AddCommGroup P), ∀ (_ : Module R P), ∀ f : P →ₗ[R] M, Module.FinitePresentation R P →\n      ∃ (F : Type) (_ : AddCommGroup F) (_ : Module R F), Module.Finite R F ∧ Module.Free R F ∧\n      ∃ h : P →ₗ[R] F, ∃ g : F →ₗ[R] M, f = g.comp h :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P49.lean",
+      "upstream_file": "FATEX/49.lean",
+      "verbatim_snippet": "theorem principal_ideal_idempotent_iff_fg_ideal_is_direct_summand (A : Type) [CommRing A] :\n    (∀ I : Ideal A, I.IsPrincipal → I ^ 2 = I) ↔\n    (∀ I : Ideal A, I.FG → (∃ J : Ideal A, I ⊔ J = ⊤ ∧ I ⊓ J = ⊥ )) :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P50.lean",
+      "upstream_file": "FATEX/50.lean",
+      "verbatim_snippet": "theorem isNoetherianRing_of_isLocalRing_of_field_inj_of_adicComplete_of_maximalIdeal_finite\n    (R : Type) [CommRing R] [IsLocalRing R] [IsAdicComplete (IsLocalRing.maximalIdeal R) R]\n    (k : Type) [Field k] [Algebra k R] [NoZeroSMulDivisors k R]\n    (hfg : (IsLocalRing.maximalIdeal R).FG) : IsNoetherianRing R :="
+    },
+    {
+      "local_file": "FateXIdealTheory/Spec.lean",
+      "upstream_file": "FATEX/53.lean",
+      "verbatim_snippet": "class IsGorensteinLocalRing (R : Type) [CommRing R] : Prop extends"
+    },
+    {
+      "local_file": "FateXIdealTheory/P53.lean",
+      "upstream_file": "FATEX/53.lean",
+      "verbatim_snippet": "theorem isGorensteinRing_quot_x2_sub_y2_y2_sub_z2_xy_yz_zx (k : Type) [Field k] :\n    IsGorensteinRing <| MvPolynomial (Fin 3) k ⧸ Ideal.span ({(X 0)^ 2 - (X 1)^2, (X 1)^2 - (X 2)^2,\n    (X 0) * (X 1), (X 1) * (X 2), (X 2) * (X 0)} : Set (MvPolynomial (Fin 3) k)) :="
+    },
+    {
+      "local_file": "FateXIdealTheory/Spec.lean",
+      "upstream_file": "FATEX/55.lean",
+      "verbatim_snippet": "def IsStablyFree (R : Type) (M : Type) [CommRing R] [AddCommGroup M] [Module R M] : Prop :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P55.lean",
+      "upstream_file": "FATEX/55.lean",
+      "verbatim_snippet": "theorem stablyFree_iff_free_of_not_fg (R : Type) (M : Type) [CommRing R] [AddCommGroup M]\n    [Module R M] (h : ¬ Module.Finite R M) : Module.Free R M ↔ IsStablyFree R M :="
+    },
+    {
+      "local_file": "FateXIdealTheory/Spec.lean",
+      "upstream_file": "FATEX/57.lean",
+      "verbatim_snippet": "def IsAlmostIntegral {A : Type} [CommRing A] [IsDomain A] (x : FractionRing A) : Prop :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P57.lean",
+      "upstream_file": "FATEX/57.lean",
+      "verbatim_snippet": "theorem completely_integrally_closed_polynomial_ring {A : Type} [CommRing A] [IsDomain A]\n    (h : IsCompletelyIntegrallyClosed A) : IsCompletelyIntegrallyClosed (Polynomial A) :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P62.lean",
+      "upstream_file": "FATEX/62.lean",
+      "verbatim_snippet": "theorem adicCompletion_equiv_of_smooth (R S : Type) [CommRing R] [CommRing S]\n    [Algebra R S] [Algebra.Smooth R S] (σ : S →+* R)\n    (h : Function.LeftInverse σ (algebraMap R S)) (hf : Module.Free R (RingHom.ker σ).Cotangent) :\n    ∃ d : ℕ, Nonempty (AdicCompletion (RingHom.ker σ) S ≃ₐ[R] MvPowerSeries (Fin d) R) :="
+    },
+    {
+      "local_file": "FateXIdealTheory/Spec.lean",
+      "upstream_file": "FATEX/63.lean",
+      "verbatim_snippet": "def UniversalProperty.liftOfSqZeroIdeal {R S S' : Type} [CommRing R] [CommRing S] [CommRing S']"
+    },
+    {
+      "local_file": "FateXIdealTheory/P63.lean",
+      "upstream_file": "FATEX/63.lean",
+      "verbatim_snippet": "theorem surjection_of_formally_unramified (R S : Type) [CommRing R] [CommRing S]\n    [Algebra R S] [Algebra.FormallyUnramified R S] :\n    ∃ (S' : Type) (_ : CommRing S') (_ : Algebra R S') (f : S' →ₐ[R] S), (RingHom.ker f) ^ 2 = 0 ∧ UniversalProperty.liftOfSqZeroIdeal f :="
+    },
+    {
+      "local_file": "FateXIdealTheory/Spec.lean",
+      "upstream_file": "FATEX/73.lean",
+      "verbatim_snippet": "noncomputable def moduleDepth (N M : ModuleCat.{0} R) : ℕ∞ :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P73.lean",
+      "upstream_file": "FATEX/73.lean",
+      "verbatim_snippet": "theorem mvPolynomial_quotient_isCohenMacaulayRing_iff (k : Type) [Field k] (n : ℕ)\n    (R : Type) [CommRing R] (f : (MvPolynomial (Fin n) k) →+* R) (surj : Function.Surjective f)\n    (homo : (RingHom.ker f).IsHomogeneous (MvPolynomial.homogeneousSubmodule (Fin n) k))\n    (le : RingHom.ker f ≤ RingHom.ker MvPolynomial.constantCoeff) :\n    IsCohenMacaulayRing R ↔\n    IsCohenMacaulayRing (Localization.AtPrime ((RingHom.ker MvPolynomial.constantCoeff).map f)\n      (hp := Ideal.map_isPrime_of_surjective surj le (H := RingHom.ker_isPrime _))) :="
+    },
+    {
+      "local_file": "FateXIdealTheory/Spec.lean",
+      "upstream_file": "FATEX/75.lean",
+      "verbatim_snippet": "noncomputable def moduleDepth (N M : ModuleCat.{0} R) : ℕ∞ :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P75.lean",
+      "upstream_file": "FATEX/75.lean",
+      "verbatim_snippet": "theorem gradedAlgebra_isCohenMacaulay_iff_homogeneously_localize {A : Type} [CommRing A] [IsNoetherianRing A]\n    (𝒜 : ℕ → Submodule ℤ A) [GradedAlgebra 𝒜] (h : IsField (𝒜 0)) (h1 : Algebra.adjoin (𝒜 0) (𝒜 1) = (⊤ : Subalgebra (𝒜 0) A)) : IsCohenMacaulayRing A ↔\n    ∀ p : Ideal A, (_ : p.IsPrime) → p.IsHomogeneous 𝒜 →\n    IsCohenMacaulayLocalRing (HomogeneousLocalization.AtPrime 𝒜 p) :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P77.lean",
+      "upstream_file": "FATEX/77.lean",
+      "verbatim_snippet": "theorem infinite_intermediate_primes (R : Type) [CommRing R] [IsNoetherianRing R] (P Q : Ideal R)\n    (le : P ≤ Q) [P.IsPrime] [Q.IsPrime] (h d : ℕ) (lt : 1 < d) (ht1 : P.height = h)\n    (ht2 : (Q.map (Ideal.Quotient.mk P)).height = d) :\n    {P' : Ideal R | P ≤ P' ∧ P' ≤ Q ∧ P'.IsPrime ∧ P'.height = h + 1 ∧\n      (Q.map (Ideal.Quotient.mk P')).height = d - 1}.Infinite :="
+    },
+    {
+      "local_file": "FateXIdealTheory/Spec.lean",
+      "upstream_file": "FATEX/78.lean",
+      "verbatim_snippet": "noncomputable def moduleDepth (N M : ModuleCat.{0} R) : ℕ∞ :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P78.lean",
+      "upstream_file": "FATEX/78.lean",
+      "verbatim_snippet": "theorem IsCohenMacaulayLocalRing.isGorensteinRing_of_ufd {A B : Type} [CommRing A]\n    [IsCohenMacaulayLocalRing A] [IsDomain A] [UniqueFactorizationMonoid A] [CommRing B]\n    [IsRegularLocalRing B] {f : B →+* A} (hf : Function.Surjective f) :\n    IsGorensteinRing A :="
+    },
+    {
+      "local_file": "FateXIdealTheory/Spec.lean",
+      "upstream_file": "FATEX/88.lean",
+      "verbatim_snippet": "abbrev R : Type := (MvPolynomial (Fin 3) ℂ) ⧸ Ideal.span {(.X 0 ^ 2 + .X 1 ^ 3 + .X 2 ^ 7 : MvPolynomial (Fin 3) ℂ)}"
+    },
+    {
+      "local_file": "FateXIdealTheory/P88.lean",
+      "upstream_file": "FATEX/88.lean",
+      "verbatim_snippet": "theorem quotient_not_UFD :\n    ∃ (h : IsDomain R),\n    (UniqueFactorizationMonoid R) :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P89.lean",
+      "upstream_file": "FATEX/89.lean",
+      "verbatim_snippet": "theorem not_isSimpleGroup_of_card_eq_336 (G : Type) [Group G]\n    [Finite G] (h_card : Nat.card G = 336) : ¬ IsSimpleGroup G :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P90.lean",
+      "upstream_file": "FATEX/90.lean",
+      "verbatim_snippet": "theorem not_finiteType_inf_algebraMap_range (k : Type) [Field k] :\n    ∃ (n : ℕ) (K : IntermediateField k (FractionRing (MvPolynomial (Fin n) k))),\n    ¬ Algebra.FiniteType k (K.toSubalgebra ⊓ (Algebra.algHom k (MvPolynomial (Fin n) k)\n    (FractionRing (MvPolynomial (Fin n) k))).range :\n    Subalgebra k (FractionRing (MvPolynomial (Fin n) k))) :="
+    },
+    {
+      "local_file": "FateXIdealTheory/Spec.lean",
+      "upstream_file": "FATEX/91.lean",
+      "verbatim_snippet": "abbrev CommRing.Pic (R : Type) [CommRing R] : Type 1 := (Skeleton <| ModuleCat.{0} R)ˣ"
+    },
+    {
+      "local_file": "FateXIdealTheory/P91.lean",
+      "upstream_file": "FATEX/91.lean",
+      "verbatim_snippet": "theorem pic_three_lines {k : Type} [Field k] : Nonempty <|\n    CommRing.Pic (MvPolynomial (Fin 2) k ⧸ Ideal.span ({(X 0) * (X 1) * (X 0 + X 1 - 1)} :\n    Set (MvPolynomial (Fin 2) k))) ≃* kˣ :="
+    },
+    {
+      "local_file": "FateXIdealTheory/Spec.lean",
+      "upstream_file": "FATEX/92.lean",
+      "verbatim_snippet": "def a (k : ℕ∞) (n : ℕ) :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P92.lean",
+      "upstream_file": "FATEX/92.lean",
+      "verbatim_snippet": "theorem dimension_sequences_of_one_dimensional_rings :\n    (∀ (A : Type) [CommRing A] (h : ringKrullDim A = 1),\n      ∃ (k : ℕ∞), (∀ (n : ℕ), ringKrullDim (MvPolynomial (Fin n) A) = a k n)) ∧\n    (∀ (k : ℕ), ∃ (A : Type) (_ : CommRing A) (h : ringKrullDim A = 1),\n      (∀ (n : ℕ), ringKrullDim (MvPolynomial (Fin n) A) = a k n)):="
+    },
+    {
+      "local_file": "FateXIdealTheory/P93.lean",
+      "upstream_file": "FATEX/93.lean",
+      "verbatim_snippet": "theorem exists_integral_finiteType_not_finiteDimensional : ∃ (k A : Type) (_ : Field k)\n    (_ : Ring A) (_ : Algebra k A),\n    Algebra.IsIntegral k A ∧ Algebra.FiniteType k A ∧ ¬ FiniteDimensional k A :="
+    },
+    {
+      "local_file": "FateXIdealTheory/Spec.lean",
+      "upstream_file": "FATEX/94.lean",
+      "verbatim_snippet": "def zeroSet : Set ℕ := {n | ∀ x : I, (ϕ.comp (f ^ n)) (x : A) = 0}"
+    },
+    {
+      "local_file": "FateXIdealTheory/P94.lean",
+      "upstream_file": "FATEX/94.lean",
+      "verbatim_snippet": "theorem zeroSet_finite_or_contain_arithmetic_progression (hf : f.FormallyEtale) :\n    (zeroSet f ϕ I).Finite ∨ ∃ (d : ℕ+) (a : ℕ), ∀ n : ℕ, a + d * n ∈ zeroSet f ϕ I :="
+    },
+    {
+      "local_file": "FateXIdealTheory/Spec.lean",
+      "upstream_file": "FATEX/95.lean",
+      "verbatim_snippet": "def f (a : ℂ) (p : ℂ[X]): ℂ[X][Y] →+* ℂ[X][Y] :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P95.lean",
+      "upstream_file": "FATEX/95.lean",
+      "verbatim_snippet": "theorem p_map_ne_p (p : ℂ[X]) (h : p.natDegree > 1) {a : ℂ} (ha : a ≠ 0)\n    (𝔭 : Ideal ℂ[X][Y]) (h𝔭 : 𝔭.IsPrime) (h : 𝔭.height = 1) :\n    𝔭.map (f a p) ≠ 𝔭 :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P96.lean",
+      "upstream_file": "FATEX/96.lean",
+      "verbatim_snippet": "theorem ratFunc_square_is_poly_of_orbit_contain_infinite_integer\n    {f : RatFunc ℚ} (hf : f.num.natDegree ≥ 2 ∨ f.denom.natDegree ≥ 2) {a : ℚ}\n    (h : ∀ n : ℕ, (f.eval (RingHom.id ℚ))^[n] a ≠ 0) -- exclude the case that the `denom` is zero\n    (ha : {m : ℤ | ∃ n : ℕ, m = (f.eval (RingHom.id ℚ))^[n] a}.Infinite) :\n    ∃ g : Polynomial ℚ, g = f.eval C f :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P97.lean",
+      "upstream_file": "FATEX/97.lean",
+      "verbatim_snippet": "theorem exists_point_not_in_zero_set {τ k : Type} [Finite τ] [Nonempty τ] [Field k] [CharZero k]\n    {f : τ → k[X]} (hfd : ∀ i : τ, (f i).natDegree ≥ 2): ∃ a : τ → k,\n    ∀ p : MvPolynomial τ k, p ≠ 0 →\n    ∃ m : ℕ, (((MvPolynomial.aeval (fun i ↦ (f i).toMvPolynomial i)) ^ m) p).aeval a ≠ 0 :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P98.lean",
+      "upstream_file": "FATEX/98.lean",
+      "verbatim_snippet": "theorem exists_maximal_ideal_not_in_finite_order {K A : Type} [Field K] [NumberField K] [CommRing A]\n    [IsDomain A] [Algebra K A] [Algebra.FiniteType K A] {f : A →ₐ[K] A} (hf : ∀ n > 0, f ^ n ≠ 1) :\n    ∃ m : Ideal A, m.IsMaximal ∧ ∀ n > 0, m.comap (f ^ n) ≠ m :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P99.lean",
+      "upstream_file": "FATEX/99.lean",
+      "verbatim_snippet": "theorem equiv_of_aut_equiv {A : Type} [CommRing A] [IsDomain A] [Algebra ℂ A]\n    [Algebra.FiniteType ℂ A] {n : ℕ} (hn : n ≥ 1)\n    (e : (A ≃ₐ[ℂ] A) ≃* (MvPolynomial (Fin n) ℂ ≃ₐ[ℂ] MvPolynomial (Fin n) ℂ)) :\n    Nonempty (A ≃ₐ[ℂ] MvPolynomial (Fin n) ℂ) :="
+    },
+    {
+      "local_file": "FateXIdealTheory/P100.lean",
+      "upstream_file": "FATEX/100.lean",
+      "verbatim_snippet": "theorem free_of_countably_generated_projective_of_local_infinite_rank {R : Type} [CommRing R]\n    [IsNoetherianRing R] (P : Type) [AddCommGroup P] [Module R P] [Projective R P]\n    (hcg : ∃ s : Set P, s.Countable ∧ Submodule.span R s = ⊤)\n    (hm : ∀ m : Ideal R, (_ : m.IsMaximal) →\n      ¬ Module.Finite (Localization.AtPrime m) (LocalizedModule.AtPrime m P)) : Free R P :="
+    }
+  ]
+}

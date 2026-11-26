@@ -1,0 +1,190 @@
+{
+  "id": "crypto-lwc-linear-xor",
+  "title": "Lightweight Cipher Linear Diffusion XOR Circuits (Pyjamask M0..M3/Inv/M_K, PHOTON-256 MDS, Clyde-128 L-box, Ascon)",
+  "description": "Thirteen pure Lean 4.36.0 (zero Mathlib) certified straight-line XOR gate minimization tracks covering Pyjamask-128's nine 32\u00d732 dense circulants (forward M0..M3, key M_K, and kernel-proved inverses InvM0..InvM3), PHOTON-256's 32\u00d732 GF(2^4) MDS matrix, Clyde-128/Spook's 64\u00d764 L-box, and Ascon's 64\u00d764 NIST SP 800-232 diffusion layers \u03a30 and \u03a32, pinned verbatim to `rweather/lightweight-crypto@fa4ec9a021` (MIT).",
+  "tier": 2,
+  "mode": "hillclimb",
+  "repo": "https://github.com/rweather/lightweight-crypto",
+  "upstream": {
+    "repo": "rweather/lightweight-crypto",
+    "commit": "fa4ec9a021b9233263de77e7dd971de8c9761495",
+    "license": "MIT"
+  },
+  "score_direction": "minimize",
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 90,
+    "memory_mb": 2048
+  },
+  "frozen_paths": [
+    "LwcLinearXor/Spec.lean",
+    "LwcLinearXor/PyjamaskM0Bound.lean",
+    "LwcLinearXor/PyjamaskM1Bound.lean",
+    "LwcLinearXor/PyjamaskM2Bound.lean",
+    "LwcLinearXor/PyjamaskM3Bound.lean",
+    "LwcLinearXor/PyjamaskMKBound.lean",
+    "LwcLinearXor/PyjamaskInvM0Bound.lean",
+    "LwcLinearXor/PyjamaskInvM1Bound.lean",
+    "LwcLinearXor/PyjamaskInvM2Bound.lean",
+    "LwcLinearXor/PyjamaskInvM3Bound.lean",
+    "LwcLinearXor/Photon256MdsBound.lean",
+    "LwcLinearXor/Clyde128LboxBound.lean",
+    "LwcLinearXor/AsconSigma0Bound.lean",
+    "LwcLinearXor/AsconSigma2Bound.lean",
+    "LICENSE",
+    "README.md",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "tasks": [
+    {
+      "id": "pyjamask_m0_xor",
+      "title": "Pyjamask-128 M0 (0xa3861085) (32\u00d732): minimize straight-line XOR gate count (baseline 320)",
+      "description": "Submit a straight-line XOR circuit implementing Pyjamask-128 M0 (0xa3861085) (32\u00d732 over GF(2)) in `LwcLinearXor/PyjamaskM0Circuit.lean` (`LwcLinearXor.pyjamaskM0Score`, `LwcLinearXor.pyjamaskM0Gates`, `LwcLinearXor.pyjamaskM0Outputs`). Seeded at 320 XORs (frontier: ~100-130). Frozen Lean 4.36.0 kernel proofs verify well-formedness, XOR count, and exact equivalence on all 2^32 inputs via linearity soundness.",
+      "baseline_score": 320,
+      "target_files": [
+        "LwcLinearXor/PyjamaskM0Circuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-pyjamask.c#L58-L73"
+    },
+    {
+      "id": "pyjamask_m1_xor",
+      "title": "Pyjamask-128 M1 (0x63417021) (32\u00d732): minimize straight-line XOR gate count (baseline 320)",
+      "description": "Submit a straight-line XOR circuit implementing Pyjamask-128 M1 (0x63417021) (32\u00d732 over GF(2)) in `LwcLinearXor/PyjamaskM1Circuit.lean` (`LwcLinearXor.pyjamaskM1Score`, `LwcLinearXor.pyjamaskM1Gates`, `LwcLinearXor.pyjamaskM1Outputs`). Seeded at 320 XORs (frontier: ~100-130). Frozen Lean 4.36.0 kernel proofs verify well-formedness, XOR count, and exact equivalence on all 2^32 inputs via linearity soundness.",
+      "baseline_score": 320,
+      "target_files": [
+        "LwcLinearXor/PyjamaskM1Circuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-pyjamask.c#L74-L89"
+    },
+    {
+      "id": "pyjamask_m2_xor",
+      "title": "Pyjamask-128 M2 (0x692cf280) (32\u00d732): minimize straight-line XOR gate count (baseline 384)",
+      "description": "Submit a straight-line XOR circuit implementing Pyjamask-128 M2 (0x692cf280) (32\u00d732 over GF(2)) in `LwcLinearXor/PyjamaskM2Circuit.lean` (`LwcLinearXor.pyjamaskM2Score`, `LwcLinearXor.pyjamaskM2Gates`, `LwcLinearXor.pyjamaskM2Outputs`). Seeded at 384 XORs (frontier: ~110-140). Frozen Lean 4.36.0 kernel proofs verify well-formedness, XOR count, and exact equivalence on all 2^32 inputs via linearity soundness.",
+      "baseline_score": 384,
+      "target_files": [
+        "LwcLinearXor/PyjamaskM2Circuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-pyjamask.c#L90-L107"
+    },
+    {
+      "id": "pyjamask_m3_xor",
+      "title": "Pyjamask-128 M3 (0x48a54813) (32\u00d732): minimize straight-line XOR gate count (baseline 320)",
+      "description": "Submit a straight-line XOR circuit implementing Pyjamask-128 M3 (0x48a54813) (32\u00d732 over GF(2)) in `LwcLinearXor/PyjamaskM3Circuit.lean` (`LwcLinearXor.pyjamaskM3Score`, `LwcLinearXor.pyjamaskM3Gates`, `LwcLinearXor.pyjamaskM3Outputs`). Seeded at 320 XORs (frontier: ~100-130). Frozen Lean 4.36.0 kernel proofs verify well-formedness, XOR count, and exact equivalence on all 2^32 inputs via linearity soundness.",
+      "baseline_score": 320,
+      "target_files": [
+        "LwcLinearXor/PyjamaskM3Circuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-pyjamask.c#L108-L123"
+    },
+    {
+      "id": "pyjamask_mk_xor",
+      "title": "Pyjamask-128 Key M_K (0xb881b9ca) (32\u00d732): minimize straight-line XOR gate count (baseline 448)",
+      "description": "Submit a straight-line XOR circuit implementing Pyjamask-128 Key M_K (0xb881b9ca) (32\u00d732 over GF(2)) in `LwcLinearXor/PyjamaskMKCircuit.lean` (`LwcLinearXor.pyjamaskMKScore`, `LwcLinearXor.pyjamaskMKGates`, `LwcLinearXor.pyjamaskMKOutputs`). Seeded at 448 XORs (frontier: ~110-145). Frozen Lean 4.36.0 kernel proofs verify well-formedness, XOR count, and exact equivalence on all 2^32 inputs via linearity soundness.",
+      "baseline_score": 448,
+      "target_files": [
+        "LwcLinearXor/PyjamaskMKCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-pyjamask.c#L38-L57"
+    },
+    {
+      "id": "pyjamask_inv_m0_xor",
+      "title": "Pyjamask-128 InvM0 (0x2037a121) (32\u00d732): minimize straight-line XOR gate count (baseline 320)",
+      "description": "Submit a straight-line XOR circuit implementing Pyjamask-128 InvM0 (0x2037a121) (32\u00d732 over GF(2)) in `LwcLinearXor/PyjamaskInvM0Circuit.lean` (`LwcLinearXor.pyjamaskInvM0Score`, `LwcLinearXor.pyjamaskInvM0Gates`, `LwcLinearXor.pyjamaskInvM0Outputs`). Seeded at 320 XORs (frontier: ~100-130). Frozen Lean 4.36.0 kernel proofs verify well-formedness, XOR count, and exact equivalence on all 2^32 inputs via linearity soundness.",
+      "baseline_score": 320,
+      "target_files": [
+        "LwcLinearXor/PyjamaskInvM0Circuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-pyjamask.c#L124-L139"
+    },
+    {
+      "id": "pyjamask_inv_m1_xor",
+      "title": "Pyjamask-128 InvM1 (0x108ff2a0) (32\u00d732): minimize straight-line XOR gate count (baseline 384)",
+      "description": "Submit a straight-line XOR circuit implementing Pyjamask-128 InvM1 (0x108ff2a0) (32\u00d732 over GF(2)) in `LwcLinearXor/PyjamaskInvM1Circuit.lean` (`LwcLinearXor.pyjamaskInvM1Score`, `LwcLinearXor.pyjamaskInvM1Gates`, `LwcLinearXor.pyjamaskInvM1Outputs`). Seeded at 384 XORs (frontier: ~110-140). Frozen Lean 4.36.0 kernel proofs verify well-formedness, XOR count, and exact equivalence on all 2^32 inputs via linearity soundness.",
+      "baseline_score": 384,
+      "target_files": [
+        "LwcLinearXor/PyjamaskInvM1Circuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-pyjamask.c#L140-L157"
+    },
+    {
+      "id": "pyjamask_inv_m2_xor",
+      "title": "Pyjamask-128 InvM2 (0x9054d8c0) (32\u00d732): minimize straight-line XOR gate count (baseline 320)",
+      "description": "Submit a straight-line XOR circuit implementing Pyjamask-128 InvM2 (0x9054d8c0) (32\u00d732 over GF(2)) in `LwcLinearXor/PyjamaskInvM2Circuit.lean` (`LwcLinearXor.pyjamaskInvM2Score`, `LwcLinearXor.pyjamaskInvM2Gates`, `LwcLinearXor.pyjamaskInvM2Outputs`). Seeded at 320 XORs (frontier: ~100-130). Frozen Lean 4.36.0 kernel proofs verify well-formedness, XOR count, and exact equivalence on all 2^32 inputs via linearity soundness.",
+      "baseline_score": 320,
+      "target_files": [
+        "LwcLinearXor/PyjamaskInvM2Circuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-pyjamask.c#L158-L173"
+    },
+    {
+      "id": "pyjamask_inv_m3_xor",
+      "title": "Pyjamask-128 InvM3 (0x3354b117) (32\u00d732): minimize straight-line XOR gate count (baseline 448)",
+      "description": "Submit a straight-line XOR circuit implementing Pyjamask-128 InvM3 (0x3354b117) (32\u00d732 over GF(2)) in `LwcLinearXor/PyjamaskInvM3Circuit.lean` (`LwcLinearXor.pyjamaskInvM3Score`, `LwcLinearXor.pyjamaskInvM3Gates`, `LwcLinearXor.pyjamaskInvM3Outputs`). Seeded at 448 XORs (frontier: ~110-145). Frozen Lean 4.36.0 kernel proofs verify well-formedness, XOR count, and exact equivalence on all 2^32 inputs via linearity soundness.",
+      "baseline_score": 448,
+      "target_files": [
+        "LwcLinearXor/PyjamaskInvM3Circuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-pyjamask.c#L174-L193"
+    },
+    {
+      "id": "photon256_mds_xor",
+      "title": "PHOTON-256 8\u00d78 GF(2^4) MDS (32\u00d732): minimize straight-line XOR gate count (baseline 475)",
+      "description": "Submit a straight-line XOR circuit implementing PHOTON-256 8\u00d78 GF(2^4) MDS (32\u00d732 over GF(2)) in `LwcLinearXor/Photon256MdsCircuit.lean` (`LwcLinearXor.photon256MdsScore`, `LwcLinearXor.photon256MdsGates`, `LwcLinearXor.photon256MdsOutputs`). Seeded at 475 XORs (frontier: ~120-160). Frozen Lean 4.36.0 kernel proofs verify well-formedness, XOR count, and exact equivalence on all 2^32 inputs via linearity soundness.",
+      "baseline_score": 475,
+      "target_files": [
+        "LwcLinearXor/Photon256MdsCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-photon256.c#L444-L472"
+    },
+    {
+      "id": "clyde128_lbox_xor",
+      "title": "Clyde-128 / Spook 64-bit L-box (64\u00d764): minimize straight-line XOR gate count (baseline 384)",
+      "description": "Submit a straight-line XOR circuit implementing Clyde-128 / Spook 64-bit L-box (64\u00d764 over GF(2)) in `LwcLinearXor/Clyde128LboxCircuit.lean` (`LwcLinearXor.clyde128LboxScore`, `LwcLinearXor.clyde128LboxGates`, `LwcLinearXor.clyde128LboxOutputs`). Seeded at 384 XORs (frontier: <340). Frozen Lean 4.36.0 kernel proofs verify well-formedness, XOR count, and exact equivalence on all 2^64 inputs via linearity soundness.",
+      "baseline_score": 384,
+      "target_files": [
+        "LwcLinearXor/Clyde128LboxCircuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-spook.c#L93-L107"
+    },
+    {
+      "id": "ascon_sigma0_xor",
+      "title": "Ascon \u03a30 (rot 19, 28) (64\u00d764): minimize straight-line XOR gate count (baseline 128)",
+      "description": "Submit a straight-line XOR circuit implementing Ascon \u03a30 (rot 19, 28) (64\u00d764 over GF(2)) in `LwcLinearXor/AsconSigma0Circuit.lean` (`LwcLinearXor.asconSigma0Score`, `LwcLinearXor.asconSigma0Gates`, `LwcLinearXor.asconSigma0Outputs`). Seeded at 128 XORs (frontier: <128). Frozen Lean 4.36.0 kernel proofs verify well-formedness, XOR count, and exact equivalence on all 2^64 inputs via linearity soundness.",
+      "baseline_score": 128,
+      "target_files": [
+        "LwcLinearXor/AsconSigma0Circuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-ascon.c#L68"
+    },
+    {
+      "id": "ascon_sigma2_xor",
+      "title": "Ascon \u03a32 (rot 1, 6) (64\u00d764): minimize straight-line XOR gate count (baseline 128)",
+      "description": "Submit a straight-line XOR circuit implementing Ascon \u03a32 (rot 1, 6) (64\u00d764 over GF(2)) in `LwcLinearXor/AsconSigma2Circuit.lean` (`LwcLinearXor.asconSigma2Score`, `LwcLinearXor.asconSigma2Gates`, `LwcLinearXor.asconSigma2Outputs`). Seeded at 128 XORs (frontier: <128). Frozen Lean 4.36.0 kernel proofs verify well-formedness, XOR count, and exact equivalence on all 2^64 inputs via linearity soundness.",
+      "baseline_score": 128,
+      "target_files": [
+        "LwcLinearXor/AsconSigma2Circuit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/rweather/lightweight-crypto/blob/fa4ec9a021b9233263de77e7dd971de8c9761495/src/combined/internal-ascon.c#L70"
+    }
+  ]
+}
