@@ -57,7 +57,7 @@ does not change a mission's spec hash or its verifier image.
 
 | Mission | Task | Seed | Best known | Kind | Source |
 | --- | --- | --- | --- | --- | --- |
-| `aes-sbox-circuit` | `minimize_total_gates` | 130 | **106** | literature | [link](https://github.com/Swapnil-jain/gf2m-circuits) |
+| `aes-sbox-circuit` | `minimize_total_gates` | 130 | **103** | collection | [link](https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox) |
 | `aes-sbox-circuit` | `minimize_and_gates` | 36 | **28** | collection | [link](https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox) |
 | `crypto-linear-xor-opt` | `aes_mixcolumns_xor` | 152 | **88** | literature | [link](https://eprint.iacr.org/2026/1481) |
 | `crypto-linear-xor-opt` | `aes_invmixcolumns_xor` | 440 | **88** | collection | [link](https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-invmixcols) |
@@ -65,11 +65,11 @@ does not change a mission's spec hash or its verifier image.
 | `crypto-linear-xor-opt` | `sm4_key_lprime_xor` | 64 | **64** | heuristic | [link](https://github.com/Sunstead-Institute/sunstead/blob/main/scripts/best_known/linear_floor.py) |
 | `crypto-linear-xor-opt` | `aria_diffusion_xor` | 96 | **48** | heuristic | [link](https://github.com/Sunstead-Institute/sunstead/blob/main/scripts/best_known/linear_floor.py) |
 | `crypto-linear-xor-opt` | `camellia_p_xor` | 36 | **16** | record | [link](https://www.rfc-editor.org/rfc/rfc3713) |
-| `crypto-sbox-circuits` | `sm4_total_gates` | 130 | **106** | proxy | [link](https://github.com/Swapnil-jain/gf2m-circuits) |
+| `crypto-sbox-circuits` | `sm4_total_gates` | 130 | **103** | proxy | [link](https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox) |
 | `crypto-sbox-circuits` | `sm4_and_gates` | 36 | **28** | derived | [link](https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox) |
-| `crypto-sbox-circuits` | `aes_inv_total_gates` | 129 | **109** | literature | [link](https://github.com/Swapnil-jain/gf2m-circuits) |
+| `crypto-sbox-circuits` | `aes_inv_total_gates` | 129 | **105** | collection | [link](https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-invsbox) |
 | `crypto-sbox-circuits` | `aes_inv_and_gates` | 36 | **28** | collection | [link](https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-invsbox) |
-| `crypto-sbox-circuits` | `camellia_total_gates` | 130 | **106** | proxy | [link](https://github.com/Swapnil-jain/gf2m-circuits) |
+| `crypto-sbox-circuits` | `camellia_total_gates` | 130 | **103** | proxy | [link](https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox) |
 | `crypto-sbox-circuits` | `camellia_and_gates` | 36 | **28** | derived | [link](https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox) |
 | `matrix-rank-alphatensor-f2` | `rank_333` | 23 | **23** | literature | [link](https://arxiv.org/abs/2212.01175) |
 | `matrix-rank-alphatensor-f2` | `rank_334` | 29 | **29** | literature | [link](https://arxiv.org/abs/2212.01175) |
@@ -98,4 +98,4 @@ does not change a mission's spec hash or its verifier image.
 Entries of kind `heuristic`, `proxy` and `record` are the weakest and should be
 replaced by literature values when someone finds them. The circuits Sunstead could
 download (NIST AES S-box and MixColumns circuits, S. Jain's AES S-box circuits) were
-re-checked on every input before being recorded.
+re-checked on every input before being recorded. Check NIST's usnistgov/Circuits (`data/slp/aes/`) first for anything AES-related: it is updated often and beat two 2026 preprints.

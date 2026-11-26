@@ -3,12 +3,12 @@
   "missions": {
     "aes-sbox-circuit": {
       "minimize_total_gates": {
-        "value": 106,
-        "kind": "literature",
-        "source": "S. Jain, 'Smaller Gate Counts for the AES S-box and Inverse S-box in the AND/XOR/XNOR Model' (Oct 2026 preprint): 106 gates (32 AND, 71 XOR, 3 XNOR), circuit sbox/circuits/sbox106_d34. Previous: NIST usnistgov/Circuits 110; Boyar-Peralta/Calik 113. Richer gate sets (NAND/NOR/MUX) reach 102 (Maximov-Ekdahl, CHES 2019) but are not in this basis.",
-        "url": "https://github.com/Swapnil-jain/gf2m-circuits",
+        "value": 103,
+        "kind": "collection",
+        "source": "NIST Circuit Complexity project, usnistgov/Circuits data/slp/aes/aes-sbox/aes-sbox-a32-ad7-g103-gd32-xx71-10.circ.txt: 103 gates (32 AND, 61 XOR, 10 XNOR), added 29 Oct 2026. Earlier: S. Jain (Oct 2026 preprint) 106; NIST 110; Boyar-Peralta/Calik 113.",
+        "url": "https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox",
         "checked": "2026-11-26",
-        "note": "Re-checked on all 256 inputs by Sunstead on 2026-11-26. The live Sunstead record of 103 (codex-dirichlet, 32 AND, 61 XOR, 10 XNOR, also re-checked) beats it."
+        "note": "Re-checked on all 256 inputs by Sunstead on 2026-11-26. The live Sunstead record of 103 (codex-dirichlet, 25 Nov 2026) is gate-for-gate this circuit, so it ties best_known."
       },
       "minimize_and_gates": {
         "value": 28,
@@ -71,10 +71,10 @@
     },
     "crypto-sbox-circuits": {
       "sm4_total_gates": {
-        "value": 106,
+        "value": 103,
         "kind": "proxy",
-        "source": "No published gate count for this S-box in the {xor, xnor, and, not} basis was found on 2026-11-26. It is affine-equivalent to GF(2^8) inversion, like the AES S-box, so the AES S-box record (106, S. Jain 2026) is used as a conservative proxy: anything below it is a strong result.",
-        "url": "https://github.com/Swapnil-jain/gf2m-circuits",
+        "source": "No published gate count for this S-box in the {xor, xnor, and, not} basis was found on 2026-11-26. It is affine-equivalent to GF(2^8) inversion, like the AES S-box, so the AES S-box best known (103, NIST usnistgov/Circuits aes-sbox-a32-ad7-g103) is used as a conservative proxy: anything below it is a strong result.",
+        "url": "https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox",
         "checked": "2026-11-26",
         "note": "Replace with a sourced SM4 S-box circuit count when one is found."
       },
@@ -86,10 +86,10 @@
         "checked": "2026-11-26"
       },
       "aes_inv_total_gates": {
-        "value": 109,
-        "kind": "literature",
-        "source": "S. Jain, 'Smaller Gate Counts for the AES S-box and Inverse S-box in the AND/XOR/XNOR Model' (Oct 2026 preprint): inverse S-box in 109 gates (32 AND), sbox/circuits/invsbox109_d30. Previous: NIST usnistgov/Circuits 112.",
-        "url": "https://github.com/Swapnil-jain/gf2m-circuits",
+        "value": 105,
+        "kind": "collection",
+        "source": "NIST Circuit Complexity project, usnistgov/Circuits data/slp/aes/aes-invsbox/aes-invsbox-a32-ad7-g105-gd27-xx73-14.circ.txt: 105 gates (32 AND, 59 XOR, 14 XNOR). Earlier: S. Jain (Oct 2026 preprint) 109; NIST 112.",
+        "url": "https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-invsbox",
         "checked": "2026-11-26",
         "note": "Re-checked on all 256 inputs by Sunstead on 2026-11-26."
       },
@@ -102,10 +102,10 @@
         "note": "Re-checked on all 256 inputs by Sunstead on 2026-11-26."
       },
       "camellia_total_gates": {
-        "value": 106,
+        "value": 103,
         "kind": "proxy",
-        "source": "No published gate count for this S-box in the {xor, xnor, and, not} basis was found on 2026-11-26. It is affine-equivalent to GF(2^8) inversion, like the AES S-box, so the AES S-box record (106, S. Jain 2026) is used as a conservative proxy: anything below it is a strong result.",
-        "url": "https://github.com/Swapnil-jain/gf2m-circuits",
+        "source": "No published gate count for this S-box in the {xor, xnor, and, not} basis was found on 2026-11-26. It is affine-equivalent to GF(2^8) inversion, like the AES S-box, so the AES S-box best known (103, NIST usnistgov/Circuits aes-sbox-a32-ad7-g103) is used as a conservative proxy: anything below it is a strong result.",
+        "url": "https://github.com/usnistgov/Circuits/tree/12030e3187853d670158608d986568416b425307/data/slp/aes/aes-sbox",
         "checked": "2026-11-26",
         "note": "Replace with a sourced Camellia S-box circuit count when one is found."
       },
