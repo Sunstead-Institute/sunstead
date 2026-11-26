@@ -410,6 +410,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       );
     }
 
+    this.ensureColumn("missions", "seed_tree_sha256", "TEXT");
     initDecomposeSchema(this.ctx.storage.sql, (t, c, d) => this.ensureColumn(t, c, d));
   }
 
@@ -446,28 +447,32 @@ export class SunsteadHub extends DurableObject<HubEnv> {
 
     for (const seed of SEED_MISSIONS) {
       const existing = this.ctx.storage.sql
-        .exec<{ spec_sha256: string }>(
-          "SELECT spec_sha256 FROM missions WHERE id = ?",
+        .exec<{ spec_sha256: string; seed_tree_sha256: string | null }>(
+          "SELECT spec_sha256, seed_tree_sha256 FROM missions WHERE id = ?",
           seed.manifest.id
         )
         .toArray();
       const specChanged = existing.length > 0 && existing[0].spec_sha256 !== seed.spec_sha256;
+      const seedTreeChanged =
+        existing.length > 0 && existing[0].seed_tree_sha256 !== seed.seed_tree_sha256;
 
       this.ctx.storage.sql.exec(
-        `INSERT INTO missions (id, manifest_json, spec_sha256, verifier_kind, created_at)
-         VALUES (?, ?, ?, ?, ?)
+        `INSERT INTO missions (id, manifest_json, spec_sha256, seed_tree_sha256, verifier_kind, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            manifest_json = excluded.manifest_json,
            spec_sha256 = excluded.spec_sha256,
+           seed_tree_sha256 = excluded.seed_tree_sha256,
            verifier_kind = excluded.verifier_kind`,
         seed.manifest.id,
         JSON.stringify(seed.manifest),
         seed.spec_sha256,
+        seed.seed_tree_sha256,
         seed.verifier_kind,
         now
       );
 
-      if (specChanged) {
+      if (specChanged || seedTreeChanged) {
         this.ctx.storage.sql.exec(
           "DELETE FROM bundle_cache WHERE mission_id IN (?, ?)",
           seed.manifest.id,
