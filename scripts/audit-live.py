@@ -1111,6 +1111,286 @@ def audit_crypto_sbox_history(repo, accepted, snapshot_tasks, manifest):
             require(previous[tid] == task["best_score"], f"published best score differs from circuit for {tid}")
 
 
+_SORTDEPTH_TARGETS = {
+    f"depth_n{n}": (n, f"SortDepth/Layers{n}.lean", f"SortDepth.depth{n}", f"SortDepth.layers{n}")
+    for n in range(9, 17)
+}
+
+
+def check_sorting_depth_network(source, task_id):
+    """Read literal parallel layers, check disjoint wires per layer, and verify sorting across all 2^n inputs."""
+    require(task_id in _SORTDEPTH_TARGETS, f"unknown sorting-depth task: {task_id}")
+    require(len(source.encode("utf-8")) <= 16384, "sorting-depth file exceeds 16384 bytes")
+    n, _, depth_name, layers_name = _SORTDEPTH_TARGETS[task_id]
+    pattern = (
+        rf"\s*def\s+{re.escape(depth_name)}\s*:\s*Nat\s*:=\s*(0|[1-9][0-9]{{0,2}})\s*\n"
+        rf"\s*def\s+{re.escape(layers_name)}\s*:\s*List\s*\(\s*List\s*\(Nat\s*×\s*Nat\)\s*\)\s*:=\s*(\[[\s\S]*\])\s*"
+    )
+    match = re.fullmatch(pattern, source)
+    require(match, "unexpected sorting-depth network format")
+    claimed_depth = int(match[1])
+    layers_lit = match[2]
+    require(re.fullmatch(r"[0-9\s(),\[\]]+", layers_lit), "invalid sorting-depth layer table")
+    layers = ast.literal_eval(layers_lit)
+    require(type(layers) is list and 1 <= len(layers) <= 32, "invalid parallel layer count")
+    total_comparators = 0
+    for lidx, layer in enumerate(layers):
+        require(type(layer) is list and len(layer) >= 1, f"empty or invalid layer {lidx}")
+        used_wires = set()
+        for cidx, comp in enumerate(layer):
+            require(
+                type(comp) is tuple and len(comp) == 2
+                and type(comp[0]) is int and type(comp[1]) is int,
+                f"invalid comparator pair at layer {lidx} index {cidx}",
+            )
+            i, j = comp
+            require(0 <= i < j < n, f"invalid wire index ({i}, {j}) for n={n} at layer {lidx}")
+            require(i not in used_wires and j not in used_wires, f"duplicate wire in layer {lidx}: ({i}, {j})")
+            used_wires.add(i)
+            used_wires.add(j)
+            total_comparators += 1
+    require(total_comparators <= 256, "total comparator count exceeds 256")
+    require(len(layers) == claimed_depth, "invalid sorting-depth score")
+
+    total_inputs = 1 << n
+    wires = []
+    for b in range(n):
+        block = ((1 << (1 << b)) - 1) << (1 << b)
+        w = block
+        step = 1 << (b + 1)
+        while step < total_inputs:
+            w |= w << step
+            step <<= 1
+        wires.append(w)
+    for layer in layers:
+        for i, j in layer:
+            a, b = wires[i], wires[j]
+            wires[i] = a & b
+            wires[j] = a | b
+    for i in range(n - 1):
+        bad = wires[i] & ~wires[i + 1]
+        if bad:
+            failing_input = (bad & -bad).bit_length() - 1
+            raise ValueError(
+                f"sorting-depth network unsorted at wires ({i}, {i + 1}) for input 0x{failing_input:x}"
+            )
+    return len(layers)
+
+
+def audit_sorting_depth_history(repo, accepted, snapshot_tasks, manifest):
+    commits = repo_git(repo, "rev-list", "--reverse", "HEAD").decode().splitlines()
+    require(len(commits) == 1 + len(accepted), "unexpected sorting-depth history length")
+    baselines = {t["id"]: t["baseline_score"] for t in manifest["tasks"]}
+    previous = {}
+    for task_id, (_, rel_path, _, _) in _SORTDEPTH_TARGETS.items():
+        seed_src = repo_git(repo, "show", commits[0] + ":" + rel_path).decode("utf-8")
+        seed_score = check_sorting_depth_network(seed_src, task_id)
+        require(seed_score == baselines[task_id], f"unexpected sorting-depth seed baseline for {task_id}")
+        previous[task_id] = seed_score
+    for commit, task_id in zip(commits[1:], accepted):
+        n, rel_path, _, _ = _SORTDEPTH_TARGETS[task_id]
+        source = repo_git(repo, "show", commit + ":" + rel_path).decode("utf-8")
+        score = check_sorting_depth_network(source, task_id)
+        require(score < previous[task_id], f"invalid sorting-depth progression for {task_id}")
+        print(f"  PASS {commit[:12]} ({task_id}): all {1 << n} inputs sorted in {score} parallel layers")
+        previous[task_id] = score
+    for task in snapshot_tasks:
+        tid = task["def"]["id"]
+        if task["status"] == "verified":
+            require(previous[tid] == task["best_score"], f"published best score differs from depth network for {tid}")
+
+
+def _rotl32(x, r):
+    return ((x << r) | (x >> (32 - r))) & 0xFFFFFFFF
+
+
+def _gf256_mul_aes(a, b):
+    res = 0
+    for _ in range(8):
+        if b & 1:
+            res ^= a
+        hi = a & 0x80
+        a = (a << 1) & 0xFF
+        if hi:
+            a ^= 0x1B
+        b >>= 1
+    return res
+
+
+def _aes_col_mul(coeffs, word32):
+    bs = [(word32 >> (8 * i)) & 0xFF for i in range(4)]
+    out = 0
+    for r in range(4):
+        acc = 0
+        for c in range(4):
+            acc ^= _gf256_mul_aes(coeffs[(c - r) % 4], bs[c])
+        out |= (acc & 0xFF) << (8 * r)
+    return out
+
+
+def _linear_rows_from_fn(n, fn):
+    cols = [fn(1 << j) for j in range(n)]
+    return [sum(((cols[j] >> i) & 1) << j for j in range(n)) for i in range(n)]
+
+
+_ARIA_DIFFUSION_INDEX_ROWS = [
+    (3, 4, 6, 8, 9, 13, 14),
+    (2, 5, 7, 8, 9, 12, 15),
+    (1, 4, 6, 10, 11, 12, 15),
+    (0, 5, 7, 10, 11, 13, 14),
+    (0, 2, 5, 8, 11, 14, 15),
+    (1, 3, 4, 9, 10, 14, 15),
+    (0, 2, 7, 9, 10, 12, 13),
+    (1, 3, 6, 8, 11, 12, 13),
+    (0, 1, 4, 7, 10, 13, 15),
+    (0, 1, 5, 6, 11, 12, 14),
+    (2, 3, 5, 6, 8, 13, 15),
+    (2, 3, 4, 7, 9, 12, 14),
+    (1, 2, 6, 7, 9, 11, 12),
+    (0, 3, 6, 7, 8, 10, 13),
+    (0, 3, 4, 5, 9, 11, 14),
+    (1, 2, 4, 5, 8, 10, 15),
+]
+
+_CAMELLIA_P_INDEX_ROWS = [
+    (0, 2, 3, 5, 6, 7),
+    (0, 1, 3, 4, 6, 7),
+    (0, 1, 2, 4, 5, 7),
+    (1, 2, 3, 4, 5, 6),
+    (0, 1, 5, 6, 7),
+    (1, 2, 4, 6, 7),
+    (2, 3, 4, 5, 7),
+    (0, 3, 4, 5, 6),
+]
+
+_LINEAR_XOR_ROWS = {
+    "aes_mixcolumns_xor": _linear_rows_from_fn(32, lambda w: _aes_col_mul((2, 3, 1, 1), w)),
+    "aes_invmixcolumns_xor": _linear_rows_from_fn(32, lambda w: _aes_col_mul((0x0E, 0x0B, 0x0D, 0x09), w)),
+    "sm4_linear_l_xor": _linear_rows_from_fn(
+        32, lambda t: t ^ _rotl32(t, 2) ^ _rotl32(t, 10) ^ _rotl32(t, 18) ^ _rotl32(t, 24)
+    ),
+    "sm4_key_lprime_xor": _linear_rows_from_fn(32, lambda t: t ^ _rotl32(t, 13) ^ _rotl32(t, 23)),
+    "aria_diffusion_xor": [sum(1 << j for j in idxs) for idxs in _ARIA_DIFFUSION_INDEX_ROWS],
+    "camellia_p_xor": [sum(1 << j for j in idxs) for idxs in _CAMELLIA_P_INDEX_ROWS],
+}
+
+_CRYPTO_LINEAR_XOR_TARGETS = {
+    "aes_mixcolumns_xor": (
+        32,
+        "CryptoLinearXor/AesMixColumnsCircuit.lean",
+        "CryptoLinearXor.aesMixColumnsScore",
+        "CryptoLinearXor.aesMixColumnsGates",
+        "CryptoLinearXor.aesMixColumnsOutputs",
+        "AES MixColumns (32x32)",
+    ),
+    "aes_invmixcolumns_xor": (
+        32,
+        "CryptoLinearXor/AesInvMixColumnsCircuit.lean",
+        "CryptoLinearXor.aesInvMixColumnsScore",
+        "CryptoLinearXor.aesInvMixColumnsGates",
+        "CryptoLinearXor.aesInvMixColumnsOutputs",
+        "AES InvMixColumns (32x32)",
+    ),
+    "sm4_linear_l_xor": (
+        32,
+        "CryptoLinearXor/Sm4LinearLCircuit.lean",
+        "CryptoLinearXor.sm4LinearLScore",
+        "CryptoLinearXor.sm4LinearLGates",
+        "CryptoLinearXor.sm4LinearLOutputs",
+        "SM4 linear diffusion L (32x32)",
+    ),
+    "sm4_key_lprime_xor": (
+        32,
+        "CryptoLinearXor/Sm4KeyLPrimeCircuit.lean",
+        "CryptoLinearXor.sm4KeyLPrimeScore",
+        "CryptoLinearXor.sm4KeyLPrimeGates",
+        "CryptoLinearXor.sm4KeyLPrimeOutputs",
+        "SM4 key diffusion L' (32x32)",
+    ),
+    "aria_diffusion_xor": (
+        16,
+        "CryptoLinearXor/AriaDiffusionCircuit.lean",
+        "CryptoLinearXor.ariaDiffusionScore",
+        "CryptoLinearXor.ariaDiffusionGates",
+        "CryptoLinearXor.ariaDiffusionOutputs",
+        "ARIA diffusion A (16x16)",
+    ),
+    "camellia_p_xor": (
+        8,
+        "CryptoLinearXor/CamelliaPCircuit.lean",
+        "CryptoLinearXor.camelliaPScore",
+        "CryptoLinearXor.camelliaPGates",
+        "CryptoLinearXor.camelliaPOutputs",
+        "Camellia P-function (8x8)",
+    ),
+}
+
+
+def check_crypto_linear_xor_circuit(source, task_id):
+    """Read literal XOR straight-line program and verify exact F2-linear matrix equivalence on all n basis vectors."""
+    require(task_id in _CRYPTO_LINEAR_XOR_TARGETS, f"unknown crypto linear-XOR task: {task_id}")
+    require(len(source.encode("utf-8")) <= 32768, "crypto linear-XOR circuit exceeds 32768 bytes")
+    n, _, score_name, gates_name, outputs_name, label = _CRYPTO_LINEAR_XOR_TARGETS[task_id]
+    pattern = (
+        rf"\s*def\s+{re.escape(score_name)}\s*:\s*Nat\s*:=\s*(0|[1-9][0-9]{{0,3}})\s*\n"
+        rf"\s*def\s+{re.escape(gates_name)}\s*:\s*List\s*\(Nat\s*×\s*Nat\)\s*:=\s*(\[[\s\S]*?\])\s*\n"
+        rf"\s*def\s+{re.escape(outputs_name)}\s*:\s*List\s+Nat\s*:=\s*(\[[\s\S]*?\])\s*"
+    )
+    match = re.fullmatch(pattern, source)
+    require(match, f"unexpected {label} circuit format")
+    claimed_score = int(match[1])
+    gates_lit, outputs_lit = match[2], match[3]
+    require(re.fullmatch(r"[0-9\s(),\[\]]+", gates_lit), f"invalid {label} gate table")
+    require(re.fullmatch(r"[0-9\s,\[\]]+", outputs_lit), f"invalid {label} output list")
+    gates = ast.literal_eval(gates_lit)
+    outputs = ast.literal_eval(outputs_lit)
+    require(type(gates) is list and 1 <= len(gates) <= 1024, f"invalid {label} gate count")
+    require(type(outputs) is list and len(outputs) == n, f"invalid {label} output count")
+    masks = [1 << i for i in range(n)]
+    for idx, gate in enumerate(gates):
+        require(
+            type(gate) is tuple and len(gate) == 2
+            and type(gate[0]) is int and type(gate[1]) is int,
+            f"invalid {label} XOR gate pair at index {idx}",
+        )
+        w1, w2 = gate
+        require(0 <= w1 < n + idx and 0 <= w2 < n + idx, f"non-causal wire index ({w1}, {w2}) at gate {idx}")
+        masks.append(masks[w1] ^ masks[w2])
+    num_wires = n + len(gates)
+    require(all(type(w) is int and 0 <= w < num_wires for w in outputs), "out-of-range output wire index")
+    require(len(gates) == claimed_score, f"invalid {label} XOR gate score")
+    expected_rows = _LINEAR_XOR_ROWS[task_id]
+    for row_idx, ow in enumerate(outputs):
+        require(
+            masks[ow] == expected_rows[row_idx],
+            f"{label} row {row_idx} differs: got 0x{masks[ow]:x}, expected 0x{expected_rows[row_idx]:x}",
+        )
+    return len(gates)
+
+
+def audit_crypto_linear_xor_history(repo, accepted, snapshot_tasks, manifest):
+    commits = repo_git(repo, "rev-list", "--reverse", "HEAD").decode().splitlines()
+    require(len(commits) == 1 + len(accepted), "unexpected crypto linear-XOR history length")
+    baselines = {t["id"]: t["baseline_score"] for t in manifest["tasks"]}
+    previous = {}
+    for task_id, (_, rel_path, _, _, _, _) in _CRYPTO_LINEAR_XOR_TARGETS.items():
+        seed_src = repo_git(repo, "show", commits[0] + ":" + rel_path).decode("utf-8")
+        seed_score = check_crypto_linear_xor_circuit(seed_src, task_id)
+        require(seed_score == baselines[task_id], f"unexpected crypto linear-XOR seed baseline for {task_id}")
+        previous[task_id] = seed_score
+    for commit, task_id in zip(commits[1:], accepted):
+        n, rel_path, _, _, _, label = _CRYPTO_LINEAR_XOR_TARGETS[task_id]
+        source = repo_git(repo, "show", commit + ":" + rel_path).decode("utf-8")
+        score = check_crypto_linear_xor_circuit(source, task_id)
+        require(score < previous[task_id], f"invalid crypto linear-XOR progression for {task_id}")
+        print(f"  PASS {commit[:12]} ({task_id}): {label} F2-linear equivalence verified at {score} XORs")
+        previous[task_id] = score
+    for task in snapshot_tasks:
+        tid = task["def"]["id"]
+        if task["status"] == "verified":
+            require(previous[tid] == task["best_score"], f"published best score differs from XOR circuit for {tid}")
+
+
 def build_audit_attestation(
     *,
     status="passed",
@@ -1224,8 +1504,17 @@ def main():
         rank_mission = mid in ("matrix-rank444-f2", "matrix-rank-alphatensor-f2") and manifest["mode"] == "hillclimb"
         aes_sbox_mission = mid == "aes-sbox-circuit" and manifest["mode"] == "hillclimb"
         sortnet_mission = mid == "sorting-networks-opt" and manifest["mode"] == "hillclimb"
+        sortdepth_mission = mid == "sorting-networks-depth-opt" and manifest["mode"] == "hillclimb"
         crypto_sbox_mission = mid == "crypto-sbox-circuits" and manifest["mode"] == "hillclimb"
-        hillclimb_mission = rank_mission or aes_sbox_mission or sortnet_mission or crypto_sbox_mission
+        crypto_linear_xor_mission = mid == "crypto-linear-xor-opt" and manifest["mode"] == "hillclimb"
+        hillclimb_mission = (
+            rank_mission
+            or aes_sbox_mission
+            or sortnet_mission
+            or sortdepth_mission
+            or crypto_sbox_mission
+            or crypto_linear_xor_mission
+        )
         require(not manifest.get("demo") and (hillclimb_mission or manifest["mode"] == "dag"), "unsupported audited mission")
         require(manifest == detail["manifest"], "live manifest differs from trusted checkout")
         history = json.loads(download(endpoint + "/history"))["commits"]
@@ -1302,6 +1591,40 @@ def main():
                                 toolchain="python-gf256-sbox-evaluator",
                                 axioms=[],
                                 summary=f"Independent 256-input GF(2^8) S-box audit passed for {mid}/{row['task_id']}",
+                                run_url=run_url,
+                                commit_sha=commit_sha,
+                            ),
+                        ))
+                count += len(accepted)
+                continue
+            if sortdepth_mission:
+                audit_sorting_depth_history(Path(tmp) / "repo", accepted, snapshot["tasks"], manifest)
+                for row in history:
+                    pid = seq_to_proof_id.get(row["seq"])
+                    if pid:
+                        attestations.append((
+                            pid,
+                            build_audit_attestation(
+                                toolchain="python-sortdepth-evaluator",
+                                axioms=[],
+                                summary=f"Independent 2^n-input parallel-depth sorting-network audit passed for {mid}/{row['task_id']}",
+                                run_url=run_url,
+                                commit_sha=commit_sha,
+                            ),
+                        ))
+                count += len(accepted)
+                continue
+            if crypto_linear_xor_mission:
+                audit_crypto_linear_xor_history(Path(tmp) / "repo", accepted, snapshot["tasks"], manifest)
+                for row in history:
+                    pid = seq_to_proof_id.get(row["seq"])
+                    if pid:
+                        attestations.append((
+                            pid,
+                            build_audit_attestation(
+                                toolchain="python-linear-xor-evaluator",
+                                axioms=[],
+                                summary=f"Independent F2-linear XOR diffusion-layer audit passed for {mid}/{row['task_id']}",
                                 run_url=run_url,
                                 commit_sha=commit_sha,
                             ),

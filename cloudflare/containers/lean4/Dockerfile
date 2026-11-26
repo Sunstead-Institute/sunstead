@@ -37,12 +37,16 @@ COPY missions/ieantn-zeta-foundations /missions/ieantn-zeta-foundations
 COPY missions/ieantn-zero-free-regions /missions/ieantn-zero-free-regions
 COPY missions/ieantn-zeta-logderiv-values /missions/ieantn-zeta-logderiv-values
 COPY missions/ieantn-buthe-prime-bounds /missions/ieantn-buthe-prime-bounds
+COPY missions/ieantn-buthe-partial-rh /missions/ieantn-buthe-partial-rh
+COPY missions/ieantn-explicit-pnt-applications /missions/ieantn-explicit-pnt-applications
 COPY missions/pnt-analytic-foundations /missions/pnt-analytic-foundations
 COPY missions/matrix-rank444-f2 /missions/matrix-rank444-f2
 COPY missions/matrix-rank-alphatensor-f2 /missions/matrix-rank-alphatensor-f2
 COPY missions/aes-sbox-circuit /missions/aes-sbox-circuit
 COPY missions/crypto-sbox-circuits /missions/crypto-sbox-circuits
+COPY missions/crypto-linear-xor-opt /missions/crypto-linear-xor-opt
 COPY missions/sorting-networks-opt /missions/sorting-networks-opt
+COPY missions/sorting-networks-depth-opt /missions/sorting-networks-depth-opt
 COPY missions/verifier-common/sunstead_sandbox.py missions/verifier-common/SunsteadCheck.lean missions/verifier-common/prebuild_cache.py missions/verifier-common/prebuild_snapshot.py /opt/sunstead/
 COPY cloudflare/containers/verifier_server.py /opt/verifier_server.py
 

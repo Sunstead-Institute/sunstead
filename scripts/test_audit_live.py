@@ -235,6 +235,113 @@ class AuditTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "progression"):
                 audit.audit_crypto_sbox_history(repo, ["sm4_total_gates"], snap_tasks, manifest)
 
+    def test_sorting_depth_baseline_and_corrupt_networks(self):
+        mdir = audit.ROOT / "missions/sorting-networks-depth-opt"
+        manifest = json.loads((mdir / "sunstead.json").read_text(encoding="utf-8"))
+        baselines = {t["id"]: t["baseline_score"] for t in manifest["tasks"]}
+        for n in range(9, 17):
+            tid = f"depth_n{n}"
+            src = (mdir / f"SortDepth/Layers{n}.lean").read_text(encoding="utf-8")
+            with self.subTest(task=tid):
+                self.assertEqual(audit.check_sorting_depth_network(src, tid), baselines[tid])
+
+        n9_src = (mdir / "SortDepth/Layers9.lean").read_text(encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "score"):
+            audit.check_sorting_depth_network(n9_src.replace("Nat := 9", "Nat := 8", 1), "depth_n9")
+        with self.assertRaisesRegex(ValueError, "duplicate wire"):
+            audit.check_sorting_depth_network(n9_src.replace("(2, 3)", "(1, 3)", 1), "depth_n9")
+        with self.assertRaisesRegex(ValueError, "wire index"):
+            audit.check_sorting_depth_network(n9_src.replace("(7, 8)", "(7, 9)", 1), "depth_n9")
+        with self.assertRaisesRegex(ValueError, "unsorted"):
+            # Drop the last layer cleanly and claim depth 8.
+            last_layer_idx = n9_src.rfind(",\n  [")
+            truncated = n9_src[:last_layer_idx] + "\n]\n"
+            audit.check_sorting_depth_network(truncated.replace("Nat := 9", "Nat := 8", 1), "depth_n9")
+        with self.assertRaisesRegex(ValueError, "format"):
+            audit.check_sorting_depth_network(n9_src + "\n#eval 1\n", "depth_n9")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            (repo / "SortDepth").mkdir(parents=True)
+            for n in range(9, 17):
+                (repo / f"SortDepth/Layers{n}.lean").write_text(
+                    (mdir / f"SortDepth/Layers{n}.lean").read_text(encoding="utf-8"),
+                    encoding="utf-8",
+                )
+            audit.repo_git(repo, "init", "--quiet", "--template=")
+            audit.repo_git(repo, "add", ".")
+            audit.repo_git(repo, "commit", "--quiet", "-m", "seed")
+            (repo / "SortDepth/Layers9.lean").write_text(n9_src + "\n", encoding="utf-8")
+            audit.repo_git(repo, "add", ".")
+            audit.repo_git(repo, "commit", "--quiet", "-m", "no improvement")
+            snap_tasks = [
+                {
+                    "def": {"id": f"depth_n{n}"},
+                    "status": "verified" if n == 9 else "open",
+                    "best_score": baselines[f"depth_n{n}"],
+                }
+                for n in range(9, 17)
+            ]
+            with self.assertRaisesRegex(ValueError, "progression"):
+                audit.audit_sorting_depth_history(repo, ["depth_n9"], snap_tasks, manifest)
+
+    def test_crypto_linear_xor_baselines_algebra_and_corrupt_circuits(self):
+        mdir = audit.ROOT / "missions/crypto-linear-xor-opt"
+        manifest = json.loads((mdir / "sunstead.json").read_text(encoding="utf-8"))
+        baselines = {t["id"]: t["baseline_score"] for t in manifest["tasks"]}
+
+        # Algebraic cross-checks: AES MixColumns * InvMixColumns = I_32, ARIA^2 = I_16.
+        mc = audit._LINEAR_XOR_ROWS["aes_mixcolumns_xor"]
+        imc = audit._LINEAR_XOR_ROWS["aes_invmixcolumns_xor"]
+        for col in range(32):
+            v = sum(((mc[r] >> col) & 1) << r for r in range(32))
+            back = sum((bin(imc[r] & v).count("1") & 1) << r for r in range(32))
+            self.assertEqual(back, 1 << col)
+        aria = audit._LINEAR_XOR_ROWS["aria_diffusion_xor"]
+        for col in range(16):
+            v = sum(((aria[r] >> col) & 1) << r for r in range(16))
+            back = sum((bin(aria[r] & v).count("1") & 1) << r for r in range(16))
+            self.assertEqual(back, 1 << col)
+
+        sources = {}
+        for tid, (_, rel_path, _, _, _, _) in audit._CRYPTO_LINEAR_XOR_TARGETS.items():
+            src = (mdir / rel_path).read_text(encoding="utf-8")
+            sources[tid] = src
+            with self.subTest(task=tid):
+                self.assertEqual(audit.check_crypto_linear_xor_circuit(src, tid), baselines[tid])
+
+        with self.assertRaisesRegex(ValueError, "score"):
+            audit.check_crypto_linear_xor_circuit(
+                sources["aes_mixcolumns_xor"].replace("Nat := 152", "Nat := 151", 1),
+                "aes_mixcolumns_xor",
+            )
+        with self.assertRaisesRegex(ValueError, "non-causal"):
+            bad = sources["camellia_p_xor"].replace("[\n  (", "[\n  (8, 0),\n  (", 1).replace("Nat := 36", "Nat := 37", 1)
+            audit.check_crypto_linear_xor_circuit(bad, "camellia_p_xor")
+        with self.assertRaisesRegex(ValueError, "differs"):
+            bad_out = audit.re.sub(r":=\s*\[(\d+),", lambda m: f":= [{(int(m.group(1)) + 1) % 8},", sources["camellia_p_xor"], count=1)
+            audit.check_crypto_linear_xor_circuit(bad_out, "camellia_p_xor")
+        with self.assertRaisesRegex(ValueError, "format"):
+            audit.check_crypto_linear_xor_circuit(sources["aria_diffusion_xor"] + "\n#eval 1\n", "aria_diffusion_xor")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            (repo / "CryptoLinearXor").mkdir(parents=True)
+            for tid, (_, rel_path, _, _, _, _) in audit._CRYPTO_LINEAR_XOR_TARGETS.items():
+                (repo / rel_path).write_text(sources[tid], encoding="utf-8")
+            audit.repo_git(repo, "init", "--quiet", "--template=")
+            audit.repo_git(repo, "add", ".")
+            audit.repo_git(repo, "commit", "--quiet", "-m", "seed")
+            (repo / "CryptoLinearXor/CamelliaPCircuit.lean").write_text(sources["camellia_p_xor"] + "\n", encoding="utf-8")
+            audit.repo_git(repo, "add", ".")
+            audit.repo_git(repo, "commit", "--quiet", "-m", "no improvement")
+            snap_tasks = [
+                {"def": {"id": tid}, "status": "verified" if tid == "camellia_p_xor" else "open", "best_score": baselines[tid]}
+                for tid in audit._CRYPTO_LINEAR_XOR_TARGETS
+            ]
+            with self.assertRaisesRegex(ValueError, "progression"):
+                audit.audit_crypto_linear_xor_history(repo, ["camellia_p_xor"], snap_tasks, manifest)
+
     def test_archive_ignores_git_and_rejects_paths(self):
         self.assertEqual(audit.archive_files(bundle([(".git/config", b"untrusted"), ("Spec.lean", b"x")])),
                          {"Spec.lean": (b"x", False)})

@@ -53,12 +53,16 @@ COPY ieantn-zeta-foundations /tmp/prebuild-missions/ieantn-zeta-foundations
 COPY ieantn-zero-free-regions /tmp/prebuild-missions/ieantn-zero-free-regions
 COPY ieantn-zeta-logderiv-values /tmp/prebuild-missions/ieantn-zeta-logderiv-values
 COPY ieantn-buthe-prime-bounds /tmp/prebuild-missions/ieantn-buthe-prime-bounds
+COPY ieantn-buthe-partial-rh /tmp/prebuild-missions/ieantn-buthe-partial-rh
+COPY ieantn-explicit-pnt-applications /tmp/prebuild-missions/ieantn-explicit-pnt-applications
 COPY pnt-analytic-foundations /tmp/prebuild-missions/pnt-analytic-foundations
 COPY matrix-rank444-f2 /tmp/prebuild-missions/matrix-rank444-f2
 COPY matrix-rank-alphatensor-f2 /tmp/prebuild-missions/matrix-rank-alphatensor-f2
 COPY aes-sbox-circuit /tmp/prebuild-missions/aes-sbox-circuit
 COPY crypto-sbox-circuits /tmp/prebuild-missions/crypto-sbox-circuits
+COPY crypto-linear-xor-opt /tmp/prebuild-missions/crypto-linear-xor-opt
 COPY sorting-networks-opt /tmp/prebuild-missions/sorting-networks-opt
+COPY sorting-networks-depth-opt /tmp/prebuild-missions/sorting-networks-depth-opt
 RUN python3 /opt/sunstead/prebuild_cache.py /tmp/prebuild-missions/* \
     && rm -rf /tmp/prebuild-missions \
     && chmod -R a-w,a+rX /opt/sunstead

@@ -357,6 +357,68 @@ test("crypto-sbox-circuits mission isolates all 6 independent S-box circuit targ
   }
 });
 
+test("Wave 4 arenas isolate independent targets and freeze specs/bounds", () => {
+  const depthManifest = JSON.parse(readFileSync(new URL(
+    "../../missions/sorting-networks-depth-opt/sunstead.json", import.meta.url
+  ), "utf8")) as MissionManifest;
+  assert.equal(depthManifest.mode, "hillclimb");
+  assert.equal(depthManifest.score_direction, "minimize");
+  assert.equal(depthManifest.tasks.length, 8);
+  const depthById = Object.fromEntries(depthManifest.tasks.map((t) => [t.id, t]));
+  for (let n = 9; n <= 16; n++) {
+    assert.equal(depthById[`depth_n${n}`].baseline_score, n);
+    validatePatch(patchFor(`SortDepth/Layers${n}.lean`), depthManifest.frozen_paths, depthById[`depth_n${n}`].target_files);
+  }
+  assert.throws(
+    () => validatePatch(patchFor("SortDepth/Spec.lean"), depthManifest.frozen_paths, depthById.depth_n9.target_files),
+    /frozen/
+  );
+  assert.throws(
+    () => validatePatch(patchFor("SortDepth/Layers10.lean"), depthManifest.frozen_paths, depthById.depth_n9.target_files),
+    /outside/
+  );
+
+  const xorManifest = JSON.parse(readFileSync(new URL(
+    "../../missions/crypto-linear-xor-opt/sunstead.json", import.meta.url
+  ), "utf8")) as MissionManifest;
+  assert.equal(xorManifest.mode, "hillclimb");
+  assert.equal(xorManifest.score_direction, "minimize");
+  assert.equal(xorManifest.tasks.length, 6);
+  const xorById = Object.fromEntries(xorManifest.tasks.map((t) => [t.id, t]));
+  assert.equal(xorById.aes_mixcolumns_xor.baseline_score, 152);
+  assert.equal(xorById.aes_invmixcolumns_xor.baseline_score, 440);
+  assert.equal(xorById.sm4_linear_l_xor.baseline_score, 128);
+  assert.equal(xorById.sm4_key_lprime_xor.baseline_score, 64);
+  assert.equal(xorById.aria_diffusion_xor.baseline_score, 96);
+  assert.equal(xorById.camellia_p_xor.baseline_score, 36);
+  for (const t of xorManifest.tasks) {
+    validatePatch(patchFor(t.target_files[0]), xorManifest.frozen_paths, t.target_files);
+  }
+  assert.throws(
+    () => validatePatch(patchFor("CryptoLinearXor/Spec.lean"), xorManifest.frozen_paths, xorById.aes_mixcolumns_xor.target_files),
+    /frozen/
+  );
+
+  for (const [dir, count] of [
+    ["ieantn-buthe-partial-rh", 6],
+    ["ieantn-explicit-pnt-applications", 6],
+  ] as const) {
+    const m = JSON.parse(readFileSync(new URL(
+      `../../missions/${dir}/sunstead.json`, import.meta.url
+    ), "utf8")) as MissionManifest;
+    assert.equal(m.mode, "dag");
+    assert.equal(m.tier, 1);
+    assert.equal(m.tasks.length, count);
+    assert.throws(
+      () => validatePatch(patchFor("IEANTN/Spec.lean"), m.frozen_paths, m.tasks[0].target_files),
+      /frozen/
+    );
+    for (const t of m.tasks) {
+      validatePatch(patchFor(t.target_files[0]), m.frozen_paths, t.target_files);
+    }
+  }
+});
+
 test("validatePatch blocks frozen paths and files outside target_files", () => {
   assert.throws(
     () => validatePatch(patchFor("MetaComplexity/Spec.lean"), FROZEN, ["MetaComplexity/X.lean"]),
