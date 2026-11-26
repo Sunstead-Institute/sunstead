@@ -2,8 +2,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
 
-const segment = z.string().regex(/^[A-Za-z0-9_-]+$/);
-const submissionId = z.string().regex(/^[A-Za-z0-9-]+$/);
+const MAX_PATCH_CHARS = 512 * 1024;
+const segment = z.string().max(256).regex(/^[A-Za-z0-9_-]+$/);
+const submissionId = z.string().max(128).regex(/^[A-Za-z0-9-]+$/);
+const contributorHandleFilter = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{1,35}$/);
 const mission = { mission_id: segment };
 const task = { ...mission, task_id: segment };
 const missions = "/api/missions";
@@ -11,13 +13,16 @@ const missions = "/api/missions";
 export async function handleMcp(request: Request, fetchHub: (req: Request) => Promise<Response>) {
   const url = new URL(request.url);
   const origin = request.headers.get("Origin");
-  if (origin !== null && origin !== url.origin) return new Response("Forbidden", { status: 403 });
+  if (origin !== null && origin !== url.origin) {
+    return new Response("Forbidden", { status: 403, headers: { "Cache-Control": "no-store" } });
+  }
   if (request.method === "OPTIONS") {
     const headers: Record<string, string> = {
       Allow: "POST, OPTIONS",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept, Mcp-Session-Id, MCP-Protocol-Version",
       "Access-Control-Max-Age": "86400",
+      "Cache-Control": "no-store",
     };
     if (origin !== null) {
       headers["Access-Control-Allow-Origin"] = origin;
@@ -25,7 +30,12 @@ export async function handleMcp(request: Request, fetchHub: (req: Request) => Pr
     }
     return new Response(null, { status: 204, headers });
   }
-  if (request.method !== "POST") return new Response(null, { status: 405, headers: { Allow: "POST, OPTIONS" } });
+  if (request.method !== "POST") {
+    return new Response(null, {
+      status: 405,
+      headers: { Allow: "POST, OPTIONS", "Cache-Control": "no-store" },
+    });
+  }
 
   // Each request owns its server and transport. Credentials and responses never span requests.
   const server = new McpServer({ name: "sunstead", version: "1.0.0" });
@@ -36,14 +46,22 @@ export async function handleMcp(request: Request, fetchHub: (req: Request) => Pr
       if (value !== null) headers.set(key, value);
     }
     if (body) headers.set("Content-Type", "application/json");
-    const response = await fetchHub(new Request(new URL(path, url), {
-      method: method ?? (body ? "POST" : "GET"), headers, body: body ? JSON.stringify(body) : undefined,
-    }));
-    const text = await response.text();
-    return {
-      isError: !response.ok,
-      content: [{ type: "text" as const, text: response.ok ? text : `HTTP ${response.status}: ${text}` }],
-    };
+    try {
+      const response = await fetchHub(new Request(new URL(path, url), {
+        method: method ?? (body ? "POST" : "GET"), headers, body: body ? JSON.stringify(body) : undefined,
+      }));
+      const text = await response.text();
+      return {
+        isError: !response.ok,
+        content: [{ type: "text" as const, text: response.ok ? text : `HTTP ${response.status}: ${text}` }],
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        isError: true,
+        content: [{ type: "text" as const, text: `Hub request failed: ${message}` }],
+      };
+    }
   }
   function taskPath(args: { mission_id: string; task_id: string }) {
     return `${missions}/${args.mission_id}/tasks/${args.task_id}`;
@@ -66,11 +84,11 @@ export async function handleMcp(request: Request, fetchHub: (req: Request) => Pr
     {
       description: "Register a new contributor handle and receive a one-time SUNSTEAD_API_KEY.",
       inputSchema: {
-        handle: z.string(),
-        display_name: z.string().optional(),
-        github: z.string().optional(),
-        x: z.string().optional(),
-        linkedin: z.string().optional(),
+        handle: z.string().min(1).max(64),
+        display_name: z.string().max(128).optional(),
+        github: z.string().max(64).optional(),
+        x: z.string().max(32).optional(),
+        linkedin: z.string().max(128).optional(),
       },
     },
     args => forward("/api/contributors/register", args, "POST")
@@ -86,9 +104,9 @@ export async function handleMcp(request: Request, fetchHub: (req: Request) => Pr
         mode: z.enum(["dag", "hillclimb"]).optional(),
         tier: z.number().int().min(1).max(2).optional(),
         open_conjecture: z.boolean().optional(),
-        toolchain: z.string().optional(),
+        toolchain: z.string().max(128).optional(),
         has_frontier: z.boolean().optional(),
-        q: z.string().optional(),
+        q: z.string().max(200).optional(),
       },
     },
     args => forward(withQuery(missions, args), undefined, "GET")
@@ -103,9 +121,9 @@ export async function handleMcp(request: Request, fetchHub: (req: Request) => Pr
         mode: z.enum(["dag", "hillclimb"]).optional(),
         tier: z.number().int().min(1).max(2).optional(),
         open_conjecture: z.boolean().optional(),
-        toolchain: z.string().optional(),
+        toolchain: z.string().max(128).optional(),
         mission: segment.optional(),
-        q: z.string().optional(),
+        q: z.string().max(200).optional(),
         limit: z.number().int().min(1).max(200).optional(),
         offset: z.number().int().min(0).optional(),
       },
@@ -127,13 +145,28 @@ export async function handleMcp(request: Request, fetchHub: (req: Request) => Pr
     {
       description:
         "Submit a unified git diff for verification. Defaults to async mode (returns HTTP 202 + submission_id immediately to avoid MCP timeouts; poll get_submission_status). Pass async: false to wait synchronously.",
-      inputSchema: { ...task, patch: z.string(), async: z.boolean().optional() },
+      inputSchema: { ...task, patch: z.string().max(MAX_PATCH_CHARS), async: z.boolean().optional() },
     },
     args =>
       forward(
         `${taskPath(args)}/submit${args.async === false ? "" : "?async=1"}`,
         { patch: args.patch }
       )
+  );
+  server.registerTool(
+    "list_submissions",
+    {
+      description:
+        "List recent verification submissions across the hub, with optional filtering by mission, task, contributor, status, or limit.",
+      inputSchema: {
+        mission: segment.optional(),
+        task: segment.optional(),
+        contributor: contributorHandleFilter.optional(),
+        status: z.enum(["verifying", "accepted", "rejected", "error"]).optional(),
+        limit: z.number().int().min(1).max(200).optional(),
+      },
+    },
+    args => forward(withQuery("/api/submissions", args), undefined, "GET")
   );
   server.registerTool(
     "get_submission_status",
@@ -148,10 +181,10 @@ export async function handleMcp(request: Request, fetchHub: (req: Request) => Pr
     {
       description: "Update or clear your contributor display_name and GitHub, X, or LinkedIn handles (handle only, never URLs).",
       inputSchema: {
-        display_name: z.string().nullable().optional(),
-        github: z.string().nullable().optional(),
-        x: z.string().nullable().optional(),
-        linkedin: z.string().nullable().optional(),
+        display_name: z.string().max(128).nullable().optional(),
+        github: z.string().max(64).nullable().optional(),
+        x: z.string().max(32).nullable().optional(),
+        linkedin: z.string().max(128).nullable().optional(),
       },
     },
     args => forward("/api/me", args, "PATCH")
@@ -167,13 +200,13 @@ export async function handleMcp(request: Request, fetchHub: (req: Request) => Pr
         subgoals: z.array(
           z.object({
             id: z.string().regex(/^[a-z][a-z0-9_]{1,47}$/),
-            title: z.string(),
-            statement: z.string(),
+            title: z.string().min(1).max(200),
+            statement: z.string().min(1).max(4096),
           })
         ).min(2).max(6),
-        reduction_file: z.string(),
-        reduction_theorem: z.string(),
-        patch: z.string(),
+        reduction_file: z.string().min(1).max(256),
+        reduction_theorem: z.string().min(1).max(256),
+        patch: z.string().max(MAX_PATCH_CHARS),
       },
     },
     ({ mission_id, task_id, ...body }) =>
@@ -186,9 +219,9 @@ export async function handleMcp(request: Request, fetchHub: (req: Request) => Pr
         "Submit a kernel-verified disproof (¬ T on ANY open DAG root task across all missions, or ¬ L_i on a spawned subgoal). Open to all registered contributors with no allowlist; resolves open conjectures (open_conjecture: true) for full Tier 1 points, removes false root tasks from the frontier, or invalidates broken decompositions and awards a refutation bounty. Defaults to async mode (HTTP 202 + submission_id; poll get_submission_status). Pass async: false to wait synchronously.",
       inputSchema: {
         ...task,
-        refute_file: z.string().optional(),
-        refute_theorem: z.string(),
-        patch: z.string(),
+        refute_file: z.string().max(256).optional(),
+        refute_theorem: z.string().min(1).max(256),
+        patch: z.string().max(MAX_PATCH_CHARS),
         async: z.boolean().optional(),
       },
     },

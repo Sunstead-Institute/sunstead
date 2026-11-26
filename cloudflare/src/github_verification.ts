@@ -43,6 +43,12 @@ export async function confirmGithubVerification(
       redirect: "error", signal: AbortSignal.timeout(8000),
     });
     if (response.status === 404) return failure(422, "Public gist not found");
+    if (
+      (response.status === 403 || response.status === 429) &&
+      response.headers.get("X-RateLimit-Remaining") === "0"
+    ) {
+      return failure(503, "GitHub API rate limit reached. Retry later");
+    }
     if (!response.ok || !response.body) return failure(503, "GitHub is unavailable. Retry later");
     // Bound memory even for large gists delivered without Content-Length.
     const reader = response.body.getReader();
@@ -59,11 +65,33 @@ export async function confirmGithubVerification(
       }
       json += decoder.decode(chunk.value, { stream: true });
     }
-    const gist = JSON.parse(json + decoder.decode());
-    const files = Object.values(gist.files ?? {}) as {content?: string; truncated?: boolean}[];
-    if (gist.public !== true || gist.owner?.login?.toLowerCase() !== pending.github.toLowerCase() ||
-        !files.some(f => !f?.truncated && typeof f?.content === "string" &&
-          f.content.split(/\r?\n/).includes(pending.github_challenge))) {
+    const gist: unknown = JSON.parse(json + decoder.decode());
+    if (!gist || typeof gist !== "object" || Array.isArray(gist)) {
+      return failure(422, "Invalid gist response from GitHub");
+    }
+    const gistObj = gist as {
+      public?: unknown;
+      owner?: { login?: unknown } | null;
+      files?: unknown;
+    };
+    const rawFiles =
+      gistObj.files && typeof gistObj.files === "object" && !Array.isArray(gistObj.files)
+        ? (Object.values(gistObj.files) as { content?: unknown; truncated?: unknown }[])
+        : [];
+    const ownerLogin =
+      gistObj.owner && typeof gistObj.owner === "object" && typeof gistObj.owner.login === "string"
+        ? gistObj.owner.login
+        : "";
+    if (
+      gistObj.public !== true ||
+      ownerLogin.toLowerCase() !== pending.github.toLowerCase() ||
+      !rawFiles.some(
+        (f) =>
+          !f?.truncated &&
+          typeof f?.content === "string" &&
+          f.content.split(/\r?\n/).some((line) => line.trim() === pending.github_challenge)
+      )
+    ) {
       return failure(422, "The public gist must contain your exact challenge on its own line and belong to your configured GitHub account");
     }
   } catch {

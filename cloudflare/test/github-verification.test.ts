@@ -70,3 +70,52 @@ test("optional GITHUB_API_TOKEN sends Bearer authorization when configured", asy
   assert.equal(result.status, 200);
   assert.equal(authHeader, "Bearer ghp_test_token_123");
 });
+
+test("GitHub API rate-limit 403 returns specific 503 error", async () => {
+  const { confirm } = fixture();
+  const rateLimited = await confirm(
+    async () =>
+      new Response(JSON.stringify({ message: "API rate limit exceeded" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json", "X-RateLimit-Remaining": "0" },
+      })
+  );
+  assert.equal(rateLimited.status, 503);
+  assert.equal(rateLimited.body.error, "GitHub API rate limit reached. Retry later");
+
+  // Non-rate-limit 403 keeps generic unavailable message
+  const forbidden = await confirm(
+    async () =>
+      new Response(JSON.stringify({ message: "Forbidden" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json", "X-RateLimit-Remaining": "42" },
+      })
+  );
+  assert.equal(forbidden.status, 503);
+  assert.equal(forbidden.body.error, "GitHub is unavailable. Retry later");
+});
+
+test("malformed non-object JSON payloads return 422 instead of 503", async () => {
+  const { confirm } = fixture();
+  for (const raw of ["null", "[]", "42", '"hello"', JSON.stringify({ public: true, owner: null, files: null })]) {
+    const res = await confirm(
+      async () => new Response(raw, { status: 200, headers: { "Content-Type": "application/json" } })
+    );
+    assert.equal(res.status, 422, `expected 422 for payload ${raw}`);
+  }
+});
+
+test("challenge line matching trims surrounding horizontal whitespace", async () => {
+  const { gist, confirm } = fixture();
+  const padded = {
+    ...gist,
+    files: {
+      "check.txt": {
+        content: `verification:\n  \t${gist.files["check.txt"].content}  \r\n`,
+      },
+    },
+  };
+  const res = await confirm(async () => Response.json(padded));
+  assert.equal(res.status, 200);
+  assert.equal(res.body.github_verified_handle, "Octocat");
+});
