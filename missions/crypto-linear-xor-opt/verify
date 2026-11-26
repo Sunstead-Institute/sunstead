@@ -1,0 +1,173 @@
+#!/usr/bin/env python3
+"""Verify explicit straight-line F_2-linear XOR circuits for OpenSSL cryptographic diffusion layers."""
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify
+
+TASKS = {
+    "aes_mixcolumns_xor": {
+        "module": "CryptoLinearXor.AesMixColumnsBound",
+        "theorem": "CryptoLinearXor.aes_mixcolumns_bound",
+        "score_const": "CryptoLinearXor.aesMixColumnsScore",
+        "statement": "def aes_mixcolumns_xor (k : Nat) : Prop := CryptoLinearXor.ValidXorCircuit 32 CryptoLinearXor.aesMixColumns32 k",
+        "label": "{score} XOR gates (AES MixColumns)",
+    },
+    "aes_invmixcolumns_xor": {
+        "module": "CryptoLinearXor.AesInvMixColumnsBound",
+        "theorem": "CryptoLinearXor.aes_invmixcolumns_bound",
+        "score_const": "CryptoLinearXor.aesInvMixColumnsScore",
+        "statement": "def aes_invmixcolumns_xor (k : Nat) : Prop := CryptoLinearXor.ValidXorCircuit 32 CryptoLinearXor.aesInvMixColumns32 k",
+        "label": "{score} XOR gates (AES InvMixColumns)",
+    },
+    "sm4_linear_l_xor": {
+        "module": "CryptoLinearXor.Sm4LinearLBound",
+        "theorem": "CryptoLinearXor.sm4_linear_l_bound",
+        "score_const": "CryptoLinearXor.sm4LinearLScore",
+        "statement": "def sm4_linear_l_xor (k : Nat) : Prop := CryptoLinearXor.ValidXorCircuit 32 CryptoLinearXor.sm4LinearL32 k",
+        "label": "{score} XOR gates (SM4 L)",
+    },
+    "sm4_key_lprime_xor": {
+        "module": "CryptoLinearXor.Sm4KeyLPrimeBound",
+        "theorem": "CryptoLinearXor.sm4_key_lprime_bound",
+        "score_const": "CryptoLinearXor.sm4KeyLPrimeScore",
+        "statement": "def sm4_key_lprime_xor (k : Nat) : Prop := CryptoLinearXor.ValidXorCircuit 32 CryptoLinearXor.sm4KeyLPrime32 k",
+        "label": "{score} XOR gates (SM4 L')",
+    },
+    "aria_diffusion_xor": {
+        "module": "CryptoLinearXor.AriaDiffusionBound",
+        "theorem": "CryptoLinearXor.aria_diffusion_bound",
+        "score_const": "CryptoLinearXor.ariaDiffusionScore",
+        "statement": "def aria_diffusion_xor (k : Nat) : Prop := CryptoLinearXor.ValidXorCircuit 16 CryptoLinearXor.ariaDiffusion16 k",
+        "label": "{score} XOR gates (ARIA A)",
+    },
+    "camellia_p_xor": {
+        "module": "CryptoLinearXor.CamelliaPBound",
+        "theorem": "CryptoLinearXor.camellia_p_bound",
+        "score_const": "CryptoLinearXor.camelliaPScore",
+        "statement": "def camellia_p_xor (k : Nat) : Prop := CryptoLinearXor.ValidXorCircuit 8 CryptoLinearXor.camelliaP8 k",
+        "label": "{score} XOR gates (Camellia P)",
+    },
+}
+
+CIRCUIT_TARGETS = {
+    "aes_mixcolumns_xor": (
+        "CryptoLinearXor/AesMixColumnsCircuit.lean",
+        "CryptoLinearXor.aesMixColumnsScore",
+        "CryptoLinearXor.aesMixColumnsGates",
+        "CryptoLinearXor.aesMixColumnsOutputs",
+        32,
+    ),
+    "aes_invmixcolumns_xor": (
+        "CryptoLinearXor/AesInvMixColumnsCircuit.lean",
+        "CryptoLinearXor.aesInvMixColumnsScore",
+        "CryptoLinearXor.aesInvMixColumnsGates",
+        "CryptoLinearXor.aesInvMixColumnsOutputs",
+        32,
+    ),
+    "sm4_linear_l_xor": (
+        "CryptoLinearXor/Sm4LinearLCircuit.lean",
+        "CryptoLinearXor.sm4LinearLScore",
+        "CryptoLinearXor.sm4LinearLGates",
+        "CryptoLinearXor.sm4LinearLOutputs",
+        32,
+    ),
+    "sm4_key_lprime_xor": (
+        "CryptoLinearXor/Sm4KeyLPrimeCircuit.lean",
+        "CryptoLinearXor.sm4KeyLPrimeScore",
+        "CryptoLinearXor.sm4KeyLPrimeGates",
+        "CryptoLinearXor.sm4KeyLPrimeOutputs",
+        32,
+    ),
+    "aria_diffusion_xor": (
+        "CryptoLinearXor/AriaDiffusionCircuit.lean",
+        "CryptoLinearXor.ariaDiffusionScore",
+        "CryptoLinearXor.ariaDiffusionGates",
+        "CryptoLinearXor.ariaDiffusionOutputs",
+        16,
+    ),
+    "camellia_p_xor": (
+        "CryptoLinearXor/CamelliaPCircuit.lean",
+        "CryptoLinearXor.camelliaPScore",
+        "CryptoLinearXor.camelliaPGates",
+        "CryptoLinearXor.camelliaPOutputs",
+        8,
+    ),
+}
+
+MAX_BYTES = 32768
+MAX_GATES = 1024
+
+
+def check_circuit(path, score_name, gates_name, outputs_name, width):
+    # Restrict the editable source to concrete XOR circuit literals replayable outside Lean.
+    if not path.is_file():
+        emit(False, f"Missing circuit file: {path.name}", stage="lint")
+    raw = path.read_bytes()
+    if len(raw) > MAX_BYTES:
+        emit(False, f"Circuit file exceeds {MAX_BYTES} bytes", stage="lint")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        emit(False, "Circuit file must be valid UTF-8", stage="lint")
+
+    nat = r"(?:0|[1-9][0-9]{0,3})"
+    pair = rf"\(\s*{nat}\s*,\s*{nat}\s*\)"
+    header_re = (
+        rf"\s*def\s+{re.escape(score_name)}\s*:\s*Nat\s*:=\s*({nat})\s*\n"
+        rf"\s*def\s+{re.escape(gates_name)}\s*:\s*List\s*\(Nat\s*×\s*Nat\)\s*:=\s*\[\s*(.*?)\s*\]\s*\n"
+        rf"\s*def\s+{re.escape(outputs_name)}\s*:\s*List\s+Nat\s*:=\s*\[\s*(.*?)\s*\]\s*"
+    )
+    match = re.fullmatch(header_re, text, re.DOTALL)
+    if not match:
+        emit(
+            False,
+            f"Expected only literal definitions for {score_name}, {gates_name}, and {outputs_name}",
+            stage="lint",
+        )
+    gates_body = match.group(2)
+    outputs_body = match.group(3)
+    if not gates_body or not re.fullmatch(
+        rf"{pair}(?:\s*,\s*{pair}){{0,{MAX_GATES - 1}}}", gates_body
+    ):
+        emit(
+            False,
+            f"Expected 1 to {MAX_GATES} literal (w1, w2) XOR gate pairs",
+            stage="lint",
+        )
+    if not re.fullmatch(rf"{nat}(?:\s*,\s*{nat}){{{width - 1}}}", outputs_body):
+        emit(
+            False,
+            f"Expected exactly {width} literal output wire indices",
+            stage="lint",
+        )
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>", stage="lint")
+    task_id = sys.argv[1]
+    if task_id in CIRCUIT_TARGETS:
+        rel_path, score_name, gates_name, outputs_name, width = CIRCUIT_TARGETS[task_id]
+        check_circuit(
+            Path(__file__).resolve().parent / rel_path,
+            score_name,
+            gates_name,
+            outputs_name,
+            width,
+        )
+    lean_verify(
+        task_id,
+        lib_root="CryptoLinearXor",
+        frozen_files=[
+            "CryptoLinearXor/Spec.lean",
+            "UPSTREAM.json",
+            "lakefile.toml",
+            "lean-toolchain",
+        ],
+        tasks=TASKS,
+        uses_mathlib=False,
+        timeout_sec=90,
+    )

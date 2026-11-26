@@ -1,0 +1,50 @@
+{
+  "repo": "openssl/openssl",
+  "commit": "d94024ffc7e726566a6255228ad0a7de4cfc956d",
+  "license": "Apache-2.0",
+  "specialization": "Sunstead pins OpenSSL's verbatim C diffusion layer implementations at commit `d94024ffc7e726566a6255228ad0a7de4cfc956d` (Apache-2.0) for AES `MixColumns` & `InvMixColumns` (`crypto/aes/aes_core.c`), SM4 `L` & `L'` (`crypto/sm4/sm4.c`), ARIA involutory diffusion `a()` (`crypto/aria/aria.c`), and Camellia `P`-function via `Camellia_Feistel` (`crypto/camellia/camellia.c`), formally proves their GF(2)-linearity, exact algebraic equivalence, invertibility/involution, and bit-parallel linear-circuit verification soundness over all 2^n inputs in pure Lean 4.36.0 (no Mathlib), and challenges contributors to minimize straight-line XOR gate count for each diffusion layer.",
+  "checks": [
+    {
+      "local_file": "CryptoLinearXor/Spec.lean",
+      "upstream_file": "crypto/aes/aes_core.c",
+      "upstream_anchor": "static void XtimeLong(uint64_t *w)",
+      "verbatim_snippet": "static void XtimeLong(uint64_t *w)\n{\n    uint64_t a, b;\n\n    a = *w;\n    b = a & U64(0x8080808080808080);\n    a ^= b;\n    b -= b >> 7;\n    b &= U64(0x1B1B1B1B1B1B1B1B);\n    b ^= a << 1;\n    *w = b;\n}"
+    },
+    {
+      "local_file": "CryptoLinearXor/Spec.lean",
+      "upstream_file": "crypto/aes/aes_core.c",
+      "upstream_anchor": "static void MixColumns(uint64_t *state)",
+      "verbatim_snippet": "static void MixColumns(uint64_t *state)\n{\n    uni s1;\n    uni s;\n    int c;\n\n    for (c = 0; c < 2; c++) {\n        s1.d = state[c];\n        s.d = s1.d;\n        s.d ^= ((s.d & U64(0xFFFF0000FFFF0000)) >> 16)\n            | ((s.d & U64(0x0000FFFF0000FFFF)) << 16);\n        s.d ^= ((s.d & U64(0xFF00FF00FF00FF00)) >> 8)\n            | ((s.d & U64(0x00FF00FF00FF00FF)) << 8);\n        s.d ^= s1.d;\n        XtimeLong(&s1.d);\n        s.d ^= s1.d;\n        s.b[0] ^= s1.b[1];\n        s.b[1] ^= s1.b[2];\n        s.b[2] ^= s1.b[3];\n        s.b[3] ^= s1.b[0];\n        s.b[4] ^= s1.b[5];\n        s.b[5] ^= s1.b[6];\n        s.b[6] ^= s1.b[7];\n        s.b[7] ^= s1.b[4];\n        state[c] = s.d;\n    }\n}\n\nstatic void InvMixColumns(uint64_t *state)\n{\n    uni s1;\n    uni s;\n    int c;\n\n    for (c = 0; c < 2; c++) {\n        s1.d = state[c];\n        s.d = s1.d;\n        s.d ^= ((s.d & U64(0xFFFF0000FFFF0000)) >> 16)\n            | ((s.d & U64(0x0000FFFF0000FFFF)) << 16);\n        s.d ^= ((s.d & U64(0xFF00FF00FF00FF00)) >> 8)\n            | ((s.d & U64(0x00FF00FF00FF00FF)) << 8);\n        s.d ^= s1.d;\n        XtimeLong(&s1.d);\n        s.d ^= s1.d;\n        s.b[0] ^= s1.b[1];\n        s.b[1] ^= s1.b[2];\n        s.b[2] ^= s1.b[3];\n        s.b[3] ^= s1.b[0];\n        s.b[4] ^= s1.b[5];\n        s.b[5] ^= s1.b[6];\n        s.b[6] ^= s1.b[7];\n        s.b[7] ^= s1.b[4];\n        XtimeLong(&s1.d);\n        s1.d ^= ((s1.d & U64(0xFFFF0000FFFF0000)) >> 16)\n            | ((s1.d & U64(0x0000FFFF0000FFFF)) << 16);\n        s.d ^= s1.d;\n        XtimeLong(&s1.d);\n        s1.d ^= ((s1.d & U64(0xFF00FF00FF00FF00)) >> 8)\n            | ((s1.d & U64(0x00FF00FF00FF00FF)) << 8);\n        s.d ^= s1.d;\n        state[c] = s.d;\n    }\n}"
+    },
+    {
+      "local_file": "CryptoLinearXor/Spec.lean",
+      "upstream_file": "crypto/sm4/sm4.c",
+      "upstream_anchor": "static ossl_inline uint32_t rotl(uint32_t a, uint8_t n)",
+      "verbatim_snippet": "static ossl_inline uint32_t rotl(uint32_t a, uint8_t n)\n{\n    return (a << n) | (a >> (32 - n));\n}"
+    },
+    {
+      "local_file": "CryptoLinearXor/Spec.lean",
+      "upstream_file": "crypto/sm4/sm4.c",
+      "upstream_anchor": "static ossl_inline uint32_t SM4_T_slow(uint32_t X)",
+      "verbatim_snippet": "static ossl_inline uint32_t SM4_T_slow(uint32_t X)\n{\n    uint32_t t = SM4_T_non_lin_sub(X);\n\n    /*\n     * L linear transform\n     */\n    return t ^ rotl(t, 2) ^ rotl(t, 10) ^ rotl(t, 18) ^ rotl(t, 24);\n}\n\nstatic ossl_inline uint32_t SM4_T(uint32_t X)\n{\n    return SM4_SBOX_T0[(uint8_t)(X >> 24)] ^ SM4_SBOX_T1[(uint8_t)(X >> 16)] ^ SM4_SBOX_T2[(uint8_t)(X >> 8)] ^ SM4_SBOX_T3[(uint8_t)X];\n}\n\nstatic ossl_inline uint32_t SM4_key_sub(uint32_t X)\n{\n    uint32_t t = SM4_T_non_lin_sub(X);\n\n    return t ^ rotl(t, 13) ^ rotl(t, 23);\n}"
+    },
+    {
+      "local_file": "CryptoLinearXor/Spec.lean",
+      "upstream_file": "crypto/aria/aria.c",
+      "upstream_anchor": "static void a(ARIA_u128 *y, const ARIA_u128 *x)",
+      "verbatim_snippet": "static void a(ARIA_u128 *y, const ARIA_u128 *x)\n{\n    y->c[0] = x->c[3] ^ x->c[4] ^ x->c[6] ^ x->c[8] ^ x->c[9] ^ x->c[13] ^ x->c[14];\n    y->c[1] = x->c[2] ^ x->c[5] ^ x->c[7] ^ x->c[8] ^ x->c[9] ^ x->c[12] ^ x->c[15];\n    y->c[2] = x->c[1] ^ x->c[4] ^ x->c[6] ^ x->c[10] ^ x->c[11] ^ x->c[12] ^ x->c[15];\n    y->c[3] = x->c[0] ^ x->c[5] ^ x->c[7] ^ x->c[10] ^ x->c[11] ^ x->c[13] ^ x->c[14];\n    y->c[4] = x->c[0] ^ x->c[2] ^ x->c[5] ^ x->c[8] ^ x->c[11] ^ x->c[14] ^ x->c[15];\n    y->c[5] = x->c[1] ^ x->c[3] ^ x->c[4] ^ x->c[9] ^ x->c[10] ^ x->c[14] ^ x->c[15];\n    y->c[6] = x->c[0] ^ x->c[2] ^ x->c[7] ^ x->c[9] ^ x->c[10] ^ x->c[12] ^ x->c[13];\n    y->c[7] = x->c[1] ^ x->c[3] ^ x->c[6] ^ x->c[8] ^ x->c[11] ^ x->c[12] ^ x->c[13];\n    y->c[8] = x->c[0] ^ x->c[1] ^ x->c[4] ^ x->c[7] ^ x->c[10] ^ x->c[13] ^ x->c[15];\n    y->c[9] = x->c[0] ^ x->c[1] ^ x->c[5] ^ x->c[6] ^ x->c[11] ^ x->c[12] ^ x->c[14];\n    y->c[10] = x->c[2] ^ x->c[3] ^ x->c[5] ^ x->c[6] ^ x->c[8] ^ x->c[13] ^ x->c[15];\n    y->c[11] = x->c[2] ^ x->c[3] ^ x->c[4] ^ x->c[7] ^ x->c[9] ^ x->c[12] ^ x->c[14];\n    y->c[12] = x->c[1] ^ x->c[2] ^ x->c[6] ^ x->c[7] ^ x->c[9] ^ x->c[11] ^ x->c[12];\n    y->c[13] = x->c[0] ^ x->c[3] ^ x->c[6] ^ x->c[7] ^ x->c[8] ^ x->c[10] ^ x->c[13];\n    y->c[14] = x->c[0] ^ x->c[3] ^ x->c[4] ^ x->c[5] ^ x->c[9] ^ x->c[11] ^ x->c[14];\n    y->c[15] = x->c[1] ^ x->c[2] ^ x->c[4] ^ x->c[5] ^ x->c[8] ^ x->c[10] ^ x->c[15];\n}"
+    },
+    {
+      "local_file": "CryptoLinearXor/Spec.lean",
+      "upstream_file": "crypto/camellia/camellia.c",
+      "upstream_anchor": "#define SBOX1_1110 Camellia_SBOX[0]",
+      "verbatim_snippet": "#define SBOX1_1110 Camellia_SBOX[0]\n#define SBOX4_4404 Camellia_SBOX[1]\n#define SBOX2_0222 Camellia_SBOX[2]\n#define SBOX3_3033 Camellia_SBOX[3]"
+    },
+    {
+      "local_file": "CryptoLinearXor/Spec.lean",
+      "upstream_file": "crypto/camellia/camellia.c",
+      "upstream_anchor": "#define Camellia_Feistel(_s0, _s1, _s2, _s3, _key)",
+      "verbatim_snippet": "#define Camellia_Feistel(_s0, _s1, _s2, _s3, _key) \\\n    do {                                           \\\n        register uint32_t _t0, _t1, _t2, _t3;      \\\n                                                   \\\n        _t0 = _s0 ^ (_key)[0];                     \\\n        _t3 = SBOX4_4404[_t0 & 0xff];              \\\n        _t1 = _s1 ^ (_key)[1];                     \\\n        _t3 ^= SBOX3_3033[(_t0 >> 8) & 0xff];      \\\n        _t2 = SBOX1_1110[_t1 & 0xff];              \\\n        _t3 ^= SBOX2_0222[(_t0 >> 16) & 0xff];     \\\n        _t2 ^= SBOX4_4404[(_t1 >> 8) & 0xff];      \\\n        _t3 ^= SBOX1_1110[(_t0 >> 24)];            \\\n        _t2 ^= _t3;                                \\\n        _t3 = RightRotate(_t3, 8);                 \\\n        _t2 ^= SBOX3_3033[(_t1 >> 16) & 0xff];     \\\n        _s3 ^= _t3;                                \\\n        _t2 ^= SBOX2_0222[(_t1 >> 24)];            \\\n        _s2 ^= _t2;                                \\\n        _s3 ^= _t2;                                \\\n    } while (0)"
+    }
+  ]
+}
