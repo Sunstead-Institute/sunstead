@@ -209,9 +209,10 @@ function main(argv) {
     return 2;
   }
 
-  if (run("node", ["scripts/sync-assets.mjs"]) !== 0) return 1;
-  const deployArgs = buildCfDeployArgs(cfArgs);
   const dryRun = cfArgs.includes("--dry-run");
+  const syncArgs = ["scripts/sync-assets.mjs", ...(dryRun ? [] : ["--require-clean-git"])];
+  if (run("node", syncArgs) !== 0) return 1;
+  const deployArgs = buildCfDeployArgs(cfArgs);
 
   if (mode === "full") {
     const env = { ...process.env };

@@ -182,6 +182,7 @@ function createTestHub(opts: {
       updated_at INTEGER NOT NULL
     );
     CREATE TABLE accepted_patches (
+      scoring_provenance_json TEXT,
       seq INTEGER PRIMARY KEY AUTOINCREMENT,
       mission_id TEXT NOT NULL,
       task_id TEXT NOT NULL,
@@ -342,6 +343,11 @@ function createTestHub(opts: {
   };
 
   const ctx: DecomposeHubContext = {
+    scoringProvenanceJson: JSON.stringify({
+      scoring_rule_version: "test",
+      git_sha: "a".repeat(40),
+      mission_bundle_sha256: "b".repeat(64),
+    }),
     sql,
     mission: {
       manifest,
@@ -567,10 +573,12 @@ test("end-to-end depth-1 decompose -> subgoal proofs -> automatic untouched ./ve
       patch: string;
       created_at: number;
       co_authors_json: string | null;
+      scoring_provenance_json: string;
     }>("SELECT * FROM accepted_patches WHERE mission_id = ? AND COALESCE(in_history, 1) = 1 ORDER BY seq ASC", "arklib-near-capacity-primes")
     .toArray();
   assert.equal(histRows.length, 1, "subgoal scratch proofs must stay out of history.mbox");
   assert.equal(histRows[0].task_id, "near_capacity_prime_supply");
+  assert.equal(JSON.parse(histRows[0].scoring_provenance_json).scoring_rule_version, "test");
   const mbox = renderMbox(
     histRows.map((r) => ({
       ...r,

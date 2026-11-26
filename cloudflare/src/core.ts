@@ -761,6 +761,15 @@ function logRatioPoints(previous: number, next: number): number {
   return Math.max(0, Math.floor(HILLCLIMB_LOG_SCALE * rel));
 }
 
+// Bump when the points/crown rules or their eligibility change.
+export const SCORING_RULE_VERSION = "sunstead-scoring-v2";
+
+export type ScoringProvenance = {
+  scoring_rule_version: string;
+  git_sha: string | null;
+  mission_bundle_sha256: string;
+};
+
 export class ScoringUnavailableError extends Error {}
 
 /**
@@ -2196,7 +2205,10 @@ export const LEDGER_DEFAULT_LIMIT = 50;
 export const LEDGER_MAX_LIMIT = 200;
 
 /** accepted_patches row (with contributor join) as the ledger reads it. */
-export type LedgerRow = AcceptedProofRow & { patch_sha256: string };
+export type LedgerRow = AcceptedProofRow & {
+  patch_sha256: string;
+  scoring_provenance_json?: string | null;
+};
 
 /** What the ledger needs to know about a mission; null when it has been retired. */
 export type LedgerMissionInfo = {
@@ -2348,6 +2360,9 @@ export function buildLedgerEntry(
     social_links: buildSocialLinksFromHandles(social),
     accepted_at: row.created_at,
     verify_ms: row.verify_ms,
+    scoring: row.scoring_provenance_json
+      ? (JSON.parse(row.scoring_provenance_json) as ScoringProvenance)
+      : null,
     spec_sha256: row.spec_sha256,
     spec_is_current: mission !== null && row.spec_sha256 === mission.spec_sha256,
     files: extractPatchPaths(row.patch),

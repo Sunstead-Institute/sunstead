@@ -6,6 +6,8 @@ import {
   computeFrontier,
   computePoints,
   ScoringUnavailableError,
+  SCORING_RULE_VERSION,
+  type ScoringProvenance,
   beatsBestKnown,
   isTaskUnlocked,
   taskDisputeReason,
@@ -80,6 +82,7 @@ import {
   type VerifierActionResponse,
 } from "./decompose";
 import { getMissionSeedFiles, SEED_MISSIONS, type SeedMission } from "./generated/missions";
+import { BUILD_PROVENANCE } from "./generated/provenance";
 import { renderJoinTxt } from "./join_txt";
 import type { Lean4Verifier, Lean4V435Verifier, Lean4V431Verifier } from "./containers";
 
@@ -91,6 +94,12 @@ export interface HubEnv {
   GITHUB_API_TOKEN?: string;
   ADMIN_API_TOKEN?: string;
 }
+
+const SCORING_PROVENANCE: ScoringProvenance = {
+  ...BUILD_PROVENANCE,
+  scoring_rule_version: SCORING_RULE_VERSION,
+};
+const SCORING_PROVENANCE_JSON = JSON.stringify(SCORING_PROVENANCE);
 
 const SEED_MISSIONS_BY_ID = new Map<string, SeedMission>(
   SEED_MISSIONS.map((s) => [s.manifest.id, s])
@@ -357,6 +366,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     // Ledger permalink key: SHA-256 of the stored (possibly normalized) patch.
     // Rows from before this column are filled in by backfillPatchHashes().
     this.ensureColumn("accepted_patches", "patch_sha256", "TEXT");
+    // Historical rows intentionally stay NULL; their scoring build is unknown.
+    this.ensureColumn("accepted_patches", "scoring_provenance_json", "TEXT");
     this.ctx.storage.sql.exec(
       "CREATE INDEX IF NOT EXISTS idx_accepted_patches_sha ON accepted_patches(patch_sha256)"
     );
@@ -1159,6 +1170,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         verifier_label: "Sandbox Ready · Cloudflare",
         verifier_backend: "cloudflare-containers",
         registered_contributors: registeredCount,
+        ...SCORING_PROVENANCE,
         timestamp: Math.floor(Date.now() / 1000),
       });
     }
@@ -1970,7 +1982,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
            COALESCE(c.display_name, a.contributor) AS display_name,
            c.github AS github, c.github_verified_handle AS github_verified_handle, c.x_handle AS x, c.linkedin_handle AS linkedin,
            a.summary, a.patch, a.patch_sha256, a.spec_sha256, a.created_at, s.verify_ms AS verify_ms, a.is_demo AS is_demo,
-           a.entry_kind AS entry_kind, a.co_authors_json AS co_authors_json, a.decomp_meta_json AS decomp_meta_json
+           a.entry_kind AS entry_kind, a.co_authors_json AS co_authors_json, a.decomp_meta_json AS decomp_meta_json,
+           a.scoring_provenance_json
     FROM accepted_patches a
     LEFT JOIN contributors c ON c.handle = a.contributor
     LEFT JOIN submissions s ON s.id = a.submission_id`;
@@ -2817,8 +2830,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         });
         this.ctx.storage.sql.exec(
           `INSERT INTO accepted_patches
-           (mission_id, task_id, submission_id, contributor, summary, patch, spec_sha256, created_at, patch_sha256, is_demo)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (mission_id, task_id, submission_id, contributor, summary, patch, spec_sha256, created_at, patch_sha256, is_demo, scoring_provenance_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           missionId,
           taskId,
           subId,
@@ -2828,7 +2841,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
           mission.spec_sha256,
           finishedAt,
           storedPatchSha,
-          mission.manifest.demo ? 1 : 0
+          mission.manifest.demo ? 1 : 0,
+          SCORING_PROVENANCE_JSON
         );
 
         this.emit({
@@ -2916,6 +2930,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     return {
       sql: this.ctx.storage.sql,
       mission,
+      scoringProvenanceJson: SCORING_PROVENANCE_JSON,
       hubOrigin,
       now: () => Math.floor(Date.now() / 1000),
       sha256Hex,
