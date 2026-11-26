@@ -134,6 +134,9 @@ jobs:
     needs: [changes, python]
     if: ${{ needs.changes.outputs.run_v436 == 'true' }}
     timeout-minutes: 90
+    env:
+      DOCKER_BUILDKIT: "1"
+      SUNSTEAD_CACHE_FROM: "1"
     steps:
       - uses: actions/checkout@v4
       - name: Free runner disk space for Lean 4.36 + Mathlib Docker build
@@ -157,9 +160,13 @@ jobs:
         run: python3 scripts/redteam.py --image sunstead/verifier-lean4:v0.2 --jobs 3
       - name: Frozen task statements match seed theorems (v4.36.0 missions)
         run: python3 scripts/check-statements.py --image sunstead/verifier-lean4:v0.2 --jobs 3
-      - name: Build & verify Cloudflare Lean 4.36.0 container (reuses local elan + Mathlib layers)
+      - name: Build & verify Cloudflare Lean 4.36.0 container (reuses local elan + Mathlib + GHCR layers)
         run: |
-          docker build -t sunstead-verifier-lean4:ci -f cloudflare/containers/lean4/Dockerfile .
+          BUILD_ARGS=(-t sunstead-verifier-lean4:ci -f cloudflare/containers/lean4/Dockerfile)
+          if docker manifest inspect ghcr.io/sunstead-institute/verifier-lean4:v0.2 >/dev/null 2>&1; then
+            BUILD_ARGS+=(--cache-from ghcr.io/sunstead-institute/verifier-lean4:v0.2)
+          fi
+          docker build "${BUILD_ARGS[@]}" .
           docker run --rm --network=none sunstead-verifier-lean4:ci sh -c '
             test -d /missions/arklib-near-capacity-primes &&
             test -d /missions/ieantn-chebyshev-kernel &&
@@ -179,6 +186,9 @@ jobs:
     needs: [changes, python]
     if: ${{ needs.changes.outputs.run_v435 == 'true' }}
     timeout-minutes: 45
+    env:
+      DOCKER_BUILDKIT: "1"
+      SUNSTEAD_CACHE_FROM: "1"
     steps:
       - uses: actions/checkout@v4
       - name: Build Lean 4.35.0 verifier image (runs SunsteadCheck selftest)
@@ -187,9 +197,13 @@ jobs:
         run: python3 scripts/redteam.py --image sunstead/verifier-lean4-v4.35.0:v0.1 --jobs 2
       - name: Frozen task statements match seed theorems (v4.35.0 missions)
         run: python3 scripts/check-statements.py --image sunstead/verifier-lean4-v4.35.0:v0.1 --jobs 2
-      - name: Build & verify Cloudflare Lean 4.35.0 container (reuses local elan layers)
+      - name: Build & verify Cloudflare Lean 4.35.0 container (reuses local elan + GHCR layers)
         run: |
-          docker build -t sunstead-verifier-lean4-v435:ci -f cloudflare/containers/lean4-v4.35.0/Dockerfile .
+          BUILD_ARGS=(-t sunstead-verifier-lean4-v435:ci -f cloudflare/containers/lean4-v4.35.0/Dockerfile)
+          if docker manifest inspect ghcr.io/sunstead-institute/verifier-lean4-v4.35.0:v0.1 >/dev/null 2>&1; then
+            BUILD_ARGS+=(--cache-from ghcr.io/sunstead-institute/verifier-lean4-v4.35.0:v0.1)
+          fi
+          docker build "${BUILD_ARGS[@]}" .
           docker run --rm --network=none sunstead-verifier-lean4-v435:ci sh -c '
             test -d /missions/lnsym-aes-gcm-armv8 &&
             test -d /missions/lnsym-gcm-gmult-armv8 &&
@@ -207,6 +221,9 @@ jobs:
     needs: [changes, python]
     if: ${{ needs.changes.outputs.run_v431 == 'true' }}
     timeout-minutes: 60
+    env:
+      DOCKER_BUILDKIT: "1"
+      SUNSTEAD_CACHE_FROM: "1"
     steps:
       - uses: actions/checkout@v4
       - name: Free runner disk space for Lean 4.31 + Mathlib + Aeneas Docker build
@@ -230,9 +247,13 @@ jobs:
         run: python3 scripts/redteam.py --image sunstead/verifier-lean4-v4.31.0:v0.1
       - name: Frozen task statements match seed theorems (v4.31.0 missions)
         run: python3 scripts/check-statements.py --image sunstead/verifier-lean4-v4.31.0:v0.1
-      - name: Build & verify Cloudflare Lean 4.31.0 container (reuses local elan + Mathlib + Aeneas layers)
+      - name: Build & verify Cloudflare Lean 4.31.0 container (reuses local elan + Mathlib + Aeneas + GHCR layers)
         run: |
-          docker build -t sunstead-verifier-lean4-v431:ci -f cloudflare/containers/lean4-v4.31.0/Dockerfile .
+          BUILD_ARGS=(-t sunstead-verifier-lean4-v431:ci -f cloudflare/containers/lean4-v4.31.0/Dockerfile)
+          if docker manifest inspect ghcr.io/sunstead-institute/verifier-lean4-v4.31.0:v0.1 >/dev/null 2>&1; then
+            BUILD_ARGS+=(--cache-from ghcr.io/sunstead-institute/verifier-lean4-v4.31.0:v0.1)
+          fi
+          docker build "${BUILD_ARGS[@]}" .
           docker run --rm --network=none sunstead-verifier-lean4-v431:ci sh -c '
             test -d /missions/curve25519-dalek &&
             test -x /opt/sunstead/sunstead-check &&
