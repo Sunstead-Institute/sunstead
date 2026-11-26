@@ -87,7 +87,8 @@ jobs:
             scripts/upstream-verify-list.py scripts/test_upstream_verify_list.py \
             scripts/test_bootstrap_snapshot.py \
             scripts/ci-path-gate.py scripts/test_ci_path_gate.py \
-            scripts/check-best-known.py scripts/best_known/linear_floor.py
+            scripts/check-best-known.py scripts/best_known/linear_floor.py \
+            scripts/rescore-ledger.py scripts/test_rescore_ledger.py
           for f in missions/*/verify; do python3 -m py_compile "$f"; done
       - name: CI path gate unit tests (offline)
         run: python3 scripts/test_ci_path_gate.py -v
@@ -103,6 +104,8 @@ jobs:
         run: python3 scripts/test_check_statements.py -v
       - name: Verify verbatim upstream provenance against pinned commits
         run: python3 scripts/check-upstream.py
+      - name: Scoring replay tests (offline)
+        run: python3 scripts/test_rescore_ledger.py -v
       - name: Every hill-climb task has a sourced best known value
         run: python3 scripts/check-best-known.py
 

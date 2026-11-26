@@ -25,7 +25,17 @@ Only a record that strictly beats best_known holds the +150 active-record crown 
 the leaderboard. When best_known is a proven optimum, the task can only pay the tie
 bonus; such tracks are kept as onboarding and verification exercises.
 
-Points already awarded before this rule (26 Nov 2026) were not recomputed.
+If a non-demo hill-climb task has no finite best-known value at scoring time,
+the hub does not accept the submission, change the record, or award points. A
+synchronous submission returns HTTP 503; an asynchronous submission ends with
+status `error` at its status URL. In both cases the message asks the contributor
+to retry after hub configuration is fixed.
+
+Existing awards are not rewritten. Run `python3 scripts/rescore-ledger.py` for
+a read-only, per-record comparison against the current public task definitions.
+Use `--save-snapshot PATH` to keep the inputs or `--snapshot PATH` to replay offline.
+The tool stops rather than silently producing partial totals if the public
+submission feed reaches its 200-row limit.
 
 ## Adding or changing a hill-climb task
 
