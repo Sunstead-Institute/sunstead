@@ -245,8 +245,25 @@ def pick_open_frontier_task(by_id, local_manifests):
     raise AssertionError("no open frontier task found in any active mission")
 
 
+def assert_base_security_headers(headers, label):
+    """Assert Worker BASE_SECURITY_HEADERS (X-Content-Type-Options, X-Frame-Options, Permissions-Policy, HSTS)."""
+    assert headers.get("x-content-type-options", "").strip().lower() == "nosniff", (label, headers)
+    assert headers.get("x-frame-options", "").strip().upper() == "DENY", (label, headers)
+    pp = headers.get("permissions-policy", "")
+    assert "camera=()" in pp, (label, pp)
+    hsts = headers.get("strict-transport-security", "")
+    assert "max-age=31536000" in hsts, (label, hsts)
+
+
+def assert_cache_control_no_store(headers, label):
+    """Assert Cache-Control includes the `no-store` directive."""
+    cc = headers.get("cache-control", "")
+    directives = {part.strip().lower() for part in cc.split(",") if part.strip()}
+    assert "no-store" in directives, (label, cc)
+
+
 def run_readonly_checks(local_manifests):
-    """Strictly read-only checks covering Edge headers, REST filters, proofs, /join.txt, /verify.py, and MCP."""
+    """Strictly read-only checks covering Edge headers/ETags/method guards, REST filters, SSE, proofs, /join.txt, /verify.py, and MCP."""
     # 1. Edge HTTP security headers on primary HTML routes.
     for html_path in ("/", "/proofs", "/what-is-this"):
         code, headers, body = req_full("GET", html_path)
@@ -255,17 +272,36 @@ def run_readonly_checks(local_manifests):
         assert "script-src 'self'" in csp, (html_path, csp)
         assert "object-src 'none'" in csp, (html_path, csp)
         assert "frame-ancestors 'none'" in csp, (html_path, csp)
-        pp = headers.get("permissions-policy", "")
-        assert "camera=()" in pp, (html_path, pp)
-        hsts = headers.get("strict-transport-security", "")
-        assert "max-age=31536000" in hsts, (html_path, hsts)
-        assert headers.get("x-content-type-options", "").strip().lower() == "nosniff", (html_path, headers)
-        assert headers.get("x-frame-options", "").strip().upper() == "DENY", (html_path, headers)
+        assert_base_security_headers(headers, html_path)
         if html_path == "/what-is-this":
             assert "What is Sunstead?" in body, (html_path, code)
     ok("edge HTTP security headers (CSP/HSTS/Permissions-Policy/X-Content-Type-Options/X-Frame-Options) on /, /proofs, /what-is-this")
 
-    # 2. Health, full mission list, and filtered /api/missions queries.
+    # 2. Conditional ETag / 304 Not Modified and 405 Method Not Allowed on static routes.
+    for static_path in ("/", "/app.js"):
+        code, headers, _ = req_full("GET", static_path, raw=True)
+        assert code == 200, (static_path, code)
+        etag = headers.get("etag", "").strip()
+        assert etag.startswith('W/"') and etag.endswith('"') and len(etag) > 4, (static_path, etag, headers)
+        code_304, headers_304, body_304 = req_full(
+            "GET", static_path, raw=True, extra_headers={"If-None-Match": etag}
+        )
+        assert code_304 == 304, (static_path, code_304, headers_304)
+        assert headers_304.get("etag", "").strip() == etag, (static_path, etag, headers_304)
+        assert headers_304.get("x-content-type-options", "").strip().lower() == "nosniff", (
+            static_path,
+            headers_304,
+        )
+        assert not body_304, (static_path, body_304)
+
+    code_405, headers_405, _ = req_full("POST", "/", extra_headers={"Content-Length": "0"})
+    assert code_405 == 405, (code_405, headers_405)
+    allow_methods = {m.strip().upper() for m in headers_405.get("allow", "").split(",") if m.strip()}
+    assert {"GET", "HEAD"}.issubset(allow_methods), (allow_methods, headers_405)
+    assert headers_405.get("x-content-type-options", "").strip().lower() == "nosniff", headers_405
+    ok("static ETag/304 Not Modified on / and /app.js & 405 Method Not Allowed (Allow: GET, HEAD) on POST /")
+
+    # 3. Health, full mission list, and filtered /api/missions queries.
     code, health = req("GET", "/api/health")
     assert code == 200 and health.get("ok") is True, (code, health)
     ok("/api/health")
@@ -313,7 +349,7 @@ def run_readonly_checks(local_manifests):
         f"toolchain=v4.35.0 -> {len(v435_ids)}, has_frontier={len(hf_res['missions'])})"
     )
 
-    # 3. Global frontier endpoint.
+    # 4. Global frontier endpoint.
     code, frontier = req("GET", "/api/frontier?unclaimed=true&tier=1&limit=10")
     assert code == 200, (code, frontier)
     assert isinstance(frontier.get("total_matching"), int) and frontier["total_matching"] >= 0, frontier
@@ -327,7 +363,7 @@ def run_readonly_checks(local_manifests):
         f"(total_matching={frontier['total_matching']})"
     )
 
-    # 4. Indexed filtered submissions endpoint.
+    # 5. Indexed filtered submissions endpoint.
     code, subs = req("GET", "/api/submissions?status=accepted&limit=5")
     assert code == 200 and isinstance(subs.get("submissions"), list), (code, subs)
     assert len(subs["submissions"]) <= 5, subs
@@ -335,7 +371,7 @@ def run_readonly_checks(local_manifests):
         assert row.get("status") == "accepted", row
     ok(f"/api/submissions?status=accepted&limit=5 returned {len(subs['submissions'])} accepted rows")
 
-    # 5. Proofs ledger, leaderboard, funnel stats, /join.txt, and /verify.py.
+    # 6. Proofs ledger, leaderboard, funnel stats, /join.txt, and /verify.py.
     code, proofs = req("GET", "/api/proofs?limit=10")
     assert code == 200 and isinstance(proofs.get("proofs"), list) and len(proofs["proofs"]) <= 10, (code, proofs)
     ok(f"/api/proofs?limit=10 returned {len(proofs['proofs'])} proofs")
@@ -364,15 +400,28 @@ def run_readonly_checks(local_manifests):
     compile(verify_py.decode("utf-8"), "<verify.py>", "exec")
     ok(f"/verify.py compiled cleanly ({len(verify_py)} bytes)")
 
-    # 6. Streamable HTTP MCP preflight & tools/list.
+    # 7. Streaming /api/events SSE security headers (non-blocking).
+    sse_req = urllib.request.Request(BASE + "/api/events", headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(sse_req, timeout=10) as sse_resp:
+        sse_status = sse_resp.status
+        sse_headers = {k.lower(): v for k, v in sse_resp.headers.items()}
+    assert sse_status == 200, ("GET /api/events", sse_status, sse_headers)
+    sse_ctype = sse_headers.get("content-type", "").strip().lower()
+    assert sse_ctype.startswith("text/event-stream"), ("GET /api/events", sse_ctype, sse_headers)
+    assert_base_security_headers(sse_headers, "GET /api/events")
+    ok("GET /api/events SSE stream responds 200 text/event-stream with edge security headers (non-blocking)")
+
+    # 8. Streamable HTTP MCP preflight, security headers, & tools/list.
     parsed = urllib.parse.urlsplit(BASE)
     base_origin = f"{parsed.scheme}://{parsed.netloc}"
     code, opt_headers, _ = req_full("OPTIONS", "/mcp", raw=True, extra_headers={"Origin": base_origin})
     assert code == 204, (code, opt_headers)
     assert opt_headers.get("access-control-allow-origin") == base_origin, opt_headers
     assert "POST" in opt_headers.get("allow", ""), opt_headers
+    assert_cache_control_no_store(opt_headers, "OPTIONS /mcp")
+    assert_base_security_headers(opt_headers, "OPTIONS /mcp")
 
-    code, mcp_res = req(
+    code, mcp_headers, mcp_res = req_full(
         "POST",
         "/mcp",
         body={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
@@ -382,11 +431,22 @@ def run_readonly_checks(local_manifests):
         },
     )
     assert code == 200 and isinstance(mcp_res, dict), (code, mcp_res)
+    assert_cache_control_no_store(mcp_headers, "POST /mcp")
+    assert_base_security_headers(mcp_headers, "POST /mcp")
     tools = mcp_res.get("result", {}).get("tools", [])
     tool_names = {t.get("name") for t in tools if isinstance(t, dict)}
-    required_tools = {"get_open_frontier", "list_missions", "submit_patch", "refute_task"}
+    required_tools = {
+        "get_open_frontier",
+        "list_missions",
+        "list_submissions",
+        "submit_patch",
+        "refute_task",
+    }
     assert required_tools.issubset(tool_names), f"missing MCP tools: {required_tools - tool_names}; got {sorted(tool_names)}"
-    ok(f"OPTIONS /mcp (204) & POST /mcp tools/list (200, {len(tool_names)} tools incl. {', '.join(sorted(required_tools))})")
+    ok(
+        f"OPTIONS /mcp (204) & POST /mcp tools/list (200, Cache-Control: no-store + security headers, "
+        f"{len(tool_names)} tools incl. {', '.join(sorted(required_tools))})"
+    )
 
     return by_id
 
