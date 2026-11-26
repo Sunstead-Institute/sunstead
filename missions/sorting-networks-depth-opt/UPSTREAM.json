@@ -1,0 +1,43 @@
+{
+  "repo": "bertdobbelaere/SorterHunter",
+  "commit": "3d8b3454bad15062f4b0030052f12d6550f8d89d",
+  "license": "MIT",
+  "specialization": "Sunstead pins Bert Dobbelaere\u2019s SorterHunter minimum-depth sorting-network benchmarks for n = 9..16 (including Sort_9_25_7.json, Sort_10_31_7.json, Sort_12_40_8.json, Sort_16_61_9.json, README.md, SorterHunter.cpp, and sorting_networks.html) and formalizes parallel layer semantics, pairwise wire disjointness, Knuth\u2019s Zero-One Principle, and a bit-sliced kernel evaluator in pure Lean 4.36.0. Each track starts from a textbook Odd-Even Transposition Sort seed (depth n) and challenges contributors to minimize parallel depth D(n).",
+  "checks": [
+    {
+      "local_file": "LICENSE",
+      "upstream_file": "LICENSE",
+      "verbatim_snippet": "MIT License\n\nCopyright (c) 2017 bertdobbelaere"
+    },
+    {
+      "local_file": "README.md",
+      "upstream_file": "README.md",
+      "verbatim_snippet": "number of parallel operation steps - a.k.a. \"depth\""
+    },
+    {
+      "local_file": "README.md",
+      "upstream_file": "sorting_networks.html",
+      "verbatim_snippet": "Number of parallel operation steps (layers), determining processing latency - metric below called \"depth\""
+    },
+    {
+      "local_file": "SortDepth/Spec.lean",
+      "upstream_file": "SorterHunter.cpp",
+      "upstream_anchor": "u32 depth=computeDepth(nw);"
+    },
+    {
+      "local_file": "SortDepth/Spec.lean",
+      "upstream_file": "Networks/Sorters/Sort_10_31_7.json",
+      "upstream_anchor": "\"N\": 10,\n  \"L\": 31,\n  \"D\": 7,"
+    },
+    {
+      "local_file": "SortDepth/Spec.lean",
+      "upstream_file": "Networks/Sorters/Sort_12_40_8.json",
+      "upstream_anchor": "\"N\": 12,\n  \"L\": 40,\n  \"D\": 8,"
+    },
+    {
+      "local_file": "SortDepth/Spec.lean",
+      "upstream_file": "Networks/Sorters/Sort_16_61_9.json",
+      "upstream_anchor": "\"N\": 16,\n  \"L\": 61,\n  \"D\": 9,"
+    }
+  ]
+}

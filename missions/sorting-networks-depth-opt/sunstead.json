@@ -1,0 +1,130 @@
+{
+  "id": "sorting-networks-depth-opt",
+  "title": "Optimal-Depth Sorting Networks (n = 9..16): minimize parallel depth",
+  "description": "Pure Lean 4.36.0 (zero Mathlib) certified optimization of minimum-depth parallel sorting networks on n = 9..16 wires, with pairwise wire disjointness, simultaneous 1-cycle layer semantics, Knuth\u2019s Zero-One Principle, and a bit-sliced 2^n-input evaluator formally proved inside `SortDepth/Spec.lean`. Eight independent hill-climb tracks start from textbook Odd-Even Transposition Sort seeds (depths 9, 10, 11, 12, 13, 14, 15, 16) and target the proven minimum parallel depths D(n) (7, 7, 8, 8, 9, 9, 9, 9; Parberry 1989, Bundala\u2013Z\u00e1vodn\u00fd 2014), pinned to `bertdobbelaere/SorterHunter@3d8b345` (MIT).",
+  "tier": 2,
+  "mode": "hillclimb",
+  "repo": "https://github.com/bertdobbelaere/SorterHunter",
+  "upstream": {
+    "repo": "bertdobbelaere/SorterHunter",
+    "commit": "3d8b3454bad15062f4b0030052f12d6550f8d89d",
+    "license": "MIT"
+  },
+  "score_direction": "minimize",
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 90,
+    "memory_mb": 2048
+  },
+  "frozen_paths": [
+    "SortDepth/Spec.lean",
+    "SortDepth/Bound9.lean",
+    "SortDepth/Bound10.lean",
+    "SortDepth/Bound11.lean",
+    "SortDepth/Bound12.lean",
+    "SortDepth/Bound13.lean",
+    "SortDepth/Bound14.lean",
+    "SortDepth/Bound15.lean",
+    "SortDepth/Bound16.lean",
+    "LICENSE",
+    "README.md",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "tasks": [
+    {
+      "id": "depth_n9",
+      "title": "Minimize 9-wire sorting network depth (baseline 9)",
+      "description": "Submit a layered parallel comparator network on 9 wires in `SortDepth/Layers9.lean` (`SortDepth.depth9` and `SortDepth.layers9`), seeded with textbook Odd-Even Transposition Sort (depth 9; proven optimum: 7, Parberry 1989). Frozen `SortDepth/Bound9.lean` kernel-verifies in-bounds ordered comparators (`i < j < 9`), pairwise disjoint wires within every layer, exact layer count, and sorting on all 2^9 = 512 Boolean inputs via `decide +kernel`, lifting to every linear order by the formalized Zero-One Principle in `SortDepth/Spec.lean`. Only strict improvements below the current record earn credit.",
+      "baseline_score": 9,
+      "target_files": [
+        "SortDepth/Layers9.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/bertdobbelaere/SorterHunter/blob/3d8b3454bad15062f4b0030052f12d6550f8d89d/Networks/Sorters/Sort_9_25_7.json"
+    },
+    {
+      "id": "depth_n10",
+      "title": "Minimize 10-wire sorting network depth (baseline 10)",
+      "description": "Submit a layered parallel comparator network on 10 wires in `SortDepth/Layers10.lean` (`SortDepth.depth10` and `SortDepth.layers10`), seeded with textbook Odd-Even Transposition Sort (depth 10; proven optimum: 7, Parberry 1989). Frozen `SortDepth/Bound10.lean` kernel-verifies in-bounds ordered comparators (`i < j < 10`), pairwise disjoint wires within every layer, exact layer count, and sorting on all 2^10 = 1,024 Boolean inputs via `decide +kernel`, lifting to every linear order by the formalized Zero-One Principle in `SortDepth/Spec.lean`. Only strict improvements below the current record earn credit.",
+      "baseline_score": 10,
+      "target_files": [
+        "SortDepth/Layers10.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/bertdobbelaere/SorterHunter/blob/3d8b3454bad15062f4b0030052f12d6550f8d89d/Networks/Sorters/Sort_10_31_7.json"
+    },
+    {
+      "id": "depth_n11",
+      "title": "Minimize 11-wire sorting network depth (baseline 11)",
+      "description": "Submit a layered parallel comparator network on 11 wires in `SortDepth/Layers11.lean` (`SortDepth.depth11` and `SortDepth.layers11`), seeded with textbook Odd-Even Transposition Sort (depth 11; proven optimum: 8, Bundala\u2013Z\u00e1vodn\u00fd 2014). Frozen `SortDepth/Bound11.lean` kernel-verifies in-bounds ordered comparators (`i < j < 11`), pairwise disjoint wires within every layer, exact layer count, and sorting on all 2^11 = 2,048 Boolean inputs via `decide +kernel`, lifting to every linear order by the formalized Zero-One Principle in `SortDepth/Spec.lean`. Only strict improvements below the current record earn credit.",
+      "baseline_score": 11,
+      "target_files": [
+        "SortDepth/Layers11.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/bertdobbelaere/SorterHunter/blob/3d8b3454bad15062f4b0030052f12d6550f8d89d/Networks/Sorters/Sort_11_35_8.json"
+    },
+    {
+      "id": "depth_n12",
+      "title": "Minimize 12-wire sorting network depth (baseline 12)",
+      "description": "Submit a layered parallel comparator network on 12 wires in `SortDepth/Layers12.lean` (`SortDepth.depth12` and `SortDepth.layers12`), seeded with textbook Odd-Even Transposition Sort (depth 12; proven optimum: 8, Bundala\u2013Z\u00e1vodn\u00fd 2014). Frozen `SortDepth/Bound12.lean` kernel-verifies in-bounds ordered comparators (`i < j < 12`), pairwise disjoint wires within every layer, exact layer count, and sorting on all 2^12 = 4,096 Boolean inputs via `decide +kernel`, lifting to every linear order by the formalized Zero-One Principle in `SortDepth/Spec.lean`. Only strict improvements below the current record earn credit.",
+      "baseline_score": 12,
+      "target_files": [
+        "SortDepth/Layers12.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/bertdobbelaere/SorterHunter/blob/3d8b3454bad15062f4b0030052f12d6550f8d89d/Networks/Sorters/Sort_12_40_8.json"
+    },
+    {
+      "id": "depth_n13",
+      "title": "Minimize 13-wire sorting network depth (baseline 13)",
+      "description": "Submit a layered parallel comparator network on 13 wires in `SortDepth/Layers13.lean` (`SortDepth.depth13` and `SortDepth.layers13`), seeded with textbook Odd-Even Transposition Sort (depth 13; proven optimum: 9, Bundala\u2013Z\u00e1vodn\u00fd 2014). Frozen `SortDepth/Bound13.lean` kernel-verifies in-bounds ordered comparators (`i < j < 13`), pairwise disjoint wires within every layer, exact layer count, and sorting on all 2^13 = 8,192 Boolean inputs via `decide +kernel`, lifting to every linear order by the formalized Zero-One Principle in `SortDepth/Spec.lean`. Only strict improvements below the current record earn credit.",
+      "baseline_score": 13,
+      "target_files": [
+        "SortDepth/Layers13.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/bertdobbelaere/SorterHunter/blob/3d8b3454bad15062f4b0030052f12d6550f8d89d/Networks/Sorters/Sort_13_46_9.json"
+    },
+    {
+      "id": "depth_n14",
+      "title": "Minimize 14-wire sorting network depth (baseline 14)",
+      "description": "Submit a layered parallel comparator network on 14 wires in `SortDepth/Layers14.lean` (`SortDepth.depth14` and `SortDepth.layers14`), seeded with textbook Odd-Even Transposition Sort (depth 14; proven optimum: 9, Bundala\u2013Z\u00e1vodn\u00fd 2014). Frozen `SortDepth/Bound14.lean` kernel-verifies in-bounds ordered comparators (`i < j < 14`), pairwise disjoint wires within every layer, exact layer count, and sorting on all 2^14 = 16,384 Boolean inputs via `decide +kernel`, lifting to every linear order by the formalized Zero-One Principle in `SortDepth/Spec.lean`. Only strict improvements below the current record earn credit.",
+      "baseline_score": 14,
+      "target_files": [
+        "SortDepth/Layers14.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/bertdobbelaere/SorterHunter/blob/3d8b3454bad15062f4b0030052f12d6550f8d89d/Networks/Sorters/Sort_14_52_9.json"
+    },
+    {
+      "id": "depth_n15",
+      "title": "Minimize 15-wire sorting network depth (baseline 15)",
+      "description": "Submit a layered parallel comparator network on 15 wires in `SortDepth/Layers15.lean` (`SortDepth.depth15` and `SortDepth.layers15`), seeded with textbook Odd-Even Transposition Sort (depth 15; proven optimum: 9, Bundala\u2013Z\u00e1vodn\u00fd 2014). Frozen `SortDepth/Bound15.lean` kernel-verifies in-bounds ordered comparators (`i < j < 15`), pairwise disjoint wires within every layer, exact layer count, and sorting on all 2^15 = 32,768 Boolean inputs via `decide +kernel`, lifting to every linear order by the formalized Zero-One Principle in `SortDepth/Spec.lean`. Only strict improvements below the current record earn credit.",
+      "baseline_score": 15,
+      "target_files": [
+        "SortDepth/Layers15.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/bertdobbelaere/SorterHunter/blob/3d8b3454bad15062f4b0030052f12d6550f8d89d/Networks/Sorters/Sort_15_57_9.json"
+    },
+    {
+      "id": "depth_n16",
+      "title": "Minimize 16-wire sorting network depth (baseline 16)",
+      "description": "Submit a layered parallel comparator network on 16 wires in `SortDepth/Layers16.lean` (`SortDepth.depth16` and `SortDepth.layers16`), seeded with textbook Odd-Even Transposition Sort (depth 16; proven optimum: 9, Bundala\u2013Z\u00e1vodn\u00fd 2014). Frozen `SortDepth/Bound16.lean` kernel-verifies in-bounds ordered comparators (`i < j < 16`), pairwise disjoint wires within every layer, exact layer count, and sorting on all 2^16 = 65,536 Boolean inputs via `decide +kernel`, lifting to every linear order by the formalized Zero-One Principle in `SortDepth/Spec.lean`. Only strict improvements below the current record earn credit.",
+      "baseline_score": 16,
+      "target_files": [
+        "SortDepth/Layers16.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/bertdobbelaere/SorterHunter/blob/3d8b3454bad15062f4b0030052f12d6550f8d89d/Networks/Sorters/Sort_16_61_9.json"
+    }
+  ]
+}
