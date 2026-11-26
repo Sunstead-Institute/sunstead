@@ -9,6 +9,8 @@ For every `missions/*/sunstead.json`:
   `https://raw.githubusercontent.com/<repo>/<commit>/<upstream_file>` and checks
   that each frozen definition/statement snippet appears verbatim in both the
   upstream commit and the local mission file (and that upstream anchors exist).
+- The mission directory ships the upstream license as `LICENSE` (verbatim, or
+  the complete Apache-2.0 text), since missions redistribute upstream files.
 """
 import argparse
 import glob
@@ -36,6 +38,40 @@ def fetch_upstream_bytes(repo: str, commit: str, path: str) -> bytes:
 
 def fetch_upstream(repo: str, commit: str, path: str) -> str:
     return fetch_upstream_bytes(repo, commit, path).decode("utf-8")
+
+
+UPSTREAM_LICENSE_NAMES = ("LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING")
+
+
+def upstream_license(repo: str, commit: str):
+    """(name, bytes) of the upstream repository's top-level license file at the pinned commit."""
+    for name in UPSTREAM_LICENSE_NAMES:
+        try:
+            return name, fetch_upstream_bytes(repo, commit, name)
+        except Exception:
+            continue
+    return None, None
+
+
+def license_problems(mdir: str, repo: str, commit: str, spdx: str) -> list:
+    """Missions redistribute upstream files, so each ships the upstream license
+    (Apache-2.0 section 4(a), MIT's notice condition) as `LICENSE` in the mission
+    directory, which also puts it in every public bundle. It must be the upstream
+    file verbatim, or, for Apache-2.0, the complete license text."""
+    path = os.path.join(mdir, "LICENSE")
+    if not os.path.isfile(path):
+        return [f"missing LICENSE: copy the upstream license from {repo}@{commit[:7]} into the mission directory"]
+    local = open(path, "rb").read()
+    name, up = upstream_license(repo, commit)
+    if up is not None and local == up:
+        return []
+    text = local.decode("utf-8", errors="replace")
+    if spdx == "Apache-2.0" and "TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION" in text \
+            and "END OF TERMS AND CONDITIONS" in text:
+        return []
+    if up is None:
+        return [f"could not fetch the upstream license ({'/'.join(UPSTREAM_LICENSE_NAMES)}) from {repo}@{commit[:7]}"]
+    return [f"LICENSE differs from upstream {repo}@{commit[:7]}/{name}"]
 
 
 def main():
@@ -82,6 +118,8 @@ def main():
                 problems.append("sunstead.json `upstream` does not match UPSTREAM.json")
             if "UPSTREAM.json" not in manifest.get("frozen_paths", []):
                 problems.append("UPSTREAM.json must be listed in frozen_paths")
+            if re.fullmatch(r"[0-9a-f]{40}", commit) and repo:
+                problems.extend(license_problems(mdir, repo, commit, lic))
 
             checks = up.get("checks", [])
             if not checks:
