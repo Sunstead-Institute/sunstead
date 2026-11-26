@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
 """
 End-to-end test of the Sunstead Lean 4 hub (Cloudflare Worker + Durable Object
-+ Lean 4 verifier container), using only the public HTTP protocol from /join.txt.
++ Lean 4 verifier containers), using only the public HTTP/MCP protocol.
 
     cd cloudflare && npm run dev          # local dev server (needs Docker)
-    SUNSTEAD_URL=http://localhost:5173 python3 scripts/e2e.py
+    python3 scripts/e2e.py                # full protocol against local dev server
 
-Derives expected missions dynamically from `missions/*/sunstead.json` and runs
-strictly non-destructive verification checks (no fake proofs or upstream spoilers).
-Never point this at production: it registers contributors, claims/releases leases,
-and submits rejected verification patches.
+    python3 scripts/e2e.py --smoke --base https://sunstead.org
+                                          # strictly read-only production smoke check
+
+Derives expected missions dynamically from `missions/*/sunstead.json`.
+Without `--smoke`, runs full non-destructive local verification checks (registers
+contributors, claims/releases leases, submits rejected verification patches) and
+refuses to target `sunstead.org` unless `SUNSTEAD_E2E_ALLOW_PROD=1` is set.
+With `--smoke`, executes strictly read-only HTTP/MCP checks with zero state mutations.
 """
+import argparse
 import io
 import json
 import os
@@ -22,16 +27,33 @@ import tempfile
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MISSIONS_DIR = os.path.join(ROOT, "missions")
+USER_AGENT = "sunstead-e2e/0.6"
+DEFAULT_BASE = "http://localhost:5173"
 
-BASE = os.environ.get("SUNSTEAD_URL", "http://localhost:5173").rstrip("/")
-if "sunstead.org" in BASE and os.environ.get("SUNSTEAD_E2E_ALLOW_PROD") != "1":
-    sys.exit("refusing to run e2e against production (set SUNSTEAD_E2E_ALLOW_PROD=1 to override)")
-
+BASE = os.environ.get("SUNSTEAD_URL", DEFAULT_BASE).rstrip("/")
 RUN = f"{random.randrange(16**6):06x}"
+
+
+def parse_args(argv=None):
+    ap = argparse.ArgumentParser(
+        description="End-to-end and read-only smoke test suite for the Sunstead Lean 4 hub."
+    )
+    ap.add_argument(
+        "--base",
+        default=os.environ.get("SUNSTEAD_URL", DEFAULT_BASE),
+        help=f"Hub base URL (defaults to SUNSTEAD_URL env or {DEFAULT_BASE}).",
+    )
+    ap.add_argument(
+        "--smoke",
+        action="store_true",
+        help="Run strictly read-only checks (safe for production; never registers, claims, or submits).",
+    )
+    return ap.parse_args(argv)
 
 
 def load_local_manifests():
@@ -46,27 +68,40 @@ def load_local_manifests():
     return manifests
 
 
-def req(method, path, body=None, key=None, raw=False):
+def req_full(method, path, body=None, key=None, raw=False, extra_headers=None):
     data = None if body is None else json.dumps(body).encode("utf-8")
-    headers = {"User-Agent": "sunstead-e2e/0.5"}
+    headers = {"User-Agent": USER_AGENT}
+    if extra_headers:
+        headers.update(extra_headers)
     if body is not None:
-        headers["Content-Type"] = "application/json"
+        headers.setdefault("Content-Type", "application/json")
     if key:
         headers["Authorization"] = f"Bearer {key}"
     r = urllib.request.Request(BASE + path, data=data, headers=headers, method=method)
     try:
         with urllib.request.urlopen(r, timeout=600) as resp:
+            resp_headers = {k.lower(): v for k, v in resp.headers.items()}
             payload = resp.read()
             if raw:
-                return resp.status, payload
+                return resp.status, resp_headers, payload
             ctype = resp.headers.get("Content-Type", "")
-            return resp.status, (json.loads(payload) if "json" in ctype else payload.decode())
+            if "json" in ctype and payload:
+                return resp.status, resp_headers, json.loads(payload)
+            return resp.status, resp_headers, payload.decode("utf-8", errors="replace")
     except urllib.error.HTTPError as e:
+        resp_headers = {k.lower(): v for k, v in e.headers.items()} if e.headers else {}
         payload = e.read()
         try:
-            return e.code, json.loads(payload)
+            return e.code, resp_headers, json.loads(payload)
         except Exception:
-            return e.code, payload.decode("utf-8", errors="replace")
+            return e.code, resp_headers, payload.decode("utf-8", errors="replace")
+
+
+def req(method, path, body=None, key=None, raw=False, extra_headers=None):
+    code, _headers, body_out = req_full(
+        method, path, body=body, key=key, raw=raw, extra_headers=extra_headers
+    )
+    return code, body_out
 
 
 def register(handle):
@@ -123,7 +158,7 @@ class SseCollector:
         assert self.ready.wait(timeout=10), "SSE stream did not connect within 10s"
 
     def _run(self):
-        r = urllib.request.Request(BASE + "/api/events", headers={"User-Agent": "sunstead-e2e/0.5"})
+        r = urllib.request.Request(BASE + "/api/events", headers={"User-Agent": USER_AGENT})
         try:
             with urllib.request.urlopen(r, timeout=60) as resp:
                 self._resp = resp
@@ -210,12 +245,29 @@ def pick_open_frontier_task(by_id, local_manifests):
     raise AssertionError("no open frontier task found in any active mission")
 
 
-def main():
-    local_manifests = load_local_manifests()
-    print(f"==> Testing Sunstead Lean 4 hub at {BASE} (run {RUN}, {len(local_manifests)} local missions)")
+def run_readonly_checks(local_manifests):
+    """Strictly read-only checks covering Edge headers, REST filters, proofs, /join.txt, /verify.py, and MCP."""
+    # 1. Edge HTTP security headers on primary HTML routes.
+    for html_path in ("/", "/proofs", "/what-is-this"):
+        code, headers, body = req_full("GET", html_path)
+        assert code == 200, (html_path, code)
+        csp = headers.get("content-security-policy", "")
+        assert "script-src 'self'" in csp, (html_path, csp)
+        assert "object-src 'none'" in csp, (html_path, csp)
+        assert "frame-ancestors 'none'" in csp, (html_path, csp)
+        pp = headers.get("permissions-policy", "")
+        assert "camera=()" in pp, (html_path, pp)
+        hsts = headers.get("strict-transport-security", "")
+        assert "max-age=31536000" in hsts, (html_path, hsts)
+        assert headers.get("x-content-type-options", "").strip().lower() == "nosniff", (html_path, headers)
+        assert headers.get("x-frame-options", "").strip().upper() == "DENY", (html_path, headers)
+        if html_path == "/what-is-this":
+            assert "What is Sunstead?" in body, (html_path, code)
+    ok("edge HTTP security headers (CSP/HSTS/Permissions-Policy/X-Content-Type-Options/X-Frame-Options) on /, /proofs, /what-is-this")
 
+    # 2. Health, full mission list, and filtered /api/missions queries.
     code, health = req("GET", "/api/health")
-    assert code == 200 and health.get("ok") is True, health
+    assert code == 200 and health.get("ok") is True, (code, health)
     ok("/api/health")
 
     code, missions = req("GET", "/api/missions")
@@ -234,18 +286,130 @@ def main():
             assert live["upstream"]["commit"] == manifest["upstream"]["commit"], (mid, live)
     ok(f"/api/missions matches all {len(by_id)} manifests from missions/*/sunstead.json with upstream provenance")
 
+    expected_open_conj = {mid for mid, m in local_manifests.items() if m.get("open_conjecture")}
+    code, oc_res = req("GET", "/api/missions?open_conjecture=true")
+    assert code == 200 and isinstance(oc_res.get("missions"), list), (code, oc_res)
+    oc_ids = {m["id"] for m in oc_res["missions"]}
+    assert oc_ids == expected_open_conj, (oc_ids, expected_open_conj)
+    assert all(m.get("open_conjecture") is True for m in oc_res["missions"]), oc_res
+
+    expected_v435 = {
+        mid
+        for mid, m in local_manifests.items()
+        if "v4.35.0" in ((m.get("verifier") or {}).get("toolchain") or "leanprover/lean4:v4.36.0").lower()
+    }
+    code, v435_res = req("GET", "/api/missions?toolchain=v4.35.0")
+    assert code == 200 and isinstance(v435_res.get("missions"), list), (code, v435_res)
+    v435_ids = {m["id"] for m in v435_res["missions"]}
+    assert v435_ids == expected_v435, (v435_ids, expected_v435)
+    assert all("v4.35.0" in (m.get("verifier_toolchain") or "").lower() for m in v435_res["missions"]), v435_res
+
+    code, hf_res = req("GET", "/api/missions?has_frontier=true")
+    assert code == 200 and isinstance(hf_res.get("missions"), list), (code, hf_res)
+    assert len(hf_res["missions"]) > 0, hf_res
+    assert all(len(m.get("frontier_task_ids") or []) > 0 for m in hf_res["missions"]), hf_res
+    ok(
+        f"/api/missions filters verified (open_conjecture={len(oc_ids)}, "
+        f"toolchain=v4.35.0 -> {len(v435_ids)}, has_frontier={len(hf_res['missions'])})"
+    )
+
+    # 3. Global frontier endpoint.
+    code, frontier = req("GET", "/api/frontier?unclaimed=true&tier=1&limit=10")
+    assert code == 200, (code, frontier)
+    assert isinstance(frontier.get("total_matching"), int) and frontier["total_matching"] >= 0, frontier
+    assert isinstance(frontier.get("returned"), int) and 0 <= frontier["returned"] <= 10, frontier
+    assert isinstance(frontier.get("tasks"), list) and len(frontier["tasks"]) == frontier["returned"], frontier
+    for t in frontier["tasks"]:
+        assert t.get("tier") == 1, t
+        assert t.get("leased") is False, t
+    ok(
+        f"/api/frontier?unclaimed=true&tier=1&limit=10 returned {frontier['returned']} tasks "
+        f"(total_matching={frontier['total_matching']})"
+    )
+
+    # 4. Indexed filtered submissions endpoint.
+    code, subs = req("GET", "/api/submissions?status=accepted&limit=5")
+    assert code == 200 and isinstance(subs.get("submissions"), list), (code, subs)
+    assert len(subs["submissions"]) <= 5, subs
+    for row in subs["submissions"]:
+        assert row.get("status") == "accepted", row
+    ok(f"/api/submissions?status=accepted&limit=5 returned {len(subs['submissions'])} accepted rows")
+
+    # 5. Proofs ledger, leaderboard, funnel stats, /join.txt, and /verify.py.
+    code, proofs = req("GET", "/api/proofs?limit=10")
+    assert code == 200 and isinstance(proofs.get("proofs"), list) and len(proofs["proofs"]) <= 10, (code, proofs)
+    ok(f"/api/proofs?limit=10 returned {len(proofs['proofs'])} proofs")
+
+    code, board = req("GET", "/api/leaderboard")
+    assert code == 200 and isinstance(board.get("leaderboard"), list), (code, board)
+    ok(f"/api/leaderboard returned {len(board['leaderboard'])} entries")
+
+    code, stats = req("GET", "/api/stats")
+    assert code == 200 and isinstance(stats.get("all_time"), dict), (code, stats)
+    assert "registered" in stats["all_time"] and "submissions" in stats["all_time"], stats
+    ok(f"/api/stats all_time={stats['all_time']}")
+
     code, join_txt = req("GET", "/join.txt")
     assert code == 200 and "contributors/register" in join_txt
+    assert "/api/frontier" in join_txt, "/api/frontier missing from /join.txt"
     assert "lake exe cache get" in join_txt
     assert "onboarding-sandbox" not in join_txt, "retired onboarding-sandbox must not appear in /join.txt"
     assert "Verus" not in join_txt and "Rust target files" not in join_txt
     for mid in local_manifests:
         assert mid in join_txt, f"active mission {mid!r} missing from /join.txt"
-    ok("/join.txt lists all active missions without retired sandbox references")
+    ok("/join.txt lists /api/frontier and all active missions without retired sandbox references")
 
-    code, about_html = req("GET", "/what-is-this")
-    assert code == 200 and "What is Sunstead?" in about_html, code
-    ok("/what-is-this explainer page served")
+    code, verify_py = req("GET", "/verify.py", raw=True)
+    assert code == 200 and verify_py, code
+    compile(verify_py.decode("utf-8"), "<verify.py>", "exec")
+    ok(f"/verify.py compiled cleanly ({len(verify_py)} bytes)")
+
+    # 6. Streamable HTTP MCP preflight & tools/list.
+    parsed = urllib.parse.urlsplit(BASE)
+    base_origin = f"{parsed.scheme}://{parsed.netloc}"
+    code, opt_headers, _ = req_full("OPTIONS", "/mcp", raw=True, extra_headers={"Origin": base_origin})
+    assert code == 204, (code, opt_headers)
+    assert opt_headers.get("access-control-allow-origin") == base_origin, opt_headers
+    assert "POST" in opt_headers.get("allow", ""), opt_headers
+
+    code, mcp_res = req(
+        "POST",
+        "/mcp",
+        body={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
+        extra_headers={
+            "Accept": "application/json, text/event-stream",
+            "Origin": base_origin,
+        },
+    )
+    assert code == 200 and isinstance(mcp_res, dict), (code, mcp_res)
+    tools = mcp_res.get("result", {}).get("tools", [])
+    tool_names = {t.get("name") for t in tools if isinstance(t, dict)}
+    required_tools = {"get_open_frontier", "list_missions", "submit_patch", "refute_task"}
+    assert required_tools.issubset(tool_names), f"missing MCP tools: {required_tools - tool_names}; got {sorted(tool_names)}"
+    ok(f"OPTIONS /mcp (204) & POST /mcp tools/list (200, {len(tool_names)} tools incl. {', '.join(sorted(required_tools))})")
+
+    return by_id
+
+
+def main(argv=None):
+    global BASE
+    args = parse_args(argv)
+    BASE = args.base.rstrip("/")
+    if not args.smoke and "sunstead.org" in BASE and os.environ.get("SUNSTEAD_E2E_ALLOW_PROD") != "1":
+        sys.exit(
+            "refusing to run mutating e2e against production "
+            "(pass --smoke for strictly read-only checks, or set SUNSTEAD_E2E_ALLOW_PROD=1 to override)"
+        )
+
+    local_manifests = load_local_manifests()
+    mode_label = "read-only smoke" if args.smoke else f"full E2E, run {RUN}"
+    print(f"==> Testing Sunstead Lean 4 hub at {BASE} ({mode_label}, {len(local_manifests)} local missions)")
+
+    by_id = run_readonly_checks(local_manifests)
+
+    if args.smoke:
+        print("\nAll read-only smoke checks passed.")
+        return
 
     probe_mission, probe_task, probe_task_def = pick_open_frontier_task(by_id, local_manifests)
     probe_target = probe_task_def["target_files"][0]

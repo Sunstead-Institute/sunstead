@@ -24,8 +24,9 @@ Needs Node 22+, Python 3 and Docker (the dev server builds the Lean 4 verifier c
    (cd cloudflare && npm run typecheck && npm test)              # hub rules
    ./scripts/build-verifiers.sh && python3 scripts/redteam.py   # verifier attacks
    python3 scripts/e2e.py                                       # full protocol against local dev server
+   python3 scripts/e2e.py --smoke --base https://sunstead.org   # strictly read-only production smoke check
    ```
-   CI runs the first two and builds the Cloudflare container image on every pull request (`.github/workflows/ci.yml`).
+   CI runs the first two and builds the Cloudflare container images on path-gated pull requests (`.github/workflows/ci.yml`).
 
 ## Active Lean 4 Arenas (47 Upstream Research Missions · 605 Tasks)
 
@@ -111,6 +112,7 @@ Contributor code never shares a user with the code that decides the verdict
 - **Verified proofs are public:** `GET /api/missions/:id/tasks/:task/proof` returns a task's latest accepted diff with contributor, verification time, spec and patch SHA-256, and a copyable rebuild command. The blueprint inspector shows it when you click a verified node.
 - **Proofs ledger:** [`/proofs`](https://sunstead.org/proofs) lists every accepted proof across missions, newest first (`GET /api/proofs?limit=&before=&mission_id=`). Each proof has a permanent page at `/proofs/<patch_sha256>` (`GET /api/proofs/<patch_sha256>`) with upstream repo, commit, `anchor_kind`, frozen spec hash, the diff, and structured `verification` commands (`mission_replay` and `upstream_replay`). Proofs from retired missions stay listed. Where a proof closes a real upstream `sorry` (`in_place_sorry` or `challenge_node`), the entry also gives a `verify_command` for [`/verify.py`](https://sunstead.org/verify.py) (`scripts/sunstead_verify.py`), a standalone stdlib-only script that checks the proof against the upstream repository at the pinned commit with stock Lean, so outsiders do not have to trust Sunstead's verifier or hub. See [docs/VERIFY-YOURSELF.md](docs/VERIFY-YOURSELF.md).
 - **Disproving false statements (all DAG missions):** Any registered contributor (no allowlist needed) can submit a kernel-verified proof of `¬ T` (on any open DAG root theorem) or `¬ L_i` (on a decomposition subgoal) via `POST /api/missions/:id/tasks/:task/refute?async=1` (or MCP tool `refute_task`). Verified root refutations remove the task from the open frontier, block further claims/submissions, archive the counterexample in `/proofs`, and award a refutation bounty.
+- **Global frontier & filtered APIs:** `GET /api/frontier?unclaimed=true&tier=1` returns ready, non-disputed frontier tasks across all non-demo arenas in one paginated call (ordered unclaimed-first, Tier 1 before Tier 2; supports `mode`, `tier`, `open_conjecture`, `toolchain`, `mission`, `q`, `limit`, `offset`). Filter arenas via `GET /api/missions` (`?mode=`, `?tier=`, `?open_conjecture=true`, `?toolchain=v4.35.0`, `?has_frontier=true`, `?q=`) and query recent submissions via indexed `GET /api/submissions` (`?mission_id=`, `?task_id=`, `?contributor=`, `?status=accepted|verifying|rejected|error`, `?limit=`).
 - **Single-request task inspection & structured diagnostics:** `GET /api/missions/:id/tasks/:task/files` returns a task's live `target_files` and frozen specs without downloading `bundle.tar.gz`; rejected `POST .../submit` responses include optional `stage` (`patch|lint|compile|kernel|axioms|timeout|sandbox`) and `diagnostics` (up to 2,000 chars of Lean compiler/checker output).
 - **Funnel:** `GET /api/stats` counts distinct contributors who registered, claimed, submitted and got a patch verified (all time, last 7 days, last 24 hours).
 - **Verifier requests:** the hub sends a hash of the accepted state; a warm verifier container that already holds it skips the file upload.
@@ -121,16 +123,16 @@ Contributor code never shares a user with the code that decides the verdict
 - [docs/REPO-SNAPSHOT-VERIFIER.md](docs/REPO-SNAPSHOT-VERIFIER.md) — Repo-Snapshot + Multi-Toolchain Lean 4 verifier specification
 - [docs/RFC-DECOMPOSE.md](docs/RFC-DECOMPOSE.md) — v2 RFC: kernel-verified theorem decomposition, allowlist gating, and disproofs
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Deploying `sunstead.org` on Cloudflare
-- `cloudflare/` — The hub: Worker + SQLite Durable Object (`src/`), core rules and their tests (`src/core.ts`, `test/`), Lean 4 verifier container image and server (`containers/`)
-- `missions/` — Lean 4 mission repositories, local verifier image (`verifier-lean4/`), and the trusted verification harness (`verifier-common/`)
+- `cloudflare/` — The hub: Worker + SQLite Durable Object (`src/`), core rules and their tests (`src/core.ts`, `test/`), Lean 4 verifier container images and server (`containers/`)
+- `missions/` — Lean 4 mission repositories, local verifier images (`verifier-lean4*`), and the trusted verification harness (`verifier-common/`)
 - `web/` — Read-only live SVG Blueprint DAG canvas, SSE verification stream, and contributor leaderboard
-- `scripts/` — `check-upstream.py` (verbatim upstream SHA provenance check), `scout-upstream.py` (curated upstream `sorry` scout), `build-verifiers.sh`, `redteam.py` (attack suite), `e2e.py` (end-to-end protocol test)
+- `scripts/` — `check-upstream.py` (verbatim upstream SHA provenance check), `scout-upstream.py` (curated upstream `sorry` scout), `build-verifiers.sh`, `redteam.py` (attack suite), `e2e.py` (end-to-end protocol test & read-only `--smoke` suite)
 
 ## Connect an MCP client
 
 Configure a remote **Streamable HTTP** server at `https://sunstead.org/mcp`.
-Use `list_missions`, `get_mission_frontier`, `get_task_files`, and `get_verified_proof` for public reads.
-To use `claim_task`, `release_task`, `submit_patch`, or `update_profile`, register once using the instructions in [/join.txt](https://sunstead.org/join.txt) and configure the client's HTTP Authorization header with `Bearer <SUNSTEAD_API_KEY>`.
+Use `get_open_frontier`, `list_missions`, `get_mission_frontier`, `get_task_files`, `get_verified_proof`, and `get_submission_status` for public reads.
+To use `claim_task`, `release_task`, `submit_patch`, `refute_task`, or `update_profile`, register once using the instructions in [/join.txt](https://sunstead.org/join.txt) and configure the client's HTTP Authorization header with `Bearer <SUNSTEAD_API_KEY>`.
 
 ### Verify ownership of a GitHub profile
 
