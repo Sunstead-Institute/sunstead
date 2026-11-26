@@ -1,0 +1,65 @@
+{
+  "id": "sphere-packing-e8-foundations",
+  "title": "Sphere Packing in \u211d\u2078 (Viazovska): Periodic Packing Constant & E\u2088 Optimality",
+  "description": "Full-repository Lean 4 module-system (`allow_module_system: true`) snapshot from thefundamentaltheor3m/Sphere-Packing-Lean (commit 072d555d, Lean v4.36.0, Apache-2.0 \u2014 the final v4.36.0 commit before the v4.37.0-rc1 toolchain bump). Closes two blueprint-backed foundational obligations: proving the periodic sphere packing constant equals the general sphere packing constant in all dimensions d > 0 (`periodic_constant_eq_constant`), and Viazovska's Fields-Medal E\u2088 optimality theorem (`SpherePacking.MainTheorem`), verified against 6 sorry-free prebuilt upstream `.olean` dependencies plus the `SpherePacking.Basic.E8` bridge.",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/thefundamentaltheor3m/Sphere-Packing-Lean",
+  "upstream": {
+    "repo": "thefundamentaltheor3m/Sphere-Packing-Lean",
+    "commit": "072d555d14b4265f3c996ad195925dc00f47f563",
+    "license": "Apache-2.0"
+  },
+  "snapshot": {
+    "mode": "repo-snapshot",
+    "snapshot_id": "sphere-packing-e8-foundations",
+    "allow_module_system": true,
+    "allowed_import_prefixes": [
+      "SpherePacking",
+      "Mathlib",
+      "Std",
+      "Init",
+      "Batteries"
+    ]
+  },
+  "frozen_paths": [
+    "UPSTREAM.json",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "toolchain": "leanprover/lean4:v4.36.0",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 240,
+    "memory_mb": 6144
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "periodic_constant_eq_constant",
+      "title": "Prove periodic sphere packing constant equals general sphere packing constant",
+      "description": "Closes the sole open `sorry` in `SpherePacking/Basic/PeriodicPacking.lean:1219-1221` (`periodic_constant_eq_constant`): for every dimension `d > 0`, prove `PeriodicSpherePackingConstant d = SpherePackingConstant d` with 0 sorry and standard axioms only. Accepted patches apply directly upstream to `thefundamentaltheor3m/Sphere-Packing-Lean@072d555d`.",
+      "target_files": [
+        "SpherePacking/Basic/PeriodicPacking.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/thefundamentaltheor3m/Sphere-Packing-Lean/blob/072d555d14b4265f3c996ad195925dc00f47f563/SpherePacking/Basic/PeriodicPacking.lean#L1219-L1221"
+    },
+    {
+      "id": "e8_sphere_packing_main_theorem",
+      "title": "Prove E\u2088 realizes optimal sphere packing density in \u211d\u2078 (`SpherePacking.MainTheorem`)",
+      "description": "Closes `SpherePacking.MainTheorem` at `SpherePacking/MainTheorem.lean:15-16`: prove `SpherePackingConstant 8 = E8Packing.density` (Viazovska's 2016 theorem in \u211d\u2078, building on `periodic_constant_eq_constant` via `SpherePacking.Basic.E8`) with 0 sorry and standard axioms only. Accepted patches apply directly upstream to `thefundamentaltheor3m/Sphere-Packing-Lean@072d555d`.",
+      "target_files": [
+        "SpherePacking/MainTheorem.lean"
+      ],
+      "depends_on": [
+        "periodic_constant_eq_constant"
+      ],
+      "upstream_url": "https://github.com/thefundamentaltheor3m/Sphere-Packing-Lean/blob/072d555d14b4265f3c996ad195925dc00f47f563/SpherePacking/MainTheorem.lean#L15-L16"
+    }
+  ]
+}

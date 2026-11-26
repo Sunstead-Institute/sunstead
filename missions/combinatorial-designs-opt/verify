@@ -1,0 +1,298 @@
+#!/usr/bin/env python3
+"""Verify explicit Covering Arrays and Golomb Rulers in Lean 4."""
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify
+
+LIB_ROOT = "CombDesigns"
+FROZEN_FILES = ["CombDesigns/Spec.lean", "UPSTREAM.json", "lakefile.toml", "lean-toolchain"]
+
+TASKS = {
+    "ca_2_15_3": {
+        "module": "CombDesigns.BoundCA_2_15_3",
+        "theorem": "CombDesigns.bound_ca_2_15_3",
+        "score_const": "CombDesigns.score_ca_2_15_3",
+        "statement": "def ca_2_15_3 (N : Nat) : Prop := CombDesigns.ValidCoveringArray2 15 3 N",
+        "label": "{score} rows (CAN(2,15,3))"
+    },
+    "ca_2_20_3": {
+        "module": "CombDesigns.BoundCA_2_20_3",
+        "theorem": "CombDesigns.bound_ca_2_20_3",
+        "score_const": "CombDesigns.score_ca_2_20_3",
+        "statement": "def ca_2_20_3 (N : Nat) : Prop := CombDesigns.ValidCoveringArray2 20 3 N",
+        "label": "{score} rows (CAN(2,20,3))"
+    },
+    "ca_2_15_4": {
+        "module": "CombDesigns.BoundCA_2_15_4",
+        "theorem": "CombDesigns.bound_ca_2_15_4",
+        "score_const": "CombDesigns.score_ca_2_15_4",
+        "statement": "def ca_2_15_4 (N : Nat) : Prop := CombDesigns.ValidCoveringArray2 15 4 N",
+        "label": "{score} rows (CAN(2,15,4))"
+    },
+    "ca_2_20_4": {
+        "module": "CombDesigns.BoundCA_2_20_4",
+        "theorem": "CombDesigns.bound_ca_2_20_4",
+        "score_const": "CombDesigns.score_ca_2_20_4",
+        "statement": "def ca_2_20_4 (N : Nat) : Prop := CombDesigns.ValidCoveringArray2 20 4 N",
+        "label": "{score} rows (CAN(2,20,4))"
+    },
+    "ca_3_12_2": {
+        "module": "CombDesigns.BoundCA_3_12_2",
+        "theorem": "CombDesigns.bound_ca_3_12_2",
+        "score_const": "CombDesigns.score_ca_3_12_2",
+        "statement": "def ca_3_12_2 (N : Nat) : Prop := CombDesigns.ValidCoveringArray3 12 2 N",
+        "label": "{score} rows (CAN(3,12,2))"
+    },
+    "ca_3_16_2": {
+        "module": "CombDesigns.BoundCA_3_16_2",
+        "theorem": "CombDesigns.bound_ca_3_16_2",
+        "score_const": "CombDesigns.score_ca_3_16_2",
+        "statement": "def ca_3_16_2 (N : Nat) : Prop := CombDesigns.ValidCoveringArray3 16 2 N",
+        "label": "{score} rows (CAN(3,16,2))"
+    },
+    "ca_3_20_2": {
+        "module": "CombDesigns.BoundCA_3_20_2",
+        "theorem": "CombDesigns.bound_ca_3_20_2",
+        "score_const": "CombDesigns.score_ca_3_20_2",
+        "statement": "def ca_3_20_2 (N : Nat) : Prop := CombDesigns.ValidCoveringArray3 20 2 N",
+        "label": "{score} rows (CAN(3,20,2))"
+    },
+    "ca_3_10_3": {
+        "module": "CombDesigns.BoundCA_3_10_3",
+        "theorem": "CombDesigns.bound_ca_3_10_3",
+        "score_const": "CombDesigns.score_ca_3_10_3",
+        "statement": "def ca_3_10_3 (N : Nat) : Prop := CombDesigns.ValidCoveringArray3 10 3 N",
+        "label": "{score} rows (CAN(3,10,3))"
+    },
+    "golomb_k12": {
+        "module": "CombDesigns.BoundGolomb12",
+        "theorem": "CombDesigns.bound_golomb_k12",
+        "score_const": "CombDesigns.score_golomb_k12",
+        "statement": "def golomb_k12 (L : Nat) : Prop := CombDesigns.ValidGolombRuler 12 L",
+        "label": "length {score} (OGR-12)"
+    },
+    "golomb_k14": {
+        "module": "CombDesigns.BoundGolomb14",
+        "theorem": "CombDesigns.bound_golomb_k14",
+        "score_const": "CombDesigns.score_golomb_k14",
+        "statement": "def golomb_k14 (L : Nat) : Prop := CombDesigns.ValidGolombRuler 14 L",
+        "label": "length {score} (OGR-14)"
+    },
+    "golomb_k16": {
+        "module": "CombDesigns.BoundGolomb16",
+        "theorem": "CombDesigns.bound_golomb_k16",
+        "score_const": "CombDesigns.score_golomb_k16",
+        "statement": "def golomb_k16 (L : Nat) : Prop := CombDesigns.ValidGolombRuler 16 L",
+        "label": "length {score} (OGR-16)"
+    },
+    "golomb_k20": {
+        "module": "CombDesigns.BoundGolomb20",
+        "theorem": "CombDesigns.bound_golomb_k20",
+        "score_const": "CombDesigns.score_golomb_k20",
+        "statement": "def golomb_k20 (L : Nat) : Prop := CombDesigns.ValidGolombRuler 20 L",
+        "label": "length {score} (OGR-20)"
+    },
+    "golomb_k25": {
+        "module": "CombDesigns.BoundGolomb25",
+        "theorem": "CombDesigns.bound_golomb_k25",
+        "score_const": "CombDesigns.score_golomb_k25",
+        "statement": "def golomb_k25 (L : Nat) : Prop := CombDesigns.ValidGolombRuler 25 L",
+        "label": "length {score} (OGR-25)"
+    },
+    "golomb_k29": {
+        "module": "CombDesigns.BoundGolomb29",
+        "theorem": "CombDesigns.bound_golomb_k29",
+        "score_const": "CombDesigns.score_golomb_k29",
+        "statement": "def golomb_k29 (L : Nat) : Prop := CombDesigns.ValidGolombRuler 29 L",
+        "label": "length {score} (OGR-29)"
+    }
+}
+
+DESIGN_TARGETS = {
+    "ca_2_15_3": [
+        "ca",
+        "CombDesigns/CA_2_15_3.lean",
+        "CombDesigns.score_ca_2_15_3",
+        "CombDesigns.arr_ca_2_15_3",
+        15,
+        3
+    ],
+    "ca_2_20_3": [
+        "ca",
+        "CombDesigns/CA_2_20_3.lean",
+        "CombDesigns.score_ca_2_20_3",
+        "CombDesigns.arr_ca_2_20_3",
+        20,
+        3
+    ],
+    "ca_2_15_4": [
+        "ca",
+        "CombDesigns/CA_2_15_4.lean",
+        "CombDesigns.score_ca_2_15_4",
+        "CombDesigns.arr_ca_2_15_4",
+        15,
+        4
+    ],
+    "ca_2_20_4": [
+        "ca",
+        "CombDesigns/CA_2_20_4.lean",
+        "CombDesigns.score_ca_2_20_4",
+        "CombDesigns.arr_ca_2_20_4",
+        20,
+        4
+    ],
+    "ca_3_12_2": [
+        "ca",
+        "CombDesigns/CA_3_12_2.lean",
+        "CombDesigns.score_ca_3_12_2",
+        "CombDesigns.arr_ca_3_12_2",
+        12,
+        2
+    ],
+    "ca_3_16_2": [
+        "ca",
+        "CombDesigns/CA_3_16_2.lean",
+        "CombDesigns.score_ca_3_16_2",
+        "CombDesigns.arr_ca_3_16_2",
+        16,
+        2
+    ],
+    "ca_3_20_2": [
+        "ca",
+        "CombDesigns/CA_3_20_2.lean",
+        "CombDesigns.score_ca_3_20_2",
+        "CombDesigns.arr_ca_3_20_2",
+        20,
+        2
+    ],
+    "ca_3_10_3": [
+        "ca",
+        "CombDesigns/CA_3_10_3.lean",
+        "CombDesigns.score_ca_3_10_3",
+        "CombDesigns.arr_ca_3_10_3",
+        10,
+        3
+    ],
+    "golomb_k12": [
+        "golomb",
+        "CombDesigns/Golomb12.lean",
+        "CombDesigns.score_golomb_k12",
+        "CombDesigns.marks_golomb_k12",
+        12,
+        0
+    ],
+    "golomb_k14": [
+        "golomb",
+        "CombDesigns/Golomb14.lean",
+        "CombDesigns.score_golomb_k14",
+        "CombDesigns.marks_golomb_k14",
+        14,
+        0
+    ],
+    "golomb_k16": [
+        "golomb",
+        "CombDesigns/Golomb16.lean",
+        "CombDesigns.score_golomb_k16",
+        "CombDesigns.marks_golomb_k16",
+        16,
+        0
+    ],
+    "golomb_k20": [
+        "golomb",
+        "CombDesigns/Golomb20.lean",
+        "CombDesigns.score_golomb_k20",
+        "CombDesigns.marks_golomb_k20",
+        20,
+        0
+    ],
+    "golomb_k25": [
+        "golomb",
+        "CombDesigns/Golomb25.lean",
+        "CombDesigns.score_golomb_k25",
+        "CombDesigns.marks_golomb_k25",
+        25,
+        0
+    ],
+    "golomb_k29": [
+        "golomb",
+        "CombDesigns/Golomb29.lean",
+        "CombDesigns.score_golomb_k29",
+        "CombDesigns.marks_golomb_k29",
+        29,
+        0
+    ]
+}
+
+MAX_BYTES = 65536
+MAX_ROWS = 256
+MAX_MARKS = 64
+
+
+def check_design_file(kind: str, path: Path, score_name: str, data_name: str, k: int, v: int) -> None:
+    if not path.is_file():
+        emit(False, f"Missing design file: {path.name}", stage="lint")
+    raw = path.read_bytes()
+    if len(raw) > MAX_BYTES:
+        emit(False, f"Design file exceeds {MAX_BYTES} bytes", stage="lint")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        emit(False, "Design file must be valid UTF-8", stage="lint")
+
+    nat = r"(?:0|[1-9][0-9]{0,5})"
+    if kind == "golomb":
+        header_re = (
+            rf"\s*def\s+{re.escape(score_name)}\s*:\s*Nat\s*:=\s*({nat})\s*\n"
+            rf"\s*def\s+{re.escape(data_name)}\s*:\s*List\s+Nat\s*:=\s*\[\s*(.*?)\s*\]\s*"
+        )
+        m = re.fullmatch(header_re, text, re.DOTALL)
+        if not m:
+            emit(False, f"Expected only literal definitions for {score_name} and {data_name}", stage="lint")
+        body = m.group(2)
+        if not body or not re.fullmatch(rf"{nat}(?:\s*,\s*{nat}){{0,{MAX_MARKS - 1}}}", body):
+            emit(False, f"Expected 1 to {MAX_MARKS} literal mark naturals", stage="lint")
+        marks = [int(tok) for tok in re.findall(nat, body)]
+        if len(marks) != k:
+            emit(False, f"Expected {k} marks, got {len(marks)}", stage="lint")
+    else:
+        header_re = (
+            rf"\s*def\s+{re.escape(score_name)}\s*:\s*Nat\s*:=\s*({nat})\s*\n"
+            rf"\s*def\s+{re.escape(data_name)}\s*:\s*List\s*\(\s*List\s+Nat\s*\)\s*:=\s*\[(.*)\]\s*"
+        )
+        m = re.fullmatch(header_re, text, re.DOTALL)
+        if not m:
+            emit(False, f"Expected only literal definitions for {score_name} and {data_name}", stage="lint")
+        score_val = int(m.group(1))
+        if score_val < 1 or score_val > MAX_ROWS:
+            emit(False, f"Row count {score_val} out of range 1..{MAX_ROWS}", stage="lint")
+        row_pat = rf"\[\s*{nat}(?:\s*,\s*{nat}){{{k - 1}}}\s*\]"
+        body = m.group(2).strip()
+        if not body or not re.fullmatch(rf"{row_pat}(?:\s*,\s*{row_pat}){{0,{MAX_ROWS - 1}}}", body):
+            emit(False, f"Expected literal rows of length {k}", stage="lint")
+        row_strs = re.findall(row_pat, body)
+        if len(row_strs) != score_val:
+            emit(False, f"Score {score_val} does not match row count {len(row_strs)}", stage="lint")
+        for rs in row_strs:
+            for tok in re.findall(nat, rs):
+                if int(tok) >= v:
+                    emit(False, f"Entry {tok} exceeds alphabet size {v}", stage="lint")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>", stage="lint")
+    task_id = sys.argv[1]
+    if task_id in DESIGN_TARGETS:
+        kind, rel_path, score_name, data_name, k, v = DESIGN_TARGETS[task_id]
+        check_design_file(kind, Path(__file__).resolve().parent / rel_path, score_name, data_name, k, v)
+    lean_verify(
+        task_id,
+        lib_root=LIB_ROOT,
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        uses_mathlib=False,
+        timeout_sec=90,
+    )

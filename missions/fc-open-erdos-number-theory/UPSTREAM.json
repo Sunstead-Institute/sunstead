@@ -1,0 +1,132 @@
+{
+  "repo": "google-deepmind/formal-conjectures",
+  "commit": "5bd8bfb9def462c19a87d2d275af3db3341dc727",
+  "license": "Apache-2.0",
+  "checks": [
+    {
+      "local_file": "FcOpenErdosNT/Erdos52SumProduct.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/52.lean",
+      "verbatim_snippet": "theorem erdos_52 : ∀ (ε : ℝ), 0 < ε → ε < 1 → ∃ (C : ℝ), 0 < C ∧ ∀ (A : Finset ℤ),\n    (max (A + A).card (A * A).card : ℝ) ≥ C * (A.card : ℝ) ^ (2 - ε) :="
+    },
+    {
+      "local_file": "FcOpenErdosNT/Erdos324PolySum.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/324.lean",
+      "verbatim_snippet": "theorem erdos_324 :\n    ∃ f : ℤ[X], {(a, b) : ℕ × ℕ | a < b}.InjOn fun (a, b) => f.eval (a : ℤ) + f.eval (b : ℤ) :="
+    },
+    {
+      "local_file": "FcOpenErdosNT/Erdos695PrimeChain.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/695.lean",
+      "verbatim_snippet": "theorem erdos_695 :\n    ∀ {q : ℕ → ℕ},\n      StrictMono q →\n      (∀ i, (q i).Prime) →\n      (∀ i, q (i + 1) % q i = 1) →\n      Tendsto (fun k => (q k : ℝ) ^ (1 / k : ℝ)) atTop atTop :="
+    },
+    {
+      "local_file": "FcOpenErdosNT/Erdos1002FractDist.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/1002.lean",
+      "verbatim_snippet": "theorem erdos_1002 :\n    ∃ g : ℝ → ℝ, Monotone g ∧\n    Tendsto g atBot (𝓝 0) ∧\n    Tendsto g atTop (𝓝 1) ∧\n    letI f :=  fun (α : ℝ) (n : ℕ) ↦\n      (1 / log n) * ∑ k ∈ Icc (1 : ℕ) n, (1 / 2 - Int.fract (α * k))\n    ∀ c : ℝ, Tendsto (fun (n : ℕ) ↦ (volume { α | α ∈ Ioo (0 : ℝ) 1 ∧ f α n ≤ c }).toReal)\n      atTop (𝓝 (g c)) :="
+    },
+    {
+      "local_file": "FcOpenErdosNT/Erdos288Harmonic.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/288.lean",
+      "verbatim_snippet": "theorem erdos_288.variants.exists_k_gt_2 :\n    ∃ k > 2, Set.Finite { I : Fin k → ℕ+ × ℕ+ |\n      ∀ j, (I j).1 ≤ (I j).2 ∧\n        ∃ n : ℕ+, (∑ j : Fin k, ∑ nⱼ ∈ Set.Icc (I j).1 (I j).2, (nⱼ⁻¹ : ℚ)) = n } :="
+    },
+    {
+      "local_file": "FcOpenErdosNT/Erdos931PrimeFac.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/931.lean",
+      "verbatim_snippet": "theorem erdos_931.variants.exists_prime (k₁ k₂ n₁ n₂ : ℕ) (h₁ : k₂ ≤ k₁) (h₂ : 3 ≤ k₂)\n    (h₃ : n₁ + k₁ ≤ n₂) (h₄ : (∏ i ∈ Finset.Icc 1 k₁, (n₁ + i)).primeFactors =\n      (∏ j ∈ Finset.Icc 1 k₂, (n₂ + j)).primeFactors) :\n    ∃ (p : ℕ), p.Prime ∧ n₁ ≤ p ∧ p ≤ n₂ :="
+    },
+    {
+      "local_file": "FcOpenErdosNT/Erdos470OddWeird.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/470.lean",
+      "verbatim_snippet": "theorem erdos_470.parts.i : ∃ n : ℕ, n.Weird ∧ Odd n :="
+    },
+    {
+      "local_file": "FcOpenErdosNT/Erdos1003Totient.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/1003.lean",
+      "verbatim_snippet": "theorem erdos_1003 : Set.Infinite {n | φ n = φ (n + 1)} :="
+    },
+    {
+      "local_file": "FcOpenErdosNT/Erdos828TotientDiv.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/828.lean",
+      "verbatim_snippet": "theorem erdos_828 : ∀ a : ℤ, Set.Infinite {n : ℕ | ↑(φ n) ∣ n + a} :="
+    },
+    {
+      "local_file": "FcOpenErdosNT/Erdos376CentralBinom.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/376.lean",
+      "verbatim_snippet": "theorem erdos_376 : { (n : ℕ) | n.centralBinom.Coprime 105 }.Infinite :="
+    },
+    {
+      "local_file": "FcOpenErdosNT/Erdos412SigmaOrbit.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/412.lean",
+      "verbatim_snippet": "theorem erdos_412 : ∀ᵉ (m ≥ 2) (n ≥ 2), ∃ i j, (σ 1)^[i] m = (σ 1)^[j] n :="
+    },
+    {
+      "local_file": "FcOpenErdosNT/Erdos251PrimeSeries.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/251.lean",
+      "verbatim_snippet": "theorem erdos_251 : Irrational (∑' n : ℕ, (Nat.nth Nat.Prime n) / (2 ^ n)) :="
+    },
+    {
+      "local_file": "FcOpenErdosNT/Erdos406Base3.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/406.lean",
+      "verbatim_snippet": "theorem erdos_406 : { n | n.isPowerOfTwo ∧ Nat.digits 3 n ⊆ [0, 1] }.Finite :="
+    },
+    {
+      "local_file": "FcOpenErdosNT/Erdos396DescFac.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/396.lean",
+      "verbatim_snippet": "theorem erdos_396 : ∀ k : ℕ, ∃ n : ℕ, descFactorial n (k + 1) ∣ centralBinom n :="
+    },
+    {
+      "local_file": "FcOpenErdosNT/Erdos826Divisors.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/826.lean",
+      "verbatim_snippet": "theorem erdos_826 :\n    ∃ C > (0 : ℝ), { n | ∀ k ≥ 1, σ 0 (n + k) ≤ C * k }.Infinite :="
+    },
+    {
+      "local_file": "FcOpenErdosNT/Erdos11SquarefreePow2.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/11.lean",
+      "verbatim_snippet": "theorem erdos_11 :\n    ∀ᶠ n : ℕ in atTop, Odd n → ∃ k l : ℕ, Squarefree k ∧ n = k + 2 ^ l :="
+    },
+    {
+      "local_file": "FcOpenErdosNT/Erdos676PrimeSquare.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/676.lean",
+      "verbatim_snippet": "theorem erdos_676 : ∀ᶠ n in atTop,\n    ∃ a p b : ℕ, p.Prime ∧ 1 ≤ a ∧ b < p ∧ n = a * p ^ 2 + b :="
+    },
+    {
+      "local_file": "FcOpenErdosNT/Erdos849PascalMult.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/849.lean",
+      "verbatim_snippet": "theorem erdos_849 :\n    ∀ t ≥ 1, ∃ a : ℕ,\n      {n : ℕ | ∃ k ≥ 1, 2 * k ≤ n ∧ choose n k = a}.ncard = t :="
+    },
+    {
+      "local_file": "FcOpenErdosNT/Erdos410SigmaGrowth.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/410.lean",
+      "verbatim_snippet": "theorem erdos_410 : ∀ n > 1,\n    Tendsto (fun k : ℕ ↦ ((sigma 1)^[k] n : ℝ) ^ (1 / (k : ℝ))) atTop atTop :="
+    },
+    {
+      "local_file": "FcOpenErdosNT/Erdos913Exponents.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/913.lean",
+      "verbatim_snippet": "theorem erdos_913 :\n    { n | Set.InjOn (n * (n + 1)).factorization (n * (n + 1)).primeFactors }.Infinite :="
+    },
+    {
+      "local_file": "FcOpenErdosNT/Erdos1094MinFac.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/1094.lean",
+      "verbatim_snippet": "theorem erdos_1094 :\n    {(n, k) : ℕ × ℕ | 0 < k ∧ 2 * k ≤ n ∧ (n.choose k).minFac > max (n / k) k}.Finite :="
+    },
+    {
+      "local_file": "FcOpenErdosNT/Erdos389ConsecProd.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/389.lean",
+      "verbatim_snippet": "theorem erdos_389 :\n    ∀ n ≥ 1, ∃ k ≥ 1, ∏ i ∈ Finset.range k, (n + i) ∣ ∏ i ∈ Finset.range k, (n + k + i) :="
+    },
+    {
+      "local_file": "FcOpenErdosNT/Erdos727Factorial.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/727.lean",
+      "verbatim_snippet": "theorem erdos_727 : ∀ k ≥ 2,\n    Set.Infinite {n : ℕ | (Nat.factorial (n + k)) ^ 2 ∣ Nat.factorial (2 * n)} :="
+    },
+    {
+      "local_file": "FcOpenErdosNT/Erdos891Primorial.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/891.lean",
+      "verbatim_snippet": "theorem erdos_891 :\n    ∀ k ≥ 2, ∀ᶠ n in atTop,\n    ∃ m ∈ Ico n (n + ∏ i ∈ range k, i.nth Nat.Prime), k < ω m :="
+    },
+    {
+      "local_file": "FcOpenErdosNT/Erdos386ConsecPrimes.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/386.lean",
+      "verbatim_snippet": "theorem erdos_386 :\n    ∃ᶠ n in .atTop, ∃ k ≥ 2,\n      k ≤ n - 2 ∧ ∃ p q : ℕ, n.choose k = ∏ i ∈ .Ico p q, nth Nat.Prime i :="
+    }
+  ]
+}

@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+"""Frozen verifier for `fc-open-oeis-classics`.
+
+Uses the shared trusted harness baked into `/opt/sunstead/sunstead_sandbox.py`
+with Lean 4.36.0 + read-only Mathlib v4.36.0.
+"""
+import sys
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify  # noqa: E402
+
+LIB_ROOT = 'FcOpenOeisClassics'
+FROZEN_FILES = [
+    "FcOpenOeisClassics/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain"
+]
+STATEMENT_PREAMBLE = ""
+TASKS = {
+    "oeis_a034693_prime_nk_plus_1": {
+        "module": "FcOpenOeisClassics.OeisA034693",
+        "theorem": "FcOpenOeisClassics.OeisA034693.exists_k",
+        "statement": "\ndef oeis_a034693_prime_nk_plus_1 : Prop :=\n  open Filter in\n  ∀ {n : ℕ} (hn : 1 < n),\n    ∃ k < n, (n * k + 1).Prime\n"
+    },
+    "oeis_a119591_prime_2nk_minus_1": {
+        "module": "FcOpenOeisClassics.OeisA119591",
+        "theorem": "FcOpenOeisClassics.OeisA119591.conjecture",
+        "statement": "\ndef oeis_a119591_prime_2nk_minus_1 : Prop :=\n  ∀ (n : ℕ) (hn : 2 ≤ n),\n    ∃ k > 0, (2 * n ^ k - 1).Prime\n"
+    },
+    "oeis_a262824_mixed_power_rep": {
+        "module": "FcOpenOeisClassics.OeisA262824",
+        "theorem": "FcOpenOeisClassics.OeisA262824.conjecture_2",
+        "statement": "\ndef oeis_a262824_mixed_power_rep : Prop :=\n  ∀ (n : ℕ),\n    ∃ w x y z : ℕ, n = w ^ 2 + x ^ 3 + 2 * y ^ 3 + z ^ 4\n"
+    },
+    "oeis_a233864_prime_2n_plus_sigma": {
+        "module": "FcOpenOeisClassics.OeisA233864",
+        "theorem": "FcOpenOeisClassics.OeisA233864.conjecture_2",
+        "statement": "\ndef oeis_a233864_prime_2n_plus_sigma : Prop :=\n  open ArithmeticFunction in\n  open scoped ArithmeticFunction.sigma in\n  ∀ (n : ℕ) (hn : 0 < n),\n    ∃ k, 0 < k ∧ k < 2 * n ∧ Nat.Prime (2 * n + σ 1 k)\n"
+    },
+    "oeis_a237720_prime_sqrt_n_plus_p": {
+        "module": "FcOpenOeisClassics.OeisA237720",
+        "theorem": "FcOpenOeisClassics.OeisA237720.conjecture_3",
+        "statement": "\ndef oeis_a237720_prime_sqrt_n_plus_p : Prop :=\n  ∀ (n : ℕ) (hn : 2 < n),\n    ∃ p : ℕ, p.Prime ∧ p < n ∧ (Nat.sqrt (n + p)).Prime\n"
+    },
+    "oeis_a234246_square_k_plus_totient": {
+        "module": "FcOpenOeisClassics.OeisA234246",
+        "theorem": "FcOpenOeisClassics.OeisA234246.conjecture_3",
+        "statement": "\ndef oeis_a234246_square_k_plus_totient : Prop :=\n  open ArithmeticFunction in\n  open scoped ArithmeticFunction.sigma in\n  ∀ (n : ℕ) (hn : 60 ≤ n),\n    ∃ k, 0 < k ∧ k < n ∧ IsSquare (k + (n - k).totient)\n"
+    },
+    "oeis_a233566_prime_p2_totient": {
+        "module": "FcOpenOeisClassics.OeisA233566",
+        "theorem": "FcOpenOeisClassics.OeisA233566.conjecture_2",
+        "statement": "\ndef oeis_a233566_prime_p2_totient : Prop :=\n  ∀ (n : ℕ) (hn : 2 < n),\n    ∃ p < n, p.Prime ∧ Nat.Prime (p ^ 2 * (n - p).totient - 1)\n"
+    },
+    "oeis_a218585_prime_quadratic": {
+        "module": "FcOpenOeisClassics.OeisA218585",
+        "theorem": "FcOpenOeisClassics.OeisA218585.conjecture_2",
+        "statement": "\ndef oeis_a218585_prime_quadratic : Prop :=\n  ∀ (n : ℕ) (hn : 12 < n),\n    ∃ x : ℕ, 0 < x ∧ 3 * x < n ∧ Nat.Prime (n * x + (n - x) ^ 2)\n"
+    },
+    "oeis_a117545_cyclotomic_prime": {
+        "module": "FcOpenOeisClassics.OeisA117545",
+        "theorem": "FcOpenOeisClassics.OeisA117545.conjecture",
+        "statement": "\ndef oeis_a117545_cyclotomic_prime : Prop :=\n  ∀ (n : ℕ) (hn : 0 < n),\n    ∃ k > 0, ((Polynomial.cyclotomic k ℤ).eval (n : ℤ)).natAbs.Prime\n"
+    },
+    "oeis_a232194_prime_nq2_plus_1": {
+        "module": "FcOpenOeisClassics.OeisA232194",
+        "theorem": "FcOpenOeisClassics.OeisA232194.conjecture_6",
+        "statement": "\ndef oeis_a232194_prime_nq2_plus_1 : Prop :=\n  ∀ (n : ℕ) (hn : n > 5),\n    ∃ p q : ℕ, 0 < q ∧ p + q = n ∧ p.Prime ∧ (n * q ^ 2 + 1).Prime\n"
+    },
+    "oeis_a218656_prime_sum_two_squares": {
+        "module": "FcOpenOeisClassics.OeisA218656",
+        "theorem": "FcOpenOeisClassics.OeisA218656.conjecture_2",
+        "statement": "\ndef oeis_a218656_prime_sum_two_squares : Prop :=\n  ∀ (n : ℕ) (hn : 1 ≤ n),\n    ∃ x : ℕ, 1 ≤ x ∧ x ≤ n ∧ Nat.Prime (x ^ 2 + (2 * n + 1 - x) ^ 2)\n"
+    },
+    "oeis_a159829_infinite_kth_power_primes": {
+        "module": "FcOpenOeisClassics.OeisA159829",
+        "theorem": "FcOpenOeisClassics.OeisA159829.conjecture2",
+        "statement": "\ndef oeis_a159829_infinite_kth_power_primes : Prop :=\n  ∀ (k : ℕ) (hk : 3 ≤ k),\n    Set.Infinite {p : ℕ | ∃ n m : ℕ, 1 ≤ n ∧ 1 ≤ m ∧ p.Prime ∧ p = n ^ k + m ^ k + 1}\n"
+    },
+    "goldbach_conjecture": {
+        "module": "FcOpenOeisClassics.GoldbachConjecture",
+        "theorem": "FcOpenOeisClassics.GoldbachConjecture.goldbach",
+        "statement": "\ndef goldbach_conjecture : Prop :=\n  ∀ n : ℕ, 2 < n → Even n → ∃ p q, Prime p ∧ Prime q ∧ n = p + q\n"
+    },
+    "twin_primes_conjecture": {
+        "module": "FcOpenOeisClassics.TwinPrimes",
+        "theorem": "FcOpenOeisClassics.TwinPrimes.twin_primes",
+        "statement": "\ndef twin_primes_conjecture : Prop :=\n  {p : ℕ | Prime p ∧ Prime (p + 2)}.Infinite\n"
+    },
+    "legendre_conjecture": {
+        "module": "FcOpenOeisClassics.LegendreConjecture",
+        "theorem": "FcOpenOeisClassics.LegendreConjecture.legendre_conjecture",
+        "statement": "\ndef legendre_conjecture : Prop :=\n  open Filter in\n  ∀ n ≥ 1, ∃ p ∈ Set.Ioo (n ^ 2) ((n + 1) ^ 2), Nat.Prime p\n"
+    },
+    "abc_conjecture": {
+        "module": "FcOpenOeisClassics.AbcConjecture",
+        "theorem": "FcOpenOeisClassics.AbcConjecture.abc",
+        "statement": "\ndef abc_conjecture : Prop :=\n  open FcOpenOeisClassics.AbcConjecture in\n  ∀ (ε : ℝ) (hε : 0 < ε),\n    {(a, b, c) : ℕ × ℕ × ℕ | 0 < a ∧ 0 < b ∧ 0 < c ∧ ({a, b, c} : Set ℕ).Pairwise Nat.Coprime ∧\n      a + b = c ∧ (radical <| a * b * c : ℝ)^(1 + ε) < c}.Finite\n"
+    },
+    "beal_conjecture": {
+        "module": "FcOpenOeisClassics.BealConjecture",
+        "theorem": "FcOpenOeisClassics.BealConjecture.beal_conjecture",
+        "statement": "\ndef beal_conjecture : Prop :=\n  open FcOpenOeisClassics.BealConjecture in\n  bealConjecture\n"
+    },
+    "fermat_catalan_conjecture": {
+        "module": "FcOpenOeisClassics.FermatCatalan",
+        "theorem": "FcOpenOeisClassics.FermatCatalan.fermat_catalan",
+        "statement": "\ndef fermat_catalan_conjecture : Prop :=\n  open FcOpenOeisClassics.FermatCatalan in\n  open scoped Function in\n  fermatCatalanConjecture\n"
+    },
+    "lonely_runner_conjecture": {
+        "module": "FcOpenOeisClassics.LonelyRunner",
+        "theorem": "FcOpenOeisClassics.LonelyRunner.lonely_runner_conjecture",
+        "statement": "\ndef lonely_runner_conjecture : Prop :=\n  ∀ (n : ℕ)\n      (speed : Fin n ↪ ℝ) (lonely : Fin n → ℝ → Prop)\n      (lonely_def :\n        ∀ r t, lonely r t ↔\n          ∀ r2 : Fin n, r2 ≠ r →\n          dist (t * speed r : UnitAddCircle) (t * speed r2) ≥ 1 / n)\n      (r : Fin n),\n    ∃ t ≥ 0, lonely r t\n"
+    },
+    "four_exponentials_conjecture": {
+        "module": "FcOpenOeisClassics.FourExponentials",
+        "theorem": "FcOpenOeisClassics.FourExponentials.four_exponentials_conjecture",
+        "statement": "\ndef four_exponentials_conjecture : Prop :=\n  open Complex in\n  ∀ (x : Fin 2 → ℂ) (y : Fin 2 → ℂ)\n      (h1 : LinearIndependent ℚ x) (h2 : LinearIndependent ℚ y),\n    ∃ i j : Fin 2, Transcendental ℚ (exp (x i * y j))\n"
+    },
+    "exp_add_pi_transcendental": {
+        "module": "FcOpenOeisClassics.ExpAddPiTranscendental",
+        "theorem": "FcOpenOeisClassics.ExpAddPiTranscendental.exp_add_pi_transcendental",
+        "statement": "\ndef exp_add_pi_transcendental : Prop :=\n  open Real in\n  Transcendental ℚ (exp 1 + π)\n"
+    },
+    "irrational_odd_zeta": {
+        "module": "FcOpenOeisClassics.IrrationalOddZeta",
+        "theorem": "FcOpenOeisClassics.IrrationalOddZeta.irrational_odd",
+        "statement": "\ndef irrational_odd_zeta : Prop :=\n  ∀ (n : ℕ) (hn : 0 < n),\n    ∃ x, Irrational x ∧ riemannZeta (2 * n + 1) = x\n"
+    },
+    "infinite_fermat_primes": {
+        "module": "FcOpenOeisClassics.InfiniteFermatPrimes",
+        "theorem": "FcOpenOeisClassics.InfiniteFermatPrimes.infinite_fermat_primes",
+        "statement": "\ndef infinite_fermat_primes : Prop :=\n  Infinite {n : ℕ | Prime n.fermatNumber}\n"
+    },
+    "gilbreath_conjecture": {
+        "module": "FcOpenOeisClassics.GilbreathConjecture",
+        "theorem": "FcOpenOeisClassics.GilbreathConjecture.gilbreath_conjecture",
+        "statement": "\ndef gilbreath_conjecture : Prop :=\n  open FcOpenOeisClassics.GilbreathConjecture in\n  ∀ (k : ℕ+),\n    d k 0 = 1\n"
+    },
+    "buchi_problem": {
+        "module": "FcOpenOeisClassics.BuchiProblem",
+        "theorem": "FcOpenOeisClassics.BuchiProblem.buchi_problem",
+        "statement": "\ndef buchi_problem : Prop :=\n  open FcOpenOeisClassics.BuchiProblem in\n  ∃ M : ℕ, 1 ≤ M ∧ IsBuchi M\n"
+    }
+}
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>")
+    lean_verify(
+        sys.argv[1],
+        lib_root=LIB_ROOT,
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        uses_mathlib=True,
+        statement_preamble=STATEMENT_PREAMBLE,
+        timeout_sec=230,
+    )

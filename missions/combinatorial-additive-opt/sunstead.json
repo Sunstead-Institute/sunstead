@@ -1,0 +1,202 @@
+{
+  "id": "combinatorial-additive-opt",
+  "title": "Additive Combinatorics: Cap Sets in F_3^n, 3-AP-Free (Salem\u2013Spencer) & Sidon Sets",
+  "description": "Pure Lean 4.36.0 (zero Mathlib) certified maximization across 14 classic additive combinatorics frontiers: 4 Cap Set tracks in F_3^4..F_3^7 (FunSearch Nature 2023 benchmark family), 5 Salem\u2013Spencer 3-AP-free tracks in {0..N-1} (N = 64..300), and 5 Sidon (B_2) set tracks in {0..N-1} (N = 100..500). `AdditiveComb/Spec.lean` formally proves soundness of a carry-free 2-bit-per-trit SWAR line-completion verifier (`thirdPointBits`), a bitmask 3-AP checker, and a pairwise-difference Sidon verifier. Pinned to `google-deepmind/funsearch@cc53f27` (Apache-2.0).",
+  "tier": 2,
+  "mode": "hillclimb",
+  "repo": "https://github.com/google-deepmind/funsearch",
+  "upstream": {
+    "repo": "google-deepmind/funsearch",
+    "commit": "cc53f274237d7ab05c19df939edbc1f9616a7c19",
+    "license": "Apache-2.0"
+  },
+  "score_direction": "maximize",
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 90,
+    "memory_mb": 2048
+  },
+  "frozen_paths": [
+    "AdditiveComb/Spec.lean",
+    "AdditiveComb/BoundCapF3_4.lean",
+    "AdditiveComb/BoundCapF3_5.lean",
+    "AdditiveComb/BoundCapF3_6.lean",
+    "AdditiveComb/BoundCapF3_7.lean",
+    "AdditiveComb/BoundAP3_64.lean",
+    "AdditiveComb/BoundAP3_100.lean",
+    "AdditiveComb/BoundAP3_150.lean",
+    "AdditiveComb/BoundAP3_200.lean",
+    "AdditiveComb/BoundAP3_300.lean",
+    "AdditiveComb/BoundSidon100.lean",
+    "AdditiveComb/BoundSidon150.lean",
+    "AdditiveComb/BoundSidon200.lean",
+    "AdditiveComb/BoundSidon300.lean",
+    "AdditiveComb/BoundSidon500.lean",
+    "LICENSE",
+    "README.md",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "tasks": [
+    {
+      "id": "capset_f3_4",
+      "title": "Maximize Cap Set size in F_3^4 (baseline 16)",
+      "description": "Submit a cap set in F_3^4 packed 2-bits-per-trit (00=0, 01=1, 10=2) in `AdditiveComb/CapF3_4.lean` (`AdditiveComb.score_capset_f3_4` and `AdditiveComb.set_capset_f3_4`), seeded with a constructive 16-cap (frontier: 20 (exact)). Frozen `AdditiveComb/BoundCapF3_4.lean` kernel-verifies valid trits, pairwise distinctness, and absence of any affine line x + y + z = 0 (mod 3) via carry-free SWAR `thirdPointBits` (`decide +kernel`).",
+      "baseline_score": 16,
+      "target_files": [
+        "AdditiveComb/CapF3_4.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/funsearch/blob/cc53f274237d7ab05c19df939edbc1f9616a7c19/cap_set/cap_set.ipynb"
+    },
+    {
+      "id": "capset_f3_5",
+      "title": "Maximize Cap Set size in F_3^5 (baseline 35)",
+      "description": "Submit a cap set in F_3^5 packed 2-bits-per-trit (00=0, 01=1, 10=2) in `AdditiveComb/CapF3_5.lean` (`AdditiveComb.score_capset_f3_5` and `AdditiveComb.set_capset_f3_5`), seeded with a constructive 35-cap (frontier: 45 (exact)). Frozen `AdditiveComb/BoundCapF3_5.lean` kernel-verifies valid trits, pairwise distinctness, and absence of any affine line x + y + z = 0 (mod 3) via carry-free SWAR `thirdPointBits` (`decide +kernel`).",
+      "baseline_score": 35,
+      "target_files": [
+        "AdditiveComb/CapF3_5.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/funsearch/blob/cc53f274237d7ab05c19df939edbc1f9616a7c19/cap_set/cap_set.ipynb"
+    },
+    {
+      "id": "capset_f3_6",
+      "title": "Maximize Cap Set size in F_3^6 (baseline 71)",
+      "description": "Submit a cap set in F_3^6 packed 2-bits-per-trit (00=0, 01=1, 10=2) in `AdditiveComb/CapF3_6.lean` (`AdditiveComb.score_capset_f3_6` and `AdditiveComb.set_capset_f3_6`), seeded with a constructive 71-cap (frontier: 112 (exact)). Frozen `AdditiveComb/BoundCapF3_6.lean` kernel-verifies valid trits, pairwise distinctness, and absence of any affine line x + y + z = 0 (mod 3) via carry-free SWAR `thirdPointBits` (`decide +kernel`).",
+      "baseline_score": 71,
+      "target_files": [
+        "AdditiveComb/CapF3_6.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/funsearch/blob/cc53f274237d7ab05c19df939edbc1f9616a7c19/cap_set/cap_set.ipynb"
+    },
+    {
+      "id": "capset_f3_7",
+      "title": "Maximize Cap Set size in F_3^7 (baseline 140)",
+      "description": "Submit a cap set in F_3^7 packed 2-bits-per-trit (00=0, 01=1, 10=2) in `AdditiveComb/CapF3_7.lean` (`AdditiveComb.score_capset_f3_7` and `AdditiveComb.set_capset_f3_7`), seeded with a constructive 140-cap (frontier: 236 (open frontier, UB 276)). Frozen `AdditiveComb/BoundCapF3_7.lean` kernel-verifies valid trits, pairwise distinctness, and absence of any affine line x + y + z = 0 (mod 3) via carry-free SWAR `thirdPointBits` (`decide +kernel`).",
+      "baseline_score": 140,
+      "target_files": [
+        "AdditiveComb/CapF3_7.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/funsearch/blob/cc53f274237d7ab05c19df939edbc1f9616a7c19/cap_set/cap_set.ipynb"
+    },
+    {
+      "id": "ap3_n64",
+      "title": "Maximize 3-AP-free (Salem\u2013Spencer) set in {0..63} (baseline 16)",
+      "description": "Submit a strictly increasing 3-AP-free subset of {0, ..., 63} in `AdditiveComb/AP3_64.lean` (`AdditiveComb.score_ap3_n64` and `AdditiveComb.set_ap3_n64`), seeded with a constructive 16-element Stanley sequence (frontier: 20 (exact r_3(64))). Frozen `AdditiveComb/BoundAP3_64.lean` kernel-verifies strict ordering, range `< 64`, and absence of any arithmetic progression a + c = 2b (`decide +kernel`).",
+      "baseline_score": 16,
+      "target_files": [
+        "AdditiveComb/AP3_64.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/funsearch/blob/cc53f274237d7ab05c19df939edbc1f9616a7c19/README.md"
+    },
+    {
+      "id": "ap3_n100",
+      "title": "Maximize 3-AP-free (Salem\u2013Spencer) set in {0..99} (baseline 22)",
+      "description": "Submit a strictly increasing 3-AP-free subset of {0, ..., 99} in `AdditiveComb/AP3_100.lean` (`AdditiveComb.score_ap3_n100` and `AdditiveComb.set_ap3_n100`), seeded with a constructive 22-element Stanley sequence (frontier: 26 (exact r_3(100))). Frozen `AdditiveComb/BoundAP3_100.lean` kernel-verifies strict ordering, range `< 100`, and absence of any arithmetic progression a + c = 2b (`decide +kernel`).",
+      "baseline_score": 22,
+      "target_files": [
+        "AdditiveComb/AP3_100.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/funsearch/blob/cc53f274237d7ab05c19df939edbc1f9616a7c19/README.md"
+    },
+    {
+      "id": "ap3_n150",
+      "title": "Maximize 3-AP-free (Salem\u2013Spencer) set in {0..149} (baseline 28)",
+      "description": "Submit a strictly increasing 3-AP-free subset of {0, ..., 149} in `AdditiveComb/AP3_150.lean` (`AdditiveComb.score_ap3_n150` and `AdditiveComb.set_ap3_n150`), seeded with a constructive 28-element Stanley sequence (frontier: 35 (hard frontier)). Frozen `AdditiveComb/BoundAP3_150.lean` kernel-verifies strict ordering, range `< 150`, and absence of any arithmetic progression a + c = 2b (`decide +kernel`).",
+      "baseline_score": 28,
+      "target_files": [
+        "AdditiveComb/AP3_150.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/funsearch/blob/cc53f274237d7ab05c19df939edbc1f9616a7c19/README.md"
+    },
+    {
+      "id": "ap3_n200",
+      "title": "Maximize 3-AP-free (Salem\u2013Spencer) set in {0..199} (baseline 32)",
+      "description": "Submit a strictly increasing 3-AP-free subset of {0, ..., 199} in `AdditiveComb/AP3_200.lean` (`AdditiveComb.score_ap3_n200` and `AdditiveComb.set_ap3_n200`), seeded with a constructive 32-element Stanley sequence (frontier: 42+ (open/hard frontier)). Frozen `AdditiveComb/BoundAP3_200.lean` kernel-verifies strict ordering, range `< 200`, and absence of any arithmetic progression a + c = 2b (`decide +kernel`).",
+      "baseline_score": 32,
+      "target_files": [
+        "AdditiveComb/AP3_200.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/funsearch/blob/cc53f274237d7ab05c19df939edbc1f9616a7c19/README.md"
+    },
+    {
+      "id": "ap3_n300",
+      "title": "Maximize 3-AP-free (Salem\u2013Spencer) set in {0..299} (baseline 44)",
+      "description": "Submit a strictly increasing 3-AP-free subset of {0, ..., 299} in `AdditiveComb/AP3_300.lean` (`AdditiveComb.score_ap3_n300` and `AdditiveComb.set_ap3_n300`), seeded with a constructive 44-element Stanley sequence (frontier: 54+ (open frontier)). Frozen `AdditiveComb/BoundAP3_300.lean` kernel-verifies strict ordering, range `< 300`, and absence of any arithmetic progression a + c = 2b (`decide +kernel`).",
+      "baseline_score": 44,
+      "target_files": [
+        "AdditiveComb/AP3_300.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/funsearch/blob/cc53f274237d7ab05c19df939edbc1f9616a7c19/README.md"
+    },
+    {
+      "id": "sidon_n100",
+      "title": "Maximize Sidon (B_2) set in {0..99} (baseline 10)",
+      "description": "Submit a strictly increasing Sidon (B_2) subset of {0, ..., 99} in `AdditiveComb/Sidon100.lean` (`AdditiveComb.score_sidon_n100` and `AdditiveComb.set_sidon_n100`), seeded with a constructive 10-element Mian\u2013Chowla sequence (frontier: 12 (exact, OGR-12=85)). Frozen `AdditiveComb/BoundSidon100.lean` kernel-verifies strict ordering, range `< 100`, and pairwise distinctness of all sums a + b (`a \u2264 b`) via difference bitmask (`decide +kernel`).",
+      "baseline_score": 10,
+      "target_files": [
+        "AdditiveComb/Sidon100.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/funsearch/blob/cc53f274237d7ab05c19df939edbc1f9616a7c19/README.md"
+    },
+    {
+      "id": "sidon_n150",
+      "title": "Maximize Sidon (B_2) set in {0..149} (baseline 12)",
+      "description": "Submit a strictly increasing Sidon (B_2) subset of {0, ..., 149} in `AdditiveComb/Sidon150.lean` (`AdditiveComb.score_sidon_n150` and `AdditiveComb.set_sidon_n150`), seeded with a constructive 12-element Mian\u2013Chowla sequence (frontier: 14 (exact, OGR-14=127)). Frozen `AdditiveComb/BoundSidon150.lean` kernel-verifies strict ordering, range `< 150`, and pairwise distinctness of all sums a + b (`a \u2264 b`) via difference bitmask (`decide +kernel`).",
+      "baseline_score": 12,
+      "target_files": [
+        "AdditiveComb/Sidon150.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/funsearch/blob/cc53f274237d7ab05c19df939edbc1f9616a7c19/README.md"
+    },
+    {
+      "id": "sidon_n200",
+      "title": "Maximize Sidon (B_2) set in {0..199} (baseline 14)",
+      "description": "Submit a strictly increasing Sidon (B_2) subset of {0, ..., 199} in `AdditiveComb/Sidon200.lean` (`AdditiveComb.score_sidon_n200` and `AdditiveComb.set_sidon_n200`), seeded with a constructive 14-element Mian\u2013Chowla sequence (frontier: 16 (exact, OGR-16=177)). Frozen `AdditiveComb/BoundSidon200.lean` kernel-verifies strict ordering, range `< 200`, and pairwise distinctness of all sums a + b (`a \u2264 b`) via difference bitmask (`decide +kernel`).",
+      "baseline_score": 14,
+      "target_files": [
+        "AdditiveComb/Sidon200.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/funsearch/blob/cc53f274237d7ab05c19df939edbc1f9616a7c19/README.md"
+    },
+    {
+      "id": "sidon_n300",
+      "title": "Maximize Sidon (B_2) set in {0..299} (baseline 16)",
+      "description": "Submit a strictly increasing Sidon (B_2) subset of {0, ..., 299} in `AdditiveComb/Sidon300.lean` (`AdditiveComb.score_sidon_n300` and `AdditiveComb.set_sidon_n300`), seeded with a constructive 16-element Mian\u2013Chowla sequence (frontier: 20 (exact, OGR-20=283)). Frozen `AdditiveComb/BoundSidon300.lean` kernel-verifies strict ordering, range `< 300`, and pairwise distinctness of all sums a + b (`a \u2264 b`) via difference bitmask (`decide +kernel`).",
+      "baseline_score": 16,
+      "target_files": [
+        "AdditiveComb/Sidon300.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/funsearch/blob/cc53f274237d7ab05c19df939edbc1f9616a7c19/README.md"
+    },
+    {
+      "id": "sidon_n500",
+      "title": "Maximize Sidon (B_2) set in {0..499} (baseline 19)",
+      "description": "Submit a strictly increasing Sidon (B_2) subset of {0, ..., 499} in `AdditiveComb/Sidon500.lean` (`AdditiveComb.score_sidon_n500` and `AdditiveComb.set_sidon_n500`), seeded with a constructive 19-element Mian\u2013Chowla sequence (frontier: 25 (hard frontier, OGR-25=480)). Frozen `AdditiveComb/BoundSidon500.lean` kernel-verifies strict ordering, range `< 500`, and pairwise distinctness of all sums a + b (`a \u2264 b`) via difference bitmask (`decide +kernel`).",
+      "baseline_score": 19,
+      "target_files": [
+        "AdditiveComb/Sidon500.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/funsearch/blob/cc53f274237d7ab05c19df939edbc1f9616a7c19/README.md"
+    }
+  ]
+}

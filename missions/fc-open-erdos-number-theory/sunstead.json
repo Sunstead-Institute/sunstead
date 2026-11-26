@@ -1,0 +1,289 @@
+{
+  "id": "fc-open-erdos-number-theory",
+  "title": "Formal Conjectures (Open Research): Erdős Problems in Number Theory",
+  "description": "Twenty-five genuinely open Erdős number theory conjectures (two-sided prove-or-refute targets via POST .../submit or POST .../refute) extracted verbatim from google-deepmind/formal-conjectures@5bd8bfb9 (Apache-2.0) and cross-referenced as open & unformalized in teorth/erdosproblems. Includes the $250 Erdős–Szemerédi sum-product conjecture (#52), odd weird numbers (#470), consecutive equal totients (#1003), central binomials coprime to 105 (#376), squarefree + 2^l representations (#11), and irrationality of ∑ p_n/2^n (#251).",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/google-deepmind/formal-conjectures",
+  "upstream": {
+    "repo": "google-deepmind/formal-conjectures",
+    "commit": "5bd8bfb9def462c19a87d2d275af3db3341dc727",
+    "license": "Apache-2.0"
+  },
+  "frozen_paths": [
+    "FcOpenErdosNT/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 240,
+    "memory_mb": 6144
+  },
+  "decomposition": {
+    "enabled": true,
+    "require_allowlist": true,
+    "allow_direct_bypass": true,
+    "max_depth": 2
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "erdos_52_sum_product",
+      "title": "Erdős #52 ($250): Erdős–Szemerédi sum-product conjecture max(|A+A|, |A·A|) ≫ |A|^{2-ε}",
+      "description": "Verbatim statement `erdos_52` from `FormalConjectures/ErdosProblems/52.lean#L37-L39` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosNT/Erdos52SumProduct.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/52.lean#L37-L39"
+    },
+    {
+      "id": "erdos_324_polynomial_sum_inj",
+      "title": "Erdős #324: polynomial f ∈ ℤ[X] with pairwise distinct sums f(a) + f(b) for a < b",
+      "description": "Verbatim statement `erdos_324` from `FormalConjectures/ErdosProblems/324.lean#L37-L39` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosNT/Erdos324PolySum.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/324.lean#L37-L39"
+    },
+    {
+      "id": "erdos_695_prime_chain_growth",
+      "title": "Erdős #695: super-exponential growth of prime chains with p_{i+1} ≡ 1 (mod p_i)",
+      "description": "Verbatim statement `erdos_695` from `FormalConjectures/ErdosProblems/695.lean#L39-L45` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosNT/Erdos695PrimeChain.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/695.lean#L39-L45"
+    },
+    {
+      "id": "erdos_1002_diophantine_dist",
+      "title": "Erdős #1002: limiting distribution of normalized fractional-part sums ∑ (1/2 - {αk})/log n",
+      "description": "Verbatim statement `erdos_1002` from `FormalConjectures/ErdosProblems/1002.lean#L42-L50` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosNT/Erdos1002FractDist.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/1002.lean#L42-L50"
+    },
+    {
+      "id": "erdos_288_unit_fraction_intervals",
+      "title": "Erdős #288: finiteness of integer-sum harmonic interval tuples for some k > 2",
+      "description": "Verbatim statement `erdos_288.variants.exists_k_gt_2` from `FormalConjectures/ErdosProblems/288.lean#L63-L67` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosNT/Erdos288Harmonic.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/288.lean#L63-L67"
+    },
+    {
+      "id": "erdos_931_consecutive_prime_factors",
+      "title": "Erdős #931: prime separating two disjoint consecutive-integer blocks with equal prime factors",
+      "description": "Verbatim statement `erdos_931.variants.exists_prime` from `FormalConjectures/ErdosProblems/931.lean#L75-L79` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosNT/Erdos931PrimeFac.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/931.lean#L75-L79"
+    },
+    {
+      "id": "erdos_470_odd_weird_exists",
+      "title": "Erdős #470 ($10): does an odd weird number exist?",
+      "description": "Verbatim statement `erdos_470.parts.i` from `FormalConjectures/ErdosProblems/470.lean#L44-L45` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosNT/Erdos470OddWeird.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/470.lean#L44-L45"
+    },
+    {
+      "id": "erdos_1003_consecutive_totient",
+      "title": "Erdős #1003: are there infinitely many n with φ(n) = φ(n + 1)?",
+      "description": "Verbatim statement `erdos_1003` from `FormalConjectures/ErdosProblems/1003.lean#L38-L39` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosNT/Erdos1003Totient.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/1003.lean#L38-L39"
+    },
+    {
+      "id": "erdos_828_totient_divides_shift",
+      "title": "Erdős #828: for every a ∈ ℤ, does φ(n) | n + a for infinitely many n?",
+      "description": "Verbatim statement `erdos_828` from `FormalConjectures/ErdosProblems/828.lean#L37-L38` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosNT/Erdos828TotientDiv.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/828.lean#L37-L38"
+    },
+    {
+      "id": "erdos_376_central_binom_coprime_105",
+      "title": "Erdős #376: are infinitely many central binomials C(2n, n) coprime to 105?",
+      "description": "Verbatim statement `erdos_376` from `FormalConjectures/ErdosProblems/376.lean#L34-L35` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosNT/Erdos376CentralBinom.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/376.lean#L34-L35"
+    },
+    {
+      "id": "erdos_412_iterated_sigma_merge",
+      "title": "Erdős #412: do iterated divisor-sum orbits σ^{[i]}(m) and σ^{[j]}(n) always meet?",
+      "description": "Verbatim statement `erdos_412` from `FormalConjectures/ErdosProblems/412.lean#L39-L40` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosNT/Erdos412SigmaOrbit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/412.lean#L39-L40"
+    },
+    {
+      "id": "erdos_251_prime_series_irrational",
+      "title": "Erdős #251: is ∑ p_n / 2^n irrational?",
+      "description": "Verbatim statement `erdos_251` from `FormalConjectures/ErdosProblems/251.lean#L34-L35` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosNT/Erdos251PrimeSeries.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/251.lean#L34-L35"
+    },
+    {
+      "id": "erdos_406_pow2_base3_digits",
+      "title": "Erdős #406: are only finitely many powers of 2 written with digits {0, 1} in base 3?",
+      "description": "Verbatim statement `erdos_406` from `FormalConjectures/ErdosProblems/406.lean#L35-L36` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosNT/Erdos406Base3.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/406.lean#L35-L36"
+    },
+    {
+      "id": "erdos_396_desc_factorial_divides_binom",
+      "title": "Erdős #396: for every k, does some n satisfy n(n-1)···(n-k) | C(2n, n)?",
+      "description": "Verbatim statement `erdos_396` from `FormalConjectures/ErdosProblems/396.lean#L37-L38` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosNT/Erdos396DescFac.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/396.lean#L37-L38"
+    },
+    {
+      "id": "erdos_826_divisor_bound_shift",
+      "title": "Erdős #826: infinitely many n with τ(n + k) ≤ C·k for all k ≥ 1",
+      "description": "Verbatim statement `erdos_826` from `FormalConjectures/ErdosProblems/826.lean#L39-L41` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosNT/Erdos826Divisors.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/826.lean#L39-L41"
+    },
+    {
+      "id": "erdos_11_squarefree_plus_pow2",
+      "title": "Erdős #11: is every sufficiently large odd integer a sum of a squarefree number and 2^l?",
+      "description": "Verbatim statement `erdos_11` from `FormalConjectures/ErdosProblems/11.lean#L36-L38` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosNT/Erdos11SquarefreePow2.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/11.lean#L36-L38"
+    },
+    {
+      "id": "erdos_676_square_prime_rep",
+      "title": "Erdős #676: is every sufficiently large n of the form a·p² + b with 0 ≤ b < p?",
+      "description": "Verbatim statement `erdos_676` from `FormalConjectures/ErdosProblems/676.lean#L84-L86` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosNT/Erdos676PrimeSquare.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/676.lean#L84-L86"
+    },
+    {
+      "id": "erdos_849_pascal_multiplicity",
+      "title": "Erdős #849: does every integer multiplicity t ≥ 1 occur for non-trivial binomial coefficients?",
+      "description": "Verbatim statement `erdos_849` from `FormalConjectures/ErdosProblems/849.lean#L37-L40` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosNT/Erdos849PascalMult.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/849.lean#L37-L40"
+    },
+    {
+      "id": "erdos_410_iterated_sigma_growth",
+      "title": "Erdős #410: does (σ^{[k]}(n))^{1/k} → ∞ for every n > 1?",
+      "description": "Verbatim statement `erdos_410` from `FormalConjectures/ErdosProblems/410.lean#L43-L45` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosNT/Erdos410SigmaGrowth.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/410.lean#L43-L45"
+    },
+    {
+      "id": "erdos_913_distinct_prime_exponents",
+      "title": "Erdős #913: infinitely many n where n(n+1) has pairwise distinct prime-power exponents",
+      "description": "Verbatim statement `erdos_913` from `FormalConjectures/ErdosProblems/913.lean#L40-L42` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosNT/Erdos913Exponents.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/913.lean#L40-L42"
+    },
+    {
+      "id": "erdos_1094_binom_min_prime_fac",
+      "title": "Erdős #1094: finiteness of (n, k) with minPrimeFac(C(n, k)) > max(n/k, k)",
+      "description": "Verbatim statement `erdos_1094` from `FormalConjectures/ErdosProblems/1094.lean#L38-L40` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosNT/Erdos1094MinFac.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/1094.lean#L38-L40"
+    },
+    {
+      "id": "erdos_389_consecutive_product_div",
+      "title": "Erdős #389: for every n ≥ 1, does some k ≥ 1 give ∏_{i<k}(n+i) | ∏_{i<k}(n+k+i)?",
+      "description": "Verbatim statement `erdos_389` from `FormalConjectures/ErdosProblems/389.lean#L37-L39` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosNT/Erdos389ConsecProd.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/389.lean#L37-L39"
+    },
+    {
+      "id": "erdos_727_shifted_factorial_square",
+      "title": "Erdős #727: for every k ≥ 2, does (n+k)!² | (2n)! for infinitely many n?",
+      "description": "Verbatim statement `erdos_727` from `FormalConjectures/ErdosProblems/727.lean#L36-L38` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosNT/Erdos727Factorial.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/727.lean#L36-L38"
+    },
+    {
+      "id": "erdos_891_primorial_interval_omega",
+      "title": "Erdős #891: prime-factor count ω(m) > k in every interval of primorial length",
+      "description": "Verbatim statement `erdos_891` from `FormalConjectures/ErdosProblems/891.lean#L42-L45` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosNT/Erdos891Primorial.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/891.lean#L42-L45"
+    },
+    {
+      "id": "erdos_386_binom_consecutive_primes",
+      "title": "Erdős #386: infinitely many binomial coefficients C(n, k) equal to a product of consecutive primes",
+      "description": "Verbatim statement `erdos_386` from `FormalConjectures/ErdosProblems/386.lean#L38-L41` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenErdosNT/Erdos386ConsecPrimes.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/386.lean#L38-L41"
+    }
+  ],
+  "open_conjecture": true
+}

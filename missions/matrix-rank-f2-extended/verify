@@ -1,0 +1,461 @@
+#!/usr/bin/env python3
+"""Verify explicit binary matrix-multiplication tensor decompositions across 26 open shapes (pure Lean 4.36.0)."""
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/opt/sunstead")
+from sunstead_sandbox import emit, lean_verify
+
+FROZEN_FILES = ["RankF2Ext/Spec.lean", "UPSTREAM.json", "lakefile.toml", "lean-toolchain"]
+
+TASKS = {
+    "rank_2_4_5": {
+        "module": "RankF2Ext.Bound2x4x5",
+        "theorem": "RankF2Ext.bound_2_4_5",
+        "score_const": "RankF2Ext.score_2_4_5",
+        "statement": "def rank_2_4_5 (r : Nat) : Prop := RankF2Ext.RankLE 2 4 5 r",
+        "label": "{score} products over F2 (2x4x5)"
+    },
+    "rank_2_5_5": {
+        "module": "RankF2Ext.Bound2x5x5",
+        "theorem": "RankF2Ext.bound_2_5_5",
+        "score_const": "RankF2Ext.score_2_5_5",
+        "statement": "def rank_2_5_5 (r : Nat) : Prop := RankF2Ext.RankLE 2 5 5 r",
+        "label": "{score} products over F2 (2x5x5)"
+    },
+    "rank_2_5_6": {
+        "module": "RankF2Ext.Bound2x5x6",
+        "theorem": "RankF2Ext.bound_2_5_6",
+        "score_const": "RankF2Ext.score_2_5_6",
+        "statement": "def rank_2_5_6 (r : Nat) : Prop := RankF2Ext.RankLE 2 5 6 r",
+        "label": "{score} products over F2 (2x5x6)"
+    },
+    "rank_3_3_5": {
+        "module": "RankF2Ext.Bound3x3x5",
+        "theorem": "RankF2Ext.bound_3_3_5",
+        "score_const": "RankF2Ext.score_3_3_5",
+        "statement": "def rank_3_3_5 (r : Nat) : Prop := RankF2Ext.RankLE 3 3 5 r",
+        "label": "{score} products over F2 (3x3x5)"
+    },
+    "rank_3_3_6": {
+        "module": "RankF2Ext.Bound3x3x6",
+        "theorem": "RankF2Ext.bound_3_3_6",
+        "score_const": "RankF2Ext.score_3_3_6",
+        "statement": "def rank_3_3_6 (r : Nat) : Prop := RankF2Ext.RankLE 3 3 6 r",
+        "label": "{score} products over F2 (3x3x6)"
+    },
+    "rank_3_3_7": {
+        "module": "RankF2Ext.Bound3x3x7",
+        "theorem": "RankF2Ext.bound_3_3_7",
+        "score_const": "RankF2Ext.score_3_3_7",
+        "statement": "def rank_3_3_7 (r : Nat) : Prop := RankF2Ext.RankLE 3 3 7 r",
+        "label": "{score} products over F2 (3x3x7)"
+    },
+    "rank_3_3_8": {
+        "module": "RankF2Ext.Bound3x3x8",
+        "theorem": "RankF2Ext.bound_3_3_8",
+        "score_const": "RankF2Ext.score_3_3_8",
+        "statement": "def rank_3_3_8 (r : Nat) : Prop := RankF2Ext.RankLE 3 3 8 r",
+        "label": "{score} products over F2 (3x3x8)"
+    },
+    "rank_3_4_6": {
+        "module": "RankF2Ext.Bound3x4x6",
+        "theorem": "RankF2Ext.bound_3_4_6",
+        "score_const": "RankF2Ext.score_3_4_6",
+        "statement": "def rank_3_4_6 (r : Nat) : Prop := RankF2Ext.RankLE 3 4 6 r",
+        "label": "{score} products over F2 (3x4x6)"
+    },
+    "rank_3_4_7": {
+        "module": "RankF2Ext.Bound3x4x7",
+        "theorem": "RankF2Ext.bound_3_4_7",
+        "score_const": "RankF2Ext.score_3_4_7",
+        "statement": "def rank_3_4_7 (r : Nat) : Prop := RankF2Ext.RankLE 3 4 7 r",
+        "label": "{score} products over F2 (3x4x7)"
+    },
+    "rank_3_4_8": {
+        "module": "RankF2Ext.Bound3x4x8",
+        "theorem": "RankF2Ext.bound_3_4_8",
+        "score_const": "RankF2Ext.score_3_4_8",
+        "statement": "def rank_3_4_8 (r : Nat) : Prop := RankF2Ext.RankLE 3 4 8 r",
+        "label": "{score} products over F2 (3x4x8)"
+    },
+    "rank_3_5_6": {
+        "module": "RankF2Ext.Bound3x5x6",
+        "theorem": "RankF2Ext.bound_3_5_6",
+        "score_const": "RankF2Ext.score_3_5_6",
+        "statement": "def rank_3_5_6 (r : Nat) : Prop := RankF2Ext.RankLE 3 5 6 r",
+        "label": "{score} products over F2 (3x5x6)"
+    },
+    "rank_3_5_7": {
+        "module": "RankF2Ext.Bound3x5x7",
+        "theorem": "RankF2Ext.bound_3_5_7",
+        "score_const": "RankF2Ext.score_3_5_7",
+        "statement": "def rank_3_5_7 (r : Nat) : Prop := RankF2Ext.RankLE 3 5 7 r",
+        "label": "{score} products over F2 (3x5x7)"
+    },
+    "rank_3_5_8": {
+        "module": "RankF2Ext.Bound3x5x8",
+        "theorem": "RankF2Ext.bound_3_5_8",
+        "score_const": "RankF2Ext.score_3_5_8",
+        "statement": "def rank_3_5_8 (r : Nat) : Prop := RankF2Ext.RankLE 3 5 8 r",
+        "label": "{score} products over F2 (3x5x8)"
+    },
+    "rank_3_6_6": {
+        "module": "RankF2Ext.Bound3x6x6",
+        "theorem": "RankF2Ext.bound_3_6_6",
+        "score_const": "RankF2Ext.score_3_6_6",
+        "statement": "def rank_3_6_6 (r : Nat) : Prop := RankF2Ext.RankLE 3 6 6 r",
+        "label": "{score} products over F2 (3x6x6)"
+    },
+    "rank_3_6_7": {
+        "module": "RankF2Ext.Bound3x6x7",
+        "theorem": "RankF2Ext.bound_3_6_7",
+        "score_const": "RankF2Ext.score_3_6_7",
+        "statement": "def rank_3_6_7 (r : Nat) : Prop := RankF2Ext.RankLE 3 6 7 r",
+        "label": "{score} products over F2 (3x6x7)"
+    },
+    "rank_4_4_6": {
+        "module": "RankF2Ext.Bound4x4x6",
+        "theorem": "RankF2Ext.bound_4_4_6",
+        "score_const": "RankF2Ext.score_4_4_6",
+        "statement": "def rank_4_4_6 (r : Nat) : Prop := RankF2Ext.RankLE 4 4 6 r",
+        "label": "{score} products over F2 (4x4x6)"
+    },
+    "rank_4_4_7": {
+        "module": "RankF2Ext.Bound4x4x7",
+        "theorem": "RankF2Ext.bound_4_4_7",
+        "score_const": "RankF2Ext.score_4_4_7",
+        "statement": "def rank_4_4_7 (r : Nat) : Prop := RankF2Ext.RankLE 4 4 7 r",
+        "label": "{score} products over F2 (4x4x7)"
+    },
+    "rank_4_4_8": {
+        "module": "RankF2Ext.Bound4x4x8",
+        "theorem": "RankF2Ext.bound_4_4_8",
+        "score_const": "RankF2Ext.score_4_4_8",
+        "statement": "def rank_4_4_8 (r : Nat) : Prop := RankF2Ext.RankLE 4 4 8 r",
+        "label": "{score} products over F2 (4x4x8)"
+    },
+    "rank_4_5_5": {
+        "module": "RankF2Ext.Bound4x5x5",
+        "theorem": "RankF2Ext.bound_4_5_5",
+        "score_const": "RankF2Ext.score_4_5_5",
+        "statement": "def rank_4_5_5 (r : Nat) : Prop := RankF2Ext.RankLE 4 5 5 r",
+        "label": "{score} products over F2 (4x5x5)"
+    },
+    "rank_4_5_6": {
+        "module": "RankF2Ext.Bound4x5x6",
+        "theorem": "RankF2Ext.bound_4_5_6",
+        "score_const": "RankF2Ext.score_4_5_6",
+        "statement": "def rank_4_5_6 (r : Nat) : Prop := RankF2Ext.RankLE 4 5 6 r",
+        "label": "{score} products over F2 (4x5x6)"
+    },
+    "rank_4_5_7": {
+        "module": "RankF2Ext.Bound4x5x7",
+        "theorem": "RankF2Ext.bound_4_5_7",
+        "score_const": "RankF2Ext.score_4_5_7",
+        "statement": "def rank_4_5_7 (r : Nat) : Prop := RankF2Ext.RankLE 4 5 7 r",
+        "label": "{score} products over F2 (4x5x7)"
+    },
+    "rank_4_6_6": {
+        "module": "RankF2Ext.Bound4x6x6",
+        "theorem": "RankF2Ext.bound_4_6_6",
+        "score_const": "RankF2Ext.score_4_6_6",
+        "statement": "def rank_4_6_6 (r : Nat) : Prop := RankF2Ext.RankLE 4 6 6 r",
+        "label": "{score} products over F2 (4x6x6)"
+    },
+    "rank_5_5_5": {
+        "module": "RankF2Ext.Bound5x5x5",
+        "theorem": "RankF2Ext.bound_5_5_5",
+        "score_const": "RankF2Ext.score_5_5_5",
+        "statement": "def rank_5_5_5 (r : Nat) : Prop := RankF2Ext.RankLE 5 5 5 r",
+        "label": "{score} products over F2 (5x5x5)"
+    },
+    "rank_5_5_6": {
+        "module": "RankF2Ext.Bound5x5x6",
+        "theorem": "RankF2Ext.bound_5_5_6",
+        "score_const": "RankF2Ext.score_5_5_6",
+        "statement": "def rank_5_5_6 (r : Nat) : Prop := RankF2Ext.RankLE 5 5 6 r",
+        "label": "{score} products over F2 (5x5x6)"
+    },
+    "rank_5_6_6": {
+        "module": "RankF2Ext.Bound5x6x6",
+        "theorem": "RankF2Ext.bound_5_6_6",
+        "score_const": "RankF2Ext.score_5_6_6",
+        "statement": "def rank_5_6_6 (r : Nat) : Prop := RankF2Ext.RankLE 5 6 6 r",
+        "label": "{score} products over F2 (5x6x6)"
+    },
+    "rank_6_6_6": {
+        "module": "RankF2Ext.Bound6x6x6",
+        "theorem": "RankF2Ext.bound_6_6_6",
+        "score_const": "RankF2Ext.score_6_6_6",
+        "statement": "def rank_6_6_6 (r : Nat) : Prop := RankF2Ext.RankLE 6 6 6 r",
+        "label": "{score} products over F2 (6x6x6)"
+    }
+}
+
+CERT_SPECS = {
+    "rank_2_4_5": {
+        "tag": "2_4_5",
+        "file": "RankF2Ext/Cert2x4x5.lean",
+        "n": 2,
+        "m": 4,
+        "p": 5,
+        "max_rank": 34
+    },
+    "rank_2_5_5": {
+        "tag": "2_5_5",
+        "file": "RankF2Ext/Cert2x5x5.lean",
+        "n": 2,
+        "m": 5,
+        "p": 5,
+        "max_rank": 40
+    },
+    "rank_2_5_6": {
+        "tag": "2_5_6",
+        "file": "RankF2Ext/Cert2x5x6.lean",
+        "n": 2,
+        "m": 5,
+        "p": 6,
+        "max_rank": 47
+    },
+    "rank_3_3_5": {
+        "tag": "3_3_5",
+        "file": "RankF2Ext/Cert3x3x5.lean",
+        "n": 3,
+        "m": 3,
+        "p": 5,
+        "max_rank": 36
+    },
+    "rank_3_3_6": {
+        "tag": "3_3_6",
+        "file": "RankF2Ext/Cert3x3x6.lean",
+        "n": 3,
+        "m": 3,
+        "p": 6,
+        "max_rank": 42
+    },
+    "rank_3_3_7": {
+        "tag": "3_3_7",
+        "file": "RankF2Ext/Cert3x3x7.lean",
+        "n": 3,
+        "m": 3,
+        "p": 7,
+        "max_rank": 49
+    },
+    "rank_3_3_8": {
+        "tag": "3_3_8",
+        "file": "RankF2Ext/Cert3x3x8.lean",
+        "n": 3,
+        "m": 3,
+        "p": 8,
+        "max_rank": 56
+    },
+    "rank_3_4_6": {
+        "tag": "3_4_6",
+        "file": "RankF2Ext/Cert3x4x6.lean",
+        "n": 3,
+        "m": 4,
+        "p": 6,
+        "max_rank": 54
+    },
+    "rank_3_4_7": {
+        "tag": "3_4_7",
+        "file": "RankF2Ext/Cert3x4x7.lean",
+        "n": 3,
+        "m": 4,
+        "p": 7,
+        "max_rank": 64
+    },
+    "rank_3_4_8": {
+        "tag": "3_4_8",
+        "file": "RankF2Ext/Cert3x4x8.lean",
+        "n": 3,
+        "m": 4,
+        "p": 8,
+        "max_rank": 73
+    },
+    "rank_3_5_6": {
+        "tag": "3_5_6",
+        "file": "RankF2Ext/Cert3x5x6.lean",
+        "n": 3,
+        "m": 5,
+        "p": 6,
+        "max_rank": 68
+    },
+    "rank_3_5_7": {
+        "tag": "3_5_7",
+        "file": "RankF2Ext/Cert3x5x7.lean",
+        "n": 3,
+        "m": 5,
+        "p": 7,
+        "max_rank": 79
+    },
+    "rank_3_5_8": {
+        "tag": "3_5_8",
+        "file": "RankF2Ext/Cert3x5x8.lean",
+        "n": 3,
+        "m": 5,
+        "p": 8,
+        "max_rank": 90
+    },
+    "rank_3_6_6": {
+        "tag": "3_6_6",
+        "file": "RankF2Ext/Cert3x6x6.lean",
+        "n": 3,
+        "m": 6,
+        "p": 6,
+        "max_rank": 82
+    },
+    "rank_3_6_7": {
+        "tag": "3_6_7",
+        "file": "RankF2Ext/Cert3x6x7.lean",
+        "n": 3,
+        "m": 6,
+        "p": 7,
+        "max_rank": 96
+    },
+    "rank_4_4_6": {
+        "tag": "4_4_6",
+        "file": "RankF2Ext/Cert4x4x6.lean",
+        "n": 4,
+        "m": 4,
+        "p": 6,
+        "max_rank": 73
+    },
+    "rank_4_4_7": {
+        "tag": "4_4_7",
+        "file": "RankF2Ext/Cert4x4x7.lean",
+        "n": 4,
+        "m": 4,
+        "p": 7,
+        "max_rank": 85
+    },
+    "rank_4_4_8": {
+        "tag": "4_4_8",
+        "file": "RankF2Ext/Cert4x4x8.lean",
+        "n": 4,
+        "m": 4,
+        "p": 8,
+        "max_rank": 96
+    },
+    "rank_4_5_5": {
+        "tag": "4_5_5",
+        "file": "RankF2Ext/Cert4x5x5.lean",
+        "n": 4,
+        "m": 5,
+        "p": 5,
+        "max_rank": 76
+    },
+    "rank_4_5_6": {
+        "tag": "4_5_6",
+        "file": "RankF2Ext/Cert4x5x6.lean",
+        "n": 4,
+        "m": 5,
+        "p": 6,
+        "max_rank": 90
+    },
+    "rank_4_5_7": {
+        "tag": "4_5_7",
+        "file": "RankF2Ext/Cert4x5x7.lean",
+        "n": 4,
+        "m": 5,
+        "p": 7,
+        "max_rank": 104
+    },
+    "rank_4_6_6": {
+        "tag": "4_6_6",
+        "file": "RankF2Ext/Cert4x6x6.lean",
+        "n": 4,
+        "m": 6,
+        "p": 6,
+        "max_rank": 105
+    },
+    "rank_5_5_5": {
+        "tag": "5_5_5",
+        "file": "RankF2Ext/Cert5x5x5.lean",
+        "n": 5,
+        "m": 5,
+        "p": 5,
+        "max_rank": 93
+    },
+    "rank_5_5_6": {
+        "tag": "5_5_6",
+        "file": "RankF2Ext/Cert5x5x6.lean",
+        "n": 5,
+        "m": 5,
+        "p": 6,
+        "max_rank": 110
+    },
+    "rank_5_6_6": {
+        "tag": "5_6_6",
+        "file": "RankF2Ext/Cert5x6x6.lean",
+        "n": 5,
+        "m": 6,
+        "p": 6,
+        "max_rank": 130
+    },
+    "rank_6_6_6": {
+        "tag": "6_6_6",
+        "file": "RankF2Ext/Cert6x6x6.lean",
+        "n": 6,
+        "m": 6,
+        "p": 6,
+        "max_rank": 153
+    }
+}
+
+
+def check_certificate(task_id, base_dir):
+    spec = CERT_SPECS.get(task_id)
+    if spec is None:
+        emit(False, f"unknown task id: {task_id}", stage="lint")
+    path = base_dir / spec["file"]
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        emit(False, f"cannot read certificate: {exc}", stage="lint")
+    if len(raw) > 32768:
+        emit(False, "Certificate exceeds 32768 bytes", stage="lint")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        emit(False, "Certificate must be valid UTF-8", stage="lint")
+    tag = spec["tag"]
+    max_r = spec["max_rank"]
+    max_a = (1 << (spec["n"] * spec["m"])) - 1
+    max_b = (1 << (spec["m"] * spec["p"])) - 1
+    max_c = (1 << (spec["p"] * spec["n"])) - 1
+    score_line, _, table = text.partition("\n")
+    sm = re.fullmatch(rf"def RankF2Ext\.score_{tag} : Nat := ([1-9][0-9]{{0,2}})", score_line)
+    if not sm or int(sm[1]) > max_r:
+        emit(False, f"Expected literal natural-number score 1..{max_r}", stage="lint")
+    body = table.strip()
+    mask = r"(0|[1-9][0-9]{0,14})"
+    term = rf"\(\s*{mask}\s*,\s*{mask}\s*,\s*{mask}\s*\)"
+    header = rf"def RankF2Ext\.cert_{tag} : List \(Nat × Nat × Nat\) :=\s*"
+    m = re.fullmatch(header + r"\[\s*(.*?)\s*\]", body, re.DOTALL)
+    if not m or not re.fullmatch(rf"{term}(?:\s*,\s*{term}){{0,{max_r - 1}}}", m[1]):
+        emit(False, f"Expected literal table of 1 to {max_r} decimal mask triples", stage="lint")
+    triples = re.findall(term, m[1])
+    if len(triples) != int(sm[1]):
+        emit(False, f"Score {sm[1]} does not match table length {len(triples)}", stage="lint")
+    for a_s, b_s, c_s in triples:
+        if int(a_s) > max_a or int(b_s) > max_b or int(c_s) > max_c:
+            emit(False, "Bitmask exceeds matrix dimension width", stage="lint")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        emit(False, "usage: ./verify <task_id>", stage="lint")
+    tid = sys.argv[1]
+    if tid in CERT_SPECS:
+        check_certificate(tid, Path(__file__).resolve().parent)
+    lean_verify(
+        tid,
+        lib_root="RankF2Ext",
+        frozen_files=FROZEN_FILES,
+        tasks=TASKS,
+        uses_mathlib=False,
+        timeout_sec=80,
+    )

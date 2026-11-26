@@ -35,6 +35,7 @@ test("dockerfileInputs lists the real verifier image's COPY sources", () => {
   const inputs = dockerfileInputs(fs.readFileSync(path.join(CF_ROOT, "containers/lean4/Dockerfile"), "utf8"));
   for (const expected of [
     "missions/pnt-analytic-foundations",
+    "missions/sphere-packing-e8-foundations",
     "missions/verifier-common/sunstead_sandbox.py",
     "missions/verifier-common/SunsteadCheck.lean",
     "cloudflare/containers/verifier_server.py",
@@ -209,6 +210,7 @@ test("multi-toolchain deploy tracks v4.36.0, v4.35.0, and v4.31.0 verifier conta
   for (const expected of [
     "missions/lnsym-aes-gcm-armv8",
     "missions/lnsym-gcm-gmult-armv8",
+    "missions/lnsym-armv8-addloop-termination",
     "missions/verifier-common/sunstead_sandbox.py",
     "missions/verifier-common/SunsteadCheck.lean",
     "missions/verifier-common/prebuild_snapshot.py",
@@ -320,10 +322,10 @@ test("sync-assets deduplicates shared blobs, preserves task-disputes.json, drops
   const staticTs = renderStaticTs(path.join(REPO_ROOT, "web"), REPO_ROOT);
   const sizes = measureGeneratedBundle(missionsTs, staticTs);
 
-  assert.ok(bundle.stats.missionCount >= 22);
+  assert.ok(bundle.stats.missionCount >= 47);
   assert.ok(bundle.stats.uniqueBlobs < bundle.stats.totalFileRefs, "duplicate files across missions must be deduplicated");
-  assert.ok(bundle.stats.dedupSavedBytes > 10_000, `expected >10 KiB dedup savings, got ${bundle.stats.dedupSavedBytes}`);
-  assert.ok(bundle.stats.skippedBytes > 10_000, "unserved LICENSE copies outside frozen_paths must be excluded from Worker bundle");
+  assert.ok(bundle.stats.dedupSavedBytes > 100_000, `expected >100 KiB dedup savings, got ${bundle.stats.dedupSavedBytes}`);
+  assert.ok(bundle.stats.skippedBytes > 100_000, "unserved LICENSE copies outside frozen_paths must be excluded from Worker bundle");
   assert.ok(sizes.missionsGz < 1024 * 1024, `real missions.ts gz (${sizes.missionsGz}) should stay compact (<1 MiB)`);
   assert.ok(sizes.combinedGz < WORKER_FREE_GZ_LIMIT_BYTES, "real generated assets must fit comfortably within 3 MiB Free Worker limit");
 

@@ -1,0 +1,222 @@
+{
+  "repo": "google-deepmind/formal-conjectures",
+  "commit": "5bd8bfb9def462c19a87d2d275af3db3341dc727",
+  "license": "Apache-2.0",
+  "checks": [
+    {
+      "local_file": "FcSolvedNT/InfiniteIrrationalAtOdd.lean",
+      "upstream_file": "FormalConjectures/Wikipedia/RiemannZetaValues.lean",
+      "verbatim_snippet": "theorem infinite_irrational_at_odd :\n    { n : ℕ | ∃ x, Irrational x ∧ riemannZeta (2 * n + 1) = x }.Infinite :="
+    },
+    {
+      "local_file": "FcSolvedNT/GourevitchSeries.lean",
+      "upstream_file": "FormalConjectures/Paper/Gourevitch.lean",
+      "verbatim_snippet": "theorem gourevitch_series_identity :\n    ∑' n : ℕ, ((1 + 14 * n + 76 * n ^ 2 + 168 * n ^ 3) / (2 ^ (20 * n)) : ℝ)\n      * Nat.centralBinom n ^ 7 = 32 / (Real.pi ^ 3) :="
+    },
+    {
+      "local_file": "FcSolvedNT/Boshernitzan.lean",
+      "upstream_file": "FormalConjectures/Books/BugeaudDistributionModuloOne/Problem10_6.lean",
+      "verbatim_snippet": "theorem boshernitzan (r : ℕ → ℝ) (hr : ∀ n, 0 < r n) (hunb : ¬ BddAbove (Set.range r))\n    (hsub : Tendsto (fun n => r (n + 1) / r n) atTop (nhds 1)) :\n    dimH {ξ : ℝ | ¬ Dense (Set.range fun n => (↑(ξ * r n) : AddCircle (1 : ℝ)))} = 0 :="
+    },
+    {
+      "local_file": "FcSolvedNT/Spec.lean",
+      "upstream_file": "FormalConjectures/Wikipedia/DirichletDivisorProblem.lean",
+      "verbatim_snippet": "noncomputable def divisorSummatory (x : ℝ) : ℝ :=\n  ∑ n ∈ Finset.Icc 1 ⌊x⌋₊, (n.divisors.card : ℝ)"
+    },
+    {
+      "local_file": "FcSolvedNT/Spec.lean",
+      "upstream_file": "FormalConjectures/Wikipedia/DirichletDivisorProblem.lean",
+      "verbatim_snippet": "noncomputable def divisorError (x : ℝ) : ℝ :=\n  divisorSummatory x - x * Real.log x - (2 * eulerMascheroniConstant - 1) * x"
+    },
+    {
+      "local_file": "FcSolvedNT/DivisorErrorHardy.lean",
+      "upstream_file": "FormalConjectures/Wikipedia/DirichletDivisorProblem.lean",
+      "verbatim_snippet": "theorem divisor_error_hardy :\n    ¬ (divisorError =o[atTop] fun x => x ^ ((1 : ℝ) / 4)) :="
+    },
+    {
+      "local_file": "FcSolvedNT/Spec.lean",
+      "upstream_file": "FormalConjectures/Wikipedia/CarmichaelTotient.lean",
+      "verbatim_snippet": "def CarmichaelTotientFor (n : ℕ) : Prop := ∃ m : ℕ, m ≠ n ∧ φ m = φ n"
+    },
+    {
+      "local_file": "FcSolvedNT/CarmichaelTotientBound.lean",
+      "upstream_file": "FormalConjectures/Wikipedia/CarmichaelTotient.lean",
+      "verbatim_snippet": "theorem carchimaelTotient_bound {n : ℕ} (hn : 0 < n) (hn' : n < 10 ^ (10 ^ 10)) :\n    CarmichaelTotientFor n :="
+    },
+    {
+      "local_file": "FcSolvedNT/Erdos408FKL.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/408.lean",
+      "verbatim_snippet": "theorem erdos_408.variants.ford_konyagin_luca (ε δ : ℝ) (hε : 0 < ε) (hδ : 0 < δ) :\n    ∃ k : ℕ, ∀ᶠ x : ℝ in atTop, (1 - ε) * x ≤\n      ((Finset.Icc 1 ⌊x⌋₊).filter fun n ↦\n        ((Nat.totient^[k] n).maxPrimeFac : ℝ) ≤ x ^ δ).card :="
+    },
+    {
+      "local_file": "FcSolvedNT/DarmonGranville.lean",
+      "upstream_file": "FormalConjectures/Wikipedia/FermatCatalanConjecture.lean",
+      "verbatim_snippet": "theorem fermat_catalan.variants.darmon_granville\n    (m n k : ℕ) (hm : 0 < m) (hn : 0 < n) (hk : 0 < k)\n    (H : (1 / m : ℝ) + 1 / n + 1 / k < 1) :\n    {(a, b, c) : ℕ × ℕ × ℕ | 0 < a ∧ 0 < b ∧ 0 < c ∧ a^m + b^n = c^k ∧\n      ({a, b, c} : Set _).Pairwise Nat.Coprime}.Finite :="
+    },
+    {
+      "local_file": "FcSolvedNT/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/1057.lean",
+      "verbatim_snippet": "noncomputable def carmichaelCounting (x : ℝ) : ℝ :=\n  ({n : ℕ | IsCarmichael n ∧ (n : ℝ) ≤ x}.ncard : ℝ)"
+    },
+    {
+      "local_file": "FcSolvedNT/Erdos1057AGP.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/1057.lean",
+      "verbatim_snippet": "theorem erdos_1057.variants.agp_lower_bound :\n    ∀ᶠ x in atTop, carmichaelCounting x > x ^ (2 / 7 : ℝ) :="
+    },
+    {
+      "local_file": "FcSolvedNT/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/325.lean",
+      "verbatim_snippet": "def IsSumThreePower (k n : ℕ) : Prop := ∃ a b c, a ^ k + b ^ k + c ^ k = n"
+    },
+    {
+      "local_file": "FcSolvedNT/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/325.lean",
+      "verbatim_snippet": "noncomputable def cardIsSumThreePowerBelow (k x : ℕ) : ℕ :=\n  {n ∈ Set.Iic x | IsSumThreePower k n}.ncard"
+    },
+    {
+      "local_file": "FcSolvedNT/Erdos325Wooley.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/325.lean",
+      "verbatim_snippet": "theorem erdos_325.variants.wooley :\n    (fun x : ℕ => (x : ℝ) ^ (0.91709477 : ℝ)) =O[atTop]\n      (fun x => (cardIsSumThreePowerBelow 3 x : ℝ)) :="
+    },
+    {
+      "local_file": "FcSolvedNT/Spec.lean",
+      "upstream_file": "FormalConjectures/Wikipedia/ClassNumberProblem.lean",
+      "verbatim_snippet": "def IsClassNumberOne (d : ℤ) : Prop :=\n  ∃ (h₂ : Irreducible (X ^ 2 - C (d : ℚ))),\n  have := Fact.mk h₂\n  NumberField.classNumber (AdjoinRoot (X ^ 2 - C (d : ℚ))) = 1"
+    },
+    {
+      "local_file": "FcSolvedNT/ImaginaryClassNumberOne.lean",
+      "upstream_file": "FormalConjectures/Wikipedia/ClassNumberProblem.lean",
+      "verbatim_snippet": "theorem class_number_problem.variants.imaginary :\n    { d : ℤ | Squarefree d ∧ d < 0 ∧ IsClassNumberOne d } =\n    {-1, -2, -3, -7, -11, -19, -43, -67, -163} :="
+    },
+    {
+      "local_file": "FcSolvedNT/Spec.lean",
+      "upstream_file": "FormalConjectures/Wikipedia/LonelyRunnerConjecture.lean",
+      "verbatim_snippet": "noncomputable def deltaTuple {n : ℕ} (v : Fin n → ℤ) : ℝ :=\n  sSup { δ : ℝ | ∃ t : AddCircle (1 : ℝ), ∀ i : Fin n, δ ≤ dist (v i • t : AddCircle (1 : ℝ)) 0 }"
+    },
+    {
+      "local_file": "FcSolvedNT/Spec.lean",
+      "upstream_file": "FormalConjectures/Wikipedia/LonelyRunnerConjecture.lean",
+      "verbatim_snippet": "noncomputable def deltaGap (n : ℕ) : ℝ :=\n  sInf { d : ℝ | ∃ v : Fin n ↪ ℤ, (∀ i : Fin n, v i ≠ 0) ∧ d = deltaTuple v }"
+    },
+    {
+      "local_file": "FcSolvedNT/LonelyRunnerTao2017.lean",
+      "upstream_file": "FormalConjectures/Wikipedia/LonelyRunnerConjecture.lean",
+      "verbatim_snippet": "theorem lonely_runner_conjecture.variants.tao_2017 :\n    ∃ c : ℝ, 0 < c ∧\n      (∀ᶠ n : ℕ in Filter.atTop,\n        deltaGap n ≥\n          ((1 : ℝ) / (2 * (n : ℝ))\n            + c * Real.log (n : ℝ) /\n                ((n : ℝ) ^ 2 * (Real.log (Real.log (n : ℝ))) ^ 2))) :="
+    },
+    {
+      "local_file": "FcSolvedNT/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/12.lean",
+      "verbatim_snippet": "abbrev IsGood (A : Set ℕ) : Prop := A.Infinite ∧\n  ∀ᵉ (a ∈ A) (b ∈ A) (c ∈ A), a ∣ b + c → a < b →\n  a < c → b = c"
+    },
+    {
+      "local_file": "FcSolvedNT/Erdos12Sarkozy.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/12.lean",
+      "verbatim_snippet": "theorem erdos_12.variants.erdos_sarkozy (f : ℕ → ℕ) (hf : atTop.Tendsto f atTop) :\n    ∃ A, IsGood A ∧ {N : ℕ | (N : ℝ) / f N < (A ∩ Icc 1 N).ncard}.Infinite :="
+    },
+    {
+      "local_file": "FcSolvedNT/Erdos67Discrepancy.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/67.lean",
+      "verbatim_snippet": "theorem erdos_67 (f : ℕ → ({-1, 1} : Finset ℝ)) (C : ℝ) (hC : 0 < C) : ∃ᵉ (d ≥ 1) (m ≥ 1),\n    C < |∑ k ∈ Finset.Icc 1 m, (f (k * d)).1| :="
+    },
+    {
+      "local_file": "FcSolvedNT/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/4.lean",
+      "verbatim_snippet": "def Erdos4For (C : ℝ) : Prop :=\n  {n : ℕ | (n + 1).nth Nat.Prime - n.nth Nat.Prime >\n    C * log (log n) * log (log (log (log n))) / (log (log (log n))) ^ 2 * log n}.Infinite"
+    },
+    {
+      "local_file": "FcSolvedNT/Erdos4PrimeGaps.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/4.lean",
+      "verbatim_snippet": "theorem erdos_4 : (∀ C > 0, Erdos4For C) :="
+    },
+    {
+      "local_file": "FcSolvedNT/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/711.lean",
+      "verbatim_snippet": "def HasDivisibleDistinctTuple (n m L : ℕ) : Prop :=\n  ∃ a : Fin n → ℕ,\n    Function.Injective a ∧\n      ∀ i : Fin n, m < a i ∧ a i < m + L ∧ (i.val + 1) ∣ a i"
+    },
+    {
+      "local_file": "FcSolvedNT/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/711.lean",
+      "verbatim_snippet": "def IsMinimalIntervalLength (n m L : ℕ) : Prop :=\n  HasDivisibleDistinctTuple n m L ∧\n    ∀ L', HasDivisibleDistinctTuple n m L' → L ≤ L'"
+    },
+    {
+      "local_file": "FcSolvedNT/Erdos711Interval.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/711.lean",
+      "verbatim_snippet": "theorem erdos_711.parts.ii : ∀ B : ℕ, ∀ᶠ n in atTop,\n    ∃ m Lm Ln : ℕ, IsMinimalIntervalLength n m Lm ∧\n      IsMinimalIntervalLength n n Ln ∧ B ≤ Lm - Ln :="
+    },
+    {
+      "local_file": "FcSolvedNT/Erdos69OmegaIrrational.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/69.lean",
+      "verbatim_snippet": "theorem erdos_69 : Irrational <| ∑' n, ω (n + 2) / 2 ^ (n + 2) :="
+    },
+    {
+      "local_file": "FcSolvedNT/Erdos402GrahamGcd.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/402.lean",
+      "verbatim_snippet": "theorem erdos_402 (A : Finset ℕ) (h₁ : 0 ∉ A) (h₂ : A.Nonempty) : ∃ᵉ (a ∈ A) (b ∈ A),\n    a.gcd b ≤ (a / A.card : ℚ) :="
+    },
+    {
+      "local_file": "FcSolvedNT/Erdos387BinomDivisor.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/387.lean",
+      "verbatim_snippet": "theorem erdos_387 : ¬ ∃ c : ℝ, 0 < c ∧ ∀ n k : ℕ, 1 ≤ k → k < n →\n    ∃ d : ℕ, (d : ℝ) ∈ Set.Ioc (c * n) n ∧ d ∣ n.choose k :="
+    },
+    {
+      "local_file": "FcSolvedNT/TernaryGoldbach.lean",
+      "upstream_file": "FormalConjectures/Wikipedia/GoldbachConjecture.lean",
+      "verbatim_snippet": "theorem ternaryGoldbach (n : ℕ) (hn : 5 < n) (hn_odd : Odd n) :\n    ∃ p q r, Nat.Prime p ∧ Nat.Prime q ∧ Nat.Prime r ∧ n = p + q + r :="
+    },
+    {
+      "local_file": "FcSolvedNT/Green3MultTriple.lean",
+      "upstream_file": "FormalConjectures/GreensOpenProblems/3.lean",
+      "verbatim_snippet": "theorem green_3 :\n    ∀ A : Set ℝ,\n      IsOpen A → A ⊆ Icc 0 1 → volume A > 1/3 →\n        ∃ x y z, x ∈ A ∧ y ∈ A ∧ z ∈ A ∧ x * y = z :="
+    },
+    {
+      "local_file": "FcSolvedNT/Erdos372MaxPrimeFac.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/372.lean",
+      "verbatim_snippet": "theorem erdos_372 :\n    {n : ℕ | Nat.maxPrimeFac n > Nat.maxPrimeFac (n + 1) ∧\n      Nat.maxPrimeFac (n + 1) > Nat.maxPrimeFac (n + 2)}.Infinite :="
+    },
+    {
+      "local_file": "FcSolvedNT/ColossallyAbundant.lean",
+      "upstream_file": "FormalConjectures/Wikipedia/ColossallyAbundantNumber.lean",
+      "verbatim_snippet": "theorem encard_colossallyAbundant_maximizers_le_four (ε : ℝ) (hε : 0 < ε) :\n    Set.encard {n : ℕ | 1 < n ∧ ∀ k : ℕ, 1 < k →\n      (σ 1 k : ℝ) / (k : ℝ) ^ (1 + ε) ≤ (σ 1 n : ℝ) / (n : ℝ) ^ (1 + ε)} ≤ 4 :="
+    },
+    {
+      "local_file": "FcSolvedNT/Spec.lean",
+      "upstream_file": "FormalConjectures/OEIS/287616.lean",
+      "verbatim_snippet": "def A (n : ℕ) : Prop :=\n  ∃ x y z : ℕ, n = x * (x + 1) / 2 + y * (3 * y + 1) / 2 + z * (5 * z + 1) / 2"
+    },
+    {
+      "local_file": "FcSolvedNT/OeisA287616.lean",
+      "upstream_file": "FormalConjectures/OEIS/287616.lean",
+      "verbatim_snippet": "theorem conjecture (n : ℕ) : A n :="
+    },
+    {
+      "local_file": "FcSolvedNT/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/848.lean",
+      "verbatim_snippet": "def NonSquarefreeProductProp (A : Finset ℕ) : Prop :=\n  ∀ a ∈ A, ∀ b ∈ A, ¬Squarefree (a * b + 1)"
+    },
+    {
+      "local_file": "FcSolvedNT/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/848.lean",
+      "verbatim_snippet": "def A₇ (N : ℕ) : Finset ℕ :=\n  (Finset.range N).filter (fun n => n % 25 = 7)"
+    },
+    {
+      "local_file": "FcSolvedNT/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/848.lean",
+      "verbatim_snippet": "def Erdos848For (N : ℕ) : Prop :=\n  ∀ A : Finset ℕ, A ⊆ Finset.range N → NonSquarefreeProductProp A →\n    A.card ≤ (A₇ N).card"
+    },
+    {
+      "local_file": "FcSolvedNT/Erdos848NonSquarefree.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/848.lean",
+      "verbatim_snippet": "theorem erdos_848 : ∀ N, Erdos848For N :="
+    },
+    {
+      "local_file": "FcSolvedNT/Spec.lean",
+      "upstream_file": "FormalConjectures/Paper/RiemannZetaMoments.lean",
+      "verbatim_snippet": "noncomputable def moment (k : ℕ) (T : ℝ) : ℝ :=\n  1/T * ∫ t in (0 : ℝ)..(T), ‖riemannZeta (1/2 + I * t)‖ ^ (2 * k)"
+    },
+    {
+      "local_file": "FcSolvedNT/ZetaSecondMoment.lean",
+      "upstream_file": "FormalConjectures/Paper/RiemannZetaMoments.lean",
+      "verbatim_snippet": "theorem moment_isEquiv₁ : moment 1 ~[atTop] fun T ↦ T.log :="
+    }
+  ]
+}

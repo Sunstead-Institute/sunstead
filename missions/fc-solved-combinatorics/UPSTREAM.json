@@ -1,0 +1,227 @@
+{
+  "repo": "google-deepmind/formal-conjectures",
+  "commit": "5bd8bfb9def462c19a87d2d275af3db3341dc727",
+  "license": "Apache-2.0",
+  "checks": [
+    {
+      "local_file": "FcSolvedComb/SixStdDev.lean",
+      "upstream_file": "FormalConjectures/Wikipedia/SixStandardDeviations.lean",
+      "verbatim_snippet": "theorem six_standard_deviations :\n    ∀ (n : ℕ) (S : Fin n → Finset (Fin n)),\n      ∃ χ : Fin n → ℝ, (∀ j, χ j = 1 ∨ χ j = -1) ∧\n        ∀ i, |∑ j ∈ S i, χ j| ≤ 6 * Real.sqrt n :="
+    },
+    {
+      "local_file": "FcSolvedComb/KotzigLarge.lean",
+      "upstream_file": "FormalConjectures/Arxiv/2001.02665/RingelConjecture.lean",
+      "verbatim_snippet": "theorem kotzig_conjecture_large :\n    ∀ᶠ (n : ℕ) in Filter.atTop, ∀ {V : Type} [Finite V] (T : SimpleGraph V),\n      T.IsTree → T.edgeSet.ncard = n →\n      ∃ f : Fin (2 * n + 1) → (V ↪ Fin (2 * n + 1)),\n        (∀ i v, f i v = f 0 v + i) ∧\n        Pairwise (fun i j => Disjoint (T.map (f i)).edgeSet (T.map (f j)).edgeSet) ∧\n        ⨆ i, T.map (f i) = (⊤ : SimpleGraph (Fin (2 * n + 1))) :="
+    },
+    {
+      "local_file": "FcSolvedComb/Erdos723ProjPlane.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/723.lean",
+      "verbatim_snippet": "theorem erdos_723.variants.leq_11 {P L : Type} [Membership P L] [Fintype P] [Fintype L] :\n    ∀ pp : ProjectivePlane P L, pp.order ≤ 11 → IsPrimePow pp.order :="
+    },
+    {
+      "local_file": "FcSolvedComb/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/813.lean",
+      "verbatim_snippet": "def EverySevenHasTriangle {n : ℕ} (G : SimpleGraph (Fin n)) : Prop :=\n  ∀ S : Finset (Fin n), S.card = 7 → ∃ t ⊆ S, G.IsNClique 3 t"
+    },
+    {
+      "local_file": "FcSolvedComb/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/813.lean",
+      "verbatim_snippet": "noncomputable def h (n : ℕ) : ℕ :=\n  sInf {k : ℕ | ∃ G : SimpleGraph (Fin n), EverySevenHasTriangle G ∧ G.cliqueNum = k}"
+    },
+    {
+      "local_file": "FcSolvedComb/Erdos813BucicSudakov.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/813.lean",
+      "verbatim_snippet": "theorem erdos_813.variants.bucic_sudakov :\n    ∀ ε > (0 : ℝ), ∀ᶠ n : ℕ in atTop, (n : ℝ) ^ (5 / 12 - ε : ℝ) ≤ (h n : ℝ) :="
+    },
+    {
+      "local_file": "FcSolvedComb/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/920.lean",
+      "verbatim_snippet": "noncomputable def f (k n : ℕ) : ℕ :=\n  sSup {(G.chromaticNumber) | (G : SimpleGraph (Fin n)) (_ : G.CliqueFree k)}"
+    },
+    {
+      "local_file": "FcSolvedComb/Erdos920TriangleFree.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/920.lean",
+      "verbatim_snippet": "theorem erdos_920.variants.k_eq_3 :\n    (fun n ↦ (f 3 n : ℝ)) =Θ[atTop] (fun n ↦ ((n : ℝ) / log n) ^ (1 / 2 : ℝ)) :="
+    },
+    {
+      "local_file": "FcSolvedComb/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/295.lean",
+      "verbatim_snippet": "noncomputable abbrev k (N : ℕ) : ℕ :=\n  sInf {k | ∃ n : Fin k → ℕ, (∀ i, N ≤ n i) ∧ StrictMono n ∧ ∑ i, (1 / n i : ℝ) = 1}"
+    },
+    {
+      "local_file": "FcSolvedComb/Erdos295Straus.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/295.lean",
+      "verbatim_snippet": "theorem erdos_295.variants.erdos_straus :\n    ∃ᵉ (C > 0) (O > 0), ∀ᶠ (N : ℕ) in Filter.atTop,\n      (k N - (rexp 1 - 1)*N) ∈ Set.Ioc (-C) (O * N / (N : ℝ).log):="
+    },
+    {
+      "local_file": "FcSolvedComb/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/494.lean",
+      "verbatim_snippet": "noncomputable def prodMultiset (A : Finset ℂ) (k : ℕ) : Multiset ℂ :=\n  ((A.powersetCard k).val.map (fun s => s.prod id))"
+    },
+    {
+      "local_file": "FcSolvedComb/Erdos494ProdMultiset.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/494.lean",
+      "verbatim_snippet": "theorem erdos_494.variants.product :\n    ∃ (A B : Finset ℂ), 3 < A.card ∧ A.card = B.card ∧ (0 : ℂ) ∉ A ∧ (0 : ℂ) ∉ B ∧\n      prodMultiset A 3 = prodMultiset B 3 ∧ A ≠ B :="
+    },
+    {
+      "local_file": "FcSolvedComb/Erdos88McKay.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/88.lean",
+      "verbatim_snippet": "theorem erdos_88.variants.erdos_mckay :\n    ∀ ε > (0 : ℝ), ∃ δ > (0 : ℝ), ∀ n : ℕ, ∀ G : SimpleGraph (Fin n),\n      (G.cliqueNum : ℝ) < ε * Real.log n → (G.indepNum : ℝ) < ε * Real.log n →\n        ∀ m : ℕ, (m : ℝ) ≤ δ * Real.log n ^ 2 →\n          ∃ S : Finset (Fin n), (G.induce (S : Set (Fin n))).edgeSet.ncard = m :="
+    },
+    {
+      "local_file": "FcSolvedComb/Erdos245Sumset.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/245.lean",
+      "verbatim_snippet": "theorem erdos_245 :\n    ∀ (A : Set ℕ), A.Infinite →\n      atTop.Tendsto (fun N ↦ (A ∩ Icc 1 ⌊N⌋₊ |>.ncard : ℝ) / N) (𝓝 0) →\n      3 ≤ atTop.limsup\n        fun N : ℝ ↦ ((A + A) ∩ Icc 1 ⌊N⌋₊ |>.ncard : EReal)\n          / (A ∩ Icc 1 ⌊N⌋₊).ncard :="
+    },
+    {
+      "local_file": "FcSolvedComb/Green23Pythagorean.lean",
+      "upstream_file": "FormalConjectures/GreensOpenProblems/23.lean",
+      "verbatim_snippet": "theorem green_23 :\n    -- For every finite colouring of the natural numbers\n    ∀ (k : ℕ) (c : ℕ → Fin k),\n    -- there exist two numbers of the same colour whose squares sum to a square\n    ∃ x y : ℕ,\n      0 < x ∧ 0 < y ∧  -- Exclude trivial x^2 + 0^2 = x^2 solution\n      c x = c y ∧      -- Same colour\n      IsSquare (x^2 + y^2)\n    :="
+    },
+    {
+      "local_file": "FcSolvedComb/Erdos599Menger.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/599.lean",
+      "verbatim_snippet": "theorem erdos_599 :\n    ∀ (V : Type) (G : SimpleGraph V) (A B : Set V),\n      Disjoint A B → G.IsIndepSet A → G.IsIndepSet B →\n      ∃ (ι : Type) (a b : ι → V) (p : ∀ i, G.Walk (a i) (b i)) (S : Set V),\n        (∀ i, a i ∈ A) ∧ (∀ i, b i ∈ B) ∧ (∀ i, (p i).IsPath) ∧\n        (Pairwise fun i j => Disjoint {v | v ∈ (p i).support} {v | v ∈ (p j).support}) ∧\n        S ⊆ {v | ∃ i, v ∈ (p i).support} ∧\n        (∀ i, ∃! v, v ∈ S ∧ v ∈ (p i).support) ∧\n        (∀ a' ∈ A, ∀ b' ∈ B, ∀ q : G.Walk a' b', q.IsPath → ∃ v ∈ q.support, v ∈ S) :="
+    },
+    {
+      "local_file": "FcSolvedComb/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/882.lean",
+      "verbatim_snippet": "def IsSubsetSumAntichain (A : Finset ℕ) : Prop :=\n  ∀ S₁ ⊆ A, ∀ S₂ ⊆ A, S₁.Nonempty → S₂.Nonempty → S₁ ≠ S₂ →\n    ¬ (∑ a ∈ S₁, a) ∣ (∑ a ∈ S₂, a)"
+    },
+    {
+      "local_file": "FcSolvedComb/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/882.lean",
+      "verbatim_snippet": "noncomputable def maxAntichainCard (n : ℕ) : ℕ :=\n  sSup {k | ∃ A ⊆ Finset.Icc 1 n, IsSubsetSumAntichain A ∧ A.card = k}"
+    },
+    {
+      "local_file": "FcSolvedComb/Erdos882Antichain.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/882.lean",
+      "verbatim_snippet": "theorem erdos_882 :\n    Filter.Tendsto (fun n : ℕ => (maxAntichainCard n : ℝ) / Real.logb 2 n)\n      Filter.atTop (nhds 1) :="
+    },
+    {
+      "local_file": "FcSolvedComb/Spec.lean",
+      "upstream_file": "FormalConjectures/Paper/TuDengConjecture.lean",
+      "verbatim_snippet": "def binaryWeight (n : ℕ) : ℕ := (Nat.digits 2 n).sum"
+    },
+    {
+      "local_file": "FcSolvedComb/TuDeng.lean",
+      "upstream_file": "FormalConjectures/Paper/TuDengConjecture.lean",
+      "verbatim_snippet": "theorem tu_deng_conjecture (k : ℕ) (hk : 2 ≤ k) (t : ZMod (2 ^ k - 1)) (ht : t ≠ 0) :\n    {p : ZMod (2 ^ k - 1) × ZMod (2 ^ k - 1) |\n        p.1 + p.2 = t ∧ binaryWeight p.1.val + binaryWeight p.2.val ≤ k - 1}.ncard\n      ≤ 2 ^ (k - 1) :="
+    },
+    {
+      "local_file": "FcSolvedComb/Spec.lean",
+      "upstream_file": "FormalConjectures/Arxiv/2507.17780/2.lean",
+      "verbatim_snippet": "noncomputable def zeroForcingStep {V : Type*} [Fintype V] [DecidableEq V]\n    (G : SimpleGraph V) [DecidableRel G.Adj] (S : Finset V) : Finset V :=\n  S ∪ Finset.univ.filter fun w =>\n    w ∉ S ∧ ∃ v ∈ S, G.Adj v w ∧ ∀ u, G.Adj v u → u ∉ S → u = w"
+    },
+    {
+      "local_file": "FcSolvedComb/Spec.lean",
+      "upstream_file": "FormalConjectures/Arxiv/2507.17780/2.lean",
+      "verbatim_snippet": "noncomputable def zeroForcingClosure {V : Type*} [Fintype V] [DecidableEq V]\n    (G : SimpleGraph V) [DecidableRel G.Adj] (S : Finset V) : Finset V :=\n  (zeroForcingStep G)^[Fintype.card V] S"
+    },
+    {
+      "local_file": "FcSolvedComb/Spec.lean",
+      "upstream_file": "FormalConjectures/Arxiv/2507.17780/2.lean",
+      "verbatim_snippet": "def IsZeroForcingSet {V : Type*} [Fintype V] [DecidableEq V]\n    (G : SimpleGraph V) [DecidableRel G.Adj] (S : Finset V) : Prop :=\n  zeroForcingClosure G S = Finset.univ"
+    },
+    {
+      "local_file": "FcSolvedComb/Spec.lean",
+      "upstream_file": "FormalConjectures/Arxiv/2507.17780/2.lean",
+      "verbatim_snippet": "noncomputable def zeroForcingNumber {V : Type*} [Fintype V] [DecidableEq V]\n    (G : SimpleGraph V) [DecidableRel G.Adj] : ℕ :=\n  sInf {k | ∃ S : Finset V, S.card = k ∧ IsZeroForcingSet G S}"
+    },
+    {
+      "local_file": "FcSolvedComb/TxGraffiti2.lean",
+      "upstream_file": "FormalConjectures/Arxiv/2507.17780/2.lean",
+      "verbatim_snippet": "theorem tx_graffiti_conjecture_2 :\n    ¬ ∀ (V : Type) [Fintype V] [DecidableEq V] (G : SimpleGraph V)\n      [DecidableRel G.Adj] (_hConn : G.Connected)\n      (_hDeg : G.maxDegree ≤ 3)\n      (_hNotK4 : G = ⊤ → Fintype.card V ≠ 4),\n      zeroForcingNumber G ≤ G.indepNum + 1 :="
+    },
+    {
+      "local_file": "FcSolvedComb/Erdos1033Fan.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/1033.lean",
+      "verbatim_snippet": "theorem erdos_1033.variants.fan (n : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]\n    (hG : n ^ 2 < 4 * #G.edgeFinset) :\n    ∃ t, G.IsNClique 3 t ∧ 21 * n ≤ 16 * ∑ v ∈ t, G.degree v :="
+    },
+    {
+      "local_file": "FcSolvedComb/Erdos627Chromatic.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/627.lean",
+      "verbatim_snippet": "theorem erdos_627.variants.erdos_1961 :\n    ∃ c > (0 : ℝ), ∀ᶠ n : ℕ in atTop, ∃ G : SimpleGraph (Fin n),\n      G.cliqueNum = 2 ∧\n        c * Real.sqrt (n : ℝ) / Real.log (n : ℝ) ≤ (G.chromaticNumber.toNat : ℝ) :="
+    },
+    {
+      "local_file": "FcSolvedComb/Erdos780Sharp.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/780.lean",
+      "verbatim_snippet": "theorem erdos_780.variants.sharp (k r t : ℕ) (hk : 1 ≤ k) (hr : 1 ≤ r) (ht : 1 ≤ t) :\n    ∃ c : {e : Finset (Fin (k * r - 1 + (t - 1) * (k - 1))) // e.card = r} → Fin t,\n      ¬ ∃ (i : Fin t) (e : Fin k → {e : Finset (Fin (k * r - 1 + (t - 1) * (k - 1))) //\n          e.card = r}), (∀ j, c (e j) = i) ∧ Pairwise fun a b ↦ Disjoint (e a).1 (e b).1 :="
+    },
+    {
+      "local_file": "FcSolvedComb/Erdos1009Sauer.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/1009.lean",
+      "verbatim_snippet": "theorem erdos_1009.variants.sauer : ∀ r : ℕ, 1 ≤ r → ∃ G : SimpleGraph (Fin (2 * r + 4)),\n    G.edgeSet.ncard = (2 * r + 4) ^ 2 / 4 + 2 * (2 * r + 4) - 6 ∧\n      ∀ T : Finset (Finset (Fin (2 * r + 4))), (∀ t ∈ T, G.IsNClique 3 t) →\n        (T : Set (Finset (Fin (2 * r + 4)))).Pairwise (fun s t => (s ∩ t).card ≤ 1) →\n          T.card ≤ 2 * (2 * r + 4) - 7 :="
+    },
+    {
+      "local_file": "FcSolvedComb/Erdos915Paths.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/915.lean",
+      "verbatim_snippet": "theorem erdos_915.variants.edge_disjoint :\n    ∀ m n : ℕ, 2 ≤ m → 1 ≤ n → ∀ (V : Type) [Fintype V] (G : SimpleGraph V),\n      Fintype.card V = 1 + n * (m - 1) → G.edgeSet.ncard = 1 + n * m.choose 2 →\n        ∃ u v : V, u ≠ v ∧ ∃ P : Finset (G.Walk u v), P.card = m ∧ (∀ p ∈ P, p.IsPath) ∧\n          (P : Set (G.Walk u v)).Pairwise fun p q => List.Disjoint p.edges q.edges :="
+    },
+    {
+      "local_file": "FcSolvedComb/Spec.lean",
+      "upstream_file": "FormalConjectures/Wikipedia/GyarfasSumnerConjecture.lean",
+      "verbatim_snippet": "def IsChiBoundedBy {W : Type} (T : SimpleGraph W) (f : ℕ → ℕ) : Prop :=\n  ∀ {V : Type} [Fintype V] [DecidableEq V] (G : SimpleGraph V) [DecidableRel G.Adj],\n    ¬ SimpleGraph.IsIndContained T G → G.chromaticNumber ≤ f G.cliqueNum"
+    },
+    {
+      "local_file": "FcSolvedComb/GyarfasSumnerPath.lean",
+      "upstream_file": "FormalConjectures/Wikipedia/GyarfasSumnerConjecture.lean",
+      "verbatim_snippet": "theorem gyarfas_sumner_conjecture.variants.path (n : ℕ) :\n    ∃ f : ℕ → ℕ, IsChiBoundedBy (pathGraph n) f :="
+    },
+    {
+      "local_file": "FcSolvedComb/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/61.lean",
+      "verbatim_snippet": "def IsErdosHajnalLowerBound {α : Type*} [Fintype α] [DecidableEq α]\n  (H : SimpleGraph α) (f : ℕ → ℝ) : Prop :=\n  ∀ᶠ n in atTop, ∀ G : SimpleGraph (Fin n),\n    (¬∃ g : α ↪ Fin n, H = G.comap g) → G.indepNum ≥ f n ∨ G.cliqueNum ≥ f n"
+    },
+    {
+      "local_file": "FcSolvedComb/Erdos61P5.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/61.lean",
+      "verbatim_snippet": "theorem erdos_61.variants.p5 :\n    ∃ c > (0 : ℝ), IsErdosHajnalLowerBound (pathGraph 5) (fun n : ℕ => (n : ℝ) ^ c) :="
+    },
+    {
+      "local_file": "FcSolvedComb/Spec.lean",
+      "upstream_file": "FormalConjectures/GreensOpenProblems/76.lean",
+      "verbatim_snippet": "def HitsRichRectangles (k : ℕ) (A A' : Finset (ℝ × ℝ)) : Prop :=\n  ∀ a b : ℝ × ℝ, k ≤ #{p ∈ A | p ∈ Set.Icc a b} → ∃ p ∈ A', p ∈ Set.Icc a b"
+    },
+    {
+      "local_file": "FcSolvedComb/Green76Rectangles.lean",
+      "upstream_file": "FormalConjectures/GreensOpenProblems/76.lean",
+      "verbatim_snippet": "theorem green_76.variants.subset :\n    ¬ ∃ k : ℕ, ∀ A : Finset (ℝ × ℝ), ∃ A' ⊆ A, #A' ≤ #A / 2 ∧ HitsRichRectangles k A A' :="
+    },
+    {
+      "local_file": "FcSolvedComb/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/926.lean",
+      "verbatim_snippet": "def H (k : ℕ) : SimpleGraph (Unit ⊕ (Fin k ⊕ {p : Fin k × Fin k // p.1 < p.2})) where\n  Adj x y :=\n    match x, y with\n    | Sum.inl _, Sum.inr (Sum.inl _) => True\n    | Sum.inr (Sum.inl _), Sum.inl _ => True\n    | Sum.inr (Sum.inl i), Sum.inr (Sum.inr p) => i = p.1.1 ∨ i = p.1.2\n    | Sum.inr (Sum.inr p), Sum.inr (Sum.inl i) => i = p.1.1 ∨ i = p.1.2\n    | _, _ => False\n  symm := by\n    constructor\n    intro x y h\n    rcases x with _ | _ | _ <;> rcases y with _ | _ | _ <;> simp_all\n  loopless := by\n    constructor\n    intro x\n    rcases x with _ | _ | _ <;> simp"
+    },
+    {
+      "local_file": "FcSolvedComb/Erdos926AKS.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/926.lean",
+      "verbatim_snippet": "theorem erdos_926.variants.aks : ∃ C : ℝ, ∀ k : ℕ, 4 ≤ k → ∀ n : ℕ,\n    (extremalNumber n (H k) : ℝ) ≤ C * k * (n : ℝ) ^ (3 / 2 : ℝ) :="
+    },
+    {
+      "local_file": "FcSolvedComb/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/781.lean",
+      "verbatim_snippet": "def IsDescendingWave {k : ℕ} (x : Fin k → ℕ) : Prop :=\n  StrictMono x ∧\n    ∀ i j l : Fin k, (i : ℕ) + 1 = j → (j : ℕ) + 1 = l → x i + x l ≤ 2 * x j"
+    },
+    {
+      "local_file": "FcSolvedComb/Spec.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/781.lean",
+      "verbatim_snippet": "noncomputable def f (k : ℕ) : ℕ :=\n  sInf {n | ∀ c : Fin n → Fin 2, ∃ x : Fin k → Fin n,\n    IsDescendingWave (fun i ↦ (x i : ℕ)) ∧ ∃ γ, ∀ i, c (x i) = γ}"
+    },
+    {
+      "local_file": "FcSolvedComb/Erdos781Wave.lean",
+      "upstream_file": "FormalConjectures/ErdosProblems/781.lean",
+      "verbatim_snippet": "theorem erdos_781.variants.brown_erdos_freedman (k : ℕ) (hk : 1 ≤ k) :\n    k ^ 2 - k + 1 ≤ f k ∧ (f k : ℚ) ≤ (k ^ 3 - 4 * k + 9) / 3 :="
+    },
+    {
+      "local_file": "FcSolvedComb/Spec.lean",
+      "upstream_file": "FormalConjectures/Paper/ManickamMiklosSinghiConjecture.lean",
+      "verbatim_snippet": "noncomputable def nonnegSubsetCount (n k : ℕ) (x : Fin n → ℝ) : ℕ :=\n  ((univ : Finset (Fin n)).powersetCard k).filter (fun S => 0 ≤ ∑ i ∈ S, x i) |>.card"
+    },
+    {
+      "local_file": "FcSolvedComb/MmsPokrovskiy.lean",
+      "upstream_file": "FormalConjectures/Paper/ManickamMiklosSinghiConjecture.lean",
+      "verbatim_snippet": "theorem manickam_miklos_singhi_conjecture.variants.pokrovskiy :\n    ∃ C : ℕ, ∀ (n k : ℕ), 1 ≤ k → C * k ≤ n → ∀ x : Fin n → ℝ, ∑ i, x i = 0 →\n      (n - 1).choose (k - 1) ≤ nonnegSubsetCount n k x :="
+    }
+  ]
+}

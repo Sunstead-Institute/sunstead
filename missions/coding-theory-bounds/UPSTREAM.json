@@ -1,0 +1,38 @@
+{
+  "repo": "williamechols/cwc-seeded-tabu-search",
+  "commit": "4f0bf18b094fb15c3634001ea8aed847e8353d1c",
+  "license": "MIT",
+  "specialization": "Sunstead pins William Echols's `cwc-seeded-tabu-search` (MIT, building on C. D. Rosin's CWBC arXiv:2603.00174 and A. E. Brouwer's binary and constant-weight code tables) and formalizes semantic binary codewords `Fin n \u2192 Bool`, Hamming weight/distance, and a proved-sound 32-bit SWAR popcount kernel checker in pure Lean 4.36.0 across 16 open A(n, d) and A(n, d, w) frontiers.",
+  "checks": [
+    {
+      "local_file": "LICENSE",
+      "upstream_file": "LICENSE",
+      "verbatim_snippet": "MIT License\n\nCopyright (c) 2026 William Echols"
+    },
+    {
+      "local_file": "README.md",
+      "upstream_file": "README.md",
+      "upstream_anchor": "Binary constant-weight codes establishing new lower bounds on `A(n,d,w)`"
+    },
+    {
+      "local_file": "CodingBounds/Spec.lean",
+      "upstream_file": "codes/21_6_5_109.txt",
+      "upstream_anchor": "000000000001010100110"
+    },
+    {
+      "local_file": "CodingBounds/Spec.lean",
+      "upstream_file": "codes/24_10_8_39.txt",
+      "upstream_anchor": "010011000100101001010000"
+    },
+    {
+      "local_file": "CodingBounds/Spec.lean",
+      "upstream_file": "codes/26_10_8_68.txt",
+      "upstream_anchor": "01100000110101000010001000"
+    },
+    {
+      "local_file": "CodingBounds/Spec.lean",
+      "upstream_file": "codes/29_12_10_70.txt",
+      "upstream_anchor": "11000000000101000010001011110"
+    }
+  ]
+}

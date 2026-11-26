@@ -1,0 +1,282 @@
+{
+  "id": "fate-x-fields-rings-groups",
+  "title": "FATE-X Research Algebra: Galois Extensions, Ring Structure & Group Theory",
+  "description": "25 research-level field/Galois theory, ring theory, and group theory `sorry` theorems copied verbatim from frenzymath/FATE-X (a6fb49ee, MIT) and kernel-verified on Lean v4.36.0 + Mathlib v4.36.0: p-extensions, radical extensions, PIDs/UFDs, Euclidean norms, polynomial/matrix rings, and finite/infinite group structure.",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/frenzymath/FATE-X",
+  "upstream": {
+    "repo": "frenzymath/FATE-X",
+    "commit": "a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d",
+    "license": "MIT"
+  },
+  "frozen_paths": [
+    "FateXFieldsRingsGroups/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 240,
+    "memory_mb": 6144
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "fatex_1_isPrincipalIdealRing_of_associated_or_associated",
+      "title": "FATEX #1 (Ring Theory / PID, ED and UFD): `isPrincipalIdealRing_of_associated_or_associated`",
+      "description": "Closes `FATEX/1.lean:9-13` (`Problem1.isPrincipalIdealRing_of_associated_or_associated`): Let $R$ be a UFD with two nonassociate prime elements $p$ and $q$ such that every prime element is an associate of either $p$ or… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXFieldsRingsGroups/P1.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/1.lean#L9-L13"
+    },
+    {
+      "id": "fatex_2_card_minimal_normal_subgroup_le_2",
+      "title": "FATEX #2 (Group Theory / Subgroups and Quotient groups): `card_minimal_normal_subgroup_le_2`",
+      "description": "Closes `FATEX/2.lean:9-13` (`Problem2.card_minimal_normal_subgroup_le_2`): Let $G$ be a finite group and $L$ a maximal subgroup of $G$. Suppose $L$ is non-Abelian and simple. Then there exist at most two… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXFieldsRingsGroups/P2.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/2.lean#L9-L13"
+    },
+    {
+      "id": "fatex_3_exists_leftCoset_rightCoset_representative",
+      "title": "FATEX #3 (Group Theory / Subgroups and Quotient groups): `exists_leftCoset_rightCoset_representative`",
+      "description": "Closes `FATEX/3.lean:9-12` (`Problem3.exists_leftCoset_rightCoset_representative`): Let $H$ be a subgroup of finite index of a group $G$. Show that there exists a subset $S$ of $G$, such that $S$ is both a set of… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXFieldsRingsGroups/P3.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/3.lean#L9-L12"
+    },
+    {
+      "id": "fatex_4_add_one_eq_two_pow_of_sylow_subgroup_not_normal",
+      "title": "FATEX #4 (Group Theory / Group Actions and Sylow theorems): `add_one_eq_two_pow_of_sylow_subgroup_not_normal`",
+      "description": "Closes `FATEX/4.lean:9-12` (`Problem4.add_one_eq_two_pow_of_sylow_subgroup_not_normal`): Let $p$ be an odd prime number, and let $G$ be a finite group of order $p(p + 1)$. Assume that $G$ does not have a normal Sylow… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXFieldsRingsGroups/P4.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/4.lean#L9-L12"
+    },
+    {
+      "id": "fatex_5_maximal_abelian_normal_subgroup_of_p_group_is_maxi",
+      "title": "FATEX #5 (Group Theory / p-Groups, Nilpotent Groups and Solvable Groups): `maximal_abelian_normal_subgroup_of_p_group_is_maximal_abelian_subgroup`",
+      "description": "Closes `FATEX/5.lean:9-14` (`Problem5.maximal_abelian_normal_subgroup_of_p_group_is_maximal_abelian_subgroup`): Let \\(p\\) be a prime, let \\(G\\) be a finite p-group. Let A be a maximal normal abelian subgroup of \\(G\\). Prove that A is also a… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXFieldsRingsGroups/P5.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/5.lean#L9-L14"
+    },
+    {
+      "id": "fatex_6_not_isSimpleGroup_of_card_eq_396",
+      "title": "FATEX #6 (Group Theory / Group Actions and Sylow theorems): `not_isSimpleGroup_of_card_eq_396`",
+      "description": "Closes `FATEX/6.lean:8-10` (`Problem6.not_isSimpleGroup_of_card_eq_396`): Prove that if $\\#G = 396$ then $G$ is not simple. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXFieldsRingsGroups/P6.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/6.lean#L8-L10"
+    },
+    {
+      "id": "fatex_7_not_isSimpleGroup_of_card_eq_1785",
+      "title": "FATEX #7 (Group Theory / Group Actions and Sylow theorems): `not_isSimpleGroup_of_card_eq_1785`",
+      "description": "Closes `FATEX/7.lean:8-10` (`Problem7.not_isSimpleGroup_of_card_eq_1785`): Prove that if $\\#G = 1785$ then $G$ is not simple. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXFieldsRingsGroups/P7.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/7.lean#L8-L10"
+    },
+    {
+      "id": "fatex_8_quaternionAlgebra_isomorphic_to_matrix_ring_or_qua",
+      "title": "FATEX #8 (Group Theory / Group Actions and Sylow theorems): `quaternionAlgebra_isomorphic_to_matrix_ring_or_quaternion_ring`",
+      "description": "Closes `FATEX/8.lean:17-21` (`Problem8.quaternionAlgebra_isomorphic_to_matrix_ring_or_quaternion_ring`): Let $A, B \\in \\mathbb{Q}^\\times$ be rational numbers. Consider the quaternion ring $$ D_{A, B, \\mathbb{R}} = \\{a+b\\boldsymbol{i}… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXFieldsRingsGroups/P8.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/8.lean#L17-L21"
+    },
+    {
+      "id": "fatex_11_not_isomorphic_euclideanDomain",
+      "title": "FATEX #11 (Ring Theory / Basic Definitions and Examples): `not_isomorphic_euclideanDomain`",
+      "description": "Closes `FATEX/11.lean:20-22` (`Problem11.not_isomorphic_euclideanDomain`): Let \\( A = \\mathbb{R}[X, Y]/(X^2 + Y^2 + 1) \\). Then it is not a Euclidean domain. Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXFieldsRingsGroups/P11.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/11.lean#L20-L22"
+    },
+    {
+      "id": "fatex_13_sq_eq_self_of_not_unit",
+      "title": "FATEX #13 (Field Theory / Galois theory): `sq_eq_self_of_not_unit`",
+      "description": "Closes `FATEX/13.lean:10-12` (`Problem13.sq_eq_self_of_not_unit`): Let $(R,+,\\cdot)$ be a (not necessarily commutative) ring. If we know that $R$ is not a field and $x^2=x$ for any $x\\in R,$ where… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXFieldsRingsGroups/P13.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/13.lean#L10-L12"
+    },
+    {
+      "id": "fatex_14_isomorphic_real_of_fractionRing_isomorphic_real_o",
+      "title": "FATEX #14 (Field Theory / Galois theory): `isomorphic_real_of_fractionRing_isomorphic_real_of_UFD`",
+      "description": "Closes `FATEX/14.lean:9-12` (`Problem14.isomorphic_real_of_fractionRing_isomorphic_real_of_UFD`): Show that if $R$ is a unique factorization domain such that the quotient field of $R$ is isomorphic to $\\mathbb{R}$ , then R is… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXFieldsRingsGroups/P14.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/14.lean#L9-L12"
+    },
+    {
+      "id": "fatex_16_normalClosure_isPExtension_of_isPExtension",
+      "title": "FATEX #16 (Field Theory / Explicit Computations): `normalClosure_isPExtension_of_isPExtension`",
+      "description": "Closes `FATEX/16.lean:20-24` (`Problem16.normalClosure_isPExtension_of_isPExtension`): Let $p$ be a prime and let $F$ be a field. Let $K$ be a finite Galois extension of $F$ whose Galois group is a $p$-group (i.e.,… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXFieldsRingsGroups/P16.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/16.lean#L20-L24"
+    },
+    {
+      "id": "fatex_17_countable_index_of_maximal_subfield_sqrt_2_nmem",
+      "title": "FATEX #17 (Field Theory / Galois theory): `countable_index_of_maximal_subfield_sqrt_2_nmem`",
+      "description": "Closes `FATEX/17.lean:9-13` (`Problem17.countable_index_of_maximal_subfield_sqrt_2_nmem`): Let $K$ be a subfield of $\\mathbb{C}$ maximal with respect to the property that $\\sqrt 2 \\notin K$. Deduce that $[\\mathbb{C} :… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXFieldsRingsGroups/P17.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/17.lean#L9-L13"
+    },
+    {
+      "id": "fatex_18_isEmpty_embedding_intermediateField_of_odd_degree",
+      "title": "FATEX #18 (Field Theory / Galois theory): `isEmpty_embedding_intermediateField_of_odd_degree_galois`",
+      "description": "Closes `FATEX/18.lean:28-32` (`Problem18.isEmpty_embedding_intermediateField_of_odd_degree_galois`): Let \\( E \\) be a subfield of \\( \\mathbb{R} \\) and let \\( K/E \\) be a finite Galois extension of odd degree \\( > 1 \\). Prove that… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXFieldsRingsGroups/P18.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/18.lean#L28-L32"
+    },
+    {
+      "id": "fatex_20_generated_single_elem_of_degree_le_p",
+      "title": "FATEX #20 (Field Theory / Galois theory): `generated_single_elem_of_degree_le_p`",
+      "description": "Closes `FATEX/20.lean:10-14` (`Problem20.generated_single_elem_of_degree_le_p`): Let $p$ be a prime number. Let $L/K$ be a finite extension of fields of characteristic $p$, and let $\\sigma:x\\mapsto x^p$ denote… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXFieldsRingsGroups/P20.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/20.lean#L10-L14"
+    },
+    {
+      "id": "fatex_21_intermediateField_rank_eq_ringChar",
+      "title": "FATEX #21 (Field Theory / Galois theory): `intermediateField_rank_eq_ringChar`",
+      "description": "Closes `FATEX/21.lean:14-18` (`Problem21.intermediateField_rank_eq_ringChar`): Let $F$ be a field and let $f(x) \\in F[x]$ be an irreducible polynomial. Suppose that $K$ is a splitting field for $f(x)$ over… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXFieldsRingsGroups/P21.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/21.lean#L14-L18"
+    },
+    {
+      "id": "fatex_22_finite_algebraic_integers_of_finite_module",
+      "title": "FATEX #22 (Field Theory / Galois theory): `finite_algebraic_integers_of_finite_module`",
+      "description": "Closes `FATEX/22.lean:11-15` (`Problem22.finite_algebraic_integers_of_finite_module`): Let $F$ be a field with $\\mathbb{Q} \\subseteq F \\subseteq \\mathbb{C}$, where $F/\\mathbb{Q}$ is a finite \\emph{abelian} Galois… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXFieldsRingsGroups/P22.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/22.lean#L11-L15"
+    },
+    {
+      "id": "fatex_23_ratio_tendsto_one_of_irreducible",
+      "title": "FATEX #23 (Field Theory / Galois theory): `ratio_tendsto_one_of_irreducible`",
+      "description": "Closes `FATEX/23.lean:13-18` (`Problem23.ratio_tendsto_one_of_irreducible`): Let $f(X)\\in\\mathbb{Z}[X]$ be an irreducible polynomial, $n_p$ is the number of solutions of $f(X)$ in $\\mathbb{F}_p$, show that… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXFieldsRingsGroups/P23.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/23.lean#L13-L18"
+    },
+    {
+      "id": "fatex_24_galoisGroup_iso_of_distinct_primes",
+      "title": "FATEX #24 (Field Theory / Galois theory): `galoisGroup_iso_of_distinct_primes`",
+      "description": "Closes `FATEX/24.lean:17-20` (`Problem24.galoisGroup_iso_of_distinct_primes`): Let $p_1, \\dots, p_r$ be $r$ different prime numbers. Prove that the Galois group of $K =\\mathbb{Q}(\\sqrt{p_1}, \\dots,… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXFieldsRingsGroups/P24.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/24.lean#L17-L20"
+    },
+    {
+      "id": "fatex_33_isNoetherianRing_of_fg_of_isNoetherianRing",
+      "title": "FATEX #33 (Ring Theory / PID, ED and UFD): `isNoetherianRing_of_fg_of_isNoetherianRing`",
+      "description": "Closes `FATEX/33.lean:9-11` (`Problem33.isNoetherianRing_of_fg_of_isNoetherianRing`): Let $A\\subset B$ be commutative rings such that $B$ is finitely generated as a module over $A$. If $B$ is a noetherian ring, show… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXFieldsRingsGroups/P33.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/33.lean#L9-L11"
+    },
+    {
+      "id": "fatex_51_adicCompletion_faithfullyFlat_iff",
+      "title": "FATEX #51 (Ring Theory / Polynomials): `adicCompletion_faithfullyFlat_iff`",
+      "description": "Closes `FATEX/51.lean:13-15` (`Problem51.adicCompletion_faithfullyFlat_iff`): A Noetherian topological ring in which the topology is defined by an ideal contained in the Jacobson radical is called a… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXFieldsRingsGroups/P51.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/51.lean#L13-L15"
+    },
+    {
+      "id": "fatex_54_not_zero_divisor_of_hausdorff_of_der_eq_one",
+      "title": "FATEX #54 (Ring Theory / Basic Definitions and Examples): `not_zero_divisor_of_hausdorff_of_der_eq_one`",
+      "description": "Closes `FATEX/54.lean:11-14` (`Problem54.not_zero_divisor_of_hausdorff_of_der_eq_one`): Let \\( A \\) be a $\\mathbb{Q}$-algebra. Suppose that \\( x \\in A \\) and \\( D \\in \\operatorname{Der}(A) \\) are such that \\( Dx = 1… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXFieldsRingsGroups/P54.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/54.lean#L11-L14"
+    },
+    {
+      "id": "fatex_59_exists_unique_valuation_eq",
+      "title": "FATEX #59 (Ring Theory / Polynomials): `exists_unique_valuation_eq`",
+      "description": "Closes `FATEX/59.lean:14-17` (`Problem59.exists_unique_valuation_eq`): Let \\( k \\) be a field, \\( X \\) and \\( Y \\) indeterminates, and suppose that \\( \\alpha \\) is a positive irrational number. Show… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXFieldsRingsGroups/P59.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/59.lean#L14-L17"
+    },
+    {
+      "id": "fatex_79_IsLocalRing_not_isCompleteIntersection_height_not",
+      "title": "FATEX #79 (Group Theory / Group Actions and Sylow theorems): `IsLocalRing.not_isCompleteIntersection.height_not_zero_and_not_one`",
+      "description": "Closes `FATEX/79.lean:51-54` (`Problem79.IsLocalRing.not_isCompleteIntersection.height_not_zero_and_not_one`): Let $B$ be a regular local ring and $I \\subset B$ an ideal such that $B/I$ is Gorenstein but not a complete intersection. Show… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXFieldsRingsGroups/P79.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/79.lean#L51-L54"
+    },
+    {
+      "id": "fatex_80_isCohenMacaulayRing_of_dimension_three",
+      "title": "FATEX #80 (Ring Theory / Polynomials): `isCohenMacaulayRing_of_dimension_three`",
+      "description": "Closes `FATEX/80.lean:55-57` (`Problem80.isCohenMacaulayRing_of_dimension_three`): Consider the ideal \\( I \\subset k[x_1, \\dots, x_6] \\) generated by the following polynomials: \\[ \\begin{aligned} f_1 &= x_2x_4 +… Verified verbatim on Lean v4.36.0 + Mathlib with 0 sorry and standard axioms only.",
+      "target_files": [
+        "FateXFieldsRingsGroups/P80.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/frenzymath/FATE-X/blob/a6fb49ee85fd05bb8ce9fc66e1c66797b5a0592d/FATEX/80.lean#L55-L57"
+    }
+  ]
+}

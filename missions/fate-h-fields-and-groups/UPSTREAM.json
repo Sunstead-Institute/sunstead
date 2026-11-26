@@ -1,0 +1,257 @@
+{
+  "repo": "frenzymath/FATE-H",
+  "commit": "17967b3118082adfba7c5a5fc03b5f4a53717b59",
+  "license": "MIT",
+  "checks": [
+    {
+      "local_file": "FateHFieldsGroups/P1.lean",
+      "upstream_file": "FATEH/1.lean",
+      "verbatim_snippet": "theorem subgroup_normal_index_le_factorial {G : Type} [Group G] {n : ℕ} (hn : n ≠ 0) \n    (H : Subgroup G) (hH : H.index = n) :\n    ∃ K : Subgroup G, K.Normal ∧ K ≤ H ∧ K.index ≠ 0 ∧ K.index ≤ n.factorial :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P2.lean",
+      "upstream_file": "FATEH/2.lean",
+      "verbatim_snippet": "theorem not_isSimpleGroup_of_card_eq_56 {G : Type} [Group G] (hG : Nat.card G = 56) :\n    ¬ IsSimpleGroup G :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P3.lean",
+      "upstream_file": "FATEH/3.lean",
+      "verbatim_snippet": "theorem not_isSimpleGroup_of_card_eq_3393 {G : Type} [Group G] (h : Nat.card G = 3393) : ¬ IsSimpleGroup G :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P4.lean",
+      "upstream_file": "FATEH/4.lean",
+      "verbatim_snippet": "theorem nonempty_mulEquiv_zMod_prod_zMod {p : ℕ} [Fact p.Prime] {P : Type} [Group P] (hp : Nat.card P = p ^ 3)\n    (h : ∃ (a b : P), a * b ≠ b * a) : Nat.card (Subgroup.center P) = p ∧\n    Nonempty ((P ⧸ Subgroup.center P) ≃* Multiplicative ((ZMod p) × (ZMod p))) :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P7.lean",
+      "upstream_file": "FATEH/7.lean",
+      "verbatim_snippet": "theorem le_centralizer_centralizer_of_centralizer_eq_bot {G : Type} [Group G] (H K : Subgroup G)\n    [H.Normal] (h1 : K ≤ H) [(K.subgroupOf H).Normal]\n    (h2 : Subgroup.centralizer (K.subgroupOf H) = (⊥ : Subgroup H)) :\n    H ≤ Subgroup.centralizer (Subgroup.centralizer (K : Set G) : Set G) :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P8.lean",
+      "upstream_file": "FATEH/8.lean",
+      "verbatim_snippet": "theorem exists_index_two_of_sylow_two_isCyclic {G : Type} [Group G] [Finite G] (P : Sylow 2 G)\n    (h1 : P.toSubgroup ≠ ⊥) [IsCyclic P] : ∃ H : Subgroup G, H.index = 2 :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P9.lean",
+      "upstream_file": "FATEH/9.lean",
+      "verbatim_snippet": "theorem DihedralGroup.centralizer_eq_bot {n : ℕ} (hn : Odd n) (h : n ≥ 3) :\n    Subgroup.centralizer ⊤ = (⊥ : Subgroup (DihedralGroup n)) :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P11.lean",
+      "upstream_file": "FATEH/11.lean",
+      "verbatim_snippet": "theorem le_center_of_card_eq_17_of_card_eq_3825 {G : Type} [Group G] (h : Nat.card G = 3825)\n    (H : Subgroup G) [H.Normal] (hH : Nat.card H = 17) : H ≤ Subgroup.center G :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P12.lean",
+      "upstream_file": "FATEH/12.lean",
+      "verbatim_snippet": "theorem exists_sl_quot_center_monoidHom_alternatingGroup :\n    ∃ φ : SL(2,ZMod 3) ⧸ Subgroup.center SL(2,ZMod 3) →* alternatingGroup (Fin 4),\n    Function.Injective φ :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P13.lean",
+      "upstream_file": "FATEH/13.lean",
+      "verbatim_snippet": "theorem card_sylow_gl_two_eq_add_one (p : ℕ) [Fact p.Prime] :\n    Nat.card (Sylow p <| GL (Fin 2) (ZMod p)) = p + 1 :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P19.lean",
+      "upstream_file": "FATEH/19.lean",
+      "verbatim_snippet": "theorem exists_subgroup_alternatingGroup_mulEquiv {G : Type} [Group G] [Finite G] :\n    ∃ (n : ℕ) (H : Subgroup (alternatingGroup (Fin n))), Nonempty (G ≃* H) :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P20.lean",
+      "upstream_file": "FATEH/20.lean",
+      "verbatim_snippet": "theorem center_eq_commutator_of_pow_three_eq_card {G : Type} [Group G] {p : ℕ} [hp : Fact p.Prime]\n    (hG : p ^ 3 = Nat.card G) (h : ∃ x y : G, x * y ≠ y * x) :\n    Subgroup.center G = commutator G :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P21.lean",
+      "upstream_file": "FATEH/21.lean",
+      "verbatim_snippet": "theorem card_addAut_eq_108 : Nat.card (AddAut <| ZMod 3 × ZMod 9) = 108 :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P22.lean",
+      "upstream_file": "FATEH/22.lean",
+      "verbatim_snippet": "theorem nonempty_mulAut_dihedralGroup_four : Nonempty (MulAut (DihedralGroup 4) ≃* DihedralGroup 4) :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P23.lean",
+      "upstream_file": "FATEH/23.lean",
+      "verbatim_snippet": "theorem not_isSimpleGroup_of_card_eq_1053 (G : Type) [Group G]\n    [Finite G] (h_card : Nat.card G = 1053) : ¬ IsSimpleGroup G :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P24.lean",
+      "upstream_file": "FATEH/24.lean",
+      "verbatim_snippet": "theorem eq_top_of_finiteIndex (H : AddSubgroup (ℚ ⧸ (Int.castAddHom ℚ).range)) (h_fin : H.FiniteIndex) :\n    H = ⊤ :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P26.lean",
+      "upstream_file": "FATEH/26.lean",
+      "verbatim_snippet": "theorem center_le_or_commutator_le_of_isCoatom {G : Type} [Group G] (H : Subgroup G)\n    (h : IsCoatom H) : Subgroup.center G ≤ H ∨ commutator G ≤ H :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P28.lean",
+      "upstream_file": "FATEH/28.lean",
+      "verbatim_snippet": "theorem exists_ratFunc_adjoin_eq_top {k : Type} [Field k] [PerfectField k] {p : ℕ} [Fact p.Prime] [CharP k p]\n    {E : Type} [Field E] [Algebra (RatFunc k) E] [FiniteDimensional (RatFunc k) E] :\n    ∃ α : E, (RatFunc k)⟮α⟯ = ⊤ :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P29.lean",
+      "upstream_file": "FATEH/29.lean",
+      "verbatim_snippet": "theorem exists_nonempty_adjoin_root_X_pow_p_sub_X_sub_C\n    {F E : Type} [Field F] {p : ℕ} [Fact p.Prime] [CharP F p] [Field E]\n    [Algebra F E] [IsGalois F E] (h_deg : Module.finrank F E = p) :\n    ∃ a : F, Nonempty (AdjoinRoot (X ^ p - X - C a : F[X]) ≃+* E) :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P30.lean",
+      "upstream_file": "FATEH/30.lean",
+      "verbatim_snippet": "theorem nonempty_ringEquiv_adjoin_pow_two_add_seven {E : Type} [Field E] [Algebra ℚ E]\n    [IsCyclotomicExtension {7} ℚ E] (ζ : E)\n    (h : IsPrimitiveRoot ζ 7) (β : E) (hb : β = ζ + ζ ^ 2 + ζ ^ 4) :\n    Nonempty (ℚ⟮β⟯ ≃+* AdjoinRoot (X ^ 2 + 7 : ℚ[X])) :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P31.lean",
+      "upstream_file": "FATEH/31.lean",
+      "verbatim_snippet": "theorem exists_basis_primitiveRoots_iff_squarefree {n : ℕ+} :\n    (∃ b : Basis (primitiveRoots n (CyclotomicField n ℚ)) ℚ (CyclotomicField n ℚ),\n    (b : _ → _) = (↑)) ↔ Squarefree n :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P32.lean",
+      "upstream_file": "FATEH/32.lean",
+      "verbatim_snippet": "theorem nonempty_galois_mulEquiv_dihedralGroup_four :\n    Nonempty (Gal (X ^ 4 - 2 * X ^ 2 - 2 : ℚ[X]) ≃* DihedralGroup 4) :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P33.lean",
+      "upstream_file": "FATEH/33.lean",
+      "verbatim_snippet": "theorem card_gal_map_eq_eq_factorial {n : Nat} (hn : n > 4) (f : ℚ[X]) (hf : f.degree = n)\n    (hf' : Irreducible f) (h : f.Gal ≃* (Equiv.Perm <| Fin n))\n    {a b : SplittingField f} (ha : f.aeval a = 0) (hb : f.aeval b = 0) (neq : a ≠ b) :\n    Nat.card {h : f.Gal // h a = b} = Nat.factorial (n - 1) :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P34.lean",
+      "upstream_file": "FATEH/34.lean",
+      "verbatim_snippet": "theorem not_irreducible_iff_finrank_lt {E E': Type} [Field E] [CharZero E] [Field E'] [Algebra E E'] {q : ℕ}\n    [Fact q.Prime] {b : E} (hb : b ≠ 0) (not_pow : ∀ c : E, c ^ q ≠ b) {a : E'}\n    (ha : a ^ q = algebraMap E E' b) (haE : ⊤ = IntermediateField.adjoin E {a}) :\n    ¬ Irreducible (X ^ q - C b) ↔ Module.finrank E E' < q :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P35.lean",
+      "upstream_file": "FATEH/35.lean",
+      "verbatim_snippet": "theorem isEmpty_adjoinRoot_zMod_four {d : ℤ} (hd : Squarefree d) {a : ℚ} (ha : a ≠ 0) :\n    IsEmpty ((AdjoinRoot ((a⁻¹ • X ^ 2) ^ 2 - C (d : ℚ)) ≃ₐ[ℚ]\n      AdjoinRoot ((a⁻¹ • X ^ 2) ^ 2 - C (d : ℚ))) ≃* Multiplicative (ZMod 4)) :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P36.lean",
+      "upstream_file": "FATEH/36.lean",
+      "verbatim_snippet": "theorem card_intermediateField_splittingField_eq_ten :\n    Nat.card (IntermediateField ℚ (X ^ 4 - X ^ 2 - 1 : ℚ[X]).SplittingField) = 10 :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P37.lean",
+      "upstream_file": "FATEH/37.lean",
+      "verbatim_snippet": "theorem adjoin_add_eq_top_of_fixedField_zpowers {K L : Type} [Field K]\n    [Field L] [Algebra K L] [IsGalois K L] (n a b : ℕ)\n    (σ : L ≃ₐ[K] L) (hσ : orderOf σ = n) (cycle : Subgroup.zpowers σ = ⊤) (hn : n > 0)\n    (hn' : n = a * b) (hab : Nat.Coprime a b) {α β : L}\n    (hα : K⟮α⟯ = IntermediateField.fixedField (Subgroup.zpowers (σ ^ a)))\n    (hβ : K⟮β⟯ = IntermediateField.fixedField (Subgroup.zpowers (σ ^ b))) : K⟮α + β⟯ = ⊤ :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P38.lean",
+      "upstream_file": "FATEH/38.lean",
+      "verbatim_snippet": "theorem exists_pow_p_mem_algebraMap_and_adjoin_eq_top {p : Nat} [Fact p.Prime]\n    {F K : Type} [Field F] (hF : (primitiveRoots p F).Nonempty) [Field K] [Algebra F K]\n    [IsGalois F K] (hK : (K ≃ₐ[F] K) ≃* Multiplicative (ZMod p × ZMod p)) :\n    ∃ (α β : K), α ≠ 0 ∧ β ≠ 0 ∧ α ^ p ∈ (algebraMap F K).range ∧ β ^ p ∈ (algebraMap F K).range ∧\n    IntermediateField.adjoin F {α, β} = ⊤ :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P39.lean",
+      "upstream_file": "FATEH/39.lean",
+      "verbatim_snippet": "theorem exists_isPrimitiveRoot_and_adjoin_eq_top :\n    letI : Fact (Nat.Prime 7) := by decide\n    ∃ ζ : (X ^ 15 - 2 : (ZMod 7)[X]).SplittingField, IsPrimitiveRoot ζ 45 ∧\n    IntermediateField.adjoin (ZMod 7) {ζ} = ⊤ :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P40.lean",
+      "upstream_file": "FATEH/40.lean",
+      "verbatim_snippet": "theorem nonempty_gal_mulEquiv_perm_fin_five {f : ℚ[X]} {K : Type} [Field K] [Algebra ℚ K]\n    [IsSplittingField ℚ K f] (hf1 : Irreducible f) (hf2 : f.natDegree = 5) (a₁ a₂ a₃ : K)\n    (ha1 : a₁ ∈ rootSet f K ∧ a₂ ∈ rootSet f K ∧ a₃ ∈ rootSet f K)\n    (ha2 : a₁ ≠ a₂ ∧ a₂ ≠ a₃ ∧ a₃ ≠ a₁)\n    (h : IntermediateField.adjoin ℚ {a₁, a₂, a₃} ≠ ⊤) :\n    Nonempty (f.Gal ≃* (Equiv.Perm <| Fin 5)) :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P41.lean",
+      "upstream_file": "FATEH/41.lean",
+      "verbatim_snippet": "theorem exists_finrank_eq_pow_of_dvd_finrank {F : Type} [Field F] (p : ℕ) [Fact (Nat.Prime p)]\n    (h : ∀ (E : Type) [Field E] [Algebra F E] [FiniteDimensional F E],\n    Module.finrank F E ≠ 1 → p ∣ Module.finrank F E)\n    (E : Type) [Field E] [Algebra F E] [FiniteDimensional F E] :\n    ∃ k, Module.finrank F E = p ^ k :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P42.lean",
+      "upstream_file": "FATEH/42.lean",
+      "verbatim_snippet": "theorem isGalois_adjoin_iff_isSquare (K L : Type) [Field K] [Field L] (h : ¬ CharP K 2) [Algebra K L] [IsGalois K L]\n    (f : (L ≃ₐ[K] L) ≃* Multiplicative (ZMod 2 × ZMod 2)) (c : Lˣ) (hc : c.1 ≠ 0)\n    (hcs : ¬ IsSquare c.1) [Fact (Irreducible (X ^ 2 - C c.1))] :\n    IsGalois K (AdjoinRoot (X ^ 2 - C c.1)) ↔ ∀ σ : (L ≃ₐ[K] L), IsSquare (σ c / c) :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P43.lean",
+      "upstream_file": "FATEH/43.lean",
+      "verbatim_snippet": "theorem norm_eq_one_of_mem_rootSet (F : IntermediateField ℚ ℂ) [FiniteDimensional ℚ F] [IsGalois ℚ F]\n    (h : ∀ f g : F ≃ₐ[ℚ] F, f * g = g * f) (α : F) (f : ℚ[X])\n    (h_min : f = minpoly ℚ α) (ha : ‖α‖ = 1)\n    (β : ℂ) (hb : β ∈ f.rootSet ℂ) : ‖β‖ = 1 :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P44.lean",
+      "upstream_file": "FATEH/44.lean",
+      "verbatim_snippet": "theorem card_monic_and_irreducible_and_natDegree_eq_19 {F : Type} (q : ℕ) [Field F]\n    [Fintype F] (hF : Fintype.card F = q) :\n    Nat.card { P : F[X] | P.Monic ∧ Irreducible P ∧ P.natDegree = 19 } =\n    (q ^ 19 - q) / 19 :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P46.lean",
+      "upstream_file": "FATEH/46.lean",
+      "verbatim_snippet": "theorem finrank_dvd_eight_of_add_inv_eq_algebraMap {α : ℂ} {K L : Type} [Field K] [NumberField K]\n    [Algebra K ℂ] (hk : Module.finrank ℚ K = 2) {a : K} (h : α + α⁻¹ = algebraMap K ℂ a)\n    [Field L] [Algebra ℚ L] [IsNormalClosure ℚ ℚ⟮a⟯ L] : Module.finrank ℚ L ∣ 8 :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P48.lean",
+      "upstream_file": "FATEH/48.lean",
+      "verbatim_snippet": "theorem infinite_complex_algEquiv : Infinite (ℂ ≃ₐ[ℚ] ℂ) :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P49.lean",
+      "upstream_file": "FATEH/49.lean",
+      "verbatim_snippet": "theorem exists_algHom_complex_injective {F : Type} [Field F] [Algebra ℚ F]\n    (h : (⊤ : IntermediateField ℚ F).FG) : ∃ f : F →ₐ[ℚ] ℂ, Function.Injective f :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P52.lean",
+      "upstream_file": "FATEH/52.lean",
+      "verbatim_snippet": "theorem isGalois_galoisField_X_pow_iff_modEq_one (p m n : ℕ) (hn : 1 ≤ n) (hm : 1 ≤ m)\n    [Fact p.Prime] :  IsGalois (GaloisField p m)⟮(RatFunc.X ^ n : RatFunc (GaloisField p m))⟯\n    (RatFunc (GaloisField p m)) ↔ p ^ m ≡ 1 [MOD n] :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P53.lean",
+      "upstream_file": "FATEH/53.lean",
+      "verbatim_snippet": "theorem real_algEquiv_eq_one (f : ℝ ≃ₐ[ℚ] ℝ) : f = 1 :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P54.lean",
+      "upstream_file": "FATEH/54.lean",
+      "verbatim_snippet": "theorem isGalois_galoisField_adjoin_X_pow_four_add_X :\n    IsGalois (GaloisField 2 2)⟮(X ^ 4 + X : RatFunc (GaloisField 2 2))⟯\n    (RatFunc (GaloisField 2 2)) :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P55.lean",
+      "upstream_file": "FATEH/55.lean",
+      "verbatim_snippet": "theorem exists_pow_two_eq_algebraMap_and_adjoin_eq_top {K L : Type} [Field K] [Field L]\n    [Algebra K L] [IsGalois K L] (hK : ¬ CharP K 2) : IsKleinFour (L ≃ₐ[K] L) ↔\n    ∃ a b : Kˣ, ∃ x y : L, x ^ 2 = algebraMap K L a.1 ∧ y ^ 2 = algebraMap K L b.1 ∧\n    K⟮x, y⟯ = ⊤ ∧ ¬IsSquare a ∧ ¬IsSquare b ∧ ¬IsSquare (a / b) :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P56.lean",
+      "upstream_file": "FATEH/56.lean",
+      "verbatim_snippet": "theorem cyclotomic_two_mul_eq_cyclotomic_comp_neg {n : ℕ} (hn : Odd n) (hn' : 1 < n) :\n    Polynomial.cyclotomic (2 * n) ℚ = (Polynomial.cyclotomic n ℚ).comp (-X) :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P57.lean",
+      "upstream_file": "FATEH/57.lean",
+      "verbatim_snippet": "theorem exists_isPurelyInseparable_and_bot_lt {F : Type} [Field F] (h : ¬ PerfectField F) :\n    ∃ E : IntermediateField F (AlgebraicClosure F), IsPurelyInseparable F E ∧ ⊥ < E :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P58.lean",
+      "upstream_file": "FATEH/58.lean",
+      "verbatim_snippet": "theorem exists_eq_adjoin_and_pow_four_mem_bot_and_not_pow_two_mem_bot (F : Type) [Field F] :\n    Subsingleton {M : IntermediateField F (AlgebraicClosure F) //\n    ∃ α : AlgebraicClosure F, M = F⟮α⟯ ∧ α ^ 4 ∈ (⊥ : IntermediateField F (AlgebraicClosure F)) ∧\n    ¬ α ^ 2 ∈ (⊥ : IntermediateField F (AlgebraicClosure F)) ∧ F⟮α⟯ = F⟮α ^ 2⟯} :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P60.lean",
+      "upstream_file": "FATEH/60.lean",
+      "verbatim_snippet": "theorem isSolvable_X_pow_six_add_gal {a : ℤ} (ha : a > 0) : IsSolvable\n    (X ^ 6 + C (3 * a : ℚ) * X ^ 4 + C 3 * X ^ 3 + C (3 * a : ℚ) * X ^ 2 + C 1 : ℚ[X]).Gal:="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P62.lean",
+      "upstream_file": "FATEH/62.lean",
+      "verbatim_snippet": "theorem primitiveRoots_not_empty (E F : Type) [Field E] [Field F] [Algebra F E]\n    (f : Polynomial F) (h_f_irr : Irreducible f) (h_splitting_field : f.IsSplittingField F E)\n    (a : E) (ha : f.aeval a = 0) (n : ℕ) (hn : n ≥ 1)\n    (g : Polynomial F) (h_g_irr : Irreducible g) (h_ga : g.aeval (a ^ n) = 0)\n    (h_deg : f.degree = g.degree * n) (h_char : (n : F) ≠ 0) : primitiveRoots n E ≠ ∅ :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P63.lean",
+      "upstream_file": "FATEH/63.lean",
+      "verbatim_snippet": "theorem eval₂_algebraMap_ne_two_pow_one_dvd_four {n : ℕ} (hn : 1 ≤ n) (f : ℚ[X]) (ξ : ℂˣ)\n    (h : ξ ∈ rootsOfUnity n ℂ) : f.eval₂ (algebraMap ℚ ℂ) ξ ≠ (2 : ℂ) ^ ((1 : ℂ) / 4) :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P65.lean",
+      "upstream_file": "FATEH/65.lean",
+      "verbatim_snippet": "theorem isSquare_discriminant_of_irreducible {p n : ℕ} [Fact p.Prime] (a b : GaloisField p n)\n    (h_irr : Irreducible (X ^ 3 + C a * X + C b)) :\n    IsSquare (- 4 * a ^ 3 - 27 * b ^ 2) :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P66.lean",
+      "upstream_file": "FATEH/66.lean",
+      "verbatim_snippet": "theorem not_irreducible_X_pow_two_pow_add_X_add_C_one {n : ℕ} (hn : n ≥ 3) :\n    ¬ Irreducible (X ^ 2 ^ n + X + C 1 : (ZMod 2)[X]) :="
+    },
+    {
+      "local_file": "FateHFieldsGroups/P97.lean",
+      "upstream_file": "FATEH/97.lean",
+      "verbatim_snippet": "theorem isAlgebraic_sin_pi_div_180 : IsAlgebraic ℚ (sin (π / 180)) :="
+    }
+  ]
+}

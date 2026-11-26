@@ -1,0 +1,288 @@
+{
+  "id": "fc-solved-algebra-analysis",
+  "title": "Formal Conjectures (Solved Literature): Algebra, Analysis, Logic & Geometry",
+  "description": "Twenty-five known-in-literature, unproved-in-Lean theorems across algebra, group theory, real & complex analysis, measure theory, logic, and geometry extracted verbatim from google-deepmind/formal-conjectures@5bd8bfb9 (Apache-2.0), including 7 FC100SolvedSet2 benchmarks (Erdős #114 lemniscate length, Chudnovsky's transcendence of Γ(1/3), Osin's Kourovka 8.8a, Pierce–Birkhoff dim 2, Shelah–Spencer 0–1 law, Green #54 Gaussian convex hull, conjugacy class sizes of S₃), plus Motzkin's Hilbert 17th Problem counterexample, Voronovskaja's theorem, Erdős–Volkmann Hausdorff dimension of additive subgroups, and Erdős's Lebesgue constant lower bound.",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/google-deepmind/formal-conjectures",
+  "upstream": {
+    "repo": "google-deepmind/formal-conjectures",
+    "commit": "5bd8bfb9def462c19a87d2d275af3db3341dc727",
+    "license": "Apache-2.0"
+  },
+  "frozen_paths": [
+    "FcSolvedAlgAnal/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 240,
+    "memory_mb": 6144
+  },
+  "decomposition": {
+    "enabled": true,
+    "require_allowlist": true,
+    "allow_direct_bypass": true,
+    "max_depth": 2
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "erdos_114_lemniscate_large_n",
+      "title": "Erdős #114: extremal lemniscate length for monic degree-n complex polynomials (large n)",
+      "description": "Verbatim statement `erdos_114.variants.large_n` from `FormalConjectures/ErdosProblems/114.lean#L63-L65` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedAlgAnal/Erdos114Lemniscate.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/114.lean#L63-L65"
+    },
+    {
+      "id": "transcendental_gamma_one_third",
+      "title": "Chudnovsky: Γ(1/3) is transcendental over ℚ",
+      "description": "Verbatim statement `transcendental_gamma_one_div_three` from `FormalConjectures/Wikipedia/Transcendental.lean#L180-L181` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedAlgAnal/GammaOneThird.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/Transcendental.lean#L180-L181"
+    },
+    {
+      "id": "kourovka_8_8a_finitely_gen_conjugate",
+      "title": "Kourovka 8.8a (Osin): non-cyclic f.g. group where every element is conjugate to a^n",
+      "description": "Verbatim statement `kourovka_8_8a` from `FormalConjectures/Kourovka/8_8.lean#L44-L47` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedAlgAnal/Kourovka8_8a.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Kourovka/8_8.lean#L44-L47"
+    },
+    {
+      "id": "conj_class_sizes_sym_three",
+      "title": "Solvable finite group with pairwise distinct conjugacy class sizes is S₃",
+      "description": "Verbatim statement `conjClassSizes_iff_sym_three_solvable` from `FormalConjectures/Paper/ConjugacyClassSizes.lean#L147-L151` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedAlgAnal/ConjClassSizesS3.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Paper/ConjugacyClassSizes.lean#L147-L151"
+    },
+    {
+      "id": "green_54_gaussian_convex_hull",
+      "title": "Ben Green #54: Gaussian measure lower bound on convex compact subset of 10·K",
+      "description": "Verbatim statement `green_54` from `FormalConjectures/GreensOpenProblems/54.lean#L57-L61` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedAlgAnal/Green54Gaussian.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/GreensOpenProblems/54.lean#L57-L61"
+    },
+    {
+      "id": "pierce_birkhoff_dim_two",
+      "title": "Mahé: Pierce–Birkhoff conjecture holds in dimension 2",
+      "description": "Verbatim statement `pierce_birkhoff_conjecture_dim_two` from `FormalConjectures/Wikipedia/PierceBirkhoff.lean#L112-L116` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedAlgAnal/PierceBirkhoffDim2.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/PierceBirkhoff.lean#L112-L116"
+    },
+    {
+      "id": "shelah_spencer_zero_one_law",
+      "title": "Shelah–Spencer (1988): first-order 0–1 law for G(n, n^{-α}) with α irrational",
+      "description": "Verbatim statement `zeroOne_irrational` from `FormalConjectures/Paper/ShelahSpencerZeroOneLaw.lean#L60-L68` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedAlgAnal/ShelahSpencer01.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Paper/ShelahSpencerZeroOneLaw.lean#L60-L68"
+    },
+    {
+      "id": "erdos_1038_monic_poly_measure",
+      "title": "Erdős #1038 (part ii): supremum measure of {|f(x)| < 1} for monic real-rooted polynomials",
+      "description": "Verbatim statement `erdos_1038.parts.ii` from `FormalConjectures/ErdosProblems/1038.lean#L54-L58` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedAlgAnal/Erdos1038Measure.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/1038.lean#L54-L58"
+    },
+    {
+      "id": "erdos_120_steinhaus_finite",
+      "title": "Erdős #120 (Steinhaus): every positive-measure set in ℝ contains an affine copy of any finite set",
+      "description": "Verbatim statement `erdos_120.variants.finite_set` from `FormalConjectures/ErdosProblems/120.lean#L55-L56` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedAlgAnal/Erdos120Finite.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/120.lean#L55-L56"
+    },
+    {
+      "id": "cprank_three_slices",
+      "title": "Complex tensor rank bound cprank(T) ≤ 2n - 1 for n × n × 3 tensors",
+      "description": "Verbatim statement `cprank_le_of_three_slices` from `FormalConjectures/Arxiv/0805.3777/TensorRank.lean#L291-L293` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedAlgAnal/TensorRankThreeSlices.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Arxiv/0805.3777/TensorRank.lean#L291-L293"
+    },
+    {
+      "id": "erdos_1119_entire_functions_card",
+      "title": "Erdős #1119 (Erdős–Wetzel): cardinality bound on families of entire functions",
+      "description": "Verbatim statement `erdos_1119` from `FormalConjectures/ErdosProblems/1119.lean#L59-L64` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedAlgAnal/Erdos1119Entire.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/1119.lean#L59-L64"
+    },
+    {
+      "id": "semiring_unique_left_not_right_maximal",
+      "title": "Semiring with a unique maximal left ideal but two distinct maximal right ideals",
+      "description": "Verbatim statement `exists_semiring_unique_left_maximal_not_unique_right_maximal` from `FormalConjectures/Mathoverflow/486451.lean#L32-L35` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedAlgAnal/SemiringMaxIdeals.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Mathoverflow/486451.lean#L32-L35"
+    },
+    {
+      "id": "kourovka_19_25_order_sum_simple",
+      "title": "Kourovka 19.25: ∑ φ(ord g) does not characterize finite simple groups",
+      "description": "Verbatim statement `kourovka_19_25` from `FormalConjectures/Kourovka/19_25.lean#L51-L56` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedAlgAnal/Kourovka19_25.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Kourovka/19_25.lean#L51-L56"
+    },
+    {
+      "id": "kourovka_20_76_pgroup_abelian_bound",
+      "title": "Kourovka 20.76: refutation of quadratic abelian subgroup bound in finite p-groups",
+      "description": "Verbatim statement `kourovka_20_76` from `FormalConjectures/Kourovka/20_76.lean#L40-L44` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedAlgAnal/Kourovka20_76.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Kourovka/20_76.lean#L40-L44"
+    },
+    {
+      "id": "green_85_loose_axis_rectangle",
+      "title": "Ben Green #85 (loose): axis-aligned rectangle of area ≫ α² / log(1/α) inside open set of measure α",
+      "description": "Verbatim statement `green_85_loose` from `FormalConjectures/GreensOpenProblems/85.lean#L61-L71` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedAlgAnal/Green85Loose.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/GreensOpenProblems/85.lean#L61-L71"
+    },
+    {
+      "id": "erdos_1133_polynomial_interpolation",
+      "title": "Erdős #1133: unbounded sup-norm for near-interpolating polynomials of degree < (1+ε)n",
+      "description": "Verbatim statement `erdos_1133` from `FormalConjectures/ErdosProblems/1133.lean#L47-L56` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedAlgAnal/Erdos1133Interp.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/1133.lean#L47-L56"
+    },
+    {
+      "id": "hilbert17_motzkin_not_sos",
+      "title": "Hilbert 17th Problem (Motzkin): x⁴y² + x²y⁴ - 3x²y² + 1 is not a sum of polynomial squares",
+      "description": "Verbatim statement `f_not_sum_of_squares` from `FormalConjectures/HilbertProblems/17.lean#L73-L75` (`category textbook`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedAlgAnal/Hilbert17Motzkin.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/HilbertProblems/17.lean#L73-L75"
+    },
+    {
+      "id": "voronovskaja_bernstein",
+      "title": "Voronovskaja (1932): asymptotic expansion of Bernstein polynomial operators",
+      "description": "Verbatim statement `voronovskaja_theorem.bernstein_operators` from `FormalConjectures/Paper/VoronovskajaTypeFormula.lean#L448-L455` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedAlgAnal/VoronovskajaBernstein.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Paper/VoronovskajaTypeFormula.lean#L448-L455"
+    },
+    {
+      "id": "erdos_1154_hausdorff_dim_subgroup",
+      "title": "Erdős #1154 (Erdős–Volkmann): additive subgroup of ℝ of every Hausdorff dimension a ∈ [0, 1]",
+      "description": "Verbatim statement `erdos_1154.variants.group` from `FormalConjectures/ErdosProblems/1154.lean#L67-L69` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedAlgAnal/Erdos1154Subgroup.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/1154.lean#L67-L69"
+    },
+    {
+      "id": "erdos_477_squares_unique_rep",
+      "title": "Erdős #477 (squares): no A ⊆ ℤ gives unique A + {n²} representations of every integer",
+      "description": "Verbatim statement `erdos_477.variants.S_sq` from `FormalConjectures/ErdosProblems/477.lean#L62-L65` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedAlgAnal/Erdos477Squares.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/477.lean#L62-L65"
+    },
+    {
+      "id": "erdos_ulam_solymosi_de_zeeuw",
+      "title": "Solymosi–de Zeeuw (Erdős–Ulam): rational-distance sets with infinite line/circle lie mostly on it",
+      "description": "Verbatim statement `erdos_ulam_problem.variants.solymosi_de_zeeuw` from `FormalConjectures/Wikipedia/ErdosUlamProblem.lean#L97-L108` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedAlgAnal/ErdosUlamSolymosi.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/ErdosUlamProblem.lean#L97-L108"
+    },
+    {
+      "id": "green_87_perm_fixed_set_limit",
+      "title": "Ben Green #87 (Eberhard–Ford–Green): limiting probability a random permutation fixes a k-set",
+      "description": "Verbatim statement `green_87.variants.exists_tendsto` from `FormalConjectures/GreensOpenProblems/87.lean#L56-L58` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedAlgAnal/Green87PermLimit.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/GreensOpenProblems/87.lean#L56-L58"
+    },
+    {
+      "id": "gamma_subgroup_rank_3_3",
+      "title": "Even-sign diagonal subgroup Γ(3, 3) ⊆ S₃ × S₃ is not 2-generated",
+      "description": "Verbatim statement `conjecture_1.variants.rank_3_3` from `FormalConjectures/Arxiv/2605.12342/Conjecture1.lean#L129-L131` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedAlgAnal/GammaSubgroup33.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Arxiv/2605.12342/Conjecture1.lean#L129-L131"
+    },
+    {
+      "id": "erdos_1046_lemniscate_diameter",
+      "title": "Erdős #1046 (Pommerenke): connected monic polynomial lemniscate has diameter ≥ 2",
+      "description": "Verbatim statement `erdos_1046.variants.diameter` from `FormalConjectures/ErdosProblems/1046.lean#L93-L95` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedAlgAnal/Erdos1046Diameter.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/1046.lean#L93-L95"
+    },
+    {
+      "id": "erdos_1132_lebesgue_function_max",
+      "title": "Erdős #1132 (Erdős 1961): lower bound (2/π) log n - C on the Lebesgue function of n nodes",
+      "description": "Verbatim statement `erdos_1132.variants.erdos_max` from `FormalConjectures/ErdosProblems/1132.lean#L133-L137` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedAlgAnal/Erdos1132Lebesgue.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/1132.lean#L133-L137"
+    }
+  ]
+}

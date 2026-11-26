@@ -1,0 +1,226 @@
+{
+  "id": "extremal-graph-bounds",
+  "title": "Extremal Graphs: Ramsey R(s, t) & C4-Free Tur\u00e1n ex(n, C4) Witness Frontiers",
+  "description": "Pure Lean 4.36.0 (zero Mathlib) certified optimization across 16 classical extremal graph witness frontiers: 8 two-color Ramsey lower bounds R(s, t) (maximizing vertex count N with no K_s and no I_t) and 8 C4-free Tur\u00e1n graphs ex(n, C_4) for n = 25..40 (maximizing edge count e with no 4-cycle). `ExtremalGraphs/Spec.lean` formally proves soundness of both the active-filtered Tomita greedy-coloring clique-freeness prover and the bitwise C4-freeness checker (`m &&& (m - 1) == 0`). Pinned to `chrispbsmolen/ramsey-witnesses@d21fda5` (MIT).",
+  "tier": 2,
+  "mode": "hillclimb",
+  "repo": "https://github.com/chrispbsmolen/ramsey-witnesses",
+  "upstream": {
+    "repo": "chrispbsmolen/ramsey-witnesses",
+    "commit": "d21fda594c86657be87e425f19f5fc02a27986e6",
+    "license": "MIT"
+  },
+  "score_direction": "maximize",
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 90,
+    "memory_mb": 2048
+  },
+  "frozen_paths": [
+    "ExtremalGraphs/Spec.lean",
+    "ExtremalGraphs/BoundRamsey3_8.lean",
+    "ExtremalGraphs/BoundRamsey3_9.lean",
+    "ExtremalGraphs/BoundRamsey3_10.lean",
+    "ExtremalGraphs/BoundRamsey3_11.lean",
+    "ExtremalGraphs/BoundRamsey4_5.lean",
+    "ExtremalGraphs/BoundRamsey4_6.lean",
+    "ExtremalGraphs/BoundRamsey4_7.lean",
+    "ExtremalGraphs/BoundRamsey5_5.lean",
+    "ExtremalGraphs/BoundC4Free25.lean",
+    "ExtremalGraphs/BoundC4Free27.lean",
+    "ExtremalGraphs/BoundC4Free29.lean",
+    "ExtremalGraphs/BoundC4Free32.lean",
+    "ExtremalGraphs/BoundC4Free34.lean",
+    "ExtremalGraphs/BoundC4Free36.lean",
+    "ExtremalGraphs/BoundC4Free38.lean",
+    "ExtremalGraphs/BoundC4Free40.lean",
+    "LICENSE",
+    "README.md",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "tasks": [
+    {
+      "id": "ramsey_3_8",
+      "title": "Maximize R(3, 8) witness graph order N (baseline 21)",
+      "description": "Submit a symmetric, loopless adjacency-bitmask graph on N vertices in `ExtremalGraphs/Ramsey3_8.lean` (`ExtremalGraphs.score_ramsey_3_8` and `ExtremalGraphs.rows_ramsey_3_8`) avoiding both K_3 and independent sets of size 8, certifying R(3, 8) \u2265 N + 1. Seeded with a constructive 21-vertex algebraic graph (frontier: 27 (R(3,8)=28 exact)). Frozen `ExtremalGraphs/BoundRamsey3_8.lean` kernel-verifies graph symmetry, irreflexivity, and absence of K_3 and I_8 via active-filtered Tomita greedy-coloring branch-and-bound (`decide +kernel`).",
+      "baseline_score": 21,
+      "target_files": [
+        "ExtremalGraphs/Ramsey3_8.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/chrispbsmolen/ramsey-witnesses/blob/d21fda594c86657be87e425f19f5fc02a27986e6/table/register.csv"
+    },
+    {
+      "id": "ramsey_3_9",
+      "title": "Maximize R(3, 9) witness graph order N (baseline 22)",
+      "description": "Submit a symmetric, loopless adjacency-bitmask graph on N vertices in `ExtremalGraphs/Ramsey3_9.lean` (`ExtremalGraphs.score_ramsey_3_9` and `ExtremalGraphs.rows_ramsey_3_9`) avoiding both K_3 and independent sets of size 9, certifying R(3, 9) \u2265 N + 1. Seeded with a constructive 22-vertex algebraic graph (frontier: 35 (R(3,9)=36 exact)). Frozen `ExtremalGraphs/BoundRamsey3_9.lean` kernel-verifies graph symmetry, irreflexivity, and absence of K_3 and I_9 via active-filtered Tomita greedy-coloring branch-and-bound (`decide +kernel`).",
+      "baseline_score": 22,
+      "target_files": [
+        "ExtremalGraphs/Ramsey3_9.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/chrispbsmolen/ramsey-witnesses/blob/d21fda594c86657be87e425f19f5fc02a27986e6/table/register.csv"
+    },
+    {
+      "id": "ramsey_3_10",
+      "title": "Maximize R(3, 10) witness graph order N (baseline 31)",
+      "description": "Submit a symmetric, loopless adjacency-bitmask graph on N vertices in `ExtremalGraphs/Ramsey3_10.lean` (`ExtremalGraphs.score_ramsey_3_10` and `ExtremalGraphs.rows_ramsey_3_10`) avoiding both K_3 and independent sets of size 10, certifying R(3, 10) \u2265 N + 1. Seeded with a constructive 31-vertex algebraic graph (frontier: 39 (R(3,10) \u2208 [40,42] open)). Frozen `ExtremalGraphs/BoundRamsey3_10.lean` kernel-verifies graph symmetry, irreflexivity, and absence of K_3 and I_10 via active-filtered Tomita greedy-coloring branch-and-bound (`decide +kernel`).",
+      "baseline_score": 31,
+      "target_files": [
+        "ExtremalGraphs/Ramsey3_10.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/chrispbsmolen/ramsey-witnesses/blob/d21fda594c86657be87e425f19f5fc02a27986e6/table/register.csv"
+    },
+    {
+      "id": "ramsey_3_11",
+      "title": "Maximize R(3, 11) witness graph order N (baseline 35)",
+      "description": "Submit a symmetric, loopless adjacency-bitmask graph on N vertices in `ExtremalGraphs/Ramsey3_11.lean` (`ExtremalGraphs.score_ramsey_3_11` and `ExtremalGraphs.rows_ramsey_3_11`) avoiding both K_3 and independent sets of size 11, certifying R(3, 11) \u2265 N + 1. Seeded with a constructive 35-vertex algebraic graph (frontier: 46 (R(3,11) \u2208 [47,50] open)). Frozen `ExtremalGraphs/BoundRamsey3_11.lean` kernel-verifies graph symmetry, irreflexivity, and absence of K_3 and I_11 via active-filtered Tomita greedy-coloring branch-and-bound (`decide +kernel`).",
+      "baseline_score": 35,
+      "target_files": [
+        "ExtremalGraphs/Ramsey3_11.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/chrispbsmolen/ramsey-witnesses/blob/d21fda594c86657be87e425f19f5fc02a27986e6/table/register.csv"
+    },
+    {
+      "id": "ramsey_4_5",
+      "title": "Maximize R(4, 5) witness graph order N (baseline 19)",
+      "description": "Submit a symmetric, loopless adjacency-bitmask graph on N vertices in `ExtremalGraphs/Ramsey4_5.lean` (`ExtremalGraphs.score_ramsey_4_5` and `ExtremalGraphs.rows_ramsey_4_5`) avoiding both K_4 and independent sets of size 5, certifying R(4, 5) \u2265 N + 1. Seeded with a constructive 19-vertex algebraic graph (frontier: 24 (R(4,5)=25 exact)). Frozen `ExtremalGraphs/BoundRamsey4_5.lean` kernel-verifies graph symmetry, irreflexivity, and absence of K_4 and I_5 via active-filtered Tomita greedy-coloring branch-and-bound (`decide +kernel`).",
+      "baseline_score": 19,
+      "target_files": [
+        "ExtremalGraphs/Ramsey4_5.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/chrispbsmolen/ramsey-witnesses/blob/d21fda594c86657be87e425f19f5fc02a27986e6/table/register.csv"
+    },
+    {
+      "id": "ramsey_4_6",
+      "title": "Maximize R(4, 6) witness graph order N (baseline 26)",
+      "description": "Submit a symmetric, loopless adjacency-bitmask graph on N vertices in `ExtremalGraphs/Ramsey4_6.lean` (`ExtremalGraphs.score_ramsey_4_6` and `ExtremalGraphs.rows_ramsey_4_6`) avoiding both K_4 and independent sets of size 6, certifying R(4, 6) \u2265 N + 1. Seeded with a constructive 26-vertex algebraic graph (frontier: 35 (R(4,6) \u2208 [36,40] open)). Frozen `ExtremalGraphs/BoundRamsey4_6.lean` kernel-verifies graph symmetry, irreflexivity, and absence of K_4 and I_6 via active-filtered Tomita greedy-coloring branch-and-bound (`decide +kernel`).",
+      "baseline_score": 26,
+      "target_files": [
+        "ExtremalGraphs/Ramsey4_6.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/chrispbsmolen/ramsey-witnesses/blob/d21fda594c86657be87e425f19f5fc02a27986e6/table/register.csv"
+    },
+    {
+      "id": "ramsey_4_7",
+      "title": "Maximize R(4, 7) witness graph order N (baseline 31)",
+      "description": "Submit a symmetric, loopless adjacency-bitmask graph on N vertices in `ExtremalGraphs/Ramsey4_7.lean` (`ExtremalGraphs.score_ramsey_4_7` and `ExtremalGraphs.rows_ramsey_4_7`) avoiding both K_4 and independent sets of size 7, certifying R(4, 7) \u2265 N + 1. Seeded with a constructive 31-vertex algebraic graph (frontier: 48 (R(4,7) \u2208 [49,58] open)). Frozen `ExtremalGraphs/BoundRamsey4_7.lean` kernel-verifies graph symmetry, irreflexivity, and absence of K_4 and I_7 via active-filtered Tomita greedy-coloring branch-and-bound (`decide +kernel`).",
+      "baseline_score": 31,
+      "target_files": [
+        "ExtremalGraphs/Ramsey4_7.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/chrispbsmolen/ramsey-witnesses/blob/d21fda594c86657be87e425f19f5fc02a27986e6/table/register.csv"
+    },
+    {
+      "id": "ramsey_5_5",
+      "title": "Maximize R(5, 5) witness graph order N (baseline 37)",
+      "description": "Submit a symmetric, loopless adjacency-bitmask graph on N vertices in `ExtremalGraphs/Ramsey5_5.lean` (`ExtremalGraphs.score_ramsey_5_5` and `ExtremalGraphs.rows_ramsey_5_5`) avoiding both K_5 and independent sets of size 5, certifying R(5, 5) \u2265 N + 1. Seeded with a constructive 37-vertex algebraic graph (frontier: 42 (R(5,5) \u2208 [43,46] open)). Frozen `ExtremalGraphs/BoundRamsey5_5.lean` kernel-verifies graph symmetry, irreflexivity, and absence of K_5 and I_5 via active-filtered Tomita greedy-coloring branch-and-bound (`decide +kernel`).",
+      "baseline_score": 37,
+      "target_files": [
+        "ExtremalGraphs/Ramsey5_5.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/chrispbsmolen/ramsey-witnesses/blob/d21fda594c86657be87e425f19f5fc02a27986e6/table/register.csv"
+    },
+    {
+      "id": "c4free_n25",
+      "title": "Maximize C4-free graph edges on n = 25 vertices (baseline 52)",
+      "description": "Submit a symmetric, loopless C4-free adjacency-bitmask graph on 25 vertices in `ExtremalGraphs/C4Free25.lean` (`ExtremalGraphs.score_c4free_n25` and `ExtremalGraphs.rows_c4free_n25`) maximizing edge count e, certifying ex(25, C_4) \u2265 e. Seeded with a constructive greedy C4-free graph of 52 edges (frontier: 66 (exact)). Frozen `ExtremalGraphs/BoundC4Free25.lean` kernel-verifies graph symmetry, irreflexivity, exact edge count, and C4-freeness (`(adj[u] &&& adj[v])` has \u2264 1 set bit for all u < v) via `decide +kernel`.",
+      "baseline_score": 52,
+      "target_files": [
+        "ExtremalGraphs/C4Free25.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/chrispbsmolen/ramsey-witnesses/blob/d21fda594c86657be87e425f19f5fc02a27986e6/README.md"
+    },
+    {
+      "id": "c4free_n27",
+      "title": "Maximize C4-free graph edges on n = 27 vertices (baseline 59)",
+      "description": "Submit a symmetric, loopless C4-free adjacency-bitmask graph on 27 vertices in `ExtremalGraphs/C4Free27.lean` (`ExtremalGraphs.score_c4free_n27` and `ExtremalGraphs.rows_c4free_n27`) maximizing edge count e, certifying ex(27, C_4) \u2265 e. Seeded with a constructive greedy C4-free graph of 59 edges (frontier: 74 (exact)). Frozen `ExtremalGraphs/BoundC4Free27.lean` kernel-verifies graph symmetry, irreflexivity, exact edge count, and C4-freeness (`(adj[u] &&& adj[v])` has \u2264 1 set bit for all u < v) via `decide +kernel`.",
+      "baseline_score": 59,
+      "target_files": [
+        "ExtremalGraphs/C4Free27.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/chrispbsmolen/ramsey-witnesses/blob/d21fda594c86657be87e425f19f5fc02a27986e6/README.md"
+    },
+    {
+      "id": "c4free_n29",
+      "title": "Maximize C4-free graph edges on n = 29 vertices (baseline 69)",
+      "description": "Submit a symmetric, loopless C4-free adjacency-bitmask graph on 29 vertices in `ExtremalGraphs/C4Free29.lean` (`ExtremalGraphs.score_c4free_n29` and `ExtremalGraphs.rows_c4free_n29`) maximizing edge count e, certifying ex(29, C_4) \u2265 e. Seeded with a constructive greedy C4-free graph of 69 edges (frontier: 83 (exact)). Frozen `ExtremalGraphs/BoundC4Free29.lean` kernel-verifies graph symmetry, irreflexivity, exact edge count, and C4-freeness (`(adj[u] &&& adj[v])` has \u2264 1 set bit for all u < v) via `decide +kernel`.",
+      "baseline_score": 69,
+      "target_files": [
+        "ExtremalGraphs/C4Free29.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/chrispbsmolen/ramsey-witnesses/blob/d21fda594c86657be87e425f19f5fc02a27986e6/README.md"
+    },
+    {
+      "id": "c4free_n32",
+      "title": "Maximize C4-free graph edges on n = 32 vertices (baseline 78)",
+      "description": "Submit a symmetric, loopless C4-free adjacency-bitmask graph on 32 vertices in `ExtremalGraphs/C4Free32.lean` (`ExtremalGraphs.score_c4free_n32` and `ExtremalGraphs.rows_c4free_n32`) maximizing edge count e, certifying ex(32, C_4) \u2265 e. Seeded with a constructive greedy C4-free graph of 78 edges (frontier: 92 (exact)). Frozen `ExtremalGraphs/BoundC4Free32.lean` kernel-verifies graph symmetry, irreflexivity, exact edge count, and C4-freeness (`(adj[u] &&& adj[v])` has \u2264 1 set bit for all u < v) via `decide +kernel`.",
+      "baseline_score": 78,
+      "target_files": [
+        "ExtremalGraphs/C4Free32.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/chrispbsmolen/ramsey-witnesses/blob/d21fda594c86657be87e425f19f5fc02a27986e6/README.md"
+    },
+    {
+      "id": "c4free_n34",
+      "title": "Maximize C4-free graph edges on n = 34 vertices (baseline 83)",
+      "description": "Submit a symmetric, loopless C4-free adjacency-bitmask graph on 34 vertices in `ExtremalGraphs/C4Free34.lean` (`ExtremalGraphs.score_c4free_n34` and `ExtremalGraphs.rows_c4free_n34`) maximizing edge count e, certifying ex(34, C_4) \u2265 e. Seeded with a constructive greedy C4-free graph of 83 edges (frontier: 100 (hard frontier)). Frozen `ExtremalGraphs/BoundC4Free34.lean` kernel-verifies graph symmetry, irreflexivity, exact edge count, and C4-freeness (`(adj[u] &&& adj[v])` has \u2264 1 set bit for all u < v) via `decide +kernel`.",
+      "baseline_score": 83,
+      "target_files": [
+        "ExtremalGraphs/C4Free34.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/chrispbsmolen/ramsey-witnesses/blob/d21fda594c86657be87e425f19f5fc02a27986e6/README.md"
+    },
+    {
+      "id": "c4free_n36",
+      "title": "Maximize C4-free graph edges on n = 36 vertices (baseline 92)",
+      "description": "Submit a symmetric, loopless C4-free adjacency-bitmask graph on 36 vertices in `ExtremalGraphs/C4Free36.lean` (`ExtremalGraphs.score_c4free_n36` and `ExtremalGraphs.rows_c4free_n36`) maximizing edge count e, certifying ex(36, C_4) \u2265 e. Seeded with a constructive greedy C4-free graph of 92 edges (frontier: 110 (open/hard frontier)). Frozen `ExtremalGraphs/BoundC4Free36.lean` kernel-verifies graph symmetry, irreflexivity, exact edge count, and C4-freeness (`(adj[u] &&& adj[v])` has \u2264 1 set bit for all u < v) via `decide +kernel`.",
+      "baseline_score": 92,
+      "target_files": [
+        "ExtremalGraphs/C4Free36.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/chrispbsmolen/ramsey-witnesses/blob/d21fda594c86657be87e425f19f5fc02a27986e6/README.md"
+    },
+    {
+      "id": "c4free_n38",
+      "title": "Maximize C4-free graph edges on n = 38 vertices (baseline 99)",
+      "description": "Submit a symmetric, loopless C4-free adjacency-bitmask graph on 38 vertices in `ExtremalGraphs/C4Free38.lean` (`ExtremalGraphs.score_c4free_n38` and `ExtremalGraphs.rows_c4free_n38`) maximizing edge count e, certifying ex(38, C_4) \u2265 e. Seeded with a constructive greedy C4-free graph of 99 edges (frontier: 120 (open/hard frontier)). Frozen `ExtremalGraphs/BoundC4Free38.lean` kernel-verifies graph symmetry, irreflexivity, exact edge count, and C4-freeness (`(adj[u] &&& adj[v])` has \u2264 1 set bit for all u < v) via `decide +kernel`.",
+      "baseline_score": 99,
+      "target_files": [
+        "ExtremalGraphs/C4Free38.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/chrispbsmolen/ramsey-witnesses/blob/d21fda594c86657be87e425f19f5fc02a27986e6/README.md"
+    },
+    {
+      "id": "c4free_n40",
+      "title": "Maximize C4-free graph edges on n = 40 vertices (baseline 106)",
+      "description": "Submit a symmetric, loopless C4-free adjacency-bitmask graph on 40 vertices in `ExtremalGraphs/C4Free40.lean` (`ExtremalGraphs.score_c4free_n40` and `ExtremalGraphs.rows_c4free_n40`) maximizing edge count e, certifying ex(40, C_4) \u2265 e. Seeded with a constructive greedy C4-free graph of 106 edges (frontier: 130 (open/hard frontier)). Frozen `ExtremalGraphs/BoundC4Free40.lean` kernel-verifies graph symmetry, irreflexivity, exact edge count, and C4-freeness (`(adj[u] &&& adj[v])` has \u2264 1 set bit for all u < v) via `decide +kernel`.",
+      "baseline_score": 106,
+      "target_files": [
+        "ExtremalGraphs/C4Free40.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/chrispbsmolen/ramsey-witnesses/blob/d21fda594c86657be87e425f19f5fc02a27986e6/README.md"
+    }
+  ]
+}

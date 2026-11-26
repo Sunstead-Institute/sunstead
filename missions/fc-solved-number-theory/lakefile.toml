@@ -1,0 +1,10 @@
+name = "fc_solved_number_theory"
+version = "0.1.0"
+
+[[require]]
+name = "mathlib"
+git = "https://github.com/leanprover-community/mathlib4.git"
+rev = "v4.36.0"
+
+[[lean_lib]]
+name = "FcSolvedNT"

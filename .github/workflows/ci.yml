@@ -166,6 +166,7 @@ jobs:
             test -x /opt/sunstead/sunstead-check &&
             /opt/sunstead/sunstead-check selftest | grep -q "\"selftest\":\"ok\"" &&
             test "$(ls -1 /opt/sunstead/mission-cache | wc -l)" -ge 4 &&
+            test -f /opt/sunstead/snapshots/sphere-packing-e8-foundations/manifest.json &&
             python3 -m py_compile /opt/verifier_server.py
           '
 
@@ -193,6 +194,7 @@ jobs:
             /opt/sunstead/sunstead-check selftest | grep -q "\"selftest\":\"ok\"" &&
             test -f /opt/sunstead/snapshots/lnsym-aes-gcm-armv8/manifest.json &&
             test -f /opt/sunstead/snapshots/lnsym-gcm-gmult-armv8/manifest.json &&
+            test -f /opt/sunstead/snapshots/lnsym-armv8-addloop-termination/manifest.json &&
             python3 -m py_compile /opt/verifier_server.py
           '
 

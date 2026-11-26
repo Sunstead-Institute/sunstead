@@ -1,0 +1,288 @@
+{
+  "id": "fc-solved-number-theory",
+  "title": "Formal Conjectures (Solved Literature): Number Theory",
+  "description": "Twenty-five known-in-literature, unproved-in-Lean number theory theorems extracted verbatim from google-deepmind/formal-conjectures@5bd8bfb9 (Apache-2.0), including 11 FC100SolvedSet2 benchmarks (Ball–Rivoal odd zeta irrationality, Darmon–Granville Fermat–Catalan, Baker–Heegner–Stark class number 1, Alford–Granville–Pomerance Carmichael lower bound, Wooley sums of three cubes, Hardy's divisor error, Ford's Carmichael totient bound, Tao's 2017 lonely runner bound, Gourevitch's series, Boshernitzan) plus Erdős Discrepancy (#67), large prime gaps (#4), Graham's GCD conjecture (#402), and Ternary Goldbach. All statements compile cleanly on Lean 4.36.0 + Mathlib v4.36.0 with zero open-PR conflicts.",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/google-deepmind/formal-conjectures",
+  "upstream": {
+    "repo": "google-deepmind/formal-conjectures",
+    "commit": "5bd8bfb9def462c19a87d2d275af3db3341dc727",
+    "license": "Apache-2.0"
+  },
+  "frozen_paths": [
+    "FcSolvedNT/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 240,
+    "memory_mb": 6144
+  },
+  "decomposition": {
+    "enabled": true,
+    "require_allowlist": true,
+    "allow_direct_bypass": true,
+    "max_depth": 2
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "infinite_irrational_at_odd",
+      "title": "Ball–Rivoal: infinitely many odd zeta values ζ(2n+1) are irrational",
+      "description": "Verbatim statement `infinite_irrational_at_odd` from `FormalConjectures/Wikipedia/RiemannZetaValues.lean#L91-L93` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedNT/InfiniteIrrationalAtOdd.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/RiemannZetaValues.lean#L91-L93"
+    },
+    {
+      "id": "gourevitch_series_identity",
+      "title": "Gourevitch hypergeometric series identity for 32/π³",
+      "description": "Verbatim statement `gourevitch_series_identity` from `FormalConjectures/Paper/Gourevitch.lean#L40-L43` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedNT/GourevitchSeries.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Paper/Gourevitch.lean#L40-L43"
+    },
+    {
+      "id": "boshernitzan_equidistribution",
+      "title": "Boshernitzan: zero Hausdorff dimension of non-dense multiples mod 1",
+      "description": "Verbatim statement `boshernitzan` from `FormalConjectures/Books/BugeaudDistributionModuloOne/Problem10_6.lean#L98-L101` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedNT/Boshernitzan.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Books/BugeaudDistributionModuloOne/Problem10_6.lean#L98-L101"
+    },
+    {
+      "id": "divisor_error_hardy",
+      "title": "Hardy's Dirichlet divisor error lower bound Δ(x) ≠ o(x^{1/4})",
+      "description": "Verbatim statement `divisor_error_hardy` from `FormalConjectures/Wikipedia/DirichletDivisorProblem.lean#L88-L90` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedNT/DivisorErrorHardy.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/DirichletDivisorProblem.lean#L88-L90"
+    },
+    {
+      "id": "carmichael_totient_bound",
+      "title": "Ford: Carmichael's totient conjecture holds for all n < 10^{10^10}",
+      "description": "Verbatim statement `carchimaelTotient_bound` from `FormalConjectures/Wikipedia/CarmichaelTotient.lean#L66-L68` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedNT/CarmichaelTotientBound.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/CarmichaelTotient.lean#L66-L68"
+    },
+    {
+      "id": "erdos_408_ford_konyagin_luca",
+      "title": "Erdős #408 (Ford–Konyagin–Luca): smooth iterated totients",
+      "description": "Verbatim statement `erdos_408.variants.ford_konyagin_luca` from `FormalConjectures/ErdosProblems/408.lean#L165-L169` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedNT/Erdos408FKL.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/408.lean#L165-L169"
+    },
+    {
+      "id": "darmon_granville_fermat_catalan",
+      "title": "Darmon–Granville: finitely many coprime solutions to a^m + b^n = c^k",
+      "description": "Verbatim statement `fermat_catalan.variants.darmon_granville` from `FormalConjectures/Wikipedia/FermatCatalanConjecture.lean#L68-L73` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedNT/DarmonGranville.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/FermatCatalanConjecture.lean#L68-L73"
+    },
+    {
+      "id": "erdos_1057_agp_carmichael",
+      "title": "Erdős #1057 (Alford–Granville–Pomerance): Carmichael count > x^{2/7}",
+      "description": "Verbatim statement `erdos_1057.variants.agp_lower_bound` from `FormalConjectures/ErdosProblems/1057.lean#L95-L97` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedNT/Erdos1057AGP.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/1057.lean#L95-L97"
+    },
+    {
+      "id": "erdos_325_wooley_cubes",
+      "title": "Erdős #325 (Wooley): integers representable as sums of three cubes",
+      "description": "Verbatim statement `erdos_325.variants.wooley` from `FormalConjectures/ErdosProblems/325.lean#L65-L68` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedNT/Erdos325Wooley.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/325.lean#L65-L68"
+    },
+    {
+      "id": "imaginary_class_number_one",
+      "title": "Baker–Heegner–Stark: exactly nine imaginary quadratic fields of class number 1",
+      "description": "Verbatim statement `class_number_problem.variants.imaginary` from `FormalConjectures/Wikipedia/ClassNumberProblem.lean#L50-L53` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedNT/ImaginaryClassNumberOne.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/ClassNumberProblem.lean#L50-L53"
+    },
+    {
+      "id": "lonely_runner_tao_2017",
+      "title": "Tao (2017): improved asymptotic lower bound for the lonely runner gap",
+      "description": "Verbatim statement `lonely_runner_conjecture.variants.tao_2017` from `FormalConjectures/Wikipedia/LonelyRunnerConjecture.lean#L73-L80` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedNT/LonelyRunnerTao2017.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/LonelyRunnerConjecture.lean#L73-L80"
+    },
+    {
+      "id": "erdos_12_erdos_sarkozy",
+      "title": "Erdős #12 (Erdős–Sárközy): dense sets avoiding a | b + c",
+      "description": "Verbatim statement `erdos_12.variants.erdos_sarkozy` from `FormalConjectures/ErdosProblems/12.lean#L106-L108` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedNT/Erdos12Sarkozy.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/12.lean#L106-L108"
+    },
+    {
+      "id": "erdos_67_discrepancy",
+      "title": "Erdős #67 (Tao 2015): Erdős discrepancy problem for ±1 sequences",
+      "description": "Verbatim statement `erdos_67` from `FormalConjectures/ErdosProblems/67.lean#L42-L44` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedNT/Erdos67Discrepancy.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/67.lean#L42-L44"
+    },
+    {
+      "id": "erdos_4_large_prime_gaps",
+      "title": "Erdős #4 (FGKMT / Maynard): arbitrarily large prime gap factor",
+      "description": "Verbatim statement `erdos_4` from `FormalConjectures/ErdosProblems/4.lean#L43-L44` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedNT/Erdos4PrimeGaps.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/4.lean#L43-L44"
+    },
+    {
+      "id": "erdos_711_minimal_interval",
+      "title": "Erdős #711 (part ii): unbounded growth of minimal divisibility interval lengths",
+      "description": "Verbatim statement `erdos_711.parts.ii` from `FormalConjectures/ErdosProblems/711.lean#L67-L70` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedNT/Erdos711Interval.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/711.lean#L67-L70"
+    },
+    {
+      "id": "erdos_69_omega_irrational",
+      "title": "Erdős #69: irrationality of ∑ ω(n) / 2^n",
+      "description": "Verbatim statement `erdos_69` from `FormalConjectures/ErdosProblems/69.lean#L40-L41` (`category textbook`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedNT/Erdos69OmegaIrrational.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/69.lean#L40-L41"
+    },
+    {
+      "id": "erdos_402_graham_gcd",
+      "title": "Erdős #402 (Graham's GCD conjecture, Balasubramanian–Soundararajan)",
+      "description": "Verbatim statement `erdos_402` from `FormalConjectures/ErdosProblems/402.lean#L38-L40` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedNT/Erdos402GrahamGcd.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/402.lean#L38-L40"
+    },
+    {
+      "id": "erdos_387_binomial_divisor",
+      "title": "Erdős #387: no universal constant divisor bound for binomial coefficients",
+      "description": "Verbatim statement `erdos_387` from `FormalConjectures/ErdosProblems/387.lean#L52-L54` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedNT/Erdos387BinomDivisor.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/387.lean#L52-L54"
+    },
+    {
+      "id": "ternary_goldbach",
+      "title": "Helfgott: Ternary Goldbach theorem for odd n > 5",
+      "description": "Verbatim statement `ternaryGoldbach` from `FormalConjectures/Wikipedia/GoldbachConjecture.lean#L52-L54` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedNT/TernaryGoldbach.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/GoldbachConjecture.lean#L52-L54"
+    },
+    {
+      "id": "green_3_multiplicative_triple",
+      "title": "Ben Green #3: open subset of [0,1] of measure > 1/3 contains x·y = z",
+      "description": "Verbatim statement `green_3` from `FormalConjectures/GreensOpenProblems/3.lean#L41-L45` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedNT/Green3MultTriple.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/GreensOpenProblems/3.lean#L41-L45"
+    },
+    {
+      "id": "erdos_372_decreasing_max_prime_fac",
+      "title": "Erdős #372 (Balog): infinitely many n with P(n) > P(n+1) > P(n+2)",
+      "description": "Verbatim statement `erdos_372` from `FormalConjectures/ErdosProblems/372.lean#L38-L41` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedNT/Erdos372MaxPrimeFac.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/372.lean#L38-L41"
+    },
+    {
+      "id": "colossally_abundant_maximizers",
+      "title": "Alaoglu–Erdős: at most four maximizers of σ(k)/k^{1+ε}",
+      "description": "Verbatim statement `encard_colossallyAbundant_maximizers_le_four` from `FormalConjectures/Wikipedia/ColossallyAbundantNumber.lean#L210-L213` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedNT/ColossallyAbundant.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/ColossallyAbundantNumber.lean#L210-L213"
+    },
+    {
+      "id": "oeis_a287616_polygonal_sum",
+      "title": "OEIS A287616 (Sun): every n is triangular + pentagonal + heptagonal",
+      "description": "Verbatim statement `conjecture` from `FormalConjectures/OEIS/287616.lean#L74-L75` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedNT/OeisA287616.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/OEIS/287616.lean#L74-L75"
+    },
+    {
+      "id": "erdos_848_non_squarefree_products",
+      "title": "Erdős #848 (Sawhney): extremal sets with non-squarefree ab + 1",
+      "description": "Verbatim statement `erdos_848` from `FormalConjectures/ErdosProblems/848.lean#L66-L67` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedNT/Erdos848NonSquarefree.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/ErdosProblems/848.lean#L66-L67"
+    },
+    {
+      "id": "riemann_zeta_second_moment",
+      "title": "Hardy–Littlewood: asymptotic second moment of ζ(1/2 + it)",
+      "description": "Verbatim statement `moment_isEquiv₁` from `FormalConjectures/Paper/RiemannZetaMoments.lean#L77-L78` (`category research solved`). Known-in-literature theorem unproved in Lean 4: replace `sorry` with a complete kernel-checked proof.",
+      "target_files": [
+        "FcSolvedNT/ZetaSecondMoment.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Paper/RiemannZetaMoments.lean#L77-L78"
+    }
+  ]
+}

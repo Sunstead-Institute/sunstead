@@ -1,0 +1,289 @@
+{
+  "id": "fc-open-oeis-classics",
+  "title": "Formal Conjectures (Open Research): OEIS & Classical Open Problems",
+  "description": "Twenty-five genuinely open conjectures (two-sided prove-or-refute targets via POST .../submit or POST .../refute) extracted verbatim from google-deepmind/formal-conjectures@5bd8bfb9 (Apache-2.0): 12 concrete, counterexample-testable OEIS integer-sequence conjectures paired with 13 iconic classical open problems (11 from FC100OpenSet2: Goldbach, Twin Primes, Legendre, ABC, Beal, Fermat–Catalan, Lonely Runner, Four Exponentials, e + π transcendental, odd ζ(2n+1) irrationality, infinitely many Fermat primes, plus Gilbreath's conjecture and Büchi's problem).",
+  "tier": 1,
+  "mode": "dag",
+  "repo": "https://github.com/google-deepmind/formal-conjectures",
+  "upstream": {
+    "repo": "google-deepmind/formal-conjectures",
+    "commit": "5bd8bfb9def462c19a87d2d275af3db3341dc727",
+    "license": "Apache-2.0"
+  },
+  "frozen_paths": [
+    "FcOpenOeisClassics/Spec.lean",
+    "UPSTREAM.json",
+    "lakefile.toml",
+    "lean-toolchain",
+    "verify",
+    "sunstead.json"
+  ],
+  "verifier": {
+    "image": "sunstead/verifier-lean4:v0.2",
+    "command": [
+      "./verify"
+    ],
+    "timeout_sec": 240,
+    "memory_mb": 6144
+  },
+  "decomposition": {
+    "enabled": true,
+    "require_allowlist": true,
+    "allow_direct_bypass": true,
+    "max_depth": 2
+  },
+  "score_direction": "maximize",
+  "tasks": [
+    {
+      "id": "oeis_a034693_prime_nk_plus_1",
+      "title": "OEIS A034693: for every n > 1, some k < n makes n·k + 1 prime",
+      "description": "Verbatim statement `exists_k` from `FormalConjectures/OEIS/34693.lean#L61-L62` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenOeisClassics/OeisA034693.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/OEIS/34693.lean#L61-L62"
+    },
+    {
+      "id": "oeis_a119591_prime_2nk_minus_1",
+      "title": "OEIS A119591: for every n ≥ 2, some k > 0 makes 2·n^k - 1 prime",
+      "description": "Verbatim statement `conjecture` from `FormalConjectures/OEIS/119591.lean#L131-L132` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenOeisClassics/OeisA119591.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/OEIS/119591.lean#L131-L132"
+    },
+    {
+      "id": "oeis_a262824_mixed_power_rep",
+      "title": "OEIS A262824: every n ∈ ℕ equals w² + x³ + 2y³ + z⁴",
+      "description": "Verbatim statement `conjecture_2` from `FormalConjectures/OEIS/262824.lean#L74-L76` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenOeisClassics/OeisA262824.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/OEIS/262824.lean#L74-L76"
+    },
+    {
+      "id": "oeis_a233864_prime_2n_plus_sigma",
+      "title": "OEIS A233864: for n > 0, some 0 < k < 2n makes 2n + σ(k) prime",
+      "description": "Verbatim statement `conjecture_2` from `FormalConjectures/OEIS/233864.lean#L85-L87` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenOeisClassics/OeisA233864.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/OEIS/233864.lean#L85-L87"
+    },
+    {
+      "id": "oeis_a237720_prime_sqrt_n_plus_p",
+      "title": "OEIS A237720: for n > 2, some prime p < n has ⌊√(n + p)⌋ prime",
+      "description": "Verbatim statement `conjecture_3` from `FormalConjectures/OEIS/237720.lean#L81-L83` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenOeisClassics/OeisA237720.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/OEIS/237720.lean#L81-L83"
+    },
+    {
+      "id": "oeis_a234246_square_k_plus_totient",
+      "title": "OEIS A234246: for n ≥ 60, some 0 < k < n makes k + φ(n - k) a square",
+      "description": "Verbatim statement `conjecture_3` from `FormalConjectures/OEIS/234246.lean#L80-L82` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenOeisClassics/OeisA234246.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/OEIS/234246.lean#L80-L82"
+    },
+    {
+      "id": "oeis_a233566_prime_p2_totient",
+      "title": "OEIS A233566: for n > 2, some prime p < n makes p²·φ(n - p) - 1 prime",
+      "description": "Verbatim statement `conjecture_2` from `FormalConjectures/OEIS/233566.lean#L69-L71` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenOeisClassics/OeisA233566.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/OEIS/233566.lean#L69-L71"
+    },
+    {
+      "id": "oeis_a218585_prime_quadratic",
+      "title": "OEIS A218585: for n > 12, some 0 < x < n/3 makes n·x + (n - x)² prime",
+      "description": "Verbatim statement `conjecture_2` from `FormalConjectures/OEIS/218585.lean#L85-L87` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenOeisClassics/OeisA218585.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/OEIS/218585.lean#L85-L87"
+    },
+    {
+      "id": "oeis_a117545_cyclotomic_prime",
+      "title": "OEIS A117545: for every n > 0, some Φ_k(n) is prime",
+      "description": "Verbatim statement `conjecture` from `FormalConjectures/OEIS/117545.lean#L117-L119` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenOeisClassics/OeisA117545.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/OEIS/117545.lean#L117-L119"
+    },
+    {
+      "id": "oeis_a232194_prime_nq2_plus_1",
+      "title": "OEIS A232194: for n > 5, some prime p and q > 0 with p + q = n make n·q² + 1 prime",
+      "description": "Verbatim statement `conjecture_6` from `FormalConjectures/OEIS/232194.lean#L102-L104` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenOeisClassics/OeisA232194.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/OEIS/232194.lean#L102-L104"
+    },
+    {
+      "id": "oeis_a218656_prime_sum_two_squares",
+      "title": "OEIS A218656: for n ≥ 1, some 1 ≤ x ≤ n makes x² + (2n + 1 - x)² prime",
+      "description": "Verbatim statement `conjecture_2` from `FormalConjectures/OEIS/218656.lean#L122-L124` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenOeisClassics/OeisA218656.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/OEIS/218656.lean#L122-L124"
+    },
+    {
+      "id": "oeis_a159829_infinite_kth_power_primes",
+      "title": "OEIS A159829: infinitely many primes of the form n^k + m^k + 1 for every k ≥ 3",
+      "description": "Verbatim statement `conjecture2` from `FormalConjectures/OEIS/159829.lean#L111-L113` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenOeisClassics/OeisA159829.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/OEIS/159829.lean#L111-L113"
+    },
+    {
+      "id": "goldbach_conjecture",
+      "title": "Goldbach's conjecture: every even n > 2 is a sum of two primes",
+      "description": "Verbatim statement `goldbach` from `FormalConjectures/Wikipedia/GoldbachConjecture.lean#L36-L38` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenOeisClassics/GoldbachConjecture.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/GoldbachConjecture.lean#L36-L38"
+    },
+    {
+      "id": "twin_primes_conjecture",
+      "title": "Twin Prime conjecture: infinitely many primes p with p + 2 prime",
+      "description": "Verbatim statement `twin_primes` from `FormalConjectures/Wikipedia/TwinPrimes.lean#L37-L39` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenOeisClassics/TwinPrimes.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/TwinPrimes.lean#L37-L39"
+    },
+    {
+      "id": "legendre_conjecture",
+      "title": "Legendre's conjecture: a prime always lies between n² and (n + 1)² for n ≥ 1",
+      "description": "Verbatim statement `legendre_conjecture` from `FormalConjectures/Wikipedia/LegendreConjecture.lean#L38-L40` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenOeisClassics/LegendreConjecture.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/LegendreConjecture.lean#L38-L40"
+    },
+    {
+      "id": "abc_conjecture",
+      "title": "abc conjecture: finitely many coprime triples a + b = c with c > rad(abc)^{1+ε}",
+      "description": "Verbatim statement `abc` from `FormalConjectures/Wikipedia/ABC.lean#L63-L66` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenOeisClassics/AbcConjecture.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/ABC.lean#L63-L66"
+    },
+    {
+      "id": "beal_conjecture",
+      "title": "Beal's conjecture: A^x + B^y = C^z (x, y, z > 2) implies gcd(A, B, C) > 1",
+      "description": "Verbatim statement `beal_conjecture` from `FormalConjectures/Wikipedia/BealConjecture.lean#L39-L40` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenOeisClassics/BealConjecture.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/BealConjecture.lean#L39-L40"
+    },
+    {
+      "id": "fermat_catalan_conjecture",
+      "title": "Fermat–Catalan conjecture: finitely many coprime powers a^m + b^n = c^k with 1/m + 1/n + 1/k < 1",
+      "description": "Verbatim statement `fermat_catalan` from `FormalConjectures/Wikipedia/FermatCatalanConjecture.lean#L59-L60` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenOeisClassics/FermatCatalan.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/FermatCatalanConjecture.lean#L59-L60"
+    },
+    {
+      "id": "lonely_runner_conjecture",
+      "title": "Lonely Runner conjecture: every runner reaches distance ≥ 1/n from all others",
+      "description": "Verbatim statement `lonely_runner_conjecture` from `FormalConjectures/Wikipedia/LonelyRunnerConjecture.lean#L39-L46` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenOeisClassics/LonelyRunner.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/LonelyRunnerConjecture.lean#L39-L46"
+    },
+    {
+      "id": "four_exponentials_conjecture",
+      "title": "Four Exponentials conjecture: at least one exp(x_i y_j) is transcendental",
+      "description": "Verbatim statement `four_exponentials_conjecture` from `FormalConjectures/Wikipedia/Exponentials.lean#L38-L41` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenOeisClassics/FourExponentials.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/Exponentials.lean#L38-L41"
+    },
+    {
+      "id": "exp_add_pi_transcendental",
+      "title": "Transcendence of e + π over ℚ",
+      "description": "Verbatim statement `exp_add_pi_transcendental` from `FormalConjectures/Wikipedia/Transcendental.lean#L36-L37` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenOeisClassics/ExpAddPiTranscendental.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/Transcendental.lean#L36-L37"
+    },
+    {
+      "id": "irrational_odd_zeta",
+      "title": "Irrationality of ζ(2n + 1) for every integer n ≥ 1",
+      "description": "Verbatim statement `irrational_odd` from `FormalConjectures/Wikipedia/RiemannZetaValues.lean#L72-L74` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenOeisClassics/IrrationalOddZeta.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/RiemannZetaValues.lean#L72-L74"
+    },
+    {
+      "id": "infinite_fermat_primes",
+      "title": "Infinitely many Fermat primes 2^{2^n} + 1",
+      "description": "Verbatim statement `infinite_fermat_primes` from `FormalConjectures/Wikipedia/Fermat.lean#L41-L42` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenOeisClassics/InfiniteFermatPrimes.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/Fermat.lean#L41-L42"
+    },
+    {
+      "id": "gilbreath_conjecture",
+      "title": "Gilbreath's conjecture: iterated prime-difference leading term is always 1",
+      "description": "Verbatim statement `gilbreath_conjecture` from `FormalConjectures/Wikipedia/Gilbreath.lean#L45-L46` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenOeisClassics/GilbreathConjecture.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/Gilbreath.lean#L45-L46"
+    },
+    {
+      "id": "buchi_problem",
+      "title": "Büchi's problem: uniform bound M on squares in arithmetic progressions with second difference 2",
+      "description": "Verbatim statement `buchi_problem` from `FormalConjectures/Wikipedia/Buchi.lean#L42-L44` (`category research open`). Two-sided open conjecture: submit a Lean 4 proof of `T` via `POST .../submit` or a kernel-checked disproof of `¬ T` via `POST .../refute`.",
+      "target_files": [
+        "FcOpenOeisClassics/BuchiProblem.lean"
+      ],
+      "depends_on": [],
+      "upstream_url": "https://github.com/google-deepmind/formal-conjectures/blob/5bd8bfb9def462c19a87d2d275af3db3341dc727/FormalConjectures/Wikipedia/Buchi.lean#L42-L44"
+    }
+  ],
+  "open_conjecture": true
+}
