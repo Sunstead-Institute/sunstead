@@ -81,7 +81,7 @@ jobs:
             missions/verifier-common/prebuild_cache.py \
             missions/verifier-common/prebuild_snapshot.py \
             cloudflare/containers/verifier_server.py \
-            scripts/check-upstream.py scripts/check-statements.py scripts/redteam.py scripts/e2e.py \
+            scripts/check-upstream.py scripts/check-statements.py scripts/test_check_statements.py scripts/redteam.py scripts/e2e.py \
             scripts/scout-upstream.py scripts/test_scout_upstream.py \
             scripts/sunstead_verify.py scripts/test_sunstead_verify.py \
             scripts/upstream-verify-list.py scripts/test_upstream_verify_list.py \
@@ -99,6 +99,8 @@ jobs:
         run: python3 scripts/test_upstream_verify_list.py
       - name: Repo-snapshot local bootstrap tests (offline)
         run: python3 scripts/test_bootstrap_snapshot.py -v
+      - name: Statement-checker batching unit tests (offline)
+        run: python3 scripts/test_check_statements.py -v
       - name: Verify verbatim upstream provenance against pinned commits
         run: python3 scripts/check-upstream.py
       - name: Every hill-climb task has a sourced best known value

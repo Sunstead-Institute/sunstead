@@ -13,10 +13,12 @@ import {
   buildSubgoalTaskId,
   checkDecompositionEligibility,
   computeDecompPointSplit,
+  computeOpenConjectureRefutePoints,
   computePoints,
   computeRefutationBounty,
   extractPropStatementExpr,
   generateUnifiedDiff,
+  isOpenConjectureTask,
   isTaskUnlocked,
   parseDecomposeRequest,
   parseRefuteRequest,
@@ -30,6 +32,7 @@ import {
   type FailureStage,
   type MissionManifest,
   type MissionVerifyContract,
+  type RefutedResolution,
   type SubgoalSpec,
   type TaskDefinition,
   type TaskState,
@@ -109,6 +112,7 @@ export type RefutationRow = {
   verify_ms: number;
   created_at: number;
   is_demo: number;
+  resolves_conjecture?: number;
 };
 
 export interface DecomposeHubContext {
@@ -247,6 +251,7 @@ export function initDecomposeSchema(
   ensureColumn("accepted_patches", "decomp_meta_json", "TEXT");
 
   ensureColumn("submissions", "kind", "TEXT NOT NULL DEFAULT 'submit'");
+  ensureColumn("refutations", "resolves_conjecture", "INTEGER NOT NULL DEFAULT 0");
 }
 
 // ---------------------------------------------------------------------------
@@ -426,6 +431,7 @@ export function listMissionRefutations(sql: SqlLike, missionId: string, hubOrigi
         decomp_id: r.decomp_id,
         subgoal_id: r.subgoal_id,
         target_kind: r.target_kind,
+        resolves_conjecture: Boolean(r.resolves_conjecture),
         refuter: r.refuter,
         summary: r.summary,
         patch_sha256: r.patch_sha256,
@@ -442,7 +448,7 @@ export function getDisputedRootMap(sql: SqlLike, missionId: string): Map<string,
   const rows = sql
     .exec<RefutationRow>(
       `SELECT * FROM refutations
-       WHERE mission_id = ? AND target_kind = 'root'
+       WHERE mission_id = ? AND target_kind = 'root' AND COALESCE(resolves_conjecture, 0) = 0
        ORDER BY created_at DESC`,
       missionId
     )
@@ -460,6 +466,65 @@ export function getDisputedRootMap(sql: SqlLike, missionId: string): Map<string,
     }
   }
   return map;
+}
+
+export function getResolvedRefutationMap(sql: SqlLike, missionId: string): Map<string, RefutedResolution> {
+  const rows = sql
+    .exec<RefutationRow>(
+      `SELECT * FROM refutations
+       WHERE mission_id = ? AND target_kind = 'root' AND COALESCE(resolves_conjecture, 0) = 1
+       ORDER BY created_at DESC`,
+      missionId
+    )
+    .toArray();
+  const map = new Map<string, RefutedResolution>();
+  for (const r of rows) {
+    if (!map.has(r.task_id)) {
+      map.set(r.task_id, {
+        refutation_id: r.id,
+        refuter: r.refuter,
+        proof_id: proofIdFromPatchSha(r.patch_sha256),
+        summary: r.summary,
+        created_at: r.created_at,
+      });
+    }
+  }
+  return map;
+}
+
+/** Batch-load all root refutations grouped by mission_id (eliminates N+1 queries at 50+ missions). */
+export function getAllRootRefutationMaps(sql: SqlLike): {
+  disputedByMission: Map<string, Map<string, DisputedCounterexample>>;
+  resolvedByMission: Map<string, Map<string, RefutedResolution>>;
+} {
+  const rows = sql
+    .exec<RefutationRow>(
+      `SELECT * FROM refutations
+       WHERE target_kind = 'root'
+       ORDER BY created_at DESC`
+    )
+    .toArray();
+  const disputedByMission = new Map<string, Map<string, DisputedCounterexample>>();
+  const resolvedByMission = new Map<string, Map<string, RefutedResolution>>();
+  for (const r of rows) {
+    const entry = {
+      refutation_id: r.id,
+      refuter: r.refuter,
+      proof_id: proofIdFromPatchSha(r.patch_sha256),
+      summary: r.summary,
+      created_at: r.created_at,
+    };
+    const bucket = r.resolves_conjecture ? resolvedByMission : disputedByMission;
+    let m = bucket.get(r.mission_id);
+    if (!m) {
+      m = new Map();
+      bucket.set(r.mission_id, m);
+    }
+    if (!m.has(r.task_id)) {
+      m.set(r.task_id, entry);
+    }
+  }
+  return { disputedByMission, resolvedByMission };
 }
 
 export function enrichTaskFilesWithDecomp(
@@ -647,7 +712,7 @@ export async function executeDecompose(
     const msg = e instanceof Error ? e.message : String(e);
     const code = /not on the Phase 1 decomposition allowlist/.test(msg)
       ? 403
-      : /already verified|already has an active|blocked on/.test(msg)
+      : /already verified|already refuted|already has an active|blocked on|cannot be decomposed/.test(msg)
         ? 409
         : /cap reached/.test(msg)
           ? 429
@@ -840,7 +905,7 @@ export async function executeDecompose(
     // Re-check concurrency invariants atomically under the mission lock.
     const latestTasks = ctx.getTasks(missionId);
     const latestTask = latestTasks.find((t) => t.def.id === taskId);
-    if (!latestTask || latestTask.status === "verified") {
+    if (!latestTask || latestTask.status === "verified" || latestTask.status === "refuted") {
       return { status: 409, body: { accepted: false, error: `task '${taskId}' is no longer open` } };
     }
     const latestActiveOnTarget = sql
@@ -1359,7 +1424,13 @@ async function tryAutoAssembleDecomposition(
     const latestDecomp = getDecompositionRow(sql, missionId, decomp.root_task_id, decomp.decomp_id);
     const latestTasks = ctx.getTasks(missionId);
     const latestRoot = latestTasks.find((t) => t.def.id === decomp.root_task_id);
-    if (!latestDecomp || latestDecomp.status !== "active" || !latestRoot || latestRoot.status === "verified") {
+    if (
+      !latestDecomp ||
+      latestDecomp.status !== "active" ||
+      !latestRoot ||
+      latestRoot.status === "verified" ||
+      latestRoot.status === "refuted"
+    ) {
       return { assembled: false, assembly_error: "root task was closed concurrently" };
     }
 
@@ -1870,6 +1941,7 @@ export function handleDirectParentBypass(
 export interface PreparedRefute {
   task: TaskState;
   isSubgoal: boolean;
+  resolvesConjecture: boolean;
   decomp: DecompositionRow | null;
   subgoals: SubgoalSpec[];
   sub: SubgoalSpec | undefined;
@@ -1906,8 +1978,12 @@ export function prepareRefute(
   if (task.status === "verified") {
     return { ok: false, status: 409, body: { error: `task '${taskId}' is already kernel-verified` } };
   }
+  if (task.status === "refuted") {
+    return { ok: false, status: 409, body: { error: `task '${taskId}' is already kernel-refuted` } };
+  }
 
   const isSubgoal = Boolean(task.def.decomp_id && task.def.subgoal_id && task.def.root_task_id);
+  const resolvesConjecture = !isSubgoal && isOpenConjectureTask(mission.manifest, task.def);
   let decomp: DecompositionRow | null = null;
   let subgoals: SubgoalSpec[] = [];
   let sub: SubgoalSpec | undefined;
@@ -1961,7 +2037,7 @@ export function prepareRefute(
   const rootTaskId = isSubgoal ? task.def.root_task_id! : task.def.id;
   return {
     ok: true,
-    prepared: { task, isSubgoal, decomp, subgoals, sub, rootTaskId, parsed },
+    prepared: { task, isSubgoal, resolvesConjecture, decomp, subgoals, sub, rootTaskId, parsed },
   };
 }
 
@@ -1989,7 +2065,7 @@ export async function executeRefute(
     prep = check.prepared;
   }
 
-  const { isSubgoal, decomp, subgoals, sub, rootTaskId, parsed } = prep;
+  const { isSubgoal, resolvesConjecture, decomp, subgoals, sub, rootTaskId, parsed } = prep;
   const now = params.createdAt ?? ctx.now();
   const subId = existingSubmissionId ?? ctx.randomUUID();
   const patchSha = await ctx.sha256Hex(parsed.patch);
@@ -2175,54 +2251,59 @@ export async function executeRefute(
   // Prevent self-refutation bounty farming: a proposer may cleanly retract their own false
   // subgoal (invalidating the split + recording a strike), but earns 0 bounty points.
   const isSelfRefutation = Boolean(isSubgoal && decomp && decomp.proposer === contributor);
-  const bounty = isSelfRefutation ? 0 : computeRefutationBounty(mission.manifest);
 
   return ctx.withMissionLock(missionId, async () => {
     const ts = ctx.now();
     let invalidatedDecompId: string | null = null;
     let reopenedParentTaskId: string | null = null;
     let proposerFlagged: string | null = null;
+    let retiredDecomps: string[] = [];
+    let bounty: number;
+
+    const rejectLockRace = (msg: string) => {
+      if (existingSubmissionId) {
+        persistSubmission({
+          status: "rejected",
+          accepted: false,
+          score: null,
+          points: 0,
+          summary: msg,
+          patch_sha256: storedPatchSha,
+          verify_ms: cRes.verify_ms ?? 0,
+          error: msg,
+          completed_at: ts,
+        });
+        ctx.emit({
+          kind: "submission_rejected",
+          submission_id: subId,
+          mission_id: missionId,
+          task_id: taskId,
+          contributor,
+          accepted: false,
+          score: null,
+          summary: msg,
+          timestamp: ts,
+        });
+      }
+      return {
+        status: 409,
+        body: {
+          accepted: false,
+          ...(existingSubmissionId ? { status: "rejected", submission_id: subId } : {}),
+          error: msg,
+        },
+      };
+    };
 
     if (isSubgoal && decomp && sub) {
       const latestDecomp = getDecompositionRow(sql, missionId, rootTaskId, decomp.decomp_id);
       if (!latestDecomp || latestDecomp.status !== "active") {
-        const msg = `decomposition '${decomp.decomp_id}' was already closed`;
-        if (existingSubmissionId) {
-          persistSubmission({
-            status: "rejected",
-            accepted: false,
-            score: null,
-            points: 0,
-            summary: msg,
-            patch_sha256: storedPatchSha,
-            verify_ms: cRes.verify_ms ?? 0,
-            error: msg,
-            completed_at: ts,
-          });
-          ctx.emit({
-            kind: "submission_rejected",
-            submission_id: subId,
-            mission_id: missionId,
-            task_id: taskId,
-            contributor,
-            accepted: false,
-            score: null,
-            summary: msg,
-            timestamp: ts,
-          });
-        }
-        return {
-          status: 409,
-          body: {
-            accepted: false,
-            ...(existingSubmissionId ? { status: "rejected", submission_id: subId } : {}),
-            error: msg,
-          },
-        };
+        return rejectLockRace(`decomposition '${decomp.decomp_id}' was already closed`);
       }
       invalidatedDecompId = latestDecomp.decomp_id;
       reopenedParentTaskId = latestDecomp.parent_task_id;
       proposerFlagged = latestDecomp.proposer;
+      bounty = isSelfRefutation ? 0 : computeRefutationBounty(mission.manifest);
 
       // Invalidate decomposition, forfeit architect share, retire all sibling/nested subgoals.
       retireDecompositionTree(sql, missionId, latestDecomp.parent_task_id, "refuted", ts, {
@@ -2230,10 +2311,10 @@ export async function executeRefute(
         refutation_id: refutationId,
       });
 
-      // Restore parent task to clean open state (if not verified).
+      // Restore parent task to clean open state (if not already resolved).
       sql.exec(
         `UPDATE tasks
-         SET status = CASE WHEN status = 'verified' THEN 'verified' ELSE 'open' END
+         SET status = CASE WHEN status IN ('verified', 'refuted') THEN status ELSE 'open' END
          WHERE mission_id = ? AND task_id = ?`,
         missionId,
         latestDecomp.parent_task_id
@@ -2248,7 +2329,15 @@ export async function executeRefute(
         latestDecomp.proposer
       );
     } else {
-      // Prevent concurrent or repeated bounty farming on an already-disputed root task.
+      const latestTasks = ctx.getTasks(missionId);
+      const latestTask = latestTasks.find((t) => t.def.id === taskId);
+      if (!latestTask || latestTask.status === "verified") {
+        return rejectLockRace(`task '${taskId}' is already kernel-verified`);
+      }
+      if (latestTask.status === "refuted") {
+        return rejectLockRace(`task '${taskId}' is already kernel-refuted`);
+      }
+      // Prevent concurrent or repeated bounty farming on an already-refuted/disputed root task.
       const existingRootRef = sql
         .exec<{ id: string }>(
           "SELECT id FROM refutations WHERE mission_id = ? AND task_id = ? AND target_kind = 'root' LIMIT 1",
@@ -2257,39 +2346,55 @@ export async function executeRefute(
         )
         .toArray();
       if (existingRootRef.length > 0) {
-        const msg = `root task '${taskId}' already has a kernel-verified counterexample (${existingRootRef[0].id})`;
-        if (existingSubmissionId) {
-          persistSubmission({
-            status: "rejected",
-            accepted: false,
-            score: null,
-            points: 0,
-            summary: msg,
-            patch_sha256: storedPatchSha,
-            verify_ms: cRes.verify_ms ?? 0,
-            error: msg,
-            completed_at: ts,
-          });
-          ctx.emit({
-            kind: "submission_rejected",
-            submission_id: subId,
-            mission_id: missionId,
-            task_id: taskId,
+        return rejectLockRace(
+          `root task '${taskId}' already has a kernel-verified counterexample (${existingRootRef[0].id})`
+        );
+      }
+
+      if (resolvesConjecture) {
+        // Two-sided open conjecture: kernel-verified `¬ T` resolves the conjecture cleanly
+        // for full task points, with zero-inflation protection deducting any prior subgoal
+        // solver or nested depth-2 architect_vest points already earned by this contributor
+        // under the same root conjecture.
+        const fullPoints = computeOpenConjectureRefutePoints(mission.manifest, latestTask);
+        const priorSubgoalPoints = sql
+          .exec<{ p: number }>(
+            `SELECT COALESCE(SUM(s.points), 0) AS p
+             FROM submissions s
+             JOIN tasks t ON t.mission_id = s.mission_id AND t.task_id = s.task_id
+             WHERE s.mission_id = ? AND s.contributor = ? AND s.accepted = 1 AND s.is_demo = 0
+               AND COALESCE(s.kind, 'submit') IN ('subgoal', 'architect_vest')
+               AND t.root_task_id = ?`,
+            missionId,
             contributor,
-            accepted: false,
-            score: null,
-            summary: msg,
-            timestamp: ts,
-          });
-        }
-        return {
-          status: 409,
-          body: {
-            accepted: false,
-            ...(existingSubmissionId ? { status: "rejected", submission_id: subId } : {}),
-            error: msg,
-          },
-        };
+            rootTaskId
+          )
+          .one().p;
+        bounty = Math.max(0, fullPoints - priorSubgoalPoints);
+
+        // Retire any active decomposition tree cleanly without penalizing the proposer
+        // (disproving a genuine open conjecture is not a proposer formalization error).
+        retiredDecomps = retireDecompositionTree(sql, missionId, taskId, "refuted", ts, {
+          refutation_id: refutationId,
+        });
+
+        sql.exec(
+          `UPDATE tasks
+           SET status = 'refuted',
+               best_score = 1.0,
+               verified_by = ?,
+               lease_contributor = NULL,
+               lease_token = NULL,
+               lease_expires_at = NULL,
+               lease_ip = NULL,
+               attempts = attempts + 1
+           WHERE mission_id = ? AND task_id = ?`,
+          contributor,
+          missionId,
+          taskId
+        );
+      } else {
+        bounty = computeRefutationBounty(mission.manifest);
       }
     }
 
@@ -2297,8 +2402,8 @@ export async function executeRefute(
 
     sql.exec(
       `INSERT INTO refutations
-       (id, mission_id, task_id, root_task_id, decomp_id, subgoal_id, target_kind, refuter, summary, patch, patch_sha256, spec_sha256, points, verify_ms, created_at, is_demo)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, mission_id, task_id, root_task_id, decomp_id, subgoal_id, target_kind, refuter, summary, patch, patch_sha256, spec_sha256, points, verify_ms, created_at, is_demo, resolves_conjecture)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       refutationId,
       missionId,
       taskId,
@@ -2314,7 +2419,8 @@ export async function executeRefute(
       bounty,
       cRes.verify_ms ?? 0,
       ts,
-      mission.manifest.demo ? 1 : 0
+      mission.manifest.demo ? 1 : 0,
+      resolvesConjecture ? 1 : 0
     );
 
     persistSubmission({
@@ -2348,6 +2454,7 @@ export async function executeRefute(
         refutation_id: refutationId,
         target_kind: isSubgoal ? "subgoal" : "root",
         root_task_id: rootTaskId,
+        ...(resolvesConjecture ? { open_conjecture: true, resolution: "refuted" } : {}),
         ...(invalidatedDecompId ? { decomp_id: invalidatedDecompId } : {}),
         ...(reopenedParentTaskId ? { parent_task_id: reopenedParentTaskId } : {}),
         ...(sub ? { subgoal_id: sub.id, subgoal_title: sub.title } : {}),
@@ -2362,10 +2469,12 @@ export async function executeRefute(
       task_id: taskId,
       contributor,
       accepted: true,
-      score: null,
+      score: resolvesConjecture ? 1.0 : null,
       summary: isSubgoal
         ? `${contributor} refuted subgoal ${sub?.id} (invalidated ${invalidatedDecompId}, reopened ${reopenedParentTaskId}, +${bounty} pts)`
-        : `${contributor} verified counterexample ¬ ${taskId} (flagged disputed_counterexample, +${bounty} pts)`,
+        : resolvesConjecture
+          ? `${contributor} refuted open conjecture ${taskId} (¬ ${taskId} kernel-verified, resolved, +${bounty} pts)`
+          : `${contributor} verified counterexample ¬ ${taskId} (flagged disputed_counterexample, +${bounty} pts)`,
       timestamp: ts,
     });
 
@@ -2386,9 +2495,17 @@ export async function executeRefute(
               reopened_parent_task_id: reopenedParentTaskId,
               proposer_flagged: proposerFlagged,
             }
-          : {
-              disputed_counterexample: true,
-            }),
+          : resolvesConjecture
+            ? {
+                resolved: true,
+                resolution: "refuted",
+                open_conjecture: true,
+                task_status: "refuted",
+                ...(retiredDecomps.length > 0 ? { retired_decompositions: retiredDecomps } : {}),
+              }
+            : {
+                disputed_counterexample: true,
+              }),
         contributor,
         points_awarded: bounty,
         patch_sha256: storedPatchSha,

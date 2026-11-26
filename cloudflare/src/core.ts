@@ -5,7 +5,7 @@
 
 export type MissionMode = "dag" | "hillclimb";
 export type ScoreDirection = "maximize" | "minimize";
-export type TaskStatus = "open" | "leased" | "verified";
+export type TaskStatus = "open" | "leased" | "verified" | "refuted";
 export type VerifierKind = "lean4" | "lean4-v4.35.0" | "lean4-v4.31.0";
 
 export interface VerifierConfig {
@@ -21,6 +21,7 @@ export interface RepoSnapshotConfig {
   snapshot_id: string;
   lean_options?: string[];
   allowed_import_prefixes?: string[];
+  allow_module_system?: boolean;
 }
 
 export const SUPPORTED_VERIFIER_TOOLCHAINS: Record<
@@ -237,6 +238,14 @@ export interface DisputedCounterexample {
   created_at: number;
 }
 
+export interface RefutedResolution {
+  refutation_id: string;
+  refuter: string;
+  proof_id: string | null;
+  summary: string;
+  created_at: number;
+}
+
 export interface UpstreamDispute {
   source: string;
   reason: string;
@@ -274,6 +283,8 @@ export interface TaskDefinition {
   upstream_url?: string;
   /** Optional explicit override for how `upstream_url` anchors into the upstream repo. */
   upstream_anchor?: UpstreamAnchorKind;
+  /** Optional per-task override for two-sided open-conjecture resolution (`¬ T` resolves task); inherits mission.open_conjecture. */
+  open_conjecture?: boolean;
   /** Dynamic decomposition subgoal fields (v2). */
   parent_task_id?: string | null;
   root_task_id?: string | null;
@@ -315,6 +326,8 @@ export interface MissionManifest {
   upstream?: UpstreamProvenance;
   snapshot?: RepoSnapshotConfig;
   decomposition?: DecompositionPolicy;
+  /** True when tasks are open mathematical conjectures resolvable by either proving `T` or kernel-refuting `¬ T`. */
+  open_conjecture?: boolean;
   frozen_paths: string[];
   verifier: VerifierConfig;
   score_direction?: ScoreDirection;
@@ -338,6 +351,24 @@ export interface TaskState {
   active_lease: Lease | null;
   attempts: number;
   disputed_counterexample?: DisputedCounterexample | null;
+  refuted_resolution?: RefutedResolution | null;
+}
+
+/** True when a root task is an open conjecture resolvable by kernel-verified `¬ T` via POST .../refute. */
+export function isOpenConjectureTask(
+  mission: Pick<MissionManifest, "open_conjecture">,
+  task: Pick<TaskDefinition, "open_conjecture" | "decomp_id">
+): boolean {
+  // Spawned decomposition subgoals are never open conjectures themselves; refuting `¬ L_i`
+  // invalidates the decomposition and reopens the parent task.
+  if (task.decomp_id) return false;
+  if (typeof task.open_conjecture === "boolean") return task.open_conjecture;
+  return Boolean(mission.open_conjecture);
+}
+
+/** True when a DAG task is terminally resolved (either proved `verified` or open-conjecture `refuted`). */
+export function isTaskResolved(task: Pick<TaskState, "status">): boolean {
+  return task.status === "verified" || task.status === "refuted";
 }
 
 export interface Verdict {
@@ -549,20 +580,26 @@ export function taskDisputeReason(
   return null;
 }
 
-export function isTaskUnlocked(task: TaskState, allTasks: TaskState[]): boolean {
+export function isTaskUnlocked(
+  task: TaskState,
+  allTasks: TaskState[],
+  byId?: ReadonlyMap<string, TaskState>
+): boolean {
   const deps = task.def.depends_on || [];
+  if (deps.length === 0) return true;
   return deps.every((depId) => {
-    const found = allTasks.find((other) => other.def.id === depId);
+    const found = byId ? byId.get(depId) : allTasks.find((other) => other.def.id === depId);
     return found?.status === "verified";
   });
 }
 
 export function computeFrontier(mode: MissionMode, tasks: TaskState[]): string[] {
+  const byId = new Map<string, TaskState>(tasks.map((t) => [t.def.id, t]));
   return tasks
     .filter((t) => {
       if (isTaskDisputed(t)) return false;
-      const unlocked = isTaskUnlocked(t, tasks);
-      return mode === "dag" ? unlocked && t.status !== "verified" : unlocked;
+      const unlocked = isTaskUnlocked(t, tasks, byId);
+      return mode === "dag" ? unlocked && !isTaskResolved(t) : unlocked;
     })
     .map((t) => t.def.id);
 }
@@ -587,6 +624,9 @@ export function applyClaim(
   }
   if (mode === "dag" && task.status === "verified") {
     throw new Error(`task '${taskId}' is already verified`);
+  }
+  if (mode === "dag" && task.status === "refuted") {
+    throw new Error(`task '${taskId}' is already refuted`);
   }
   if (
     task.active_lease &&
@@ -628,6 +668,9 @@ export function applyVerdict(
   if (mode === "dag" && task.status === "verified") {
     throw new Error(`task '${taskId}' is already verified`);
   }
+  if (mode === "dag" && task.status === "refuted") {
+    throw new Error(`task '${taskId}' is already refuted`);
+  }
 
   validatePatch(patch, frozenPaths, task.def.target_files);
 
@@ -663,12 +706,13 @@ export function applyVerdict(
   const simulated = allTasks.map((t) =>
     t.def.id === taskId ? { ...t, status: "verified" as TaskStatus } : t
   );
+  const simulatedById = new Map<string, TaskState>(simulated.map((t) => [t.def.id, t]));
   const unlockedDependents = simulated
     .filter(
       (c) =>
         (c.def.depends_on || []).includes(taskId) &&
-        isTaskUnlocked(c, simulated) &&
-        c.status !== "verified"
+        isTaskUnlocked(c, simulated, simulatedById) &&
+        !isTaskResolved(c)
     )
     .map((t) => t.def.id);
 
@@ -773,11 +817,14 @@ export interface SortableMissionSummary {
   demo?: boolean;
   total_tasks: number;
   verified_tasks: number;
+  refuted_tasks?: number;
 }
 
-/** A DAG mission with every task verified belongs in the Completed Showcase; hill-climb tracks stay open. */
-export function isMissionCompleted(m: Pick<SortableMissionSummary, "mode" | "total_tasks" | "verified_tasks">): boolean {
-  return m.mode === "dag" && m.total_tasks > 0 && m.verified_tasks >= m.total_tasks;
+/** A DAG mission with every task resolved (proved or open-conjecture refuted) belongs in the Completed Showcase; hill-climb tracks stay open. */
+export function isMissionCompleted(
+  m: Pick<SortableMissionSummary, "mode" | "total_tasks" | "verified_tasks" | "refuted_tasks">
+): boolean {
+  return m.mode === "dag" && m.total_tasks > 0 && m.verified_tasks + (m.refuted_tasks ?? 0) >= m.total_tasks;
 }
 
 /**
@@ -1525,10 +1572,13 @@ export function buildProofView(
     { github: row.github, x: row.x ?? null, linkedin: row.linkedin ?? null },
     nonDemoCount
   );
+  const entryKind = normalizeEntryKind(row.entry_kind);
+  const decompMeta = parseStoredDecompMeta(row.decomp_meta_json);
   return {
     mission_id: row.mission_id,
     task_id: row.task_id,
     seq: row.seq,
+    entry_kind: entryKind,
     submission_id: row.submission_id,
     contributor: row.contributor,
     display_name: row.display_name || row.contributor,
@@ -1547,6 +1597,7 @@ export function buildProofView(
     patch: row.patch,
     history_mbox: `${opts.hubOrigin}/api/missions/${encodeURIComponent(row.mission_id)}/history.mbox`,
     how_to_rebuild: howToRebuild(opts.hubOrigin, row.mission_id),
+    ...(decompMeta ? { decomposition: decompMeta } : {}),
   };
 }
 
@@ -1841,6 +1892,7 @@ export function buildTaskFilesView(opts: {
     title: task.def.title,
     status: task.status,
     unlocked,
+    open_conjecture: isOpenConjectureTask(mission, task.def),
     spec_sha256: specSha256,
     upstream_url: task.def.upstream_url ?? null,
     depends_on: task.def.depends_on ?? [],
@@ -1925,10 +1977,19 @@ export function computeDecompPointSplit(
   };
 }
 
-/** Bounty awarded for a kernel-verified refutation (`¬ L_i` or `¬ T`); 0 on demo missions. */
+/** Bounty awarded for a kernel-verified refutation (`¬ L_i` or non-conjecture `¬ T`); 0 on demo missions. */
 export function computeRefutationBounty(mission: Pick<MissionManifest, "tier" | "demo">): number {
   if (mission.demo) return 0;
   return mission.tier === 1 ? REFUTATION_BOUNTY_TIER1 : REFUTATION_BOUNTY_OTHER;
+}
+
+/** Full points awarded when a kernel-verified `¬ T` resolves an open conjecture (0 on demo missions). */
+export function computeOpenConjectureRefutePoints(
+  mission: MissionManifest,
+  task: TaskState
+): number {
+  if (mission.demo) return 0;
+  return computePoints(mission, task, null, 1.0);
 }
 
 export function buildSubgoalTaskId(parentTaskId: string, decompId: string, subgoalId: string): string {
@@ -1977,6 +2038,9 @@ export function checkDecompositionEligibility(opts: {
   }
   if (task.status === "verified") {
     throw new Error(`task '${task.def.id}' is already verified`);
+  }
+  if (task.status === "refuted") {
+    throw new Error(`task '${task.def.id}' is already refuted`);
   }
   const disputeMsg = taskDisputeReason(task);
   if (disputeMsg) {

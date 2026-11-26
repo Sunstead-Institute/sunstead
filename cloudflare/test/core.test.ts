@@ -57,8 +57,11 @@ import {
   shouldRunAsyncSubmit,
   formatSubmissionStatusView,
   computeDecompPointSplit,
+  computeOpenConjectureRefutePoints,
   computeRefutationBounty,
   checkDecompositionEligibility,
+  isOpenConjectureTask,
+  isTaskResolved,
   parseDecomposeRequest,
   parseRefuteRequest,
   buildSubgoalStubSource,
@@ -572,7 +575,7 @@ test("best_known scoring respects maximize direction and proven optima", () => {
   assert.equal(beatsBestKnown("minimize", opt.def.best_known, null), false);
 });
 
-test("every non-demo hill-climb seed mission carries a sourced best_known below or at its seed", () => {
+test("every non-demo hill-climb seed mission carries a sourced best_known at or beyond its seed", () => {
   const registry = JSON.parse(readFileSync(new URL("../../missions/best-known.json", import.meta.url), "utf8"));
   let checked = 0;
   for (const [missionId, tasks] of Object.entries(registry.missions as Record<string, Record<string, BestKnown>>)) {
@@ -580,11 +583,17 @@ test("every non-demo hill-climb seed mission carries a sourced best_known below 
       readFileSync(new URL(`../../missions/${missionId}/sunstead.json`, import.meta.url), "utf8")
     ) as MissionManifest;
     assert.equal(manifest.mode, "hillclimb");
+    const direction = manifest.score_direction ?? "maximize";
     for (const def of manifest.tasks) {
       const bk = tasks[def.id];
       assert.ok(bk, `${missionId}/${def.id} has no best_known`);
       assert.ok(bk.source.length > 20 && bk.url.startsWith("https://"), `${missionId}/${def.id} is unsourced`);
-      if (typeof def.baseline_score === "number") assert.ok(bk.value <= def.baseline_score);
+      if (typeof def.baseline_score === "number") {
+        assert.ok(
+          direction === "minimize" ? bk.value <= def.baseline_score : bk.value >= def.baseline_score,
+          `${missionId}/${def.id}: best_known ${bk.value} is weaker than seed ${def.baseline_score} (${direction})`
+        );
+      }
       checked++;
     }
   }
@@ -669,6 +678,7 @@ test("buildProofView returns attribution, timing, files, spec status and rebuild
     patchSha256: "sha256:ppp",
   });
   assert.equal(v.contributor, "codex-dirichlet");
+  assert.equal(v.entry_kind, "proof");
   assert.equal(v.display_name, "Codex Dirichlet");
   assert.equal(v.github, "codex-dirichlet");
   assert.equal(v.verify_ms, 63_000);
@@ -1529,14 +1539,24 @@ test("web/app.js hill-climb nodePalette preserves CLAIMED/OPEN status and SSE in
   const vm = await import("node:vm");
   const appJs = readFileSync(new URL("../../web/app.js", import.meta.url), "utf8");
   const paletteMatch = appJs.match(/function nodePalette\(task, mode\) \{[\s\S]*?\n\}/);
+  const completedMatch = appJs.match(/function isMissionCompleted\(m\) \{[\s\S]*?\n\}/);
   assert.ok(paletteMatch, "nodePalette(task, mode) must exist in web/app.js");
+  assert.ok(completedMatch, "isMissionCompleted(m) must exist in web/app.js");
   assert.match(appJs, /state\.proofCache\.delete\(`\$\{ev\.mission_id\}\/\$\{ev\.task_id\}`\)/);
   assert.match(appJs, /state\.proofCache\.clear\(\)/);
   assert.match(appJs, /completed-missions-section/);
 
   const ctx: Record<string, unknown> = {};
-  vm.runInNewContext(`${paletteMatch[0]}\nthis.nodePalette = nodePalette;`, ctx);
-  const nodePalette = ctx.nodePalette as (t: Record<string, unknown>, mode: string) => { badge: string };
+  vm.runInNewContext(
+    `${paletteMatch[0]}\n${completedMatch[0]}\nthis.nodePalette = nodePalette;\nthis.isMissionCompleted = isMissionCompleted;`,
+    ctx
+  );
+  const nodePalette = ctx.nodePalette as (t: Record<string, unknown>, mode: string) => {
+    badge: string;
+    fill: string;
+    stroke: string;
+  };
+  const uiIsMissionCompleted = ctx.isMissionCompleted as (m: Record<string, unknown>) => boolean;
 
   assert.equal(
     nodePalette({ unlocked: true, status: "verified", active_lease: { contributor: "alice" } }, "hillclimb").badge,
@@ -1546,22 +1566,30 @@ test("web/app.js hill-climb nodePalette preserves CLAIMED/OPEN status and SSE in
     nodePalette({ unlocked: true, status: "verified", active_lease: null }, "hillclimb").badge,
     "RECORD · OPEN"
   );
-  assert.equal(
-    nodePalette({ unlocked: true, status: "verified", active_lease: null }, "dag").badge,
-    "VERIFIED"
+  const verifiedPal = nodePalette({ unlocked: true, status: "verified", active_lease: null }, "dag");
+  assert.equal(verifiedPal.badge, "VERIFIED");
+  const disputedPal = nodePalette(
+    {
+      unlocked: true,
+      status: "open",
+      active_lease: null,
+      disputed_counterexample: { refuter: "bob", proof_id: "a".repeat(64) },
+    },
+    "dag"
   );
-  assert.equal(
-    nodePalette(
-      {
-        unlocked: true,
-        status: "open",
-        active_lease: null,
-        disputed_counterexample: { refuter: "bob", proof_id: "a".repeat(64) },
-      },
-      "dag"
-    ).badge,
-    "DISPUTED ¬T"
+  assert.equal(disputedPal.badge, "DISPUTED ¬T");
+  const refutedPal = nodePalette(
+    {
+      unlocked: true,
+      status: "refuted",
+      active_lease: null,
+      refuted_resolution: { refuter: "alice", proof_id: "b".repeat(64) },
+    },
+    "dag"
   );
+  assert.equal(refutedPal.badge, "REFUTED ¬T");
+  assert.notEqual(refutedPal.stroke, disputedPal.stroke, "resolved refutation must look distinct from disputed");
+  assert.notEqual(refutedPal.stroke, verifiedPal.stroke, "resolved refutation must look distinct from verified");
   assert.equal(
     nodePalette(
       {
@@ -1582,11 +1610,50 @@ test("web/app.js hill-climb nodePalette preserves CLAIMED/OPEN status and SSE in
     ).badge,
     "UPSTREAM DISPUTED"
   );
+
+  // UI completion counts both verified and refuted open-conjecture tasks.
+  assert.equal(uiIsMissionCompleted({ mode: "dag", total_tasks: 2, verified_tasks: 1, refuted_tasks: 1 }), true);
+  assert.equal(uiIsMissionCompleted({ mode: "dag", total_tasks: 2, verified_tasks: 0, refuted_tasks: 2, resolved_tasks: 2 }), true);
+  assert.equal(uiIsMissionCompleted({ mode: "dag", total_tasks: 2, verified_tasks: 1, refuted_tasks: 0 }), false);
+  assert.equal(uiIsMissionCompleted({ mode: "hillclimb", total_tasks: 2, verified_tasks: 2, refuted_tasks: 0 }), false);
+
   assert.match(appJs, /decomp-cluster/);
   assert.match(appJs, /decomp-edge/);
   assert.match(appJs, /ledger-badge-refute/);
+  assert.match(appJs, /ledger-badge-conjecture/);
+  assert.match(appJs, /conjecture-banner/);
+  assert.match(appJs, /refuted-banner/);
   assert.match(appJs, /task_decomposed/);
   assert.match(appJs, /decomposition_refuted/);
+  assert.match(appJs, /task_refuted/);
+
+  // buildProofView preserves entry_kind and decomposition metadata for refutations.
+  const refuteView = buildProofView(
+    proofRow({
+      entry_kind: "refutation",
+      decomp_meta_json: JSON.stringify({ target_kind: "root", open_conjecture: true }),
+    }),
+    {
+      hubOrigin: "https://sunstead.org",
+      currentSpecSha256: "sha256:aaa",
+      patchSha256: "sha256:ppp",
+    }
+  );
+  assert.equal(refuteView.entry_kind, "refutation");
+  assert.deepEqual(refuteView.decomposition, { target_kind: "root", open_conjecture: true });
+
+  // RepoSnapshotConfig accepts opt-in `allow_module_system: true` (required by module-system packs like sphere-packing-e8).
+  const modSysManifest: MissionManifest = {
+    ...mission("dag", 1),
+    snapshot: {
+      mode: "repo-snapshot",
+      snapshot_id: "sphere-packing-e8-foundations",
+      allowed_import_prefixes: ["SpherePacking", "Mathlib"],
+      allow_module_system: true,
+    },
+  };
+  assert.equal(modSysManifest.snapshot?.allow_module_system, true);
+  assert.equal(buildMissionLocalSetup(modSysManifest, "https://sunstead.org").uses_mathlib, true);
 });
 
 // ---------------------------------------------------------------- v2 decompose & refute core rules
@@ -1988,4 +2055,123 @@ test("v2 assembleDecomposedLeanFile strips DecompStatements imports and renderMb
   assert.match(joinTxt, /refute_task/);
   assert.match(joinTxt, /\/decompose/);
   assert.match(joinTxt, /\/refute/);
+});
+
+// ---------------------------------------------------------------- open-conjecture two-sided rules
+
+test("open_conjecture helpers resolve mission/task overrides and never treat subgoals as open conjectures", () => {
+  assert.equal(isOpenConjectureTask({ open_conjecture: true }, { open_conjecture: undefined }), true);
+  assert.equal(isOpenConjectureTask({ open_conjecture: true }, { open_conjecture: false }), false);
+  assert.equal(isOpenConjectureTask({ open_conjecture: false }, { open_conjecture: true }), true);
+  assert.equal(isOpenConjectureTask({}, {}), false);
+  // Spawned decomposition subgoals are never open conjectures themselves.
+  assert.equal(
+    isOpenConjectureTask({ open_conjecture: true }, { open_conjecture: true, decomp_id: "d1" }),
+    false
+  );
+
+  const ocMission = mission("dag", 1, { open_conjecture: true });
+  assert.equal(computeOpenConjectureRefutePoints(ocMission, task("c1")), 150);
+  assert.equal(computeOpenConjectureRefutePoints(ocMission, task("c2", {}, ["c1"])), 250);
+  assert.equal(computeOpenConjectureRefutePoints(mission("dag", 2, { open_conjecture: true }), task("c1")), 100);
+  assert.equal(computeOpenConjectureRefutePoints(mission("dag", 1, { open_conjecture: true, demo: true }), task("c1")), 0);
+});
+
+test("refuted open-conjecture tasks leave frontier, block claims/submits/decomposes, do not unlock dependents, and complete mission", () => {
+  const c1Refuted = task("c1", { status: "refuted" });
+  const c2DepOnC1 = task("c2", {}, ["c1"]);
+  const c3Open = task("c3");
+  const c4Verified = task("c4", { status: "verified" });
+  const all = [c1Refuted, c2DepOnC1, c3Open, c4Verified];
+
+  assert.equal(isTaskResolved(c1Refuted), true);
+  assert.equal(isTaskResolved(c4Verified), true);
+  assert.equal(isTaskResolved(c3Open), false);
+
+  // c1 is refuted -> excluded from frontier; c2 depends on c1 -> stays blocked (cannot import a disproved lemma!).
+  assert.deepEqual(computeFrontier("dag", all), ["c3"]);
+
+  assert.throws(() => applyClaim("dag", all, "c1", "alice", "tok", 100, 600), /already refuted/);
+  assert.throws(() => applyClaim("dag", all, "c2", "alice", "tok", 100, 600), /blocked/);
+  assert.throws(
+    () =>
+      applyVerdict("dag", "maximize", FROZEN, SPEC, all, "c1", patchFor("MetaComplexity/c1.lean"), {
+        ok: true,
+        score: 1,
+        summary: "ok",
+        spec_sha256: SPEC,
+      }),
+    /already refuted/
+  );
+
+  const ocMission = mission("dag", 1, {
+    open_conjecture: true,
+    decomposition: { enabled: true, require_allowlist: true, allow_direct_bypass: true, max_depth: 2 },
+  });
+  // Decomposition works on open open-conjecture tasks, and is rejected on already-refuted tasks.
+  assert.equal(
+    checkDecompositionEligibility({
+      manifest: ocMission,
+      task: c3Open,
+      allTasks: all,
+      contributor: "alice",
+      isAllowlisted: true,
+      activeDecompsOnTarget: 0,
+      activeDecompsByContributor: 0,
+    }).depth,
+    1
+  );
+  assert.throws(
+    () =>
+      checkDecompositionEligibility({
+        manifest: ocMission,
+        task: c1Refuted,
+        allTasks: all,
+        contributor: "alice",
+        isAllowlisted: true,
+        activeDecompsOnTarget: 0,
+        activeDecompsByContributor: 0,
+      }),
+    /already refuted/
+  );
+
+  // Mission completion counts verified + refuted tasks together.
+  assert.equal(isMissionCompleted({ mode: "dag", total_tasks: 4, verified_tasks: 2, refuted_tasks: 2 }), true);
+  assert.equal(isMissionCompleted({ mode: "dag", total_tasks: 4, verified_tasks: 2, refuted_tasks: 1 }), false);
+  const sorted = sortMissionSummaries([
+    { id: "open-pack", tier: 1, mode: "dag", total_tasks: 10, verified_tasks: 3, refuted_tasks: 2 },
+    { id: "resolved-pack", tier: 1, mode: "dag", total_tasks: 10, verified_tasks: 6, refuted_tasks: 4 },
+  ]);
+  assert.deepEqual(
+    sorted.map((m) => m.id),
+    ["open-pack", "resolved-pack"]
+  );
+});
+
+test("renderJoinTxt labels open-conjecture packs, counts proved+refuted, and caps long frontiers cleanly", () => {
+  const manyTasks = Array.from({ length: 30 }, (_, i) => ({
+    id: `conj_${i + 1}`,
+    title: `Conjecture ${i + 1}`,
+    target_files: [`FcOpen/C${i + 1}.lean`],
+    depends_on: [],
+  }));
+  const ocManifest = mission("dag", 1, {
+    id: "fc-erdos-open",
+    title: "Formal Conjectures: Open Erdős Problems",
+    open_conjecture: true,
+    tasks: manyTasks,
+  });
+  const states: TaskState[] = manyTasks.map((def, i) => ({
+    def,
+    status: i === 0 ? "verified" : i === 1 ? "refuted" : "open",
+    best_score: null,
+    verified_by: i < 2 ? "alice" : null,
+    active_lease: null,
+    attempts: 0,
+  }));
+  const txt = renderJoinTxt("https://sunstead.org", [{ manifest: ocManifest, tasks: states }]);
+  assert.match(txt, /DAG · OPEN CONJECTURES/);
+  assert.match(txt, /1 proved, 1 refuted \/ 30/);
+  assert.match(txt, /\(\+16 more; see GET \/api\/missions\/fc-erdos-open\)/);
+  assert.match(txt, /open_conjecture: true/);
 });

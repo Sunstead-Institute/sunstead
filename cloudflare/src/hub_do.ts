@@ -56,7 +56,9 @@ import {
   executeDecompose,
   executeRefute,
   executeSubgoalSubmit,
+  getAllRootRefutationMaps,
   getDisputedRootMap,
+  getResolvedRefutationMap,
   handleDirectParentBypass,
   initDecomposeSchema,
   isAllowlisted,
@@ -68,7 +70,7 @@ import {
   type DecomposeHubContext,
   type VerifierActionResponse,
 } from "./decompose";
-import { SEED_MISSIONS, type SeedMission } from "./generated/missions";
+import { getMissionSeedFiles, SEED_MISSIONS, type SeedMission } from "./generated/missions";
 import { renderJoinTxt } from "./join_txt";
 import type { Lean4Verifier, Lean4V435Verifier, Lean4V431Verifier } from "./containers";
 
@@ -80,6 +82,10 @@ export interface HubEnv {
   GITHUB_API_TOKEN?: string;
   ADMIN_API_TOKEN?: string;
 }
+
+const SEED_MISSIONS_BY_ID = new Map<string, SeedMission>(
+  SEED_MISSIONS.map((s) => [s.manifest.id, s])
+);
 
 function parseVerifierKind(kind: string): SeedMission["verifier_kind"] {
   if (kind === "lean4-v4.35.0") return "lean4-v4.35.0";
@@ -428,12 +434,22 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     const now = Math.floor(Date.now() / 1000);
     const seedMissionIds = new Set(SEED_MISSIONS.map((s) => s.manifest.id));
 
+    // Load all existing mission rows + static task counts in 2 batched queries so
+    // cold starts at 50+ missions / 1,000+ tasks skip unchanged upserts cleanly.
+    const existingRows = this.ctx.storage.sql
+      .exec<{
+        id: string;
+        manifest_json: string;
+        spec_sha256: string;
+        seed_tree_sha256: string | null;
+        verifier_kind: string;
+      }>("SELECT id, manifest_json, spec_sha256, seed_tree_sha256, verifier_kind FROM missions")
+      .toArray();
+    const existingById = new Map(existingRows.map((r) => [r.id, r]));
+
     // Prune retired missions from active tables while preserving historical
     // submissions, contributors, claims_log, and accepted_patches.
-    const existingMissions = this.ctx.storage.sql
-      .exec<{ id: string }>("SELECT id FROM missions")
-      .toArray();
-    for (const row of existingMissions) {
+    for (const row of existingRows) {
       if (!seedMissionIds.has(row.id)) {
         this.ctx.storage.sql.exec("DELETE FROM tasks WHERE mission_id = ?", row.id);
         this.ctx.storage.sql.exec("DELETE FROM mission_files WHERE mission_id = ?", row.id);
@@ -446,16 +462,32 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       }
     }
 
+    const staticTaskCounts = new Map<string, number>();
+    for (const r of this.ctx.storage.sql
+      .exec<{ mission_id: string; c: number }>(
+        "SELECT mission_id, COUNT(*) AS c FROM tasks WHERE COALESCE(is_dynamic, 0) = 0 GROUP BY mission_id"
+      )
+      .toArray()) {
+      staticTaskCounts.set(r.mission_id, r.c);
+    }
+
     for (const seed of SEED_MISSIONS) {
-      const existing = this.ctx.storage.sql
-        .exec<{ spec_sha256: string; seed_tree_sha256: string | null }>(
-          "SELECT spec_sha256, seed_tree_sha256 FROM missions WHERE id = ?",
-          seed.manifest.id
-        )
-        .toArray();
-      const specChanged = existing.length > 0 && existing[0].spec_sha256 !== seed.spec_sha256;
+      const prev = existingById.get(seed.manifest.id);
+      const manifestJson = JSON.stringify(seed.manifest);
+      const unchanged =
+        prev !== undefined &&
+        prev.spec_sha256 === seed.spec_sha256 &&
+        prev.seed_tree_sha256 === (seed.seed_tree_sha256 ?? null) &&
+        prev.verifier_kind === seed.verifier_kind &&
+        prev.manifest_json === manifestJson &&
+        (staticTaskCounts.get(seed.manifest.id) ?? 0) === seed.manifest.tasks.length;
+      if (unchanged) {
+        continue;
+      }
+
+      const specChanged = prev !== undefined && prev.spec_sha256 !== seed.spec_sha256;
       const seedTreeChanged =
-        existing.length > 0 && existing[0].seed_tree_sha256 !== seed.seed_tree_sha256;
+        prev !== undefined && prev.seed_tree_sha256 !== (seed.seed_tree_sha256 ?? null);
 
       this.ctx.storage.sql.exec(
         `INSERT INTO missions (id, manifest_json, spec_sha256, seed_tree_sha256, verifier_kind, created_at)
@@ -466,9 +498,9 @@ export class SunsteadHub extends DurableObject<HubEnv> {
            seed_tree_sha256 = excluded.seed_tree_sha256,
            verifier_kind = excluded.verifier_kind`,
         seed.manifest.id,
-        JSON.stringify(seed.manifest),
+        manifestJson,
         seed.spec_sha256,
-        seed.seed_tree_sha256,
+        seed.seed_tree_sha256 ?? null,
         seed.verifier_kind,
         now
       );
@@ -645,19 +677,76 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       )
       .toArray();
     if (rows.length === 0) return null;
-    const seed = SEED_MISSIONS.find((s) => s.manifest.id === missionId);
+    const seed = SEED_MISSIONS_BY_ID.get(missionId);
+    const seedFiles = seed ? getMissionSeedFiles(seed) : null;
     return {
       manifest: JSON.parse(rows[0].manifest_json) as MissionManifest,
       spec_sha256: rows[0].spec_sha256,
       verifier_kind: parseVerifierKind(rows[0].verifier_kind),
-      ...(seed?.seed_files ? { seed_files: seed.seed_files } : {}),
+      ...(seedFiles && Object.keys(seedFiles).length > 0 ? { seed_files: seedFiles } : {}),
       ...(seed?.verify_contract ? { verify_contract: seed.verify_contract } : {}),
+    };
+  }
+
+  private mapTaskRow(
+    r: {
+      def_json: string;
+      status: string;
+      best_score: number | null;
+      verified_by: string | null;
+      lease_contributor: string | null;
+      lease_token: string | null;
+      lease_expires_at: number | null;
+      attempts: number;
+    },
+    now: number,
+    disputed?: Map<string, NonNullable<TaskState["disputed_counterexample"]>>,
+    resolved?: Map<string, NonNullable<TaskState["refuted_resolution"]>>
+  ): TaskState {
+    const def = JSON.parse(r.def_json);
+    let active_lease: Lease | null = null;
+    if (
+      r.lease_contributor &&
+      r.lease_token &&
+      r.lease_expires_at !== null &&
+      r.lease_expires_at > now
+    ) {
+      active_lease = {
+        task_id: def.id,
+        contributor: r.lease_contributor,
+        lease_token: r.lease_token,
+        expires_at_unix: r.lease_expires_at,
+      };
+    }
+    let status: TaskStatus =
+      r.status === "verified"
+        ? "verified"
+        : r.status === "refuted"
+          ? "refuted"
+          : r.status === "leased"
+            ? "leased"
+            : "open";
+    if (status === "leased" && !active_lease) {
+      status = "open";
+    }
+    const dispute = disputed?.get(def.id) ?? null;
+    const refutedRes = resolved?.get(def.id) ?? null;
+    return {
+      def,
+      status,
+      best_score: r.best_score,
+      verified_by: r.verified_by,
+      active_lease,
+      attempts: r.attempts,
+      ...(dispute ? { disputed_counterexample: dispute } : {}),
+      ...(refutedRes ? { refuted_resolution: refutedRes } : {}),
     };
   }
 
   private getTasks(missionId: string): TaskState[] {
     const now = Math.floor(Date.now() / 1000);
     const disputed = getDisputedRootMap(this.ctx.storage.sql, missionId);
+    const resolved = getResolvedRefutationMap(this.ctx.storage.sql, missionId);
     const rows = this.ctx.storage.sql
       .exec<{
         def_json: string;
@@ -676,38 +765,46 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       )
       .toArray();
 
-    return rows.map((r) => {
-      const def = JSON.parse(r.def_json);
-      let active_lease: Lease | null = null;
-      if (
-        r.lease_contributor &&
-        r.lease_token &&
-        r.lease_expires_at !== null &&
-        r.lease_expires_at > now
-      ) {
-        active_lease = {
-          task_id: def.id,
-          contributor: r.lease_contributor,
-          lease_token: r.lease_token,
-          expires_at_unix: r.lease_expires_at,
-        };
+    return rows.map((r) => this.mapTaskRow(r, now, disputed, resolved));
+  }
+
+  /** Batch-load active tasks across all missions in 2 queries (eliminates N+1 queries on /api/missions and /join.txt). */
+  private getAllTasksByMission(): Map<string, TaskState[]> {
+    const now = Math.floor(Date.now() / 1000);
+    const { disputedByMission, resolvedByMission } = getAllRootRefutationMaps(this.ctx.storage.sql);
+    const rows = this.ctx.storage.sql
+      .exec<{
+        mission_id: string;
+        def_json: string;
+        status: string;
+        best_score: number | null;
+        verified_by: string | null;
+        lease_contributor: string | null;
+        lease_token: string | null;
+        lease_expires_at: number | null;
+        attempts: number;
+      }>(
+        `SELECT mission_id, def_json, status, best_score, verified_by,
+                lease_contributor, lease_token, lease_expires_at, attempts
+         FROM tasks WHERE COALESCE(retired, 0) = 0 ORDER BY rowid ASC`
+      )
+      .toArray();
+    const byMission = new Map<string, TaskState[]>();
+    for (const r of rows) {
+      const task = this.mapTaskRow(
+        r,
+        now,
+        disputedByMission.get(r.mission_id),
+        resolvedByMission.get(r.mission_id)
+      );
+      let list = byMission.get(r.mission_id);
+      if (!list) {
+        list = [];
+        byMission.set(r.mission_id, list);
       }
-      let status: TaskStatus =
-        r.status === "verified" ? "verified" : r.status === "leased" ? "leased" : "open";
-      if (status === "leased" && !active_lease) {
-        status = "open";
-      }
-      const dispute = disputed.get(def.id) ?? null;
-      return {
-        def,
-        status,
-        best_score: r.best_score,
-        verified_by: r.verified_by,
-        active_lease,
-        attempts: r.attempts,
-        ...(dispute ? { disputed_counterexample: dispute } : {}),
-      };
-    });
+      list.push(task);
+    }
+    return byMission;
   }
 
   private getMissionFiles(missionId: string): Record<string, string> {
@@ -1067,9 +1164,10 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     }
 
     if (method === "GET" && path === "/join.txt") {
+      const allTasks = this.getAllTasksByMission();
       const missions = sortMissionSummaries(
         this.listMissionsRows().map((m) => {
-          const tasks = this.getTasks(m.manifest.id);
+          const tasks = allTasks.get(m.manifest.id) ?? [];
           const rootTasks = tasks.filter((t) => !t.def.decomp_id);
           return {
             id: m.manifest.id,
@@ -1078,6 +1176,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
             demo: Boolean(m.manifest.demo),
             total_tasks: rootTasks.length,
             verified_tasks: rootTasks.filter((t) => t.status === "verified").length,
+            refuted_tasks: rootTasks.filter((t) => t.status === "refuted").length,
             manifest: m.manifest,
             tasks,
           };
@@ -1150,15 +1249,20 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     }
 
     if (method === "GET" && path === "/api/missions") {
+      const allTasks = this.getAllTasksByMission();
+      const activeDecompCounts = new Map<string, number>();
+      for (const r of this.ctx.storage.sql
+        .exec<{ mission_id: string; c: number }>(
+          "SELECT mission_id, COUNT(*) AS c FROM decompositions WHERE status = 'active' GROUP BY mission_id"
+        )
+        .toArray()) {
+        activeDecompCounts.set(r.mission_id, r.c);
+      }
       const summaries = this.listMissionsRows().map((m) => {
-        const tasks = this.getTasks(m.manifest.id);
+        const tasks = allTasks.get(m.manifest.id) ?? [];
         const rootTasks = tasks.filter((t) => !t.def.decomp_id);
-        const activeDecomps = this.ctx.storage.sql
-          .exec<{ c: number }>(
-            "SELECT COUNT(*) AS c FROM decompositions WHERE mission_id = ? AND status = 'active'",
-            m.manifest.id
-          )
-          .one().c;
+        const verifiedCount = rootTasks.filter((t) => t.status === "verified").length;
+        const refutedCount = rootTasks.filter((t) => t.status === "refuted").length;
         return {
           id: m.manifest.id,
           title: m.manifest.title,
@@ -1166,6 +1270,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
           tier: m.manifest.tier,
           mode: m.manifest.mode,
           demo: Boolean(m.manifest.demo),
+          open_conjecture: Boolean(m.manifest.open_conjecture),
           upstream: m.manifest.upstream ?? null,
           score_direction: m.manifest.score_direction ?? "maximize",
           spec_sha256: m.spec_sha256,
@@ -1174,10 +1279,12 @@ export class SunsteadHub extends DurableObject<HubEnv> {
           verifier_toolchain: m.manifest.verifier.toolchain ?? "leanprover/lean4:v4.36.0",
           snapshot: m.manifest.snapshot ?? null,
           decomposition: m.manifest.decomposition ?? null,
-          active_decompositions: activeDecomps,
+          active_decompositions: activeDecompCounts.get(m.manifest.id) ?? 0,
           frozen_paths: m.manifest.frozen_paths,
           total_tasks: rootTasks.length,
-          verified_tasks: rootTasks.filter((t) => t.status === "verified").length,
+          verified_tasks: verifiedCount,
+          refuted_tasks: refutedCount,
+          resolved_tasks: verifiedCount + refutedCount,
           leased_tasks: tasks.filter((t) => t.active_lease !== null).length,
           frontier_task_ids: computeFrontier(m.manifest.mode, tasks),
         };
@@ -1311,6 +1418,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       if (!mission) return jsonResp({ error: `unknown mission: ${missionId}` }, 404);
       const tasks = this.getTasks(missionId);
       const frontier = computeFrontier(mission.manifest.mode, tasks);
+      const tasksById = new Map<string, TaskState>(tasks.map((t) => [t.def.id, t]));
       return jsonResp({
         mission: {
           manifest: mission.manifest,
@@ -1319,7 +1427,7 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         },
         local_setup: buildMissionLocalSetup(mission.manifest, url.origin),
         frontier,
-        tasks: tasks.map((t) => ({ ...t, unlocked: isTaskUnlocked(t, tasks) })),
+        tasks: tasks.map((t) => ({ ...t, unlocked: isTaskUnlocked(t, tasks, tasksById) })),
         decompositions: listMissionDecompositions(this.ctx.storage.sql, missionId),
         refutations: listMissionRefutations(this.ctx.storage.sql, missionId, url.origin),
         recent_submissions: this.getRecentSubmissions(missionId, 25),
@@ -1846,7 +1954,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
         `SELECT a.seq, a.mission_id, a.task_id, a.submission_id, a.contributor,
                 COALESCE(c.display_name, a.contributor) AS display_name,
                 c.github AS github, c.github_verified_handle AS github_verified_handle, c.x_handle AS x, c.linkedin_handle AS linkedin,
-                a.summary, a.patch, a.spec_sha256, a.created_at, s.verify_ms AS verify_ms, a.is_demo AS is_demo
+                a.summary, a.patch, a.spec_sha256, a.created_at, s.verify_ms AS verify_ms, a.is_demo AS is_demo,
+                a.entry_kind AS entry_kind, a.decomp_meta_json AS decomp_meta_json
          FROM accepted_patches a
          LEFT JOIN contributors c ON c.handle = a.contributor
          LEFT JOIN submissions s ON s.id = a.submission_id
@@ -2012,13 +2121,13 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     const tasks = this.getTasks(missionId);
     const task = tasks.find((t) => t.def.id === taskId);
     if (!task) return jsonResp({ error: `unknown task: ${taskId}` }, 404);
-    const seed = SEED_MISSIONS.find((s) => s.manifest.id === missionId);
+    const seed = SEED_MISSIONS_BY_ID.get(missionId);
     const baseView = buildTaskFilesView({
       mission: mission.manifest,
       specSha256: mission.spec_sha256,
       task,
       unlocked: isTaskUnlocked(task, tasks),
-      seedFiles: seed?.seed_files ?? {},
+      seedFiles: getMissionSeedFiles(seed),
       liveOverlay: this.getMissionFiles(missionId),
     });
     return jsonResp(
@@ -2221,7 +2330,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       }
 
       const now = Math.floor(Date.now() / 1000);
-      const nextStatus: TaskStatus = task.status === "verified" ? "verified" : "open";
+      const nextStatus: TaskStatus =
+        task.status === "verified" || task.status === "refuted" ? task.status : "open";
       this.ctx.storage.sql.exec(
         `UPDATE tasks
          SET status = ?, lease_contributor = NULL, lease_token = NULL, lease_expires_at = NULL, lease_ip = NULL
@@ -2285,8 +2395,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
     if (!isTaskUnlocked(task, tasksPre)) {
       return jsonResp({ error: `task '${taskId}' is blocked on unverified dependencies` }, 409);
     }
-    if (mission.manifest.mode === "dag" && task.status === "verified") {
-      return jsonResp({ error: `task '${taskId}' is already verified` }, 409);
+    if (mission.manifest.mode === "dag" && (task.status === "verified" || task.status === "refuted")) {
+      return jsonResp({ error: `task '${taskId}' is already ${task.status}` }, 409);
     }
     if (!task.def.decomp_id && mission.manifest.decomposition?.allow_direct_bypass === false) {
       const hasActiveDecomp = this.ctx.storage.sql
@@ -2512,8 +2622,8 @@ export class SunsteadHub extends DurableObject<HubEnv> {
       });
       return { status: 409, body: { accepted: false, status: "rejected", submission_id: subId, error: reason } };
     }
-    if (mission.manifest.mode === "dag" && preVerifyTask.status === "verified") {
-      const reason = `task '${taskId}' is already verified`;
+    if (mission.manifest.mode === "dag" && (preVerifyTask.status === "verified" || preVerifyTask.status === "refuted")) {
+      const reason = `task '${taskId}' is already ${preVerifyTask.status}`;
       const finishedAt = Math.floor(Date.now() / 1000);
       this.updateSubmissionOutcome({
         id: subId,

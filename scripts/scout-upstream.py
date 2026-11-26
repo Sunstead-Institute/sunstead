@@ -41,11 +41,15 @@ Usage:
 """
 import argparse
 import glob
+import hashlib
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from dataclasses import asdict, dataclass, field
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -58,20 +62,31 @@ WATCHLIST_DOMAINS = [
     ("thefundamentaltheor3m/Sphere-Packing-Lean", "math"),
     ("google-deepmind/formal-conjectures", "math"),
     ("teorth/IEANTN", "math"),
+    ("leanprover-community/physlib", "math"),
+    ("kbuzzard/ClassFieldTheory", "math"),
+    ("frenzymath/FATE", "math"),
+    ("teorth/equational_theories", "math"),
     ("Verified-zkEVM/ArkLib", "cryptography"),
     ("Verified-zkEVM/VCVio", "cryptography"),
     ("Verified-zkEVM/CompPoly", "cryptography"),
     ("Verified-zkEVM/clean", "cryptography"),
     ("Verified-zkEVM/evm-asm", "cryptography"),
     ("Verified-zkEVM/PolyFun", "cryptography"),
+    ("Verified-zkEVM/rust-lean", "cryptography"),
+    ("Verified-zkEVM/leanerVM", "cryptography"),
     ("leanprover/LNSym", "cryptography"),
     ("Beneficial-AI-Foundation/curve25519-dalek-lean-verify", "cryptography"),
+    ("Beneficial-AI-Foundation/dalek-lean-bench", "cryptography"),
     ("leanEthereum/leanVM", "cryptography"),
     ("BobDyLean/dylean", "cryptography"),
     ("reilabs/proven-zk", "cryptography"),
     ("reilabs/lampe", "cryptography"),
     ("GaloisInc/zkLean", "cryptography"),
     ("cedar-policy/cedar-spec", "systems"),
+    ("opencompl/lean-mlir", "systems"),
+    ("opencompl/riscv-lean", "systems"),
+    ("digama0/lean4lean", "systems"),
+    ("sunblaze-ucb/verina", "systems"),
     ("k3nfalt/longtails", "optimization"),
     ("optsuite/optlib", "optimization"),
     ("verified-optimization/CvxLean", "optimization"),
@@ -84,6 +99,12 @@ DOMAINS = sorted(set(DOMAIN_OF.values()))
 # Default per-subprocess timeouts (seconds), overridable via --timeout.
 GIT_TIMEOUT = 120
 GH_TIMEOUT = 60
+HTTP_TIMEOUT = 30
+DISCOVER_UA = "sunstead-scout-upstream/0.3"
+MATHLIB_DOWNSTREAM_YML_URL = (
+    "https://raw.githubusercontent.com/leanprover-community/mathlib4/master/scripts/downstream-repos.yml"
+)
+RESERVOIR_INDEX_REPO = "leanprover/reservoir-index"
 
 # The toolchain the production verifier image runs (cloudflare/containers/lean4).
 # Only standalone-mathlib candidates pinned to it can be packaged without new
@@ -152,6 +173,54 @@ MARKER_RE = re.compile(
 SKIP_PATH_RE = re.compile(r"(^|/)(test|tests|examples?|scratch|archive|\.lake|lake-packages)(/|$)", re.IGNORECASE)
 SORRY_RE = re.compile(r"(?<![\w.'])sorry(?![\w'])")
 IDENT_RE = re.compile(r"[A-Za-z_][\w'.]*")
+
+# formal-conjectures gotcha classifiers:
+# - `@[category research open | research solved | graduate | undergraduate | test | API | ...]`
+# - `answer(sorry)` fill-in-the-blank statement placeholder
+# - CC-BY-SA / GFDL / ShareAlike copyleft prose markers in comments/docstrings
+FC_CATEGORY_RE = re.compile(
+    r"@\[[^\]]*\bcategory\s+(?P<cat>research\s+open|research\s+solved|graduate|undergraduate|high_school|olympiad|test|API)\b",
+    re.IGNORECASE,
+)
+FC_EXCLUDED_CATEGORIES = {"test", "API"}
+ANSWER_SORRY_RE = re.compile(r"(?<![\w.'])answer\s*\(\s*sorry\s*\)")
+COPYLEFT_DOC_RE = re.compile(
+    r"\b(?:CC[- ]BY[- ]SA(?:\s*\d+(?:\.\d+)*)?|"
+    r"Creative\s+Commons\s+Attribution[- ]ShareAlike|"
+    r"ShareAlike\s+\d+(?:\.\d+)*|"
+    r"GNU\s+Free\s+Documentation\s+License|"
+    r"GFDL)\b",
+    re.IGNORECASE,
+)
+
+
+def extract_fc_category(attr_text: str):
+    """Extract normalized `formal-conjectures` `@[category ...]` tag from declaration attributes.
+
+    Comments and strings are masked first so prose mentioning `@[category test]`
+    never misclassifies a real theorem.
+    """
+    masked = mask_comments_and_strings(attr_text or "")
+    matches = list(FC_CATEGORY_RE.finditer(masked))
+    if not matches:
+        return None
+    raw = " ".join(matches[-1].group("cat").split())
+    low = raw.lower()
+    if low == "api":
+        return "API"
+    return low
+
+
+def detect_copyleft_markers(text: str):
+    """Return deduplicated CC-BY-SA / ShareAlike / GFDL docstring license markers."""
+    seen, out = set(), []
+    for m in COPYLEFT_DOC_RE.finditer(text or ""):
+        norm = " ".join(m.group(0).split())
+        key = re.sub(r"[-\s]+", "-", norm.lower())
+        if key not in seen:
+            seen.add(key)
+            out.append(norm)
+    return out
 
 
 # ---------------------------------------------------------------- Lean lexing
@@ -308,6 +377,11 @@ class Candidate:
     project_imports: list = field(default_factory=list)
     packageable_now: bool = False
     open_work: list = field(default_factory=list)  # [{"kind", "number", "url", "match"}] from --check-prs
+    category: str = ""  # formal-conjectures @[category ...] tag (e.g. "research open", "graduate")
+    open_conjecture: bool = False  # True for @[category research open] two-sided prove-or-refute targets
+    copyleft_markers: list = field(default_factory=list)  # CC-BY-SA / GFDL docstring markers flagged for license review
+    raw_decl: str = ""  # verbatim declaration text (used by --scaffold; omitted from default compact reports)
+    imports: list = field(default_factory=list)  # header imports of the upstream file
 
 
 def analyze_file(rel: str, src: str):
@@ -319,13 +393,21 @@ def analyze_file(rel: str, src: str):
         if not d.sorry_lines:
             continue
         stmt_end = statement_end(d.code)
+        stmt_code = d.code[:stmt_end] if stmt_end >= 0 else d.code
         stmt_line_end = d.start_line + d.code[: max(stmt_end, 0)].count("\n")
+        stmt_has_answer_sorry = bool(ANSWER_SORRY_RE.search(stmt_code))
+        stmt_has_sorry = bool(stmt_end >= 0 and SORRY_RE.search(stmt_code))
+        fc_cat = extract_fc_category(d.attr_text)
         for sl in d.sorry_lines:
             reasons = []
             if d.kind not in PROOF_KINDS:
                 reasons.append(f"{d.kind} sorry (not a theorem/lemma proof)")
-            elif stmt_end < 0 or sl < stmt_line_end or (sl == stmt_line_end and SORRY_RE.search(d.code[:stmt_end] or "")):
+            elif stmt_has_answer_sorry:
+                reasons.append("statement contains answer(sorry) fill-in-the-blank")
+            elif stmt_end < 0 or sl < stmt_line_end or stmt_has_sorry:
                 reasons.append("sorry in the statement, not the proof")
+            if fc_cat in FC_EXCLUDED_CATEGORIES:
+                reasons.append(f"formal-conjectures @[category {fc_cat}]")
             if SKIP_PATH_RE.search(rel):
                 reasons.append("test/example/scratch path")
             if file_marked:
@@ -690,6 +772,7 @@ def scout_repo(repo, workdir, toolchain, live, check_prs=False, gh=run_gh):
         toolchain=(show(d, commit, "lean-toolchain") or "").strip(),
         mathlib=mathlib_rev(show(d, commit, "lake-manifest.json")),
         license=detect_spdx(lic_text),
+        license_text=lic_text,
     )
     info["license_status"] = license_status(info["license"])
     files = [f for f in git(d, "ls-tree", "-r", "--name-only", commit).split("\n") if f.endswith(".lean")]
@@ -717,7 +800,9 @@ def scout_repo(repo, workdir, toolchain, live, check_prs=False, gh=run_gh):
             contents[f] = show(d, commit, f) or ""
         if not SORRY_RE.search(contents[f]):
             continue
-        packaging, project_imports = classify_packaging(file_imports(contents[f]))
+        f_imports = file_imports(contents[f])
+        packaging, project_imports = classify_packaging(f_imports)
+        file_header_copyleft = detect_copyleft_markers("\n".join(contents[f].split("\n")[:80]))
         for decl, line, status, reasons in analyze_file(f, contents[f]):
             sorry_decls.setdefault(decl.name, decl)
             stmt_end = statement_end(decl.code)
@@ -725,14 +810,28 @@ def scout_repo(repo, workdir, toolchain, live, check_prs=False, gh=run_gh):
             proof_text[(f, decl.name)] = decl.code[stmt_end:] if stmt_end > 0 else ""
             has_bp = "@[blueprint" in decl.attr_text or "blueprint" in decl.attr_text.split("\n")[-1] or decl.name in blueprint_names or short(decl.name) in {short(n) for n in blueprint_names}
             is_live = any(lo <= line <= hi for lo, hi in live.get((repo, f), []))
+            fc_cat = extract_fc_category(decl.attr_text) or ""
+            copyleft_markers = list(dict.fromkeys(
+                file_header_copyleft + detect_copyleft_markers(decl.attr_text + "\n" + decl.raw)
+            ))
+            hints = feasibility_hints(decl.attr_text, stmt, contents[f])
+            if copyleft_markers:
+                hints.append(
+                    f"copyleft docstring marker ({', '.join(copyleft_markers)}): review/strip prose before mirroring"
+                )
             cands.append(Candidate(
                 repo=repo, commit=commit, file=f, line=line, kind=decl.kind, name=decl.name,
                 url=f"https://github.com/{repo}/blob/{commit}/{f}#L{decl.start_line}-L{line}",
                 status=status, reasons=reasons, blueprint=has_bp, statement_uses_sorry_decl=[],
                 already_live=is_live, statement=" ".join(stmt.split())[:300],
-                hints=feasibility_hints(decl.attr_text, stmt, contents[f]),
+                hints=hints,
                 domain=info["domain"], toolchain=info["toolchain"],
                 packaging=packaging, project_imports=project_imports,
+                category=fc_cat,
+                open_conjecture=(fc_cat == "research open"),
+                copyleft_markers=copyleft_markers,
+                raw_decl=decl.raw,
+                imports=f_imports,
             ))
     # Vacuity hint: statement mentions a definition that itself has a sorry.
     sorry_defs = {n for n, dcl in sorry_decls.items() if dcl.kind not in PROOF_KINDS}
@@ -755,6 +854,7 @@ def scout_repo(repo, workdir, toolchain, live, check_prs=False, gh=run_gh):
         c.packageable_now = (
             c.status == "candidate" and c.packaging == "standalone-mathlib"
             and c.toolchain == SUPPORTED_TOOLCHAIN and info["license_status"] == "permissive"
+            and not c.copyleft_markers
         )
     if check_prs and any(c.status == "candidate" for c in uniq):
         try:
@@ -787,6 +887,659 @@ def group_by_toolchain(results):
                 g[c.packaging] = g.get(c.packaging, 0) + 1
                 g["packageable_now"] += c.packageable_now
     return dict(sorted(groups.items()))
+
+
+# ------------------------------------------------------- dynamic discovery
+
+GITHUB_REPO_URL_RE = re.compile(
+    r"https?://github\.com/(?P<owner>[A-Za-z0-9_.-]+)/(?P<name>[A-Za-z0-9_.-]+?)(?:\.git)?(?:[/#?\"'\s,}\]]|$)"
+)
+OWNER_REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+DISCOVER_SKIP_REPOS = {
+    "leanprover-community/mathlib4",
+    "leanprover/lean4",
+    "leanprover/std4",
+    "leanprover-community/batteries",
+}
+
+
+def normalize_github_repo(raw: str):
+    """Extract canonical `owner/name` from a GitHub URL or `owner/name` slug, else None."""
+    if not isinstance(raw, str):
+        return None
+    s = raw.strip().strip("\"'")
+    if not s:
+        return None
+    m = GITHUB_REPO_URL_RE.search(s)
+    if m:
+        repo = f"{m.group('owner')}/{m.group('name')}"
+    elif OWNER_REPO_RE.fullmatch(s):
+        repo = s[:-4] if s.endswith(".git") else s
+    else:
+        return None
+    if repo.endswith(".git"):
+        repo = repo[:-4]
+    return repo if OWNER_REPO_RE.fullmatch(repo) else None
+
+
+def parse_downstream_repos_yml(text: str):
+    """Parse Mathlib's `downstream-repos.yml` (stdlib-only, no PyYAML needed).
+
+    Supports mapping-style (`name:\n  url: https://github.com/...`), list-of-dicts
+    (`- repo: owner/name` / `- url: ...`), and plain URL/slug lists.
+    Returns deduplicated `[{'repo', 'source', 'branch', 'name'}]`.
+    """
+    found = []
+    seen = set()
+    current_name = None
+    current_branch = None
+    for raw_line in (text or "").splitlines():
+        line = raw_line.split("#", 1)[0].rstrip()
+        if not line.strip():
+            continue
+        stripped = line.strip()
+        # Top-level YAML key (e.g. `flt:` or `PrimeNumberTheoremAnd:`)
+        if not raw_line[0].isspace() and stripped.endswith(":") and not stripped.startswith("-"):
+            current_name = stripped[:-1].strip().strip("\"'")
+            current_branch = None
+            continue
+        bm = re.match(r"^-?\s*(?:branch|rev|default_branch)\s*:\s*(.+)$", stripped)
+        if bm:
+            current_branch = bm.group(1).strip().strip("\"'")
+            if found and current_name and found[-1]["name"] == current_name and not found[-1]["branch"]:
+                found[-1]["branch"] = current_branch
+            continue
+        repo = None
+        for key_re in (
+            r"^-?\s*(?:url|git|repo_url|repository|github)\s*:\s*(.+)$",
+            r"^-?\s*repo\s*:\s*(.+)$",
+        ):
+            km = re.match(key_re, stripped)
+            if km:
+                repo = normalize_github_repo(km.group(1))
+                break
+        if repo is None and (stripped.startswith("- ") or "github.com/" in stripped):
+            val = stripped[2:].strip() if stripped.startswith("- ") else stripped
+            repo = normalize_github_repo(val)
+        if repo and repo not in seen and repo not in DISCOVER_SKIP_REPOS:
+            seen.add(repo)
+            found.append({
+                "repo": repo,
+                "source": "mathlib-downstream",
+                "name": current_name or repo.split("/", 1)[1],
+                "branch": current_branch,
+            })
+    return found
+
+
+def parse_reservoir_metadata(data, *, min_stars=0, lean_version_prefix=None):
+    """Parse one or many `leanprover/reservoir-index` metadata JSON records.
+
+    Accepts a JSON string, a single metadata dict, or a list of metadata dicts.
+    Filters by `min_stars` and optional `lean_version_prefix` (e.g. 'v4.36.0' or '4.36').
+    """
+    if isinstance(data, str):
+        data = json.loads(data or "[]")
+    records = data if isinstance(data, list) else ([data] if isinstance(data, dict) else [])
+    found = []
+    seen = set()
+    want_ver = (lean_version_prefix or "").lstrip("v").strip()
+    for rec in records:
+        if not isinstance(rec, dict):
+            continue
+        stars = int(rec.get("stars") or 0)
+        if stars < min_stars:
+            continue
+        repo = None
+        for src in rec.get("sources") or []:
+            if not isinstance(src, dict):
+                continue
+            for k in ("fullName", "repoUrl", "gitUrl", "url"):
+                repo = normalize_github_repo(src.get(k) or "")
+                if repo:
+                    break
+            if repo:
+                break
+        if not repo:
+            for k in ("fullName", "repo", "repository", "homepage"):
+                repo = normalize_github_repo(rec.get(k) or "")
+                if repo:
+                    break
+        if not repo or repo in seen or repo in DISCOVER_SKIP_REPOS:
+            continue
+        toolchains = []
+        for b in rec.get("builds") or []:
+            if isinstance(b, dict) and b.get("toolchain"):
+                toolchains.append(str(b["toolchain"]))
+        tc = str(rec.get("toolchain") or (toolchains[0] if toolchains else ""))
+        if want_ver and tc and want_ver not in tc.lstrip("v"):
+            continue
+        if want_ver and not tc:
+            continue
+        seen.add(repo)
+        found.append({
+            "repo": repo,
+            "source": "reservoir-index",
+            "name": rec.get("name") or repo.split("/", 1)[1],
+            "stars": stars,
+            "license": rec.get("license") or "",
+            "toolchain": tc,
+            "keywords": list(rec.get("keywords") or []),
+        })
+    found.sort(key=lambda r: (-int(r.get("stars") or 0), r["repo"].lower()))
+    return found
+
+
+def parse_reservoir_tree(tree_payload):
+    """Extract `owner/name` candidates from a single GitHub recursive tree response of
+    `leanprover/reservoir-index` (`owner/pkg/metadata.json` paths, 1 API call total)."""
+    if isinstance(tree_payload, str):
+        tree_payload = json.loads(tree_payload or "{}")
+    entries = tree_payload.get("tree", []) if isinstance(tree_payload, dict) else []
+    found, seen = [], set()
+    for e in entries:
+        if not isinstance(e, dict):
+            continue
+        path = str(e.get("path") or "")
+        parts = path.split("/")
+        if len(parts) == 3 and parts[2] == "metadata.json":
+            repo = normalize_github_repo(f"{parts[0]}/{parts[1]}")
+            if repo and repo not in seen and repo not in DISCOVER_SKIP_REPOS:
+                seen.add(repo)
+                found.append({
+                    "repo": repo,
+                    "source": "reservoir-index",
+                    "name": parts[1],
+                    "metadata_path": path,
+                })
+    return found
+
+
+def fetch_url_text(url: str, timeout=None) -> str:
+    """Read-only HTTPS GET with explicit timeout and Sunstead User-Agent."""
+    t = HTTP_TIMEOUT if timeout is None else timeout
+    req = urllib.request.Request(url, headers={"User-Agent": DISCOVER_UA})
+    try:
+        with urllib.request.urlopen(req, timeout=t) as resp:
+            return resp.read().decode("utf-8", errors="replace")
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        raise RuntimeError(f"GET {url} failed: {e}")
+
+
+def discover_repos(
+    *,
+    source="all",
+    limit=50,
+    min_stars=0,
+    toolchain_prefix=None,
+    exclude_watchlist=False,
+    http_get=fetch_url_text,
+    gh=run_gh,
+):
+    """Discover Lean 4 repositories from Mathlib's `downstream-repos.yml` and/or
+    `leanprover/reservoir-index` with strict rate-limit/timeout hygiene.
+
+    Returns `(discovered_records, warnings)`. Network/API failures degrade
+    gracefully into warnings rather than crashing.
+    """
+    discovered = []
+    warnings = []
+    seen = set(WATCHLIST) if exclude_watchlist else set()
+
+    if source in ("all", "downstream"):
+        try:
+            yml = http_get(MATHLIB_DOWNSTREAM_YML_URL)
+            for item in parse_downstream_repos_yml(yml):
+                if item["repo"] not in seen:
+                    seen.add(item["repo"])
+                    discovered.append(item)
+        except Exception as e:
+            warnings.append(f"downstream-repos.yml fetch failed: {e}")
+
+    if source in ("all", "reservoir") and (limit <= 0 or len(discovered) < limit):
+        try:
+            tree = gh_get(f"repos/{RESERVOIR_INDEX_REPO}/git/trees/HEAD?recursive=1", gh=gh)
+            tree_items = parse_reservoir_tree(tree)
+            if min_stars > 0 or toolchain_prefix:
+                # Rate-limit hygiene: fetch individual raw metadata.json only up to a bounded cap.
+                cap = min(len(tree_items), max(limit * 3, 60) if limit > 0 else 150)
+                meta_recs = []
+                for ti in tree_items[:cap]:
+                    raw_url = f"https://raw.githubusercontent.com/{RESERVOIR_INDEX_REPO}/HEAD/{ti['metadata_path']}"
+                    try:
+                        meta_recs.append(json.loads(http_get(raw_url)))
+                    except Exception:
+                        continue
+                parsed = parse_reservoir_metadata(
+                    meta_recs, min_stars=min_stars, lean_version_prefix=toolchain_prefix
+                )
+                for item in parsed:
+                    if item["repo"] not in seen:
+                        seen.add(item["repo"])
+                        discovered.append(item)
+            else:
+                for item in tree_items:
+                    if item["repo"] not in seen:
+                        seen.add(item["repo"])
+                        discovered.append(item)
+        except Exception as e:
+            warnings.append(f"reservoir-index discovery failed: {e}")
+
+    if limit and limit > 0:
+        discovered = discovered[:limit]
+    return discovered, warnings
+
+
+# ------------------------------------------------------- arena pack scaffold
+
+TOOLCHAIN_VERIFIER_IMAGE = {
+    "leanprover/lean4:v4.36.0": "sunstead/verifier-lean4:v0.2",
+    "leanprover/lean4:v4.35.0": "sunstead/verifier-lean4-v4.35.0:v0.1",
+    "leanprover/lean4:v4.31.0": "sunstead/verifier-lean4-v4.31.0:v0.1",
+}
+
+
+def slugify_id(raw: str, max_len=48) -> str:
+    s = re.sub(r"[^a-zA-Z0-9]+", "_", raw).strip("_").lower()
+    if not s or not s[0].isalpha():
+        s = "t_" + s
+    return s[:max_len].rstrip("_")
+
+
+def pascal_ident(raw: str, fallback="SunsteadPack") -> str:
+    parts = [p for p in re.split(r"[^A-Za-z0-9]+", raw) if p]
+    out = "".join(p[0].upper() + p[1:] for p in parts)
+    if not out or not out[0].isalpha():
+        out = fallback + out
+    return out
+
+
+def infer_topic_from_path(rel_path: str) -> str:
+    """Derive a clean topic slug from a Lean file path (e.g. `FormalConjectures/ErdosProblems/12.lean` -> `erdos-problems`)."""
+    norm = rel_path.replace("\\", "/").strip("/")
+    parts = norm.split("/")
+    if len(parts) >= 3:
+        raw = parts[1]
+    elif len(parts) == 2:
+        raw = os.path.splitext(parts[1])[0]
+    else:
+        raw = os.path.splitext(parts[0])[0]
+    # Split CamelCase -> kebab-case
+    kebab = re.sub(r"([a-z0-9])([A-Z])", r"\1-\2", raw)
+    kebab = re.sub(r"[^a-zA-Z0-9]+", "-", kebab).strip("-").lower()
+    return kebab or "general"
+
+
+def shard_candidates_by_topic(candidates, *, shard_size=50, prefix=""):
+    """Group vetted candidates into topic-sharded Arena Packs (default 50 tasks/pack,
+    splitting open conjectures (`research open`) cleanly from non-open tasks).
+
+    Returns `[{'mission_id', 'topic', 'open_conjecture', 'candidates'}]`.
+    """
+    shard_size = max(1, int(shard_size))
+    buckets = {}
+    for c in candidates:
+        topic = infer_topic_from_path(c.file)
+        is_oc = bool(getattr(c, "open_conjecture", False) or getattr(c, "category", "") == "research open")
+        buckets.setdefault((topic, is_oc), []).append(c)
+
+    packs = []
+    pref = re.sub(r"[^a-z0-9-]+", "-", (prefix or "").lower()).strip("-")
+    for (topic, is_oc), items in sorted(buckets.items()):
+        items = sorted(items, key=lambda x: (x.file, x.line, x.name))
+        total_shards = (len(items) + shard_size - 1) // shard_size
+        for shard_idx in range(total_shards):
+            chunk = items[shard_idx * shard_size : (shard_idx + 1) * shard_size]
+            parts = [p for p in (pref, topic, "open" if is_oc else "") if p]
+            if total_shards > 1:
+                parts.append(f"{shard_idx + 1:02d}")
+            mission_id = "-".join(parts)
+            packs.append({
+                "mission_id": mission_id,
+                "topic": topic,
+                "open_conjecture": is_oc,
+                "candidates": chunk,
+            })
+    return packs
+
+
+def _extract_statement_prop_from_decl(cand: Candidate) -> str:
+    """Build a best-effort Prop expression for `SunsteadStatements` from a candidate's statement."""
+    stmt = (cand.statement or "").strip()
+    # Strip leading attributes/modifiers and `theorem|lemma <name>`
+    m = DECL_RE.match(stmt)
+    rest = stmt[m.end():].strip() if m else stmt
+    # Split top-level binders before `:` if present; fall back to `True` placeholder with comment.
+    depth = 0
+    colon_pos = -1
+    for i, ch in enumerate(rest):
+        if ch in "([{⦃⟨":
+            depth += 1
+        elif ch in ")]}⦄⟩":
+            depth = max(0, depth - 1)
+        elif depth == 0 and ch == ":":
+            if i + 1 < len(rest) and rest[i + 1] == "=":
+                break
+            colon_pos = i
+            break
+    if colon_pos < 0:
+        return rest or "True"
+    binders = rest[:colon_pos].strip()
+    ret = rest[colon_pos + 1 :].strip()
+    if binders:
+        return f"∀ {binders}, {ret}"
+    return ret
+
+
+def _strip_fc_category_attr(decl_body: str) -> str:
+    """Strip inline `@[category ...]` attribute prefix when scaffolding standalone Mathlib stubs."""
+    return re.sub(r"^@\[[^\]]*\bcategory\b[^\]]*\]\s*", "", decl_body.strip(), flags=re.IGNORECASE)
+
+
+def _clean_task_stub(lib_root: str, task_thm_short: str, cand: Candidate) -> str:
+    """Render a clean target `.lean` stub preserving the upstream signature + `sorry`."""
+    imports = [f"import {lib_root}.Spec"]
+    for imp in cand.imports or []:
+        root = imp.split(".", 1)[0]
+        if root in STANDALONE_IMPORT_ROOTS and imp != "Mathlib":
+            imp_line = f"import {imp}"
+            if imp_line not in imports:
+                imports.append(imp_line)
+    # Build declaration text: reuse verbatim upstream declaration if clean, else synthesize from statement.
+    decl_body = _strip_fc_category_attr(cand.raw_decl or "")
+    if decl_body:
+        lines = [
+            *imports,
+            "",
+            f"namespace {lib_root}",
+            "",
+            f"-- Upstream: {cand.url}",
+            decl_body,
+            "",
+            f"end {lib_root}",
+            "",
+        ]
+        return "\n".join(lines)
+    stmt = _strip_fc_category_attr(cand.statement or f"theorem {task_thm_short} : True")
+    return "\n".join([
+        *imports,
+        "",
+        f"namespace {lib_root}",
+        "",
+        f"-- Upstream: {cand.url}",
+        f"{stmt} := by",
+        "  sorry",
+        "",
+        f"end {lib_root}",
+        "",
+    ])
+
+
+def scaffold_arena_packs(
+    results,
+    out_dir: str,
+    *,
+    shard_size=50,
+    prefix="",
+    allow_copyleft_docs=False,
+    include_live=False,
+):
+    """Turn vetted scout candidates into ready-to-verify Sunstead Arena Pack directories.
+
+    Creates `<out_dir>/<mission-id>/` containing:
+      - `sunstead.json` (with `"open_conjecture": true` on `research open` packs)
+      - `UPSTREAM.json` (pinned 40-char commit SHA + verbatim snippet checks)
+      - `LICENSE` (verbatim upstream license text)
+      - `lean-toolchain` & `lakefile.toml`
+      - `<LibRoot>/Spec.lean` & per-task `<LibRoot>/<Task>.lean` stubs
+      - executable `./verify` script matching `sunstead_sandbox.lean_verify` + `sync-assets.mjs` AST contract
+
+    Returns a list of summary dicts for every scaffolded pack.
+    """
+    os.makedirs(out_dir, exist_ok=True)
+    written = []
+
+    for info, cands in results:
+        if info.get("error"):
+            continue
+        repo = info.get("repo", "")
+        commit = info.get("commit", "")
+        toolchain = (info.get("toolchain") or SUPPORTED_TOOLCHAIN).strip()
+        lic = info.get("license") or "UNKNOWN"
+        lic_text = info.get("license_text") or f"Upstream license ({lic}) from https://github.com/{repo}@{commit}\n"
+        mathlib_ver = info.get("mathlib") or toolchain.split(":")[-1]
+        verifier_img = TOOLCHAIN_VERIFIER_IMAGE.get(toolchain, TOOLCHAIN_VERIFIER_IMAGE[SUPPORTED_TOOLCHAIN])
+
+        vetted = [
+            c for c in cands
+            if c.status == "candidate"
+            and (include_live or not c.already_live)
+            and (allow_copyleft_docs or not c.copyleft_markers)
+        ]
+        if not vetted:
+            continue
+
+        repo_prefix = prefix or slugify_id(repo.split("/", 1)[-1], max_len=24).replace("_", "-")
+        packs = shard_candidates_by_topic(vetted, shard_size=shard_size, prefix=repo_prefix)
+        for pack in packs:
+            mission_id = pack["mission_id"]
+            is_open_conj = pack["open_conjecture"]
+            pack_cands = pack["candidates"]
+            mdir = os.path.join(out_dir, mission_id)
+            lib_root = pascal_ident(mission_id)
+            lib_dir = os.path.join(mdir, lib_root)
+            os.makedirs(lib_dir, exist_ok=True)
+
+            # 1. lean-toolchain, LICENSE, lakefile.toml, Spec.lean
+            with open(os.path.join(mdir, "lean-toolchain"), "w", encoding="utf-8") as fh:
+                fh.write(toolchain + "\n")
+            with open(os.path.join(mdir, "LICENSE"), "w", encoding="utf-8") as fh:
+                fh.write(lic_text)
+            uses_mathlib = any(
+                any(imp == "Mathlib" or imp.startswith("Mathlib.") for imp in (c.imports or []))
+                for c in pack_cands
+            ) or any(c.packaging == "standalone-mathlib" for c in pack_cands)
+            lakefile_lines = [
+                f'name = "{mission_id.replace("-", "_")}"',
+                'version = "0.1.0"',
+                "",
+            ]
+            if uses_mathlib:
+                lakefile_lines.extend([
+                    "[[require]]",
+                    'name = "mathlib"',
+                    'git = "https://github.com/leanprover-community/mathlib4.git"',
+                    f'rev = "{mathlib_ver}"',
+                    "",
+                ])
+            lakefile_lines.extend(["[[lean_lib]]", f'name = "{lib_root}"', ""])
+            with open(os.path.join(mdir, "lakefile.toml"), "w", encoding="utf-8") as fh:
+                fh.write("\n".join(lakefile_lines))
+
+            spec_rel = f"{lib_root}/Spec.lean"
+            spec_lines = [
+                "import Mathlib" if uses_mathlib else "-- Core Lean 4 spec",
+                "",
+                f"namespace {lib_root}",
+                f"-- Shared frozen definitions for {mission_id} ({repo}@{commit[:12]}).",
+                f"end {lib_root}",
+                "",
+            ]
+            with open(os.path.join(mdir, spec_rel), "w", encoding="utf-8") as fh:
+                fh.write("\n".join(spec_lines))
+
+            # 2. Per-task target files, manifest tasks, verify TASKS, UPSTREAM.json checks
+            used_task_ids = set()
+            used_mod_names = set()
+            manifest_tasks = []
+            verify_tasks = {}
+            upstream_checks = []
+            cand_to_task_id = {}
+
+            for idx, c in enumerate(pack_cands, start=1):
+                base_tid = slugify_id(short(c.name) or f"task_{idx}")
+                tid = base_tid
+                suffix = 2
+                while tid in used_task_ids:
+                    tid = f"{base_tid}_{suffix}"
+                    suffix += 1
+                used_task_ids.add(tid)
+                cand_to_task_id[c.name] = tid
+
+                base_mod = pascal_ident(short(c.name) or f"Task{idx}", fallback="Task")
+                mod_leaf = base_mod
+                msuf = 2
+                while mod_leaf in used_mod_names:
+                    mod_leaf = f"{base_mod}{msuf}"
+                    msuf += 1
+                used_mod_names.add(mod_leaf)
+
+                rel_target = f"{lib_root}/{mod_leaf}.lean"
+                full_mod = f"{lib_root}.{mod_leaf}"
+                clean_decl = _strip_fc_category_attr(c.raw_decl or "")
+                dm = DECL_RE.match(clean_decl.splitlines()[0]) if clean_decl else None
+                declared_name = (dm.group("name") if dm and dm.group("name") else short(c.name) or tid)
+                stub_src = _clean_task_stub(lib_root, declared_name, c)
+                with open(os.path.join(mdir, rel_target), "w", encoding="utf-8") as fh:
+                    fh.write(stub_src)
+
+                prop_expr = _extract_statement_prop_from_decl(c)
+                verify_tasks[tid] = {
+                    "module": full_mod,
+                    "theorem": f"{lib_root}.{declared_name}",
+                    "statement": f"\ndef {tid} : Prop :=\n  {prop_expr}\n",
+                }
+                snippet = (clean_decl.splitlines()[0] if clean_decl else _strip_fc_category_attr(c.statement)).strip()
+                if snippet:
+                    upstream_checks.append({
+                        "local_file": rel_target,
+                        "upstream_file": c.file,
+                        "verbatim_snippet": snippet,
+                    })
+                manifest_tasks.append({
+                    "id": tid,
+                    "title": f"{'Open conjecture' if is_open_conj else 'Prove'}: {c.name}",
+                    "description": f"Upstream `{c.file}:{c.line}` from `{repo}@{commit[:12]}`"
+                    + (f" (`@[category {c.category}]`)" if c.category else "") + ".",
+                    "target_files": [rel_target],
+                    "depends_on": [],  # wired in second pass below
+                    "upstream_url": c.url,
+                })
+
+            # Wire intra-pack dependency edges cleanly.
+            for t_obj, c in zip(manifest_tasks, pack_cands):
+                deps = [
+                    cand_to_task_id[d]
+                    for d in (c.depends_on or [])
+                    if d in cand_to_task_id and cand_to_task_id[d] != t_obj["id"]
+                ]
+                t_obj["depends_on"] = sorted(set(deps))
+
+            frozen_paths = [
+                spec_rel,
+                "UPSTREAM.json",
+                "lakefile.toml",
+                "lean-toolchain",
+                "verify",
+                "sunstead.json",
+            ]
+            manifest = {
+                "id": mission_id,
+                "title": f"{repo.split('/', 1)[-1]} ({pack['topic']}): "
+                + ("Open Conjectures" if is_open_conj else "Upstream Proof Obligations"),
+                "description": (
+                    f"Scaffolded Arena Pack ({len(manifest_tasks)} tasks) from {repo}@{commit[:12]} "
+                    f"({lic}, {toolchain}). Audit compiled statements and axioms before publishing."
+                ),
+                "tier": 1,
+                "mode": "dag",
+                "repo": f"https://github.com/{repo}",
+                "upstream": {
+                    "repo": repo,
+                    "commit": commit,
+                    "license": lic,
+                },
+                **({"open_conjecture": True} if is_open_conj else {}),
+                "frozen_paths": frozen_paths,
+                "verifier": {
+                    "image": verifier_img,
+                    "toolchain": toolchain,
+                    "command": ["./verify"],
+                    "timeout_sec": 180,
+                    "memory_mb": 6144,
+                },
+                "score_direction": "maximize",
+                "tasks": manifest_tasks,
+            }
+            with open(os.path.join(mdir, "sunstead.json"), "w", encoding="utf-8") as fh:
+                json.dump(manifest, fh, indent=2, ensure_ascii=False)
+                fh.write("\n")
+
+            upstream_json = {
+                "repo": repo,
+                "commit": commit,
+                "license": lic,
+                "checks": upstream_checks,
+            }
+            with open(os.path.join(mdir, "UPSTREAM.json"), "w", encoding="utf-8") as fh:
+                json.dump(upstream_json, fh, indent=2, ensure_ascii=False)
+                fh.write("\n")
+
+            verify_frozen = [spec_rel, "UPSTREAM.json", "lakefile.toml", "lean-toolchain"]
+            verify_src = (
+                "#!/usr/bin/env python3\n"
+                f'"""Frozen verifier for `{mission_id}` (scaffolded by scout-upstream.py)."""\n'
+                "import sys\n\n"
+                'sys.path.insert(0, "/opt/sunstead")\n'
+                "from sunstead_sandbox import emit, lean_verify  # noqa: E402\n\n"
+                f"LIB_ROOT = {lib_root!r}\n"
+                f"FROZEN_FILES = {json.dumps(verify_frozen, indent=4)}\n"
+                'STATEMENT_PREAMBLE = ""\n'
+                f"TASKS = {json.dumps(verify_tasks, indent=4, ensure_ascii=False)}\n\n"
+                'if __name__ == "__main__":\n'
+                "    if len(sys.argv) < 2:\n"
+                '        emit(False, "usage: ./verify <task_id>")\n'
+                "    lean_verify(\n"
+                "        sys.argv[1],\n"
+                "        lib_root=LIB_ROOT,\n"
+                "        frozen_files=FROZEN_FILES,\n"
+                "        tasks=TASKS,\n"
+                f"        uses_mathlib={uses_mathlib!r},\n"
+                "        statement_preamble=STATEMENT_PREAMBLE,\n"
+                "        timeout_sec=170,\n"
+                "    )\n"
+            )
+            verify_path = os.path.join(mdir, "verify")
+            with open(verify_path, "w", encoding="utf-8") as fh:
+                fh.write(verify_src)
+            os.chmod(verify_path, os.stat(verify_path).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+            written.append({
+                "mission_id": mission_id,
+                "dir": mdir,
+                "repo": repo,
+                "commit": commit,
+                "toolchain": toolchain,
+                "open_conjecture": is_open_conj,
+                "tasks": len(manifest_tasks),
+            })
+    return written
+
+
+def load_results_from_json(path: str):
+    """Reload `[(info, [Candidate, ...])]` from a previous `--format json` output."""
+    with open(path, encoding="utf-8") as fh:
+        raw = json.load(fh)
+    valid_fields = set(Candidate.__dataclass_fields__.keys())
+    results = []
+    for entry in raw:
+        info = {k: v for k, v in entry.items() if k != "sorries"}
+        cands = [
+            Candidate(**{k: v for k, v in row.items() if k in valid_fields})
+            for row in entry.get("sorries", [])
+        ]
+        results.append((info, cands))
+    return results
 
 
 # ------------------------------------------------------------------- output
@@ -841,12 +1594,13 @@ def render_markdown(results, toolchain, check_prs=False):
         checked = check_prs and info.get("open_work_checked")
         out.append(f"## {info['repo']}@{info['commit']} ({info['toolchain']}, {info['license']}, {license_status(info['license'])})")
         out.append("")
-        out.append("| Declaration | Location | Packaging | Blueprint | Live | Depends on | Open PRs/issues | Hints |")
-        out.append("|---|---|---|---|---|---|---|---|")
+        out.append("| Declaration | Location | Packaging | Category | Blueprint | Live | Depends on | Open PRs/issues | Hints |")
+        out.append("|---|---|---|---|---|---|---|---|---|")
         for c in sorted(open_c, key=lambda c: (c.already_live, not c.packageable_now, bool(c.open_work), bool(c.hints), not c.blueprint, c.file, c.line)):
             pkg = c.packaging + (" (packageable now)" if c.packageable_now else "")
+            cat_cell = (c.category + (" (two-sided)" if c.open_conjecture else "")) if c.category else "—"
             out.append(
-                f"| `{c.name}` ({c.kind}) | [{c.file}:{c.line}]({c.url}) | {pkg} | {'yes' if c.blueprint else 'no'} | "
+                f"| `{c.name}` ({c.kind}) | [{c.file}:{c.line}]({c.url}) | {pkg} | {cat_cell} | {'yes' if c.blueprint else 'no'} | "
                 f"{'already live' if c.already_live else ''} | {', '.join(f'`{short(d)}`' for d in c.depends_on)} | "
                 f"{open_work_cell(c, checked)} | {'; '.join(c.hints)} |"
             )
@@ -868,23 +1622,99 @@ def main(argv=None):
              "a candidate an open PR likely solves is excluded",
     )
     ap.add_argument(
+        "--discover", action="store_true",
+        help="dynamically discover candidate Lean 4 repos from Mathlib downstream-repos.yml and leanprover/reservoir-index",
+    )
+    ap.add_argument(
+        "--discover-source", choices=["all", "downstream", "reservoir"], default="all",
+        help="discovery source for --discover (default: all)",
+    )
+    ap.add_argument(
+        "--discover-limit", type=int, default=50,
+        help="maximum number of discovered repositories (rate-limit hygiene, default: 50)",
+    )
+    ap.add_argument(
+        "--discover-min-stars", type=int, default=0,
+        help="minimum GitHub stars filter for reservoir-index discovery",
+    )
+    ap.add_argument(
+        "--discover-list-only", action="store_true",
+        help="with --discover, print discovered repositories without cloning/scanning them",
+    )
+    ap.add_argument(
+        "--from-json",
+        help="load previously scouted JSON results instead of cloning (useful with --scaffold)",
+    )
+    ap.add_argument(
+        "--scaffold",
+        metavar="OUT_DIR",
+        help="write topic-sharded Sunstead Arena Pack directories for vetted candidates into OUT_DIR",
+    )
+    ap.add_argument(
+        "--shard-size", type=int, default=50,
+        help="maximum tasks per topic-sharded Arena Pack in --scaffold mode (default: 50)",
+    )
+    ap.add_argument(
+        "--scaffold-prefix", default="",
+        help="mission id prefix for --scaffold packs (default: derived from repo name)",
+    )
+    ap.add_argument(
         "--timeout", type=int, default=GIT_TIMEOUT,
-        help=f"per-subprocess timeout in seconds for git/gh calls (default: {GIT_TIMEOUT}s)",
+        help=f"per-subprocess timeout in seconds for git/gh/http calls (default: {GIT_TIMEOUT}s)",
     )
     args = ap.parse_args(argv)
     if args.timeout is not None and args.timeout > 0:
         globals()["GIT_TIMEOUT"] = args.timeout
         globals()["GH_TIMEOUT"] = min(args.timeout, GH_TIMEOUT) if args.timeout < GH_TIMEOUT else args.timeout
+        globals()["HTTP_TIMEOUT"] = min(args.timeout, HTTP_TIMEOUT) if args.timeout < HTTP_TIMEOUT else args.timeout
 
-    repos = args.repo or [r for r, d in WATCHLIST_DOMAINS if not args.domain or d in args.domain]
-    live = live_task_lines()
-    results = []
-    for repo in repos:
-        print(f"scouting {repo} ...", file=sys.stderr)
-        results.append(scout_repo(repo, args.workdir, args.toolchain, live, check_prs=args.check_prs))
+    if args.from_json:
+        results = load_results_from_json(args.from_json)
+    else:
+        repos = list(args.repo or [])
+        if args.discover:
+            discovered, warnings = discover_repos(
+                source=args.discover_source,
+                limit=args.discover_limit,
+                min_stars=args.discover_min_stars,
+                toolchain_prefix=args.toolchain,
+                exclude_watchlist=bool(args.domain or args.repo),
+            )
+            for w in warnings:
+                print(f"[discover warning] {w}", file=sys.stderr)
+            if args.discover_list_only:
+                if args.format == "json":
+                    print(json.dumps({"discovered": discovered, "warnings": warnings}, indent=2))
+                else:
+                    print(f"# Discovered Lean 4 repositories ({len(discovered)})\n")
+                    for item in discovered:
+                        extra = f" ({item.get('toolchain')})" if item.get("toolchain") else ""
+                        print(f"- `{item['repo']}` [{item['source']}]{extra}")
+                return 0
+            repos.extend(item["repo"] for item in discovered if item["repo"] not in repos)
+        if not repos:
+            repos = [r for r, d in WATCHLIST_DOMAINS if not args.domain or d in args.domain]
+        live = live_task_lines()
+        results = []
+        for repo in repos:
+            print(f"scouting {repo} ...", file=sys.stderr)
+            results.append(scout_repo(repo, args.workdir, args.toolchain, live, check_prs=args.check_prs))
+
+    if args.scaffold:
+        packs = scaffold_arena_packs(
+            results,
+            args.scaffold,
+            shard_size=args.shard_size,
+            prefix=args.scaffold_prefix,
+        )
+        print(f"scaffolded {len(packs)} Arena Pack(s) into {args.scaffold}", file=sys.stderr)
+
     if args.format == "json":
         print(json.dumps([
-            {**info, "sorries": [asdict(c) for c in cands if args.include_excluded or c.status == "candidate"]}
+            {
+                **info,
+                "sorries": [asdict(c) for c in cands if args.include_excluded or c.status == "candidate"],
+            }
             for info, cands in results
         ], indent=2, ensure_ascii=False))
     else:

@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 """Offline unit tests for scripts/scout-upstream.py.  Run: python3 scripts/test_scout_upstream.py"""
+import ast
+import contextlib
 import importlib.util
+import io
+import json
 import os
+import stat
 import subprocess
+import sys
+import tempfile
 import unittest
 
 _spec = importlib.util.spec_from_file_location(
@@ -363,21 +370,459 @@ class TimeoutAndLiveTests(unittest.TestCase):
         self.assertEqual(calls[0][1]["timeout"], scout.GIT_TIMEOUT)
 
 
+class WatchlistExpansionTests(unittest.TestCase):
+    def test_expanded_high_value_repos_registered(self):
+        expected = {
+            "leanprover-community/physlib": "math",
+            "kbuzzard/ClassFieldTheory": "math",
+            "frenzymath/FATE": "math",
+            "teorth/equational_theories": "math",
+            "Verified-zkEVM/rust-lean": "cryptography",
+            "Verified-zkEVM/leanerVM": "cryptography",
+            "Beneficial-AI-Foundation/dalek-lean-bench": "cryptography",
+            "opencompl/lean-mlir": "systems",
+            "opencompl/riscv-lean": "systems",
+            "digama0/lean4lean": "systems",
+            "sunblaze-ucb/verina": "systems",
+        }
+        for repo, dom in expected.items():
+            self.assertIn(repo, scout.WATCHLIST)
+            self.assertEqual(scout.DOMAIN_OF[repo], dom)
+        self.assertEqual(len(scout.WATCHLIST), len(set(scout.WATCHLIST)))
+
+
+FC_LEAN = '''import Mathlib
+
+/-!
+Problem prose adapted from Wikipedia under CC-BY-SA 4.0.
+-/
+
+namespace Erdos123
+
+@[category research open, AMS 11]
+theorem erdos_123 (n : Nat) : n + 0 = n := by
+  sorry
+
+@[category research solved, AMS 11]
+theorem erdos_123_known (n : Nat) : n = n := by
+  sorry
+
+@[category graduate, AMS 5]
+theorem grad_lemma : True := by
+  sorry
+
+@[category undergraduate]
+theorem undergrad_lemma : True := by
+  sorry
+
+@[category test]
+theorem sanity_check : 1 + 1 = 2 := by
+  sorry
+
+@[category API]
+theorem api_helper : True := by
+  sorry
+
+@[category research open, AMS 11]
+theorem fill_in_blank : answer(sorry) ↔ True := by
+  sorry
+
+@[category research open]
+theorem fill_in_blank_spaces : answer ( sorry ) = 42 := by
+  sorry
+
+/- Mentioning @[category test] in a doc comment must not exclude this theorem. -/
+@[category research open]
+theorem comment_mention_ok : True := by
+  sorry
+
+/-- Statement text copied from MathOverflow (Creative Commons Attribution-ShareAlike 4.0). -/
+@[category research open]
+theorem copyleft_doc_thm : True := by
+  sorry
+
+end Erdos123
+'''
+
+
+class FormalConjecturesGotchaTests(unittest.TestCase):
+    def test_fc_category_extraction_and_exclusion(self):
+        rows = scout.analyze_file("FormalConjectures/ErdosProblems/123.lean", FC_LEAN)
+        by_n = {}
+        for d, sl, st, r in rows:
+            by_n.setdefault(d.name, []).append((sl, st, r, d))
+
+        # research open / research solved / graduate / undergraduate are candidates
+        for name, expected_cat in (
+            ("Erdos123.erdos_123", "research open"),
+            ("Erdos123.erdos_123_known", "research solved"),
+            ("Erdos123.grad_lemma", "graduate"),
+            ("Erdos123.undergrad_lemma", "undergraduate"),
+            ("Erdos123.comment_mention_ok", "research open"),
+        ):
+            self.assertIn(name, by_n)
+            self.assertTrue(all(st == "candidate" for _, st, _, _ in by_n[name]), by_n[name])
+            self.assertEqual(scout.extract_fc_category(by_n[name][0][3].attr_text), expected_cat)
+
+        # test and API categories are excluded
+        for excluded_name, tag in (("Erdos123.sanity_check", "test"), ("Erdos123.api_helper", "API")):
+            self.assertIn(excluded_name, by_n)
+            for _, st, reasons, _ in by_n[excluded_name]:
+                self.assertEqual(st, "excluded")
+                self.assertTrue(any(f"@[category {tag}]" in r for r in reasons), reasons)
+
+    def test_answer_sorry_excludes_all_sorry_lines_in_declaration(self):
+        rows = scout.analyze_file("FormalConjectures/ErdosProblems/123.lean", FC_LEAN)
+        for name in ("Erdos123.fill_in_blank", "Erdos123.fill_in_blank_spaces"):
+            matches = [(sl, st, reasons) for d, sl, st, reasons in rows if d.name == name]
+            self.assertGreaterEqual(len(matches), 2, f"expected both statement and proof sorry lines for {name}")
+            for _, st, reasons in matches:
+                self.assertEqual(st, "excluded", f"proof sorry leaked as candidate for {name}: {reasons}")
+                self.assertTrue(any("answer(sorry)" in r for r in reasons), reasons)
+
+    def test_copyleft_docstring_marker_detection(self):
+        self.assertEqual(
+            scout.detect_copyleft_markers("Text under CC-BY-SA 4.0 and cc by-sa 4.0 and GFDL."),
+            ["CC-BY-SA 4.0", "GFDL"],
+        )
+        self.assertEqual(
+            scout.detect_copyleft_markers("Licensed under Creative Commons Attribution-ShareAlike 3.0"),
+            ["Creative Commons Attribution-ShareAlike"],
+        )
+        self.assertEqual(scout.detect_copyleft_markers("Pure Apache-2.0 file."), [])
+
+
+DOWNSTREAM_YML = """
+# Mathlib downstream repositories
+PrimeNumberTheoremAnd:
+  url: https://github.com/AlexKontorovich/PrimeNumberTheoremAnd.git
+  branch: main
+
+physlib:
+  repo: leanprover-community/physlib
+  rev: master
+
+- https://github.com/kbuzzard/ClassFieldTheory
+- https://github.com/leanprover-community/mathlib4  # must be skipped
+- https://github.com/leanprover-community/physlib   # duplicate must be deduped
+"""
+
+RESERVOIR_META = [
+    {
+        "name": "lean-mlir",
+        "stars": 120,
+        "license": "Apache-2.0",
+        "toolchain": "leanprover/lean4:v4.36.0",
+        "sources": [{"type": "git", "host": "github", "repoUrl": "https://github.com/opencompl/lean-mlir"}],
+    },
+    {
+        "name": "tiny-toy",
+        "stars": 2,
+        "license": "MIT",
+        "toolchain": "leanprover/lean4:v4.36.0",
+        "sources": [{"type": "git", "host": "github", "repoUrl": "https://github.com/someone/tiny-toy"}],
+    },
+    {
+        "name": "old-pkg",
+        "stars": 90,
+        "license": "MIT",
+        "toolchain": "leanprover/lean4:v4.12.0",
+        "sources": [{"type": "git", "host": "github", "repoUrl": "https://github.com/someone/old-pkg"}],
+    },
+]
+
+RESERVOIR_TREE = {
+    "tree": [
+        {"path": "README.md", "type": "blob"},
+        {"path": "opencompl/lean-mlir/metadata.json", "type": "blob"},
+        {"path": "someone/tiny-toy/metadata.json", "type": "blob"},
+        {"path": "leanprover-community/mathlib4/metadata.json", "type": "blob"},
+    ]
+}
+
+
+class DiscoveryParserTests(unittest.TestCase):
+    def test_parse_downstream_repos_yml(self):
+        items = scout.parse_downstream_repos_yml(DOWNSTREAM_YML)
+        self.assertEqual(
+            [i["repo"] for i in items],
+            [
+                "AlexKontorovich/PrimeNumberTheoremAnd",
+                "leanprover-community/physlib",
+                "kbuzzard/ClassFieldTheory",
+            ],
+        )
+        self.assertEqual(items[0]["branch"], "main")
+        self.assertTrue(all(i["source"] == "mathlib-downstream" for i in items))
+
+    def test_parse_reservoir_metadata_and_tree(self):
+        filtered = scout.parse_reservoir_metadata(RESERVOIR_META, min_stars=10, lean_version_prefix="v4.36")
+        self.assertEqual([i["repo"] for i in filtered], ["opencompl/lean-mlir"])
+        self.assertEqual(filtered[0]["stars"], 120)
+
+        tree_items = scout.parse_reservoir_tree(RESERVOIR_TREE)
+        self.assertEqual([i["repo"] for i in tree_items], ["opencompl/lean-mlir", "someone/tiny-toy"])
+
+    def test_discover_repos_offline_and_graceful_errors(self):
+        gh = FakeGh({"repos/leanprover/reservoir-index/git/trees/HEAD": RESERVOIR_TREE})
+        http_routes = {
+            scout.MATHLIB_DOWNSTREAM_YML_URL: DOWNSTREAM_YML,
+            f"https://raw.githubusercontent.com/{scout.RESERVOIR_INDEX_REPO}/HEAD/opencompl/lean-mlir/metadata.json": json.dumps(RESERVOIR_META[0]),
+            f"https://raw.githubusercontent.com/{scout.RESERVOIR_INDEX_REPO}/HEAD/someone/tiny-toy/metadata.json": json.dumps(RESERVOIR_META[1]),
+        }
+        items, warnings = scout.discover_repos(
+            source="all",
+            limit=10,
+            min_stars=10,
+            toolchain_prefix="v4.36",
+            http_get=lambda u: http_routes[u],
+            gh=gh,
+        )
+        self.assertEqual(warnings, [])
+        self.assertIn("leanprover-community/physlib", [i["repo"] for i in items])
+        self.assertIn("opencompl/lean-mlir", [i["repo"] for i in items])
+        self.assertNotIn("someone/tiny-toy", [i["repo"] for i in items])
+
+        # Exclude watchlist filters out already-watched repos cleanly.
+        novel, _ = scout.discover_repos(
+            source="reservoir",
+            limit=5,
+            exclude_watchlist=True,
+            http_get=lambda u: http_routes[u],
+            gh=gh,
+        )
+        self.assertEqual([i["repo"] for i in novel], ["someone/tiny-toy"])
+
+        # Network failures degrade cleanly into warnings instead of crashing.
+        def boom(_):
+            raise RuntimeError("timed out after 5s")
+        empty, errs = scout.discover_repos(source="all", http_get=boom, gh=boom)
+        self.assertEqual(empty, [])
+        self.assertEqual(len(errs), 2)
+
+
+class ScaffoldArenaPackTests(unittest.TestCase):
+    def test_topic_sharding_and_arena_pack_scaffolding(self):
+        commit = "a" * 40
+        info = {
+            "repo": "google-deepmind/formal-conjectures",
+            "commit": commit,
+            "toolchain": "leanprover/lean4:v4.36.0",
+            "mathlib": "v4.36.0",
+            "license": "Apache-2.0",
+            "license_text": "Apache License\nVersion 2.0\n",
+            "domain": "math",
+            "error": None,
+        }
+        cands = []
+        # 60 open Erdős conjectures -> sharded at shard_size=25 into 25 + 25 + 10 (3 packs, open_conjecture=True)
+        for i in range(60):
+            cands.append(scout.Candidate(
+                repo=info["repo"], commit=commit,
+                file=f"FormalConjectures/ErdosProblems/P{i:03d}.lean",
+                line=12, kind="theorem", name=f"Erdos.erdos_{i:03d}",
+                url=f"https://github.com/{info['repo']}/blob/{commit}/FormalConjectures/ErdosProblems/P{i:03d}.lean#L10-L12",
+                status="candidate", reasons=[], blueprint=False, statement_uses_sorry_decl=[],
+                already_live=False, statement=f"theorem erdos_{i:03d} (n : Nat) : n + 0 = n",
+                domain="math", toolchain="leanprover/lean4:v4.36.0",
+                packaging="standalone-mathlib", packageable_now=True,
+                category="research open", open_conjecture=True,
+                raw_decl=f"theorem erdos_{i:03d} (n : Nat) : n + 0 = n := by\n  sorry",
+                imports=["Mathlib"],
+            ))
+        # 3 graduate number-theory theorems (with a dependency edge) -> 1 non-open pack (no open_conjecture flag)
+        for i in range(3):
+            cands.append(scout.Candidate(
+                repo=info["repo"], commit=commit,
+                file=f"FormalConjectures/NumberTheory/N{i}.lean",
+                line=8, kind="theorem", name=f"NT.grad_{i}",
+                url=f"https://github.com/{info['repo']}/blob/{commit}/FormalConjectures/NumberTheory/N{i}.lean#L7-L8",
+                status="candidate", reasons=[], blueprint=False, statement_uses_sorry_decl=[],
+                already_live=False, statement=f"theorem grad_{i} : True",
+                depends_on=(["NT.grad_0"] if i == 1 else []),
+                domain="math", toolchain="leanprover/lean4:v4.36.0",
+                packaging="standalone-mathlib", packageable_now=True,
+                category="graduate", open_conjecture=False,
+                raw_decl=f"theorem grad_{i} : True := by\n  sorry",
+                imports=["Mathlib"],
+            ))
+        # Copyleft-flagged candidate must be skipped by default in --scaffold.
+        cands.append(scout.Candidate(
+            repo=info["repo"], commit=commit,
+            file="FormalConjectures/NumberTheory/Wiki.lean",
+            line=5, kind="theorem", name="NT.wiki_flagged",
+            url="https://example.invalid", status="candidate", reasons=[],
+            blueprint=False, statement_uses_sorry_decl=[], already_live=False,
+            statement="theorem wiki_flagged : True",
+            category="graduate", open_conjecture=False,
+            copyleft_markers=["CC-BY-SA 4.0"],
+            raw_decl="theorem wiki_flagged : True := by\n  sorry",
+            imports=["Mathlib"],
+        ))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            packs = scout.scaffold_arena_packs([(info, cands)], tmp, shard_size=25, prefix="fc")
+            self.assertEqual(len(packs), 4)
+            by_id = {p["mission_id"]: p for p in packs}
+            self.assertEqual(by_id["fc-erdos-problems-open-01"]["tasks"], 25)
+            self.assertEqual(by_id["fc-erdos-problems-open-02"]["tasks"], 25)
+            self.assertEqual(by_id["fc-erdos-problems-open-03"]["tasks"], 10)
+            self.assertEqual(by_id["fc-number-theory"]["tasks"], 3)
+            self.assertTrue(by_id["fc-erdos-problems-open-01"]["open_conjecture"])
+            self.assertFalse(by_id["fc-number-theory"]["open_conjecture"])
+
+            # Inspect generated Arena Pack files for exact Sunstead conventions.
+            oc_dir = by_id["fc-erdos-problems-open-01"]["dir"]
+            with open(os.path.join(oc_dir, "sunstead.json"), encoding="utf-8") as fh:
+                manifest = json.load(fh)
+            self.assertTrue(manifest.get("open_conjecture"))
+            self.assertIn("UPSTREAM.json", manifest["frozen_paths"])
+            self.assertEqual(len(manifest["tasks"]), 25)
+            with open(os.path.join(oc_dir, "lean-toolchain"), encoding="utf-8") as fh:
+                self.assertEqual(fh.read().strip(), "leanprover/lean4:v4.36.0")
+            self.assertTrue(os.path.isfile(os.path.join(oc_dir, "LICENSE")))
+            self.assertTrue(os.path.isfile(os.path.join(oc_dir, "lakefile.toml")))
+
+            with open(os.path.join(oc_dir, "UPSTREAM.json"), encoding="utf-8") as fh:
+                up_json = json.load(fh)
+            self.assertEqual(up_json["commit"], commit)
+            self.assertEqual(len(up_json["checks"]), 25)
+            # Every verbatim_snippet in UPSTREAM.json must appear in its local stub file!
+            for chk in up_json["checks"]:
+                with open(os.path.join(oc_dir, chk["local_file"]), encoding="utf-8") as fh:
+                    local_txt = fh.read()
+                self.assertIn(chk["verbatim_snippet"], local_txt)
+
+            # Generated `./verify` must be executable and AST-parseable with LIB_ROOT & TASKS.
+            verify_path = os.path.join(oc_dir, "verify")
+            self.assertTrue(os.stat(verify_path).st_mode & stat.S_IXUSR)
+            with open(verify_path, encoding="utf-8") as fh:
+                tree = ast.parse(fh.read())
+            assigns = {t.id: ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign) for t in n.targets if isinstance(t, ast.Name) and t.id in ("LIB_ROOT", "TASKS", "FROZEN_FILES")}
+            self.assertEqual(len(assigns["TASKS"]), 25)
+
+            # Non-open pack omits open_conjecture, wires intra-pack depends_on, and excludes wiki_flagged!
+            with open(os.path.join(by_id["fc-number-theory"]["dir"], "sunstead.json"), encoding="utf-8") as fh:
+                nt_manifest = json.load(fh)
+            self.assertNotIn("open_conjecture", nt_manifest)
+            nt_by_id = {t["id"]: t for t in nt_manifest["tasks"]}
+            self.assertEqual(nt_by_id["grad_1"]["depends_on"], ["grad_0"])
+            self.assertNotIn("wiki_flagged", nt_by_id)
+
+            # Test REAL `--format json` -> `--from-json` -> `--scaffold` CLI round-trip preserves verbatim LICENSE!
+            orig_scout_repo = scout.scout_repo
+            orig_live_task_lines = scout.live_task_lines
+            verbatim_license = "Apache License\nVersion 2.0, January 2004\nTERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\nEND OF TERMS AND CONDITIONS\n"
+            info_full = {**info, "license_text": verbatim_license}
+            scout.scout_repo = lambda repo, workdir, tc, live, check_prs=False: (info_full, cands[:5])
+            scout.live_task_lines = lambda: {}
+            try:
+                json_out, err_out = io.StringIO(), io.StringIO()
+                with contextlib.redirect_stdout(json_out), contextlib.redirect_stderr(err_out):
+                    rc1 = scout.main(["--repo", info["repo"], "--format", "json"])
+                self.assertEqual(rc1, 0)
+            finally:
+                scout.scout_repo = orig_scout_repo
+                scout.live_task_lines = orig_live_task_lines
+
+            parsed_json = json.loads(json_out.getvalue())
+            self.assertEqual(parsed_json[0]["license_text"], verbatim_license)
+
+            json_path = os.path.join(tmp, "scout.json")
+            with open(json_path, "w", encoding="utf-8") as fh:
+                fh.write(json_out.getvalue())
+            out_dir2 = os.path.join(tmp, "cli-out")
+            buf_out, buf_err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(buf_out), contextlib.redirect_stderr(buf_err):
+                rc2 = scout.main(["--from-json", json_path, "--scaffold", out_dir2, "--shard-size", "25", "--format", "json"])
+            self.assertEqual(rc2, 0)
+            pack_dir2 = os.path.join(out_dir2, "formal-conjectures-erdos-problems-open")
+            self.assertTrue(os.path.isdir(pack_dir2))
+            with open(os.path.join(pack_dir2, "LICENSE"), encoding="utf-8") as fh:
+                self.assertEqual(fh.read(), verbatim_license, "scaffolded LICENSE must match verbatim upstream license_text from --format json")
+
+
+class PrebuildCacheScalingTests(unittest.TestCase):
+    def test_prebuild_cache_skips_snapshots_filters_toolchain_and_dedups_parallel(self):
+        vc_dir = os.path.join(scout.ROOT, "missions", "verifier-common")
+        spec = importlib.util.spec_from_file_location("prebuild_cache_under_test", os.path.join(vc_dir, "prebuild_cache.py"))
+        pc = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(pc)
+
+        # Real missions/ scan skips repo-snapshot missions (lnsym-*, curve25519-dalek) cleanly.
+        missions_root = os.path.join(scout.ROOT, "missions")
+        v436 = pc.discover_mission_dirs([missions_root], toolchain="leanprover/lean4:v4.36.0")
+        names = {os.path.basename(d) for d in v436}
+        self.assertIn("pnt-analytic-foundations", names)
+        self.assertIn("arklib-near-capacity-primes", names)
+        self.assertNotIn("lnsym-aes-gcm-armv8", names)
+        self.assertNotIn("curve25519-dalek", names)
+
+        # prepare_mission_plan returns None on a repo-snapshot mission and valid plan on classic mission.
+        self.assertIsNone(pc.prepare_mission_plan(os.path.join(missions_root, "lnsym-aes-gcm-armv8")))
+        plan = pc.prepare_mission_plan(os.path.join(missions_root, "pnt-analytic-foundations"))
+        self.assertIsNotNone(plan)
+        self.assertEqual(plan["lib_root"], "PntFoundations")
+        self.assertEqual(plan["task_count"], 6)
+
+        # Atomic build + idempotent cache-hit reuse + parallel deduplication (mocking lean compile).
+        compiled = []
+        orig_compile = pc._compile_module
+        orig_mathlib = pc.sb._mathlib_lib_paths
+
+        def fake_compile(project_dir, mod, out_dir, lean_path):
+            compiled.append(mod)
+            segs = pc.sb._validate_mod_name(mod)
+            out_olean = os.path.join(out_dir, *segs) + ".olean"
+            os.makedirs(os.path.dirname(out_olean), exist_ok=True)
+            with open(out_olean, "wb") as fh:
+                fh.write(b"fake-olean")
+            return out_olean
+
+        pc._compile_module = fake_compile
+        pc.sb._mathlib_lib_paths = lambda: ["/fake/mathlib"]
+        try:
+            with tempfile.TemporaryDirectory() as cache_tmp:
+                out_buf = io.StringIO()
+                with contextlib.redirect_stdout(out_buf):
+                    st1 = pc.build_mission_plan(plan, cache_tmp)
+                    st2 = pc.build_mission_plan(plan, cache_tmp)
+                self.assertEqual(st1, "built")
+                self.assertEqual(st2, "cached")
+                self.assertEqual(compiled, ["PntFoundations.Spec", "PntFoundations.SunsteadStatements"])
+                meta_path = os.path.join(cache_tmp, plan["cache_key"], "manifest.json")
+                self.assertTrue(os.path.isfile(meta_path))
+                with open(meta_path, encoding="utf-8") as fh:
+                    meta = json.load(fh)
+                self.assertEqual(meta["task_count"], 6)
+        finally:
+            pc._compile_module = orig_compile
+            pc.sb._mathlib_lib_paths = orig_mathlib
+
+
 class NoNetworkTests(unittest.TestCase):
     def test_suite_makes_no_subprocess_calls(self):
-        """The offline tests above must never reach gh/git: guard subprocess.run."""
-        orig = scout.subprocess.run
+        """The offline tests above must never reach gh/git/http: guard subprocess.run & urlopen."""
+        orig_run = scout.subprocess.run
+        orig_url = scout.urllib.request.urlopen
         scout.subprocess.run = lambda *a, **k: (_ for _ in ()).throw(AssertionError("network/subprocess call in tests"))
+        scout.urllib.request.urlopen = lambda *a, **k: (_ for _ in ()).throw(AssertionError("HTTP call in tests"))
         try:
             suite = unittest.defaultTestLoader.loadTestsFromTestCase(CheckPrsTests)
             suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(MultiToolchainTests))
             suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(PrefetchTests))
             suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(TimeoutAndLiveTests))
+            suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(WatchlistExpansionTests))
+            suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(FormalConjecturesGotchaTests))
+            suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(DiscoveryParserTests))
+            suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(ScaffoldArenaPackTests))
+            suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(PrebuildCacheScalingTests))
             result = unittest.TestResult()
             suite.run(result)
             self.assertTrue(result.wasSuccessful(), result.failures + result.errors)
         finally:
-            scout.subprocess.run = orig
+            scout.subprocess.run = orig_run
+            scout.urllib.request.urlopen = orig_url
 
 
 if __name__ == "__main__":

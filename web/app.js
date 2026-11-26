@@ -121,8 +121,23 @@ async function loadHealth() {
   }
 }
 
+function resolvedTaskCount(m) {
+  if (!m) return 0;
+  if (typeof m.resolved_tasks === "number") return m.resolved_tasks;
+  return (m.verified_tasks || 0) + (m.refuted_tasks || 0);
+}
+
+function isOpenConjectureTaskDef(manifest, def) {
+  if (!def || def.decomp_id) return false;
+  if (typeof def.open_conjecture === "boolean") return def.open_conjecture;
+  return Boolean(manifest && manifest.open_conjecture);
+}
+
 function isMissionCompleted(m) {
-  return m && m.mode === "dag" && m.total_tasks > 0 && m.verified_tasks >= m.total_tasks;
+  const resolved = typeof m?.resolved_tasks === "number"
+    ? m.resolved_tasks
+    : (m?.verified_tasks || 0) + (m?.refuted_tasks || 0);
+  return Boolean(m && m.mode === "dag" && m.total_tasks > 0 && resolved >= m.total_tasks);
 }
 
 async function loadMissions() {
@@ -130,9 +145,13 @@ async function loadMissions() {
   state.missions = data.missions || [];
 
   const totalTasks = state.missions.reduce((acc, m) => acc + m.total_tasks, 0);
-  const verifiedTasks = state.missions.reduce((acc, m) => acc + m.verified_tasks, 0);
+  const resolvedTasks = state.missions.reduce((acc, m) => acc + resolvedTaskCount(m), 0);
+  const refutedTasks = state.missions.reduce((acc, m) => acc + (m.refuted_tasks || 0), 0);
   const openFrontier = state.missions.reduce((acc, m) => acc + (m.frontier_task_ids?.length || 0), 0);
-  $("stat-verified").textContent = `${verifiedTasks}/${totalTasks}`;
+  $("stat-verified").textContent = `${resolvedTasks}/${totalTasks}`;
+  $("stat-verified").title = refutedTasks > 0
+    ? `${resolvedTasks - refutedTasks} proved + ${refutedTasks} refuted (¬T) out of ${totalTasks} tasks`
+    : "";
   $("stat-frontier").textContent = `${openFrontier}`;
   $("stat-missions").textContent = `${state.missions.length}`;
 
@@ -151,18 +170,31 @@ async function loadMissions() {
 }
 
 function renderMissionCardHtml(m, completed) {
-  const pct = m.total_tasks > 0 ? Math.round((m.verified_tasks / m.total_tasks) * 100) : 0;
+  const resolved = resolvedTaskCount(m);
+  const refuted = m.refuted_tasks || 0;
+  const pct = m.total_tasks > 0 ? Math.round((resolved / m.total_tasks) * 100) : 0;
   const active = m.id === state.activeMissionId ? "active" : "";
   const doneClass = completed ? "mission-tab-completed" : "";
-  const modeLabel = m.mode === "hillclimb" ? "HILL-CLIMB" : completed ? "COMPLETE" : "BLUEPRINT";
+  const modeLabel =
+    m.mode === "hillclimb"
+      ? "HILL-CLIMB"
+      : completed
+        ? "COMPLETE"
+        : m.open_conjecture
+          ? "CONJECTURES"
+          : "BLUEPRINT";
+  const countText = refuted > 0 ? `${resolved}/${m.total_tasks} (${refuted} ¬T)` : `${resolved}/${m.total_tasks}`;
+  const conjectureBadge = m.open_conjecture
+    ? `<span class="badge-conjecture" title="Two-sided open conjecture: prove T or refute ¬T for full credit">T OR ¬T</span>`
+    : "";
   const demoBadge = m.demo
     ? `<span class="badge-demo" title="Protocol sandbox: awards 0 leaderboard points">SANDBOX</span>`
     : "";
   return `
     <button class="mission-tab ${doneClass} ${active}" data-id="${escapeHtml(m.id)}">
       <div class="tab-top">
-        <span style="display:inline-flex;align-items:center;gap:6px"><span class="badge-gold">Tier ${m.tier}</span>${demoBadge}</span>
-        <span class="badge-teal">${modeLabel} · ${m.verified_tasks}/${m.total_tasks}</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap"><span class="badge-gold">Tier ${m.tier}</span>${conjectureBadge}${demoBadge}</span>
+        <span class="badge-teal">${modeLabel} · ${countText}</span>
       </div>
       <div class="tab-title">${escapeHtml(m.title)}</div>
       <div class="muted small" style="font-family:var(--mono)">${escapeHtml(m.id)}</div>
@@ -218,7 +250,12 @@ async function loadMissionDetail(missionId) {
   $("active-mode").textContent =
     manifest.mode === "hillclimb"
       ? `HILL-CLIMB (${manifest.score_direction})`
-      : "PROOF BLUEPRINT";
+      : manifest.open_conjecture
+        ? "OPEN CONJECTURE BLUEPRINT"
+        : "PROOF BLUEPRINT";
+  if ($("active-open-conjecture")) {
+    $("active-open-conjecture").classList.toggle("hidden", !manifest.open_conjecture);
+  }
   $("active-demo").classList.toggle("hidden", !manifest.demo);
   const upEl = $("active-upstream");
   if (upEl) {
@@ -297,6 +334,15 @@ function nodePalette(task, mode) {
       badge: "DISPUTED ¬T",
       badgeColor: "#9B2C2C",
       titleColor: "#6B1B1B",
+    };
+  }
+  if (task.status === "refuted") {
+    return {
+      fill: "#F6EFF8",
+      stroke: "#7A3B7E",
+      badge: "REFUTED ¬T",
+      badgeColor: "#6B2D6F",
+      titleColor: "#3D1640",
     };
   }
   if (task.def && task.def.upstream_disputed) {
@@ -432,6 +478,9 @@ function renderDag(detail) {
     <marker id="arrow-teal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
       <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#2A7D7F" />
     </marker>
+    <marker id="arrow-plum" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#7A3B7E" />
+    </marker>
     <marker id="arrow-gold" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
       <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#C6A15A" />
     </marker>
@@ -488,9 +537,10 @@ function renderDag(detail) {
       const x2 = dst.x;
       const y2 = dst.y + nodeH / 2;
       const mx = (x1 + x2) / 2;
-      const satisfied = depTask && depTask.status === "verified";
-      const stroke = satisfied ? "#2A7D7F" : "#BDB5A5";
-      const marker = satisfied ? "url(#arrow-teal)" : "url(#arrow-muted)";
+      const satisfied = depTask && (depTask.status === "verified" || depTask.status === "refuted");
+      const refutedDep = depTask && depTask.status === "refuted";
+      const stroke = refutedDep ? "#7A3B7E" : satisfied ? "#2A7D7F" : "#BDB5A5";
+      const marker = refutedDep ? "url(#arrow-plum)" : satisfied ? "url(#arrow-teal)" : "url(#arrow-muted)";
       edgesHtml += `<path d="M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}"
         fill="none" stroke="${stroke}" stroke-width="${satisfied ? 2 : 1.4}"
         stroke-dasharray="${satisfied ? "" : "4 4"}" marker-end="${marker}" />`;
@@ -523,15 +573,27 @@ function renderDag(detail) {
     const c = nodePalette(t, manifest.mode);
     const sel = t.def.id === state.selectedTaskId ? "selected" : "";
     const isSub = Boolean(t.def.decomp_id);
+    const isOpenConj = isOpenConjectureTaskDef(manifest, t.def);
     const activeChildDecomp = activeDecompByParent.get(t.def.id);
-    const badgeLabel = isSub ? `${c.badge} · SUBGOAL` : c.badge;
+    const badgeLabel = isSub
+      ? `${c.badge} · SUBGOAL`
+      : isOpenConj &&
+          t.status !== "verified" &&
+          t.status !== "refuted" &&
+          !t.disputed_counterexample &&
+          !(t.def && t.def.upstream_disputed)
+        ? `${c.badge} · T/¬T`
+        : c.badge;
     const shortTitle =
       t.def.title.length > 33 ? t.def.title.slice(0, 32) + "…" : t.def.title;
     const rawIdLabel = isSub && t.def.subgoal_id ? t.def.subgoal_id : t.def.id;
     const shortId =
       rawIdLabel.length > 20 ? rawIdLabel.slice(0, 19) + "…" : rawIdLabel;
     let footer = `${t.attempts} run${t.attempts === 1 ? "" : "s"}`;
-    if (t.disputed_counterexample) {
+    if (t.status === "refuted") {
+      const refuter = t.refuted_resolution?.refuter || t.verified_by || "contributor";
+      footer = `refuted ¬T by ${refuter}`;
+    } else if (t.disputed_counterexample) {
       footer = `disputed ¬T by ${t.disputed_counterexample.refuter}`;
     } else if (t.def && t.def.upstream_disputed) {
       footer = `upstream disputed (${t.def.upstream_disputed.recorded_at || "excluded"})`;
@@ -661,6 +723,22 @@ function renderInspector(detail) {
       })()
     : "";
 
+  const isOpenConj = isOpenConjectureTaskDef(m, task.def);
+  const refutedBannerHtml = task.status === "refuted"
+    ? (() => {
+        const rr = task.refuted_resolution;
+        const refuter = rr?.refuter || task.verified_by || "contributor";
+        const when = rr?.created_at ? ` (${escapeHtml(fmtUtc(rr.created_at))})` : "";
+        const link = rr?.proof_id
+          ? ` · <a class="proof-link" href="/proofs/${escapeHtml(rr.proof_id)}">inspect counterexample ↗</a>`
+          : "";
+        return `<div class="refuted-banner">
+          <strong>Open Conjecture Resolved — Refuted (¬ T):</strong>
+          Kernel-verified counterexample by <code>${escapeHtml(refuter)}</code>${when}${link}
+        </div>`;
+      })()
+    : "";
+
   const upstreamDispute = task.def?.upstream_disputed || null;
   const upstreamDisputeUrl = upstreamDispute ? safeHttpUrl(upstreamDispute.url) : null;
   const disputedBannerHtml = task.disputed_counterexample
@@ -679,6 +757,16 @@ function renderInspector(detail) {
         </div>`
       : "";
 
+  const conjectureBannerHtml =
+    isOpenConj && task.status !== "verified" && task.status !== "refuted" && !task.disputed_counterexample && !upstreamDispute
+      ? `<div class="conjecture-banner">
+          <strong>Two-Sided Open Conjecture (Prove T or Refute ¬ T):</strong>
+          Submit a Lean 4 proof of <code>T</code> via <code>POST .../submit</code> or a kernel-verified counterexample proving <code>¬ T</code> via <code>POST .../refute</code> — either resolves the task for full Tier ${escapeHtml(m.tier)} credit.
+        </div>`
+      : "";
+
+  const hasAcceptedArtifact = task.status === "verified" || task.status === "refuted";
+
   el.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">
       <div>
@@ -688,7 +776,9 @@ function renderInspector(detail) {
       <a class="small" style="color:var(--teal);font-weight:500;text-decoration:none" href="/api/missions/${encodeURIComponent(m.id)}/bundle.tar.gz">Download live bundle (.tar.gz) ↓</a>
     </div>
     ${task.def.description ? `<p class="muted small" style="margin:6px 0 0">${escapeHtml(task.def.description)}</p>` : ""}
+    ${refutedBannerHtml}
     ${disputedBannerHtml}
+    ${conjectureBannerHtml}
     ${subgoalBannerHtml}
     ${parentDecompBannerHtml}
     <div class="inspector-grid">
@@ -704,16 +794,22 @@ function renderInspector(detail) {
       ${scoreHtml}
       ${bestKnownHtml}
       <div class="kv">
-        <div class="kv-label">Submit Endpoint</div>
+        <div class="kv-label">Submit Endpoint${isOpenConj ? " (Prove T)" : ""}</div>
         <div class="kv-val">POST ${escapeHtml(origin)}/api/missions/${escapeHtml(m.id)}/tasks/${escapeHtml(task.def.id)}/submit</div>
       </div>
       ${
-        m.mode === "dag"
-          ? `<div class="kv"><div class="kv-label">${m.decomposition?.enabled && !task.def.decomp_id ? "Disprove / Decompose" : "Disprove False Statement"}</div><div class="kv-val">POST .../tasks/${escapeHtml(task.def.id)}/refute (open to all)${m.decomposition?.enabled && !task.def.decomp_id ? ` · /decompose (allowlist)` : ""}</div></div>`
-          : ""
+        isOpenConj && !task.def.decomp_id
+          ? `<div class="kv"><div class="kv-label">Refute Endpoint (Disprove ¬ T)</div><div class="kv-val">POST ${escapeHtml(origin)}/api/missions/${escapeHtml(m.id)}/tasks/${escapeHtml(task.def.id)}/refute (open to all)</div></div>${
+              m.decomposition?.enabled
+                ? `<div class="kv"><div class="kv-label">v2 Decompose</div><div class="kv-val">POST .../tasks/${escapeHtml(task.def.id)}/decompose (allowlist)</div></div>`
+                : ""
+            }`
+          : m.mode === "dag"
+            ? `<div class="kv"><div class="kv-label">${m.decomposition?.enabled && !task.def.decomp_id ? "Disprove / Decompose" : "Disprove False Statement"}</div><div class="kv-val">POST .../tasks/${escapeHtml(task.def.id)}/refute (open to all)${m.decomposition?.enabled && !task.def.decomp_id ? ` · /decompose (allowlist)` : ""}</div></div>`
+            : ""
       }
     </div>
-    ${task.status === "verified" ? `<div class="proof-panel" id="proof-panel" aria-live="polite"><div class="muted small">Loading verified proof…</div></div>` : ""}
+    ${hasAcceptedArtifact ? `<div class="proof-panel" id="proof-panel" aria-live="polite"><div class="muted small">${task.status === "refuted" ? "Loading kernel-verified refutation…" : "Loading verified proof…"}</div></div>` : ""}
   `;
   el.querySelectorAll(".decomp-jump").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -733,7 +829,7 @@ function renderInspector(detail) {
       renderInspector(detail);
     });
   });
-  if (task.status === "verified") loadProof(m.id, task.def.id);
+  if (hasAcceptedArtifact) loadProof(m.id, task.def.id);
 }
 
 function fmtDuration(ms) {
@@ -866,14 +962,18 @@ function contributorHtml(proof) {
 
 /** Diff, metadata and rebuild command for one accepted proof (task panel and ledger page). */
 function proofDetailHtml(proof) {
-  const specNote = proof.spec_is_current
-    ? ""
-    : `<div class="proof-warn small">Accepted under an earlier frozen spec than the one live now.</div>`;
+  const isRefutation = proof.entry_kind === "refutation";
+  const specNote =
+    proof.spec_is_current || isRefutation || proof.entry_kind === "subgoal"
+      ? ""
+      : `<div class="proof-warn small">Accepted under an earlier frozen spec than the one live now.</div>`;
   const proofId = String(proof.patch_sha256 || "").replace(/^sha256:/, "");
   const permalink = /^[0-9a-f]{64}$/.test(proofId) ? `<a class="proof-link" href="/proofs/${proofId}">permalink</a>` : "";
-  const rebuildCmd = proof.verification
-    ? proof.verification.mission_replay?.command || null
-    : proof.how_to_rebuild || null;
+  const rebuildCmd = isRefutation
+    ? null
+    : proof.verification
+      ? proof.verification.mission_replay?.command || null
+      : proof.how_to_rebuild || null;
   const verifyCmd = proof.verification
     ? proof.verification.upstream_replay?.command || null
     : proof.verify_command || null;
@@ -888,7 +988,7 @@ function proofDetailHtml(proof) {
     ${proof.summary ? `<p class="muted small proof-summary">${escapeHtml(proof.summary)}</p>` : ""}
     <div class="proof-block">
       <div class="proof-block-head">
-        <span class="kv-label">Accepted Lean 4 diff · ${escapeHtml((proof.files || []).join(", "))}</span>
+        <span class="kv-label">${isRefutation ? "Accepted Lean 4 refutation diff (¬ T)" : "Accepted Lean 4 diff"} · ${escapeHtml((proof.files || []).join(", "))}</span>
         <button type="button" class="btn-outline-ink proof-copy" data-copy="patch" data-label="Copy diff">Copy diff</button>
       </div>
       <pre class="proof-diff" tabindex="0">${renderDiffHtml(proof.patch)}</pre>
@@ -947,13 +1047,19 @@ function wireProofCopyButtons(root, proof) {
 
 function renderProofPanel(proof) {
   const panel = $("proof-panel");
+  const isRefutation = proof.entry_kind === "refutation";
+  const isHistoryEntry = !isRefutation && proof.entry_kind !== "subgoal";
+  const kickerClass = isRefutation ? "proof-kicker proof-kicker-refute" : "proof-kicker";
+  const kickerText = isRefutation
+    ? `Kernel-verified refutation (¬ T) · commit #${escapeHtml(proof.seq)}`
+    : `Verified proof · commit #${escapeHtml(proof.seq)}`;
   panel.innerHTML = `
     <div class="proof-head">
       <div>
-        <div class="proof-kicker">Verified proof · commit #${escapeHtml(proof.seq)}</div>
+        <div class="${kickerClass}">${kickerText}</div>
         <div class="proof-by">${contributorHtml(proof)}</div>
       </div>
-      <a class="btn-outline-ink" href="${escapeHtml(proof.history_mbox)}">history.mbox ↓</a>
+      ${isHistoryEntry ? `<a class="btn-outline-ink" href="${escapeHtml(proof.history_mbox)}">history.mbox ↓</a>` : ""}
     </div>
     ${proofDetailHtml(proof)}
   `;
@@ -965,7 +1071,11 @@ function renderProofPanel(proof) {
 function ledgerBadges(p) {
   const out = [];
   if (p.entry_kind === "refutation") {
-    out.push(`<span class="ledger-badge ledger-badge-refute" title="Kernel-verified disproof (¬ statement)">refutation ¬</span>`);
+    if (p.decomposition && p.decomposition.open_conjecture) {
+      out.push(`<span class="ledger-badge ledger-badge-conjecture" title="Kernel-verified disproof (¬ T) resolving an open conjecture">conjecture refuted ¬T</span>`);
+    } else {
+      out.push(`<span class="ledger-badge ledger-badge-refute" title="Kernel-verified disproof (¬ statement)">refutation ¬</span>`);
+    }
   } else if (p.entry_kind === "subgoal") {
     out.push(`<span class="ledger-badge ledger-badge-decomp" title="Verified v2 decomposition subgoal">subgoal</span>`);
   } else if (p.entry_kind === "assembled") {
@@ -988,7 +1098,8 @@ function renderDecompProvenanceHtml(p) {
       parts.push(`parent <code>${escapeHtml(d.parent_task_id)}</code>`);
     }
     if (d.proposer) parts.push(`proposer <code>${escapeHtml(d.proposer)}</code>`);
-    if (d.target_kind === "root") parts.push(`root counterexample`);
+    if (d.open_conjecture) parts.push(`resolved open conjecture (¬ T)`);
+    else if (d.target_kind === "root") parts.push(`root counterexample`);
   }
   if (Array.isArray(p.co_authors) && p.co_authors.length > 0) {
     const names = p.co_authors
@@ -1059,7 +1170,9 @@ async function loadLedgerProof(root, hash) {
       <div class="muted">No accepted proof has patch SHA-256 <code>${escapeHtml(hash)}</code> (${escapeHtml(e.message)}).</div>`;
     return;
   }
-  document.title = `${proof.task_title || proof.task_id} · Verified proof · Sunstead`;
+  const isRefutation = proof.entry_kind === "refutation";
+  const isHistoryEntry = !isRefutation && proof.entry_kind !== "subgoal";
+  document.title = `${proof.task_title || proof.task_id} · ${isRefutation ? "Verified refutation" : "Verified proof"} · Sunstead`;
   const also = (proof.also_accepted_as || [])
     .map((a) => `<li><code>${escapeHtml(a.mission_id)}/${escapeHtml(a.task_id)}</code> by <code>${escapeHtml(a.contributor)}</code>, ${escapeHtml(fmtUtc(a.accepted_at))}</li>`)
     .join("");
@@ -1067,11 +1180,11 @@ async function loadLedgerProof(root, hash) {
     <p><a class="proof-link" href="/proofs">← All proofs</a></p>
     <div class="proof-head">
       <div>
-        <div class="proof-kicker">Verified proof · ${escapeHtml(proof.mission_title || proof.mission_id)} · commit #${escapeHtml(proof.seq)} ${ledgerBadges(proof)}</div>
+        <div class="${isRefutation ? "proof-kicker proof-kicker-refute" : "proof-kicker"}">${isRefutation ? "Kernel-verified refutation (¬ T)" : "Verified proof"} · ${escapeHtml(proof.mission_title || proof.mission_id)} · commit #${escapeHtml(proof.seq)} ${ledgerBadges(proof)}</div>
         <h2 class="serif-h2 ledger-proof-title">${escapeHtml(proof.task_title || proof.task_id)}</h2>
         <div class="proof-by">${contributorHtml(proof)}</div>
       </div>
-      <a class="btn-outline-ink" href="${escapeHtml(proof.history_mbox)}">history.mbox ↓</a>
+      ${isHistoryEntry ? `<a class="btn-outline-ink" href="${escapeHtml(proof.history_mbox)}">history.mbox ↓</a>` : ""}
     </div>
     <div class="small ledger-upstream">Upstream: ${upstreamHtml(proof.upstream)}</div>
     ${renderDecompProvenanceHtml(proof)}
@@ -1127,7 +1240,8 @@ function renderEvents() {
       if (ev.kind === "submission_accepted") { cls = "accepted"; icon = "✓"; }
       else if (ev.kind === "submission_rejected") { cls = "rejected"; icon = "✕"; }
       else if (ev.kind === "task_decomposed") { cls = "accepted"; icon = "◇"; }
-      else if (ev.kind === "decomposition_refuted" || ev.kind === "task_refuted") { cls = "rejected"; icon = "¬"; }
+      else if (ev.kind === "task_refuted") { cls = "refuted"; icon = "¬"; }
+      else if (ev.kind === "decomposition_refuted") { cls = "rejected"; icon = "¬"; }
       else if (ev.kind === "lease_claimed") { cls = "claimed"; icon = "●"; }
       else if (ev.kind === "lease_released") { cls = "claimed"; icon = "○"; }
       const scoreBadge =
@@ -1225,7 +1339,7 @@ function connectSse() {
   const handle = (e) => {
     try {
       const ev = JSON.parse(e.data);
-      if (ev.kind === "submission_accepted" && ev.mission_id && ev.task_id) {
+      if ((ev.kind === "submission_accepted" || ev.kind === "task_refuted") && ev.mission_id && ev.task_id) {
         state.proofCache.delete(`${ev.mission_id}/${ev.task_id}`);
       }
       state.events.unshift(ev);
