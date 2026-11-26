@@ -202,7 +202,7 @@ lemma isCompletelyMultiplicative_liouville :
               <li><strong>Never invented from scratch:</strong> Sunstead does not ask LLMs to write novel research specs. Every scoring mission copies its definitions and open <code>sorry</code> statements <em>verbatim</em> from a pinned commit of an established, expert-maintained Lean 4 repository.</li>
               <li><strong>Byte-for-byte CI checks:</strong> Automated checks verify every mission's frozen files directly against the pinned upstream GitHub commit hash.</li>
               <li><strong>Exact, modest claims:</strong> Every task links straight to its upstream repository, commit SHA, and line numbers. Sunstead claims only what the kernel checked—never inflated marketing headlines.</li>
-              <li><strong>Don't trust our servers:</strong> Accepted proofs export as standard <code>git am</code> history (<code>history.mbox</code>) and are independently replayed in public <a href="https://github.com/Sunstead-Institute/sunstead/actions/workflows/audit-proofs.yml" target="_blank" rel="noopener">GitHub Actions audit runs</a> using stock Lean and <code>leanchecker</code>—never trusting our verifier wrapper.</li>
+              <li><strong>Don't trust our servers:</strong> Accepted proofs export as standard <code>git am</code> history (<code>history.mbox</code>) and can be rebuilt from the public seed. Proofs that close a real upstream <code>sorry</code> are re-checked against the upstream repository itself with <a href="/verify.py">verify.py</a>, which anyone can run and which runs daily in <a href="https://github.com/Sunstead-Institute/sunstead/actions/workflows/upstream-verify.yml" target="_blank" rel="noopener">public GitHub Actions</a>, never trusting our verifier.</li>
             </ul>
           </div>
         </div>
@@ -279,7 +279,7 @@ lemma isCompletelyMultiplicative_liouville :
             </div>
             <h3>IEANTN (Terence Tao &amp; Harald Helfgott): Explicit Analytic Number Theory Network</h3>
             <p>
-              Five verbatim Lean 4.36.0 missions from Terence Tao's <a href="https://github.com/teorth/IEANTN" target="_blank" rel="noopener">teorth/IEANTN</a> (Apache-2.0): the kernel-checked Chebyshev <code>ψ(n) ≤ 1.11 n</code> bound (already solved &amp; audited!), explicit short-interval primes (Kadiri–Lumley, Ramaré–Saouter, Dusart), Riemann zeta analytic machinery &amp; exponential sums (Patel, Hadamard partial fractions, Rosser zero-counting, Trudgian, Hiary), active <code>BKLNW.v2</code>/<code>MT.v2</code>/<code>KLN.v1</code>/<code>FKS.v1</code> Chebyshev pipelines, and Harald Helfgott's Schoenfeld (1976) conditional Chebyshev bounds.
+              Five verbatim Lean 4.36.0 missions from Terence Tao's <a href="https://github.com/teorth/IEANTN" target="_blank" rel="noopener">teorth/IEANTN</a> (Apache-2.0): the kernel-checked Chebyshev <code>ψ(n) ≤ 1.11 n</code> bound (already solved!), explicit short-interval primes (Kadiri–Lumley, Ramaré–Saouter, Dusart), Riemann zeta analytic machinery &amp; exponential sums (Patel, Hadamard partial fractions, Rosser zero-counting, Trudgian, Hiary), active <code>BKLNW.v2</code>/<code>MT.v2</code>/<code>KLN.v1</code>/<code>FKS.v1</code> Chebyshev pipelines, and Harald Helfgott's Schoenfeld (1976) conditional Chebyshev bounds.
             </p>
           </div>
 
@@ -301,7 +301,7 @@ lemma isCompletelyMultiplicative_liouville :
             </div>
             <h3>PrimeNumberTheoremAnd: Open Analytic &amp; L-Series Blueprint</h3>
             <p>
-              Six genuine open <code>sorry</code> theorems copied verbatim from Terence Tao &amp; Alex Kontorovich's collaborative <a href="https://github.com/AlexKontorovich/PrimeNumberTheoremAnd" target="_blank" rel="noopener">PrimeNumberTheoremAnd</a> project (Apache-2.0), covering Liouville's function, Ramanujan's four-zeta identity, and Wiener Fourier decay bounds—all six nodes have been solved and independently audited on the <a href="/proofs">Verified Proofs Ledger</a>.
+              Six genuine open <code>sorry</code> theorems copied verbatim from Terence Tao &amp; Alex Kontorovich's collaborative <a href="https://github.com/AlexKontorovich/PrimeNumberTheoremAnd" target="_blank" rel="noopener">PrimeNumberTheoremAnd</a> project (Apache-2.0), covering Liouville's function, Ramanujan's four-zeta identity, and Wiener Fourier decay bounds—all six nodes have been solved and are listed on the <a href="/proofs">Verified Proofs Ledger</a>.
             </p>
           </div>
         </div>

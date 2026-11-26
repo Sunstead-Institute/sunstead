@@ -786,117 +786,11 @@ export type AcceptedProofRow = {
   spec_sha256: string;
   created_at: number;
   verify_ms: number | null;
-  audit_json?: string | null;
   is_demo?: number;
   entry_kind?: string | null;
   co_authors_json?: string | null;
   decomp_meta_json?: string | null;
 };
-
-export interface ProofAuditRecord {
-  status: "passed" | "failed";
-  audited_at: number;
-  auditor: string;
-  toolchain: string | null;
-  run_url: string | null;
-  commit_sha: string | null;
-  axioms: string[] | null;
-  summary: string | null;
-}
-
-const AUDIT_COMMIT_RE = /^[0-9a-f]{7,40}$/i;
-const AUDIT_AXIOM_RE = /^[A-Za-z0-9_.]+$/;
-
-/** Validate an incoming independent audit attestation from `audit-proofs.yml`. */
-export function parseAuditAttestation(
-  raw: unknown,
-  nowUnix = Math.floor(Date.now() / 1000)
-): ProofAuditRecord {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    throw new Error("audit attestation body must be a JSON object");
-  }
-  const obj = raw as Record<string, unknown>;
-  const status = obj.status;
-  if (status !== "passed" && status !== "failed") {
-    throw new Error("audit status must be 'passed' or 'failed'");
-  }
-  const auditorRaw = typeof obj.auditor === "string" ? obj.auditor.trim() : "";
-  const auditor = auditorRaw.replace(/[\r\n\t]+/g, " ").slice(0, 120);
-  if (!auditor) {
-    throw new Error("audit attestation requires a non-empty auditor");
-  }
-  let auditedAt = nowUnix;
-  if (obj.audited_at !== undefined && obj.audited_at !== null) {
-    const n = Number(obj.audited_at);
-    if (!Number.isInteger(n) || n <= 0) {
-      throw new Error("audited_at must be a positive unix timestamp");
-    }
-    auditedAt = n;
-  }
-  let runUrl: string | null = null;
-  if (obj.run_url !== undefined && obj.run_url !== null && obj.run_url !== "") {
-    if (typeof obj.run_url !== "string") throw new Error("run_url must be a string");
-    let parsed: URL;
-    try {
-      parsed = new URL(obj.run_url.trim());
-    } catch {
-      throw new Error("run_url must be a valid https URL");
-    }
-    if (parsed.protocol !== "https:") {
-      throw new Error("run_url must use https");
-    }
-    runUrl = parsed.href.slice(0, 300);
-  }
-  let toolchain: string | null = null;
-  if (obj.toolchain !== undefined && obj.toolchain !== null && obj.toolchain !== "") {
-    if (typeof obj.toolchain !== "string") throw new Error("toolchain must be a string");
-    toolchain = obj.toolchain.trim().replace(/[\r\n\t]+/g, " ").slice(0, 80) || null;
-  }
-  let commitSha: string | null = null;
-  if (obj.commit_sha !== undefined && obj.commit_sha !== null && obj.commit_sha !== "") {
-    if (typeof obj.commit_sha !== "string" || !AUDIT_COMMIT_RE.test(obj.commit_sha.trim())) {
-      throw new Error("commit_sha must be 7-40 hex characters");
-    }
-    commitSha = obj.commit_sha.trim().toLowerCase();
-  }
-  let axioms: string[] | null = null;
-  if (obj.axioms !== undefined && obj.axioms !== null) {
-    if (!Array.isArray(obj.axioms) || obj.axioms.length > 16) {
-      throw new Error("axioms must be an array of axiom names");
-    }
-    axioms = obj.axioms.map((a) => {
-      if (typeof a !== "string" || !AUDIT_AXIOM_RE.test(a.trim())) {
-        throw new Error(`invalid axiom name: ${String(a)}`);
-      }
-      return a.trim();
-    });
-  }
-  let summary: string | null = null;
-  if (obj.summary !== undefined && obj.summary !== null && obj.summary !== "") {
-    if (typeof obj.summary !== "string") throw new Error("summary must be a string");
-    summary = obj.summary.trim().replace(/[\r\n\t]+/g, " ").slice(0, 300) || null;
-  }
-  return {
-    status,
-    audited_at: auditedAt,
-    auditor,
-    toolchain,
-    run_url: runUrl,
-    commit_sha: commitSha,
-    axioms,
-    summary,
-  };
-}
-
-/** Parse persisted `accepted_patches.audit_json`, returning null if unset or malformed. */
-export function parseStoredAudit(auditJson: string | null | undefined): ProofAuditRecord | null {
-  if (!auditJson || typeof auditJson !== "string") return null;
-  try {
-    return parseAuditAttestation(JSON.parse(auditJson));
-  } catch {
-    return null;
-  }
-}
 
 /** Constant-time string comparison for bearer secrets. */
 export function constantTimeEqual(a: string, b: string): boolean {
@@ -1634,7 +1528,6 @@ export function buildLedgerEntry(
     spec_sha256: row.spec_sha256,
     spec_is_current: mission !== null && row.spec_sha256 === mission.spec_sha256,
     files: extractPatchPaths(row.patch),
-    audit: parseStoredAudit(row.audit_json),
     ...(coAuthors.length > 0 ? { co_authors: coAuthors } : {}),
     ...(decompMeta ? { decomposition: decompMeta } : {}),
   };

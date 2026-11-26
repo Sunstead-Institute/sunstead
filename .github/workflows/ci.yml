@@ -86,7 +86,6 @@ jobs:
             scripts/export-upstream.py scripts/test_export_upstream.py \
             scripts/sunstead_verify.py scripts/test_sunstead_verify.py \
             scripts/upstream-verify-list.py scripts/test_upstream_verify_list.py \
-            scripts/audit-live.py scripts/test_audit_live.py \
             scripts/test_bootstrap_snapshot.py \
             scripts/ci-path-gate.py scripts/test_ci_path_gate.py
           for f in missions/*/verify; do python3 -m py_compile "$f"; done
@@ -102,8 +101,6 @@ jobs:
         run: python3 scripts/test_upstream_verify_list.py
       - name: Repo-snapshot local bootstrap tests (offline)
         run: python3 scripts/test_bootstrap_snapshot.py -v
-      - name: Independent audit unit tests (offline)
-        run: python3 scripts/test_audit_live.py
       - name: Verify verbatim upstream provenance against pinned commits
         run: python3 scripts/check-upstream.py
 
@@ -157,8 +154,6 @@ jobs:
         run: python3 scripts/redteam.py --image sunstead/verifier-lean4:v0.2
       - name: Frozen task statements match seed theorems (v4.36.0 missions)
         run: python3 scripts/check-statements.py --image sunstead/verifier-lean4:v0.2
-      - name: Independent audit container security tests (v4.36.0)
-        run: python3 scripts/test_audit_live.py -v
       - name: Build & verify Cloudflare Lean 4.36.0 container (reuses local elan + Mathlib layers)
         run: |
           docker build -t sunstead-verifier-lean4:ci -f cloudflare/containers/lean4/Dockerfile .
@@ -188,8 +183,6 @@ jobs:
         run: python3 scripts/redteam.py --image sunstead/verifier-lean4-v4.35.0:v0.1
       - name: Frozen task statements match seed theorems (v4.35.0 missions)
         run: python3 scripts/check-statements.py --image sunstead/verifier-lean4-v4.35.0:v0.1
-      - name: Independent audit container security tests (v4.35.0)
-        run: python3 scripts/test_audit_live.py -v
       - name: Build & verify Cloudflare Lean 4.35.0 container (reuses local elan layers)
         run: |
           docker build -t sunstead-verifier-lean4-v435:ci -f cloudflare/containers/lean4-v4.35.0/Dockerfile .
@@ -232,8 +225,6 @@ jobs:
         run: python3 scripts/redteam.py --image sunstead/verifier-lean4-v4.31.0:v0.1
       - name: Frozen task statements match seed theorems (v4.31.0 missions)
         run: python3 scripts/check-statements.py --image sunstead/verifier-lean4-v4.31.0:v0.1
-      - name: Independent audit container security tests (v4.31.0)
-        run: python3 scripts/test_audit_live.py -v
       - name: Build & verify Cloudflare Lean 4.31.0 container (reuses local elan + Mathlib + Aeneas layers)
         run: |
           docker build -t sunstead-verifier-lean4-v431:ci -f cloudflare/containers/lean4-v4.31.0/Dockerfile .

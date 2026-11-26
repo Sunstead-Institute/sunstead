@@ -46,8 +46,6 @@ import {
   verifierSlotName,
   isMissionCompleted,
   sortMissionSummaries,
-  parseAuditAttestation,
-  parseStoredAudit,
   constantTimeEqual,
   shouldRunAsyncSubmit,
   formatSubmissionStatusView,
@@ -680,7 +678,7 @@ test("ledger entries carry provenance, attribution, spec status and a permalink"
   });
   assert.equal(e.display_name, "Codex Dirichlet");
   assert.deepEqual(e.files, ["PNT/Liouville.lean"]);
-  assert.equal(e.audit, null);
+  assert.equal("audit" in e, false);
   assert.equal("patch" in e, false, "list entries leave the patch body to the permalink");
 });
 
@@ -1176,7 +1174,7 @@ test("renderJoinTxt uses ghcr.io/sunstead-institute, accurate per-mission toolch
   assert.match(txt, /floor\(5000 x \|ln\(new\/old\)\|\)/);
 });
 
-// ---------------------------------------------------------------- async submit, pooling, sorting, audit & UI
+// ---------------------------------------------------------------- async submit, pooling, sorting & UI
 
 test("VerifierSlotPool fans out concurrent verifications on one mission and prefers warm affinity slots", async () => {
   assert.equal(VERIFIER_POOL_SIZE.lean4, 6);
@@ -1315,32 +1313,7 @@ test("sortMissionSummaries places active Tier 1 DAGs first, then Tier 2 hill-cli
   assert.equal(isMissionCompleted(sorted[0]), false);
 });
 
-test("parseAuditAttestation validates attestations and buildLedgerEntry exposes persisted audit records", () => {
-  const att = parseAuditAttestation(
-    {
-      status: "passed",
-      auditor: "github-actions/audit-proofs",
-      toolchain: "lean4:v4.36.0",
-      run_url: "https://github.com/Sunstead-Institute/sunstead/actions/runs/12345",
-      commit_sha: "abcdef1234567",
-      axioms: ["propext", "Classical.choice"],
-      summary: "Stock Lean 4.36.0 + leanchecker passed",
-    },
-    1700000000
-  );
-  assert.equal(att.status, "passed");
-  assert.equal(att.audited_at, 1700000000);
-  assert.throws(() => parseAuditAttestation({ status: "bogus", auditor: "x" }), /status/);
-  assert.throws(() => parseAuditAttestation({ status: "passed", auditor: "x", run_url: "javascript:alert(1)" }), /https/);
-  assert.throws(() => parseAuditAttestation({ status: "passed", auditor: "x", commit_sha: "not-hex!" }), /commit_sha/);
-
-  const entry = buildLedgerEntry(
-    { ...proofRow({ audit_json: JSON.stringify(att) }), patch_sha256: `sha256:${LEDGER_SHA}` },
-    ledgerMission(),
-    "https://sunstead.org"
-  );
-  assert.deepEqual(entry.audit, att);
-  assert.equal(parseStoredAudit("{invalid json"), null);
+test("constantTimeEqual compares bearer tokens exactly", () => {
   assert.equal(constantTimeEqual("secret-token", "secret-token"), true);
   assert.equal(constantTimeEqual("secret-token", "secret-tokeN"), false);
   assert.equal(constantTimeEqual("short", "longer"), false);
