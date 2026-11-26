@@ -81,12 +81,14 @@ attains AND-depth 3, and the affine conversions add no AND layers.
 
 ## C4-free extremal graph sources
 
-For the closed C4-free tracks, the [Afzaly–McKay data page](https://users.cecs.anu.edu.au/~bdm/data/extremal.html)
-gives exact edge counts in the `H={C4}` table, also indexed in [OEIS A006855](https://oeis.org/A006855).
-For small-order background, see [Clapham, Flockhart and Sheehan (1989)](https://doi.org/10.1002/jgt.3190130107)
-(exact through 21 vertices) and Füredi's 1994 extended abstract, §6, linked by A006855.
-Neither is being cited for all the larger entries: for n ≥ 33, the exact edge counts here
-come from the Afzaly–McKay data page (papers in preparation).
+The closed C4-free tracks use the exact edge counts in the `H={C4}` table of the
+[Afzaly–McKay data page](https://users.cecs.anu.edu.au/~bdm/data/extremal.html), also indexed in
+[OEIS A006855](https://oeis.org/A006855). For n ≤ 32 the values come from refereed exhaustive
+searches: [Clapham, Flockhart and Sheehan (1989)](https://doi.org/10.1002/jgt.3190130107) for
+n ≤ 21, Yang and Rowlinson, *On extremal graphs without four-cycles*, Utilitas Math. 41 (1992)
+204–210, for 22 ≤ n ≤ 31, and Shao, Xu and Xu, *A new Turán number for quadrilateral*,
+Utilitas Math. 79 (2009) 51–58, for ex(32, C4) = 92. For n ≥ 33 the exact counts come only
+from the Afzaly–McKay data page (papers in preparation).
 
 ## Current values (checked 26 Nov 2026)
 

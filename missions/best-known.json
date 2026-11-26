@@ -265,8 +265,8 @@
         "url": "https://oeis.org/A003022",
         "checked": "2026-11-26",
         "proven_optimal": {
-          "source": "Dollas, Rankin and McCracken, exact-length table and independent verification: G(17) = 199 <= 199 < 216 = G(18); distinct positive differences give a Golomb ruler, so at most 17 marks fit.",
-          "url": "https://www.cs.toronto.edu/~apostol/golomb/main.pdf"
+          "source": "A. Dollas, W. T. Rankin and D. McCracken (1998), A New Algorithm for Golomb Ruler Derivation and Proof of the 19 Mark Ruler: computational proof of the 17- and 18-mark optima, confirming O. Sibert's 1993 search: G(17) = 199 <= 199 < 216 = G(18); distinct positive differences give a Golomb ruler, so at most 17 marks fit.",
+          "url": "https://doi.org/10.1109/18.651068"
         }
       },
       "sidon_n300": {
@@ -347,18 +347,18 @@
         "url": "https://www.public.asu.edu/~ccolbou/src/tabby/catable.html",
         "checked": "2026-11-26",
         "proven_optimal": {
-          "source": "Torres-Jiménez and Izquierdo-Márquez (2016), Construction of non-isomorphic covering arrays: computational enumeration establishes CAN(3,16,2) = 17. Hiess and Kampel (October 2025 preprint), Section 2.1, also discusses the lower bound and credits earlier computational work.",
+          "source": "Torres-Jiménez and Izquierdo-Márquez (2016), Construction of non-isomorphic covering arrays, Discrete Math. Algorithms Appl. 8(2) (2016) 1650033: computational enumeration establishes CAN(3,16,2) = 17.",
           "url": "https://doi.org/10.1142/S1793830916500336"
         }
       },
       "ca_3_20_2": {
         "value": 18,
         "kind": "literature",
-        "source": "Roux constructed the 18-row array; Hiess and Kampel, Theorem 1 and Corollary 1, rule out 17 rows for 20 columns.",
+        "source": "Roux constructed the 18-row array; Hiess and Kampel (Discrete Math. 350 (2027) 115553), Theorem 1 and Corollary 1, rule out 17 rows for 20 columns.",
         "url": "https://arxiv.org/html/2510.17596v1",
         "checked": "2026-11-26",
         "proven_optimal": {
-          "source": "Hiess and Kampel, October 2025 computational preprint, Theorem 1 and Corollary 1: a strength-3 binary covering array of 17 rows has at most 16 columns, so CAN(3,20,2) >= 18.",
+          "source": "I. Hiess and L. Kampel, Determining covering array numbers via balanced covering arrays, Discrete Mathematics 350(4) (2027) 115553 (arXiv:2510.17596; computational), Theorem 1 and Corollary 1: a strength-3 binary covering array of 17 rows has at most 16 columns, so CAN(3,20,2) >= 18.",
           "url": "https://arxiv.org/html/2510.17596v1"
         }
       },
@@ -409,7 +409,7 @@
         "url": "https://oeis.org/A003022",
         "checked": "2026-11-26",
         "proven_optimal": {
-          "source": "Garry–Vanderschel exhaustive project, as tabulated by Dollas, Rankin and McCracken: no 20-mark ruler is shorter than 283.",
+          "source": "Garry–Vanderschel exhaustive search (later distributed.net), values tabulated in A. Dimitromanolakis (2002), Table 2.1, and OEIS A003022: no 20-mark ruler is shorter than 283.",
           "url": "https://www.cs.toronto.edu/~apostol/golomb/main.pdf"
         }
       },
@@ -1130,44 +1130,44 @@
       "c4free_n25": {
         "value": 63,
         "kind": "collection",
-        "source": "Afzaly–McKay, Extremal Graphs and Turan numbers, H={C4} table (also OEIS A006855): ex(25, C4) = 63.",
+        "source": "Y. Yang and P. Rowlinson, On extremal graphs without four-cycles, Utilitas Math. 41 (1992) 204–210 (exact for 22 <= n <= 31); the Afzaly–McKay H={C4} table and OEIS A006855 agree: ex(25, C4) = 63.",
         "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html",
         "checked": "2026-11-26",
         "proven_optimal": {
-          "source": "A. Afzaly and B. D. McKay, extremal graphs exhaustive results table (unrestricted C4-free column): maximum 63 edges for 25 vertices.",
+          "source": "Y. Yang and P. Rowlinson (1992), exhaustive computer search for 22 <= n <= 31: ex(25, C4) = 63, so no C4-free graph on 25 vertices has 64 edges. The linked Afzaly–McKay table gives the same value.",
           "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html"
         }
       },
       "c4free_n27": {
         "value": 71,
         "kind": "collection",
-        "source": "Afzaly–McKay, Extremal Graphs and Turan numbers, H={C4} table (also OEIS A006855): ex(27, C4) = 71.",
+        "source": "Y. Yang and P. Rowlinson, On extremal graphs without four-cycles, Utilitas Math. 41 (1992) 204–210 (exact for 22 <= n <= 31); the Afzaly–McKay H={C4} table and OEIS A006855 agree: ex(27, C4) = 71.",
         "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html",
         "checked": "2026-11-26",
         "proven_optimal": {
-          "source": "A. Afzaly and B. D. McKay, extremal graphs exhaustive results table (unrestricted C4-free column): maximum 71 edges for 27 vertices.",
+          "source": "Y. Yang and P. Rowlinson (1992), exhaustive computer search for 22 <= n <= 31: ex(27, C4) = 71, so no C4-free graph on 27 vertices has 72 edges. The linked Afzaly–McKay table gives the same value.",
           "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html"
         }
       },
       "c4free_n29": {
         "value": 80,
         "kind": "collection",
-        "source": "Afzaly–McKay, Extremal Graphs and Turan numbers, H={C4} table (also OEIS A006855): ex(29, C4) = 80.",
+        "source": "Y. Yang and P. Rowlinson, On extremal graphs without four-cycles, Utilitas Math. 41 (1992) 204–210 (exact for 22 <= n <= 31); the Afzaly–McKay H={C4} table and OEIS A006855 agree: ex(29, C4) = 80.",
         "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html",
         "checked": "2026-11-26",
         "proven_optimal": {
-          "source": "A. Afzaly and B. D. McKay, extremal graphs exhaustive results table (unrestricted C4-free column): maximum 80 edges for 29 vertices.",
+          "source": "Y. Yang and P. Rowlinson (1992), exhaustive computer search for 22 <= n <= 31: ex(29, C4) = 80, so no C4-free graph on 29 vertices has 81 edges. The linked Afzaly–McKay table gives the same value.",
           "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html"
         }
       },
       "c4free_n32": {
         "value": 92,
         "kind": "collection",
-        "source": "Afzaly–McKay, Extremal Graphs and Turan numbers, H={C4} table (also OEIS A006855): ex(32, C4) = 92.",
+        "source": "Z. Shao, J. Xu and X. Xu, A new Turán number for quadrilateral, Utilitas Math. 79 (2009) 51–58; the Afzaly–McKay H={C4} table and OEIS A006855 agree: ex(32, C4) = 92.",
         "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html",
         "checked": "2026-11-26",
         "proven_optimal": {
-          "source": "A. Afzaly and B. D. McKay, extremal graphs exhaustive results table (unrestricted C4-free column): maximum 92 edges for 32 vertices.",
+          "source": "Z. Shao, J. Xu and X. Xu (2009), A new Turán number for quadrilateral: ex(32, C4) = 92, so no C4-free graph on 32 vertices has 93 edges. The linked Afzaly–McKay table gives the same value.",
           "url": "https://users.cecs.anu.edu.au/~bdm/data/extremal.html"
         }
       },
