@@ -129,13 +129,10 @@ function walkFiles(dir, base = dir, acc = []) {
   return acc;
 }
 
-function computeSpecSha256(missionDir, frozenPaths) {
-  const files = walkFiles(missionDir)
-    .filter((f) => frozenPaths.some((pat) => globMatches(pat, f.rel)))
-    .sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0));
-
+function computeFilesSha256(files) {
+  const sorted = [...files].sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0));
   const hash = crypto.createHash("sha256");
-  for (const f of files) {
+  for (const f of sorted) {
     const bytes = fs.readFileSync(f.abs);
     const lenBuf = Buffer.alloc(8);
     lenBuf.writeBigUInt64LE(BigInt(bytes.length));
@@ -147,6 +144,17 @@ function computeSpecSha256(missionDir, frozenPaths) {
     hash.update(Buffer.from("\n", "utf8"));
   }
   return `sha256:${hash.digest("hex")}`;
+}
+
+function computeSpecSha256(missionDir, frozenPaths) {
+  const files = walkFiles(missionDir).filter((f) =>
+    frozenPaths.some((pat) => globMatches(pat, f.rel))
+  );
+  return computeFilesSha256(files);
+}
+
+function computeSeedTreeSha256(missionDir) {
+  return computeFilesSha256(walkFiles(missionDir));
 }
 
 const missionsDir = path.join(REPO_ROOT, "missions");
@@ -210,6 +218,7 @@ const missions = missionDirs.map((dirName) => {
   const fullDir = path.join(missionsDir, dirName);
   const manifest = JSON.parse(fs.readFileSync(path.join(fullDir, "sunstead.json"), "utf8"));
   const spec_sha256 = computeSpecSha256(fullDir, manifest.frozen_paths);
+  const seed_tree_sha256 = computeSeedTreeSha256(fullDir);
   const image = (manifest.verifier?.image || "").trim();
   const toolchain = (manifest.verifier?.toolchain || "").trim();
   let verifier_kind;
@@ -243,6 +252,7 @@ const missions = missionDirs.map((dirName) => {
   return {
     manifest,
     spec_sha256,
+    seed_tree_sha256,
     verifier_kind,
     seed_files,
     ...(verify_contract ? { verify_contract } : {}),
@@ -256,6 +266,7 @@ fs.writeFileSync(
     `export interface SeedMission {\n` +
     `  manifest: MissionManifest;\n` +
     `  spec_sha256: string;\n` +
+    `  seed_tree_sha256?: string;\n` +
     `  verifier_kind: VerifierKind;\n` +
     `  seed_files?: Record<string, string>;\n` +
     `  verify_contract?: MissionVerifyContract;\n` +
