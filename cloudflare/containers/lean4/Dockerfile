@@ -72,10 +72,9 @@ COPY missions/crypto-std-sboxes /missions/crypto-std-sboxes
 COPY missions/crypto-lwc-linear-xor /missions/crypto-lwc-linear-xor
 COPY missions/sphere-packing-e8-foundations /missions/sphere-packing-e8-foundations
 COPY missions/verifier-common/sunstead_sandbox.py missions/verifier-common/SunsteadCheck.lean missions/verifier-common/prebuild_cache.py missions/verifier-common/prebuild_snapshot.py /opt/sunstead/
-COPY cloudflare/containers/verifier_server.py /opt/verifier_server.py
 
-# Seeds, harness, native checker, prebuilt frozen `.olean` cache, and server
-# are read-only. The server runs as root and never executes contributor code
+# Seeds, harness, native checker, and prebuilt frozen `.olean` caches are
+# read-only. The server runs as root and never executes contributor code
 # itself: `verify` drops to `sunstead-runner` for that, and the trusted kernel
 # replay runs as `sunstead-checker`.
 RUN SYSROOT="$(lean --print-prefix)" \
@@ -87,10 +86,14 @@ RUN SYSROOT="$(lean --print-prefix)" \
     && /opt/sunstead/sunstead-check selftest | grep -q '"selftest":"ok"' \
     && python3 /opt/sunstead/prebuild_cache.py /missions/* \
     && python3 /opt/sunstead/prebuild_snapshot.py /missions/* \
-    && chmod -R a-w,a+rX /missions /opt/sunstead /opt/verifier_server.py \
+    && chmod -R a-w,a+rX /missions /opt/sunstead \
     && useradd -M -d /nonexistent -s /usr/sbin/nologin -u 10002 sunstead-runner \
     && useradd -M -d /nonexistent -s /usr/sbin/nologin -u 10003 sunstead-checker \
     && mkdir -p /work && chmod 0755 /work
+
+# Copied last so server-only edits reuse all prebuilt `.olean` / snapshot cache layers.
+COPY cloudflare/containers/verifier_server.py /opt/verifier_server.py
+RUN chmod a-w,a+rX /opt/verifier_server.py
 
 WORKDIR /work
 EXPOSE 8080

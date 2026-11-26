@@ -43,10 +43,9 @@ RUN mkdir -p /opt/mathlib /tmp/c25519-pin \
 
 COPY missions/curve25519-dalek /missions/curve25519-dalek
 COPY missions/verifier-common/sunstead_sandbox.py missions/verifier-common/SunsteadCheck.lean missions/verifier-common/prebuild_snapshot.py /opt/sunstead/
-COPY cloudflare/containers/verifier_server.py /opt/verifier_server.py
 
-# Seeds, harness, native checker, prebuilt repo-snapshot `.olean` caches, and
-# server are read-only. The server runs as root and drops to `sunstead-runner`
+# Seeds, harness, native checker, and prebuilt repo-snapshot `.olean` caches
+# are read-only. The server runs as root and drops to `sunstead-runner`
 # for contributor compilation and `sunstead-checker` for kernel replay.
 RUN SYSROOT="$(lean --print-prefix)" \
     && mkdir -p /tmp/scbuild \
@@ -56,10 +55,14 @@ RUN SYSROOT="$(lean --print-prefix)" \
     && rm -rf /tmp/scbuild \
     && /opt/sunstead/sunstead-check selftest | grep -q '"selftest":"ok"' \
     && python3 /opt/sunstead/prebuild_snapshot.py /missions/* \
-    && chmod -R a-w,a+rX /missions /opt/sunstead /opt/verifier_server.py \
+    && chmod -R a-w,a+rX /missions /opt/sunstead \
     && useradd -M -d /nonexistent -s /usr/sbin/nologin -u 10002 sunstead-runner \
     && useradd -M -d /nonexistent -s /usr/sbin/nologin -u 10003 sunstead-checker \
     && mkdir -p /work && chmod 0755 /work
+
+# Copied last so server-only edits reuse all prebuilt snapshot cache layers.
+COPY cloudflare/containers/verifier_server.py /opt/verifier_server.py
+RUN chmod a-w,a+rX /opt/verifier_server.py
 
 WORKDIR /work
 EXPOSE 8080

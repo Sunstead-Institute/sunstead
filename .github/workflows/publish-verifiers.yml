@@ -138,6 +138,7 @@ jobs:
       - name: Build, selftest, and push verifier image to GHCR
         if: steps.gate.outputs.run == 'true'
         env:
+          DOCKER_BUILDKIT: "1"
           DOCKERFILE: ${{ matrix.dockerfile }}
           IMAGE: ${{ matrix.image }}
           TAG: ${{ matrix.tag }}
@@ -145,16 +146,21 @@ jobs:
           SHORT_SHA: ${{ github.sha }}
         run: |
           SHA_TAG="sha-${SHORT_SHA:0:12}"
-          docker build \
-            --platform linux/amd64 \
-            --label "org.opencontainers.image.source=https://github.com/Sunstead-Institute/sunstead" \
-            --label "org.opencontainers.image.description=Sunstead hermetic Lean 4 (${TOOLCHAIN}) kernel-replay verifier" \
-            --label "org.opencontainers.image.licenses=Apache-2.0" \
-            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
-            -t "${IMAGE}:${TAG}" \
-            -t "${IMAGE}:${SHA_TAG}" \
-            -f "${DOCKERFILE}" \
-            missions
+          BUILD_ARGS=(
+            --platform linux/amd64
+            --build-arg BUILDKIT_INLINE_CACHE=1
+            --label "org.opencontainers.image.source=https://github.com/Sunstead-Institute/sunstead"
+            --label "org.opencontainers.image.description=Sunstead hermetic Lean 4 (${TOOLCHAIN}) kernel-replay verifier"
+            --label "org.opencontainers.image.licenses=Apache-2.0"
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}"
+            -t "${IMAGE}:${TAG}"
+            -t "${IMAGE}:${SHA_TAG}"
+            -f "${DOCKERFILE}"
+          )
+          if docker manifest inspect "${IMAGE}:${TAG}" >/dev/null 2>&1; then
+            BUILD_ARGS+=(--cache-from "${IMAGE}:${TAG}")
+          fi
+          docker build "${BUILD_ARGS[@]}" missions
 
           # Verify the compiled native checker passes selftest offline before pushing.
           docker run --rm --network=none "${IMAGE}:${TAG}" \
