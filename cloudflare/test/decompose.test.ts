@@ -13,6 +13,8 @@ import {
   formatSubmissionStatusView,
   generateUnifiedDiff,
   parseStoredCoAuthors,
+  parseSubmissionListFilters,
+  querySubmissions,
   reapStaleVerifyingSubmissionById,
   reapStaleVerifyingSubmissions,
   renderMbox,
@@ -1562,4 +1564,220 @@ test("reapStaleVerifyingSubmissionById lazily reaps a stale verifying submission
   assert.equal(view.stage, "sandbox");
   assert.equal(view.error, STALE_VERIFYING_ERROR);
   assert.equal(view.completed_at, pollNow);
+});
+
+test("querySubmissions filters accurately by mission_id, task_id, contributor, status, combined filters, limit, uses SQLite indexes, and prevents SQL injection", () => {
+  const { db, sql } = createTestHub();
+
+  // Mirror the indexes added in SunsteadHub.initSchema().
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_submissions_created
+      ON submissions(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_submissions_mission_created
+      ON submissions(mission_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_submissions_contributor_created
+      ON submissions(contributor, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_submissions_status_created
+      ON submissions(status, created_at DESC);
+  `);
+
+  const rows: Array<{
+    id: string;
+    mission_id: string;
+    task_id: string;
+    contributor: string;
+    status: string;
+    accepted: number;
+    score: number | null;
+    points: number;
+    summary: string;
+    created_at: number;
+    completed_at: number | null;
+    is_demo?: number;
+  }> = [
+    {
+      id: "sub-1",
+      mission_id: "fc-open-erdos-combinatorics",
+      task_id: "erdos_1",
+      contributor: "codex-dirichlet",
+      status: "accepted",
+      accepted: 1,
+      score: 1,
+      points: 150,
+      summary: "kernel ok 1",
+      created_at: 1_700_000_100,
+      completed_at: 1_700_000_120,
+    },
+    {
+      id: "sub-2",
+      mission_id: "fc-open-erdos-combinatorics",
+      task_id: "erdos_1",
+      contributor: "codex-dirichlet",
+      status: "rejected",
+      accepted: 0,
+      score: null,
+      points: 0,
+      summary: "compile failed",
+      created_at: 1_700_000_200,
+      completed_at: 1_700_000_205,
+    },
+    {
+      id: "sub-3",
+      mission_id: "fc-open-erdos-combinatorics",
+      task_id: "erdos_2",
+      contributor: "alice",
+      status: "accepted",
+      accepted: 1,
+      score: 1,
+      points: 150,
+      summary: "kernel ok 2",
+      created_at: 1_700_000_300,
+      completed_at: 1_700_000_330,
+    },
+    {
+      id: "sub-4",
+      mission_id: "arklib-near-capacity-primes",
+      task_id: "near_capacity_prime_supply",
+      contributor: "codex-dirichlet",
+      status: "accepted",
+      accepted: 1,
+      score: 1,
+      points: 150,
+      summary: "kernel ok 3",
+      created_at: 1_700_000_400,
+      completed_at: 1_700_000_425,
+    },
+    {
+      id: "sub-5",
+      mission_id: "arklib-near-capacity-primes",
+      task_id: "near_capacity_prime_supply",
+      contributor: "bob",
+      status: "verifying",
+      accepted: 0,
+      score: null,
+      points: 0,
+      summary: "Verifying...",
+      created_at: 1_700_000_500,
+      completed_at: null,
+    },
+    {
+      id: "sub-6",
+      mission_id: "fc-open-erdos-combinatorics",
+      task_id: "erdos_2",
+      contributor: "codex-dirichlet",
+      status: "error",
+      accepted: 0,
+      score: null,
+      points: 0,
+      summary: "sandbox timeout",
+      created_at: 1_700_000_600,
+      completed_at: 1_700_000_610,
+      is_demo: 1,
+    },
+  ];
+
+  for (const r of rows) {
+    sql.exec(
+      `INSERT INTO submissions
+       (id, mission_id, task_id, contributor, status, accepted, score, points, summary, patch_sha256, proof_id, verify_ms, created_at, completed_at, is_demo)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 120, ?, ?, ?)`,
+      r.id,
+      r.mission_id,
+      r.task_id,
+      r.contributor,
+      r.status,
+      r.accepted,
+      r.score,
+      r.points,
+      r.summary,
+      `sha256:${r.id}`,
+      r.accepted ? "a".repeat(64) : null,
+      r.created_at,
+      r.completed_at,
+      r.is_demo ?? 0
+    );
+  }
+
+  // Unfiltered returns newest-first and converts boolean flags cleanly.
+  const all = querySubmissions(sql);
+  assert.deepEqual(
+    all.map((r) => r.id),
+    ["sub-6", "sub-5", "sub-4", "sub-3", "sub-2", "sub-1"]
+  );
+  assert.equal(all[0].is_demo, true);
+  assert.equal(all[0].accepted, false);
+  assert.equal(all[2].is_demo, false);
+  assert.equal(all[2].accepted, true);
+
+  // Filter by mission (and alias `mission=`)
+  assert.deepEqual(
+    querySubmissions(sql, parseSubmissionListFilters(new URLSearchParams("mission=fc-open-erdos-combinatorics"))).map((r) => r.id),
+    ["sub-6", "sub-3", "sub-2", "sub-1"]
+  );
+
+  // Filter by task_id (and alias `task=`)
+  assert.deepEqual(
+    querySubmissions(sql, parseSubmissionListFilters(new URLSearchParams("task=erdos_2"))).map((r) => r.id),
+    ["sub-6", "sub-3"]
+  );
+
+  // Filter by contributor (case-insensitive normalization)
+  assert.deepEqual(
+    querySubmissions(sql, parseSubmissionListFilters(new URLSearchParams("contributor=Codex-Dirichlet"))).map((r) => r.id),
+    ["sub-6", "sub-4", "sub-2", "sub-1"]
+  );
+
+  // Filter by status
+  assert.deepEqual(querySubmissions(sql, { status: "accepted" }).map((r) => r.id), ["sub-4", "sub-3", "sub-1"]);
+  assert.deepEqual(querySubmissions(sql, { status: "rejected" }).map((r) => r.id), ["sub-2"]);
+  assert.deepEqual(querySubmissions(sql, { status: "verifying" }).map((r) => r.id), ["sub-5"]);
+  assert.deepEqual(querySubmissions(sql, { status: "error" }).map((r) => r.id), ["sub-6"]);
+
+  // Combined filters + limit
+  assert.deepEqual(
+    querySubmissions(
+      sql,
+      parseSubmissionListFilters(new URLSearchParams("contributor=codex-dirichlet&status=accepted&limit=1"))
+    ).map((r) => r.id),
+    ["sub-4"]
+  );
+  assert.deepEqual(
+    querySubmissions(
+      sql,
+      parseSubmissionListFilters(
+        new URLSearchParams("mission_id=fc-open-erdos-combinatorics&task_id=erdos_1&contributor=codex-dirichlet&status=accepted")
+      )
+    ).map((r) => r.id),
+    ["sub-1"]
+  );
+
+  // Verify SQLite uses the composite indexes without temp B-tree sorting
+  const planFor = (q: string, ...args: (string | number)[]) =>
+    db
+      .prepare(`EXPLAIN QUERY PLAN ${q}`)
+      .all(...(args as never[]))
+      .map((r) => String((r as { detail?: string }).detail ?? ""))
+      .join(" | ");
+  const missionPlan = planFor("SELECT id FROM submissions WHERE mission_id = ? ORDER BY created_at DESC LIMIT ?", "fc-open-erdos-combinatorics", 20);
+  const contribPlan = planFor("SELECT id FROM submissions WHERE contributor = ? ORDER BY created_at DESC LIMIT ?", "codex-dirichlet", 20);
+  const statusPlan = planFor("SELECT id FROM submissions WHERE status = ? ORDER BY created_at DESC LIMIT ?", "accepted", 20);
+  assert.match(missionPlan, /idx_submissions_mission_created/);
+  assert.doesNotMatch(missionPlan, /TEMP B-TREE/);
+  assert.match(contribPlan, /idx_submissions_contributor_created/);
+  assert.doesNotMatch(contribPlan, /TEMP B-TREE/);
+  assert.match(statusPlan, /idx_submissions_status_created/);
+  assert.doesNotMatch(statusPlan, /TEMP B-TREE/);
+
+  // Zero SQL injection risk: adversarial filter values match nothing and leave table untouched.
+  assert.deepEqual(querySubmissions(sql, { mission_id: "' OR '1'='1" }), []);
+  assert.deepEqual(querySubmissions(sql, { task_id: "erdos_1' UNION SELECT * FROM submissions--" }), []);
+  assert.deepEqual(querySubmissions(sql, { contributor: "alice'; DROP TABLE submissions;--" }), []);
+  assert.deepEqual(
+    querySubmissions(
+      sql,
+      parseSubmissionListFilters(new URLSearchParams("mission_id=' OR 1=1--&contributor=x'; DELETE FROM submissions;--&status=accepted' OR 1=1--"))
+    ),
+    []
+  );
+  assert.equal(sql.exec<{ c: number }>("SELECT COUNT(*) AS c FROM submissions").one().c, 6);
 });
